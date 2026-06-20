@@ -6,17 +6,17 @@ import json
 import uuid
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import config, matchmaking, service
+from . import config, ingest, matchmaking, service
 from .database import get_db, init_db
 from .models import Category, Comparison, Criterion, Generator, ModelOutput, Rating, Task, Vote
-from .schemas import VoteIn
+from .schemas import CategoryIn, GeneratorIn, TaskIn, VoteIn
 
 config.ensure_dirs()
 init_db()
@@ -111,6 +111,11 @@ def _build_comparison(
 def _require_admin(token: str | None) -> None:
     if not token or token != config.ADMIN_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid or missing admin token")
+
+
+def require_admin_header(x_admin_token: str | None = Header(default=None)) -> None:
+    """Dependency for programmatic JSON/upload endpoints (token via X-Admin-Token)."""
+    _require_admin(x_admin_token)
 
 
 # ------------------------------------------------------------------- arena UI
@@ -414,6 +419,92 @@ def export_dataset(db: Session = Depends(get_db)):
             }
         )
     return {"n_votes": len(records), "votes": records}
+
+
+# ----------------------------------------------------------- ingestion API (JSON)
+# Programmatic surface for generator pipelines. Auth via the X-Admin-Token header.
+
+
+@app.get("/api/tasks")
+def api_list_tasks(db: Session = Depends(get_db)):
+    """Discover task ids/slugs so a pipeline knows where to register outputs."""
+    out = []
+    for t in db.execute(select(Task)).scalars().all():
+        out.append(
+            {
+                "id": t.id,
+                "title": t.title,
+                "category": t.category.slug,
+                "n_outputs": len(t.outputs),
+                "active": t.active,
+            }
+        )
+    return {"tasks": out}
+
+
+@app.post("/api/categories", dependencies=[Depends(require_admin_header)])
+def api_upsert_category(body: CategoryIn, db: Session = Depends(get_db)):
+    cat = ingest.upsert_category(db, body.slug, body.name, body.description)
+    db.commit()
+    return {"id": cat.id, "slug": cat.slug, "name": cat.name}
+
+
+@app.post("/api/generators", dependencies=[Depends(require_admin_header)])
+def api_upsert_generator(body: GeneratorIn, db: Session = Depends(get_db)):
+    gen = ingest.upsert_generator(db, body.slug, body.name, body.kind, body.description)
+    db.commit()
+    return {"id": gen.id, "slug": gen.slug, "name": gen.name, "kind": gen.kind}
+
+
+@app.post("/api/tasks", dependencies=[Depends(require_admin_header)])
+def api_create_task(body: TaskIn, db: Session = Depends(get_db)):
+    try:
+        task = ingest.create_task(db, body.category, body.title, body.prompt, body.criteria_note)
+    except ingest.IngestError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    db.commit()
+    return {"id": task.id, "title": task.title, "category": task.category.slug}
+
+
+@app.post("/api/outputs", dependencies=[Depends(require_admin_header)])
+async def api_register_output(
+    task_id: int = Form(...),
+    generator_slug: str = Form(...),
+    generator_name: str | None = Form(default=None),
+    title: str = Form(default=""),
+    meta: str = Form(default="{}"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """Register a generator's baked 3D asset for a task (validated + deduped)."""
+    ext = (file.filename or "asset.glb").rsplit(".", 1)[-1].lower()
+    try:
+        meta_dict = json.loads(meta) if meta else {}
+    except json.JSONDecodeError as exc:
+        raise HTTPException(400, f"meta must be valid JSON: {exc}") from exc
+    try:
+        output, created = ingest.register_output(
+            db,
+            task_id=task_id,
+            generator_slug=generator_slug,
+            data=await file.read(),
+            ext=ext,
+            title=title,
+            meta=meta_dict,
+            generator_name=generator_name,
+        )
+    except ingest.IngestError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    db.commit()
+    return {
+        "id": output.id,
+        "created": created,  # False if an identical asset was already registered
+        "task_id": output.task_id,
+        "generator_id": output.generator_id,
+        "asset_url": f"/assets/{output.asset_path}",
+        "format": output.asset_format,
+        "meta": json.loads(output.meta_json),
+    }
 
 
 @app.get("/healthz")

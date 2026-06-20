@@ -31,8 +31,7 @@ class GeneratorIn(BaseModel):
 
 
 class TaskIn(BaseModel):
-    category_id: int
+    category: str  # category slug
     title: str
     prompt: str
     criteria_note: str = ""
-    active: bool = True

@@ -102,8 +102,39 @@ docker run -p 8000:8000 -e BIO3D_ADMIN_TOKEN=... -v $PWD/data:/data bio3d-arena
 ## Tests
 
 ```bash
-pytest -q        # ranking (Elo/BT) + end-to-end API + research slices (14 tests)
+pytest -q        # ranking + e2e API + research slices + ingestion (19 tests)
 ```
+
+## Ingesting real generator outputs
+
+Generator pipelines register baked 3D assets programmatically (no DB access).
+Auth is the `X-Admin-Token` header. Assets are **validated** (must parse + have
+geometry) and **deduplicated** by content hash within a (task, generator).
+
+JSON/upload endpoints:
+
+- `GET  /api/tasks` — list task ids/slugs to target.
+- `POST /api/categories` · `POST /api/generators` — upsert by slug.
+- `POST /api/tasks` — create a task (`{category, title, prompt}`).
+- `POST /api/outputs` — multipart upload (`task_id`, `generator_slug`, optional
+  `generator_name`, `title`, `meta` JSON, `file`). Returns `{id, created, ...}`
+  (`created=false` when an identical asset was already registered).
+
+Python client (`app/client.py`) + runnable example (`scripts/ingest_example.py`):
+
+```python
+from app.client import Bio3DArenaClient
+c = Bio3DArenaClient("http://localhost:8000", admin_token="...")
+c.upsert_category("flowers", "Flowers")
+task = c.create_task("flowers", "Rose bloom", "Generate an open rose.")
+c.upsert_generator("my-rose-gen", "My Rose Generator")
+c.register_output(task["id"], "my-rose-gen", "out.glb", meta={"seed": 7})  # bake gene/params → GLB
+c.recompute()
+```
+
+Replace the example's `bake_glb(...)` with your generator (flower-sim,
+Blender/GeoNodes rose, plant world model, …) producing a GLB from a
+gene/parameter vector or prompt.
 
 ## Research API
 
@@ -130,9 +161,10 @@ category}) scope.
 
 **Staged plan to a real tool** (research/internal first → public arena):
 
-- ⬜ **Real-generator ingestion API** — `POST /api/outputs` (token-gated) + a Python
-  client so generator pipelines (e.g. flower-sim, Blender/GeoNodes rose, plant
-  world model) register GLBs directly; bake gene/params → GLB.
+- ✅ **Real-generator ingestion API** — `POST /api/outputs` (token-gated, validated,
+  deduped) + a Python client so generator pipelines (e.g. flower-sim,
+  Blender/GeoNodes rose, plant world model) register GLBs directly; bake
+  gene/params → GLB. See "Ingesting real generator outputs" above.
 - ⬜ **Molecular-format viewers** (Mol\*/3Dmol.js for PDB/mmCIF) via the viewer
   registry; point clouds.
 - ⬜ **Statistical rigor**: significance view ("is A meaningfully above B?"),
