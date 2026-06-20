@@ -235,3 +235,36 @@ class Submission(Base):
     )
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
     reviewed_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class Metric(Base):
+    """Objective recon-accuracy score for one ModelOutput vs a task's GT cloud set.
+
+    Mode-B counterpart to the vote-driven Rating. Populated by the batch scorer
+    (recon_service) from AgriGen's /score microservice. One row per output (latest);
+    rescoring overwrites. Confounds + versions are typed columns (fairness §6.2/§6.1
+    of the recon-integration spec) so the board is reproducible and audit-able.
+    """
+
+    __tablename__ = "metric"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"), unique=True, index=True)
+    # Holistic measures (never rank on chamfer alone).
+    chamfer: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nearest_shape_distance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nearest_gt_idx: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fscore: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tau: Mapped[float | None] = mapped_column(Float, nullable=True)
+    coverage: Mapped[float | None] = mapped_column(Float, nullable=True)
+    species_verdict: Mapped[str | None] = mapped_column(String(8), nullable=True)  # PASS|FAIL
+    gt_band_lo: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gt_band_hi: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Pinned confounds + reproducibility.
+    point_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    icp_seed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    scorer_version: Mapped[str] = mapped_column(String(128), default="")
+    gt_version_hash: Mapped[str] = mapped_column(String(128), default="")
+    status: Mapped[str] = mapped_column(String(16), default="ok")  # ok|error|skipped
+    detail: Mapped[str] = mapped_column(Text, default="")
+    computed: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
