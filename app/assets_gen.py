@@ -102,3 +102,20 @@ def build_asset(shape: str, seed: int, out_path: Path) -> dict:
     scene.export(out_path, file_type="glb")
     vtx = int(sum(len(g.vertices) for g in scene.geometry.values()))
     return {"shape": shape, "seed": int(seed), "vertices": vtx, "generated": True}
+
+
+def build_degenerate(out_path: Path) -> dict:
+    """A deliberately bad asset (a single tiny triangle) for gold attention checks.
+
+    Valid GLB (passes ingestion) but obviously worse than any real output to a
+    human — the 'wrong' answer in a calibration pair.
+    """
+    verts = np.array([[0.0, 0.0, 0.0], [0.08, 0.0, 0.0], [0.0, 0.08, 0.0]])
+    faces = np.array([[0, 1, 2]])
+    mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+    mesh.visual.vertex_colors = _color((110, 110, 110))
+    scene = trimesh.Scene()
+    scene.add_geometry(mesh, node_name="degenerate")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    scene.export(out_path, file_type="glb")
+    return {"degenerate": True, "vertices": 3, "generated": True}

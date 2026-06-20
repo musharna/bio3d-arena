@@ -14,9 +14,20 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import config
-from .assets_gen import build_asset
+from .assets_gen import build_asset, build_degenerate
 from .database import SessionLocal, init_db
-from .models import Category, Criterion, Generator, ModelOutput, Rating, Task
+from .models import (
+    Category,
+    Comparison,
+    Criterion,
+    Generator,
+    GoldPair,
+    ModelOutput,
+    Rating,
+    Task,
+    Vote,
+    VoterSession,
+)
 from .molec_gen import build_molecule_pdb
 
 # (slug, name, description)
@@ -115,7 +126,19 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
         if existing and not force:
             return {"status": "already-seeded"}
         if force:
-            for model in (Rating, ModelOutput, Task, Generator, Criterion, Category):
+            # Delete children before parents to respect FKs.
+            for model in (
+                Vote,
+                Comparison,
+                GoldPair,
+                Rating,
+                VoterSession,
+                ModelOutput,
+                Task,
+                Generator,
+                Criterion,
+                Category,
+            ):
                 db.query(model).delete()
             db.commit()
 
@@ -139,10 +162,12 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
         db.flush()  # assign ids
 
         n_outputs = 0
+        task_by_slug: dict[str, tuple[Task, str]] = {}
         for tslug, cslug, title, prompt, shape, kind in TASKS:
             t = Task(category_id=cats[cslug].id, title=title, prompt=prompt)
             db.add(t)
             db.flush()
+            task_by_slug[tslug] = (t, shape)
             ext = "pdb" if kind == "pdb" else "glb"
             for gslug, gen in gens.items():
                 seed = _seed_int(tslug, gslug)
@@ -169,6 +194,11 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
         for gen in gens.values():
             db.add(Rating(generator_id=gen.id, category_id=None, criterion_id=overall.id))
 
+        # Gold attention checks: a calibration generator whose outputs (a good
+        # asset vs a degenerate one) are is_gold=True, so they never enter normal
+        # matchmaking or rankings — used only to score voter trust.
+        n_gold = _seed_gold(db, task_by_slug)
+
         db.commit()
         return {
             "status": "seeded",
@@ -177,10 +207,64 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
             "generators": len(gens),
             "tasks": len(TASKS),
             "outputs": n_outputs,
+            "gold_pairs": n_gold,
         }
     finally:
         if own:
             db.close()
+
+
+# Tasks to build gold attention-check pairs for (must be mesh tasks).
+GOLD_TASKS = ["rose-bloom", "plant-cell"]
+
+
+def _seed_gold(db: Session, task_by_slug: dict[str, tuple[Task, str]]) -> int:
+    """Create a calibration generator + good/decoy gold outputs + GoldPair rows."""
+    calib = Generator(
+        slug="calibration", name="Calibration (gold)", kind="decoy", is_anonymous=True
+    )
+    db.add(calib)
+    db.flush()
+
+    n = 0
+    for tslug in GOLD_TASKS:
+        if tslug not in task_by_slug:
+            continue
+        task, shape = task_by_slug[tslug]
+        good_rel = Path("gold") / f"{tslug}__good.glb"
+        bad_rel = Path("gold") / f"{tslug}__bad.glb"
+        build_asset(shape, _seed_int("gold-good", tslug), config.ASSET_DIR / good_rel)
+        build_degenerate(config.ASSET_DIR / bad_rel)
+        good = ModelOutput(
+            task_id=task.id,
+            generator_id=calib.id,
+            title="gold-good",
+            asset_path=str(good_rel).replace("\\", "/"),
+            asset_format="glb",
+            is_gold=True,
+            meta_json=json.dumps({"gold": "good"}),
+        )
+        bad = ModelOutput(
+            task_id=task.id,
+            generator_id=calib.id,
+            title="gold-bad",
+            asset_path=str(bad_rel).replace("\\", "/"),
+            asset_format="glb",
+            is_gold=True,
+            meta_json=json.dumps({"gold": "bad"}),
+        )
+        db.add_all([good, bad])
+        db.flush()
+        db.add(
+            GoldPair(
+                task_id=task.id,
+                good_output_id=good.id,
+                bad_output_id=bad.id,
+                note=f"seeded gold for {tslug}",
+            )
+        )
+        n += 1
+    return n
 
 
 if __name__ == "__main__":

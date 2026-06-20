@@ -13,7 +13,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import config, ranking
-from .models import Category, Comparison, Criterion, Generator, ModelOutput, Rating, Task, Vote
+from .models import (
+    Category,
+    Comparison,
+    Criterion,
+    Generator,
+    ModelOutput,
+    Rating,
+    Task,
+    Vote,
+    VoterSession,
+)
 
 
 def get_or_create_rating(
@@ -67,10 +77,17 @@ def _matches_for_scope(
     Bradley-Terry without a separate tie parameter. 'bad' votes are excluded.
     category_id=None means the global scope (all categories).
     """
+    # Exclude gold attention-check comparisons, and (left outer join) any vote from
+    # a session whose trust has fallen below TRUST_THRESHOLD — anti-abuse gating.
     stmt = (
         select(Vote, Comparison)
         .join(Comparison, Vote.comparison_id == Comparison.id)
-        .where(Comparison.criterion_id == criterion_id)
+        .outerjoin(VoterSession, VoterSession.session_id == Vote.session_id)
+        .where(
+            Comparison.criterion_id == criterion_id,
+            Comparison.is_gold.is_(False),
+            (VoterSession.trust.is_(None)) | (VoterSession.trust >= config.TRUST_THRESHOLD),
+        )
     )
     if category_id is not None:
         stmt = stmt.join(Task, Comparison.task_id == Task.id).where(Task.category_id == category_id)
@@ -92,8 +109,8 @@ def _matches_for_scope(
 
 
 def _players_for_scope(db: Session, category_id: int | None) -> list[int]:
-    """All generators eligible to appear in a scope's leaderboard (so 0-game ones show)."""
-    stmt = select(ModelOutput.generator_id)
+    """Generators eligible for a scope's leaderboard (gold/decoy outputs excluded)."""
+    stmt = select(ModelOutput.generator_id).where(ModelOutput.is_gold.is_(False))
     if category_id is not None:
         stmt = stmt.join(Task, ModelOutput.task_id == Task.id).where(
             Task.category_id == category_id
@@ -227,6 +244,13 @@ def compute_bias(db: Session) -> dict:
             fmt_games[lose_out.asset_format] += 1
     n = len(rows)
     decisive = a + b
+
+    # Gold attention-check + trust stats.
+    sessions = db.execute(select(VoterSession)).scalars().all()
+    gold_seen = sum(s.gold_seen for s in sessions)
+    gold_passed = sum(s.gold_passed for s in sessions)
+    low_trust = sum(1 for s in sessions if s.trust < config.TRUST_THRESHOLD)
+
     return {
         "n_votes": n,
         "decisive": decisive,
@@ -235,4 +259,8 @@ def compute_bias(db: Session) -> dict:
         "bad_rate": round(bad / n, 3) if n else None,
         "cross_format_comparisons": cross_format,
         "format_win_rate": {f: round(fmt_wins[f] / g, 3) for f, g in fmt_games.items() if g},
+        "gold_checks_served": gold_seen,
+        "gold_pass_rate": round(gold_passed / gold_seen, 3) if gold_seen else None,
+        "sessions": len(sessions),
+        "low_trust_sessions": low_trust,
     }

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Methodology · Bio 3D Arena{% endblock %}
+{% block content %}
+<section class="board prose">
+  <h2>Methodology &amp; integrity</h2>
+  <p class="subtle">How rankings are computed and how vote quality is protected.</p>
+
+  <h3>Ranking</h3>
+  <ul>
+    <li><b>Online Elo</b> (K=32, ties = 0.5) updates live on every decisive vote —
+      the fast, approximate signal shown next to each generator.</li>
+    <li><b>Bradley–Terry MLE</b> over the full pairwise win record is the
+      authoritative leaderboard, fit by minorization–maximization and rescaled to
+      an Elo-like range. <b>Bootstrap resampling</b> gives 95% confidence intervals.</li>
+    <li><b>Significance</b>: a paired bootstrap reports P(A ranks above B) for every
+      pair, so we can say whether A is <i>meaningfully</i> ahead — not just nominally.</li>
+    <li><b>Ties</b> are credited as a split (one win each direction). Comparisons are
+      drawn within a task, so the two outputs share a prompt and format.</li>
+  </ul>
+
+  <h3>Vote integrity</h3>
+  <ul>
+    <li><b>Anonymity</b>: generator identities are never sent to the browser during
+      voting; sides (A/B) are randomized to neutralize position bias.</li>
+    <li><b>Gold attention checks</b>: ~{{ (gold_rate * 100) | round(0) | int }}% of
+      comparisons are calibration pairs with a known-good vs. an obviously-bad asset.
+      A voter's <b>trust</b> is the Laplace-smoothed pass rate
+      (gold_passed + 1)/(gold_seen + 1). Votes from sessions below trust
+      {{ trust_threshold }} are excluded from the Bradley–Terry leaderboard
+      (still recorded for audit).</li>
+    <li><b>Rate limiting</b>: at most {{ rate_limit }} votes per {{ rate_window }}s per
+      session.</li>
+    <li><b>Dedup</b>: a session cannot re-vote the same pairing for the same criterion.</li>
+    <li><b>Human verification</b>: captcha is {% if require_captcha %}<b>enabled</b>{% else %}available but
+      disabled in this deployment{% endif %} (Turnstile/hCaptcha integration point).</li>
+  </ul>
+
+  <h3>Bias audit</h3>
+  <p>The <a href="/significance">significance page</a> publishes a live bias audit:
+    the left(A) win rate (≈0.50 means no position bias), tie/bad rates, gold
+    pass-rate, low-trust session count, and any cross-format comparisons (a
+    format-confound risk).</p>
+
+  <p class="subtle">Gold/decoy assets are excluded from matchmaking and from all
+    rankings — they exist only to measure voter trust.</p>
+</section>
+{% endblock %}

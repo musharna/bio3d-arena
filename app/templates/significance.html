@@ -80,6 +80,11 @@
       <tr><td>Win rate by format (cross-format only)</td>
           <td class="num">{% for f, v in bias.format_win_rate.items() %}{{ f }}={{ v }} {% endfor %}</td></tr>
       {% endif %}
+      <tr><td>Gold attention checks served</td><td class="num">{{ bias.gold_checks_served }}</td></tr>
+      <tr><td>Gold pass rate <span class="subtle">(voter trust signal)</span></td>
+          <td class="num strong">{% if bias.gold_pass_rate is none %}—{% else %}{{ bias.gold_pass_rate }}{% endif %}</td></tr>
+      <tr><td>Low-trust sessions (excluded from BT)</td>
+          <td class="num">{{ bias.low_trust_sessions }} / {{ bias.sessions }}</td></tr>
     </tbody>
   </table>
 </section>

@@ -61,9 +61,7 @@ class Generator(Base):
     slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(128))
     description: Mapped[str] = mapped_column(Text, default="")
-    kind: Mapped[str] = mapped_column(
-        String(64), default="model"
-    )  # model | human | baseline
+    kind: Mapped[str] = mapped_column(String(64), default="model")  # model | human | baseline
     is_anonymous: Mapped[bool] = mapped_column(Boolean, default=True)
 
     outputs: Mapped[list["ModelOutput"]] = relationship(back_populates="generator")
@@ -101,16 +99,15 @@ class ModelOutput(Base):
     generator_id: Mapped[int] = mapped_column(ForeignKey("generator.id"), index=True)
     title: Mapped[str] = mapped_column(String(200), default="")
     asset_path: Mapped[str] = mapped_column(String(512))  # relative to ASSET_DIR
-    asset_format: Mapped[str] = mapped_column(
-        String(32), default="glb"
-    )  # glb|gltf|pdb|...
+    asset_format: Mapped[str] = mapped_column(String(32), default="glb")  # glb|gltf|pdb|...
     meta_json: Mapped[str] = mapped_column(Text, default="{}")
     n_comparisons: Mapped[int] = mapped_column(Integer, default=0)  # for matchmaking
+    # Gold/decoy assets used only for attention checks — excluded from matchmaking
+    # and from all rankings.
+    is_gold: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
-    task: Mapped["Task"] = relationship(
-        back_populates="outputs", foreign_keys=[task_id]
-    )
+    task: Mapped["Task"] = relationship(back_populates="outputs", foreign_keys=[task_id])
     generator: Mapped["Generator"] = relationship(back_populates="outputs")
 
 
@@ -125,11 +122,13 @@ class Comparison(Base):
     output_b_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"))
     criterion_id: Mapped[int] = mapped_column(ForeignKey("criterion.id"))
     session_id: Mapped[str] = mapped_column(String(64), index=True)
+    # Gold attention check: is_gold set when this pair has a known-correct answer
+    # (gold_expected ∈ {'a','b'} = the slot holding the good asset).
+    is_gold: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    gold_expected: Mapped[str | None] = mapped_column(String(1), nullable=True)
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
-    vote: Mapped["Vote | None"] = relationship(
-        back_populates="comparison", uselist=False
-    )
+    vote: Mapped["Vote | None"] = relationship(back_populates="comparison", uselist=False)
 
 
 class Vote(Base):
@@ -155,9 +154,7 @@ class Rating(Base):
 
     __tablename__ = "rating"
     __table_args__ = (
-        UniqueConstraint(
-            "generator_id", "category_id", "criterion_id", name="uq_rating_scope"
-        ),
+        UniqueConstraint("generator_id", "category_id", "criterion_id", name="uq_rating_scope"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -171,6 +168,40 @@ class Rating(Base):
     bt_lower: Mapped[float] = mapped_column(Float, default=1000.0)
     bt_upper: Mapped[float] = mapped_column(Float, default=1000.0)
     n_games: Mapped[int] = mapped_column(Integer, default=0)
-    updated: Mapped[dt.datetime] = mapped_column(
-        DateTime, default=_utcnow, onupdate=_utcnow
-    )
+    updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class VoterSession(Base):
+    """Trust bookkeeping for an anonymous voter (keyed by the session cookie).
+
+    trust starts at 1.0 (benefit of the doubt) and is Laplace-smoothed by
+    gold attention-check outcomes: trust = (gold_passed + 1) / (gold_seen + 1).
+    Votes from sessions below TRUST_THRESHOLD are excluded from the authoritative
+    Bradley-Terry leaderboard (but still recorded).
+    """
+
+    __tablename__ = "voter_session"
+
+    session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    trust: Mapped[float] = mapped_column(Float, default=1.0)
+    gold_seen: Mapped[int] = mapped_column(Integer, default=0)
+    gold_passed: Mapped[int] = mapped_column(Integer, default=0)
+    n_votes: Mapped[int] = mapped_column(Integer, default=0)
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+    updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class GoldPair(Base):
+    """A calibration pair with a known-correct answer (good vs decoy output).
+
+    Both referenced outputs have model_output.is_gold = True so they never enter
+    normal matchmaking or rankings.
+    """
+
+    __tablename__ = "gold_pair"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("task.id"), index=True)
+    good_output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"))
+    bad_output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"))
+    note: Mapped[str] = mapped_column(Text, default="")

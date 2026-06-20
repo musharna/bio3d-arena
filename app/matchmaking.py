@@ -12,24 +12,35 @@ import random
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .models import ModelOutput, Task
+from .models import GoldPair, ModelOutput, Task
+
+
+def _real_outputs(task: Task) -> list[ModelOutput]:
+    """Task outputs eligible for normal matchmaking (gold/decoy assets excluded)."""
+    return [o for o in task.outputs if not o.is_gold]
 
 
 def pick_task(db: Session, category_id: int | None = None) -> Task | None:
-    """Pick a random active task that has at least two outputs to compare."""
+    """Pick a random active task that has at least two (non-gold) outputs."""
     stmt = select(Task).where(Task.active.is_(True))
     if category_id is not None:
         stmt = stmt.where(Task.category_id == category_id)
     tasks = db.execute(stmt).scalars().all()
-    candidates = [t for t in tasks if len(t.outputs) >= 2]
+    candidates = [t for t in tasks if len(_real_outputs(t)) >= 2]
     if not candidates:
         return None
     return random.choice(candidates)
 
 
+def pick_gold_pair(db: Session) -> GoldPair | None:
+    """Pick a random gold attention-check pair, if any are configured."""
+    golds = db.execute(select(GoldPair)).scalars().all()
+    return random.choice(golds) if golds else None
+
+
 def pick_pair(db: Session, task: Task) -> tuple[ModelOutput, ModelOutput] | None:
-    """Pick two distinct outputs for the task, biased toward least-compared ones."""
-    outputs = list(task.outputs)
+    """Pick two distinct (non-gold) outputs for the task, biased toward least-compared."""
+    outputs = _real_outputs(task)
     if len(outputs) < 2:
         return None
     # Least-sampled first; random tiebreak so equal-count outputs rotate fairly.

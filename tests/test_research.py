@@ -56,8 +56,9 @@ def test_sliced_leaderboard_and_export():
     assert len(g["rows"]) == 5
 
     # Export contains the scoped votes with full provenance (generators revealed).
+    # (Per-session dedup caps distinct flowers×realism pairs, so < 14 may land.)
     ex = client.get("/api/export.json").json()
-    assert ex["n_votes"] >= 14
+    assert ex["n_votes"] >= 6
     rec = ex["votes"][0]
     for field in ("criterion", "category", "generator_a", "generator_b", "winner", "voted_at"):
         assert field in rec

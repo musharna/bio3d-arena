@@ -28,8 +28,13 @@ structural accuracy, visual quality, and scientific usefulness.
   _meaningfully_ ahead of B?" → P(A ranks above B) matrix + "beats next rank?")
   and a **position/format bias audit** (left-win-rate, tie/bad rate, cross-format
   confound).
-- **Storage** — prompts, tasks, generators, 3D outputs, comparisons, and votes in
-  SQLite via SQLAlchemy.
+- **Vote integrity / anti-abuse** — **gold-standard attention checks** (good vs
+  decoy) that score voter **trust**; trust-gated rankings (low-trust sessions
+  excluded from Bradley–Terry); **rate limiting**; per-session **dedup**; a
+  **captcha seam** (Turnstile/hCaptcha integration point); and a public
+  **methodology** page.
+- **Storage** — prompts, tasks, generators, 3D outputs, comparisons, votes, and
+  voter-trust in SQLite via SQLAlchemy.
 - **Admin tools** — token-gated UI to add categories, criteria, tasks, and
   generators; upload `.glb` outputs; and trigger a leaderboard recompute.
 
@@ -106,7 +111,7 @@ docker run -p 8000:8000 -e BIO3D_ADMIN_TOKEN=... -v $PWD/data:/data bio3d-arena
 ## Tests
 
 ```bash
-pytest -q        # ranking + API + slices + ingestion + molecular + stats (27 tests)
+pytest -q        # ranking, API, slices, ingestion, molecular, stats, integrity (33 tests)
 ```
 
 ## Ingesting real generator outputs
@@ -150,7 +155,11 @@ gene/parameter vector or prompt.
   generators revealed for offline analysis).
 - `GET /api/significance?criterion=&category=` — pairwise P(A ranks above B)
   matrix + per-rank "beats next?" significance (paired bootstrap). Page: `/significance`.
-- `GET /api/bias` — position/format bias audit (left-win-rate, tie/bad, cross-format).
+- `GET /api/bias` — position/format bias audit + gold pass-rate + low-trust count.
+- `POST /api/vote` is rate-limited, deduplicated, and trust-scored; ~`GOLD_RATE`
+  of comparisons are gold attention checks. Tunables: `BIO3D_VOTE_RATE_LIMIT`,
+  `BIO3D_VOTE_RATE_WINDOW`, `BIO3D_GOLD_RATE`, `BIO3D_TRUST_THRESHOLD`,
+  `BIO3D_REQUIRE_CAPTCHA`. See `/methodology`.
 
 Ties are credited as a split (one win each direction) so they inform
 Bradley–Terry. `POST /admin/recompute` refits every (criterion × {global + each
@@ -179,9 +188,13 @@ category}) scope.
 - ✅ **Statistical rigor**: paired-bootstrap pairwise significance ("is A
   meaningfully above B?") + position/format bias audit (`/significance`,
   `/api/significance`, `/api/bias`). (Full Rao–Kupper tie model still future.)
-- ⬜ **Public-arena hardening**: anti-abuse (rate limits, captcha, gold-standard
-  attention checks, outlier-voter down-weighting), Postgres + object storage +
-  CDN, methodology/transparency page, model-author submission + moderation.
+- ✅ **Vote integrity / anti-abuse**: gold-standard attention checks + trust
+  scoring, trust-gated Bradley–Terry, rate limiting, per-session dedup, captcha
+  seam, and a `/methodology` transparency page.
+- ⬜ **Scale-out** (remaining): Postgres (works today via `BIO3D_DATABASE_URL`;
+  needs load-test + connection pooling) + object storage (S3/R2) with a storage
+  abstraction + CDN; Redis-backed rate limiting for multi-worker; model-author
+  submission + moderation queue.
 
 ## Notes
 

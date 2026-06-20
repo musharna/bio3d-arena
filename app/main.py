@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import random
 import uuid
 from pathlib import Path
 
@@ -13,7 +14,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import config, ingest, matchmaking, service
+from . import config, ingest, integrity, matchmaking, service
 from .database import get_db, init_db
 from .models import Category, Comparison, Criterion, Generator, ModelOutput, Rating, Task, Vote
 from .schemas import CategoryIn, GeneratorIn, TaskIn, VoteIn
@@ -64,16 +65,67 @@ def _resolve_category_id(db: Session, category_slug: str | None) -> int | None:
     return cat.id if cat else None
 
 
+def _serialize(
+    comparison: Comparison, task: Task, crit: Criterion, out_a: ModelOutput, out_b: ModelOutput
+) -> dict:
+    """Anonymized arena payload — never leaks generator identity or gold status."""
+    return {
+        "comparison_id": comparison.id,
+        "task": {"title": task.title, "prompt": task.prompt, "category": task.category.name},
+        "criterion": {"slug": crit.slug, "name": crit.name},
+        "a": {"url": f"/assets/{out_a.asset_path}", "format": out_a.asset_format},
+        "b": {"url": f"/assets/{out_b.asset_path}", "format": out_b.asset_format},
+    }
+
+
+def _build_gold_comparison(db: Session, session_id: str, crit: Criterion) -> dict | None:
+    """Build a gold attention-check comparison (good vs decoy) with a known answer."""
+    gp = matchmaking.pick_gold_pair(db)
+    if gp is None:
+        return None
+    good = db.get(ModelOutput, gp.good_output_id)
+    bad = db.get(ModelOutput, gp.bad_output_id)
+    task = db.get(Task, gp.task_id)
+    # Randomize which slot holds the good asset; gold_expected records it.
+    if random.random() < 0.5:
+        out_a, out_b, expected = good, bad, "a"
+    else:
+        out_a, out_b, expected = bad, good, "b"
+    comparison = Comparison(
+        task_id=task.id,
+        output_a_id=out_a.id,
+        output_b_id=out_b.id,
+        criterion_id=crit.id,
+        session_id=session_id,
+        is_gold=True,
+        gold_expected=expected,
+    )
+    db.add(comparison)
+    db.commit()
+    return _serialize(comparison, task, crit, out_a, out_b)
+
+
 def _build_comparison(
     db: Session,
     session_id: str,
     criterion_slug: str | None = None,
     category_slug: str | None = None,
 ) -> dict | None:
-    """Pick a task + pair, persist a Comparison row, return an anonymized payload.
+    """Pick a task + pair (or inject a gold check), persist it, return anon payload."""
+    crit = None
+    if criterion_slug:
+        crit = (
+            db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+        )
+    if crit is None:
+        crit = _default_criterion(db)
 
-    Optionally restrict to a category and/or judge a specific criterion.
-    """
+    # Occasionally serve a gold attention check instead of a real comparison.
+    if random.random() < config.GOLD_RATE:
+        gold = _build_gold_comparison(db, session_id, crit)
+        if gold is not None:
+            return gold
+
     category_id = _resolve_category_id(db, category_slug)
     task = matchmaking.pick_task(db, category_id=category_id)
     if task is None:
@@ -82,13 +134,6 @@ def _build_comparison(
     if pair is None:
         return None
     out_a, out_b = pair
-    crit = None
-    if criterion_slug:
-        crit = (
-            db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
-        )
-    if crit is None:
-        crit = _default_criterion(db)
     comparison = Comparison(
         task_id=task.id,
         output_a_id=out_a.id,
@@ -98,14 +143,7 @@ def _build_comparison(
     )
     db.add(comparison)
     db.commit()
-    return {
-        "comparison_id": comparison.id,
-        "task": {"title": task.title, "prompt": task.prompt, "category": task.category.name},
-        "criterion": {"slug": crit.slug, "name": crit.name},
-        # Anonymized: never leak generator identity during voting.
-        "a": {"url": f"/assets/{out_a.asset_path}", "format": out_a.asset_format},
-        "b": {"url": f"/assets/{out_b.asset_path}", "format": out_b.asset_format},
-    }
+    return _serialize(comparison, task, crit, out_a, out_b)
 
 
 def _require_admin(token: str | None) -> None:
@@ -157,23 +195,42 @@ def api_vote(
     db: Session = Depends(get_db),
     criterion: str | None = None,
     category: str | None = None,
+    x_captcha_token: str | None = Header(default=None),
 ):
+    sid = request.state.session_id
+
+    # 1. Human verification (no-op unless REQUIRE_CAPTCHA is enabled).
+    if not integrity.verify_captcha(x_captcha_token):
+        raise HTTPException(403, "Captcha verification required/failed")
+    # 2. Rate limiting.
+    if not integrity.check_rate_limit(sid):
+        raise HTTPException(429, "Rate limit exceeded — slow down")
+
     comparison = db.get(Comparison, vote_in.comparison_id)
     if comparison is None:
         raise HTTPException(404, "Unknown comparison")
     if comparison.vote is not None:
         raise HTTPException(409, "Comparison already voted")
-    vote = Vote(
-        comparison_id=comparison.id,
-        winner=vote_in.winner,
-        session_id=request.state.session_id,
-    )
+    # 3. Dedup: a session may not re-vote the same (non-gold) pairing.
+    if not comparison.is_gold and integrity.already_voted_pair(
+        db, sid, comparison.output_a_id, comparison.output_b_id, comparison.criterion_id
+    ):
+        raise HTTPException(409, "You have already voted on this pairing")
+
+    vote = Vote(comparison_id=comparison.id, winner=vote_in.winner, session_id=sid)
     db.add(vote)
     db.flush()
-    service.apply_vote(db, vote)
+    integrity.note_vote(db, sid)
+
+    if comparison.is_gold:
+        # Attention check: update trust, do NOT feed rankings.
+        passed = vote_in.winner == comparison.gold_expected
+        integrity.record_gold_outcome(db, sid, passed)
+    else:
+        service.apply_vote(db, vote)
     db.commit()
     # Keep the same criterion/category filter for the follow-up comparison.
-    nxt = _build_comparison(db, request.state.session_id, criterion, category)
+    nxt = _build_comparison(db, sid, criterion, category)
     return {"status": "ok", "next": nxt}
 
 
@@ -257,6 +314,21 @@ def api_leaderboard(
         "category": category,
         "rows": _leaderboard_rows(db, criterion, category),
     }
+
+
+@app.get("/methodology", response_class=HTMLResponse)
+def methodology_page(request: Request):
+    return templates.TemplateResponse(
+        request,
+        "methodology.html",
+        {
+            "rate_limit": config.VOTE_RATE_LIMIT,
+            "rate_window": int(config.VOTE_RATE_WINDOW),
+            "gold_rate": config.GOLD_RATE,
+            "trust_threshold": config.TRUST_THRESHOLD,
+            "require_captcha": config.REQUIRE_CAPTCHA,
+        },
+    )
 
 
 # --------------------------------------------------------- significance + bias
