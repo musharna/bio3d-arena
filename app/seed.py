@@ -29,7 +29,7 @@ from .models import (
     Vote,
     VoterSession,
 )
-from .molec_gen import build_molecule_pdb
+from .molec_gen import build_molecule_pdb, build_molecule_sdf
 from .storage import get_storage
 
 
@@ -68,7 +68,7 @@ GENERATORS = [
 ]
 
 # (slug, category_slug, title, prompt, shape, kind)
-# kind: "mesh" → GLB via assets_gen · "pdb" → PDB via molec_gen (3Dmol viewer)
+# kind: "mesh" → GLB via assets_gen · "pdb" → PDB via molec_gen · "sdf" → SDF via molec_gen
 TASKS = [
     (
         "plant-cell",
@@ -117,6 +117,14 @@ TASKS = [
         "Generate an atomic-resolution small molecule as a PDB structure.",
         "molecule",
         "pdb",
+    ),
+    (
+        "ligand-sdf",
+        "molecules",
+        "Small molecule (SDF/molfile)",
+        "Generate a small organic molecule as an MDL SDF connection table.",
+        "molecule",
+        "sdf",
     ),
 ]
 
@@ -179,12 +187,14 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
             db.add(t)
             db.flush()
             task_by_slug[tslug] = (t, shape)
-            ext = "pdb" if kind == "pdb" else "glb"
+            ext = {"pdb": "pdb", "sdf": "sdf"}.get(kind, "glb")
             for gslug, gen in gens.items():
                 seed = _seed_int(tslug, gslug)
                 rel = Path("seed") / f"{tslug}__{gslug}.{ext}"
                 if kind == "pdb":
                     meta = build_molecule_pdb(seed, config.ASSET_DIR / rel)
+                elif kind == "sdf":
+                    meta = build_molecule_sdf(seed, config.ASSET_DIR / rel)
                 else:
                     meta = build_asset(shape, seed, config.ASSET_DIR / rel)
                 _publish(rel)

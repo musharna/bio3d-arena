@@ -48,3 +48,30 @@ def build_molecule_pdb(seed: int, out_path: Path) -> dict:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(text)
     return {"format": "pdb", "seed": int(seed), "atoms": n_atoms, "generated": True}
+
+
+def build_molecule_sdf(seed: int, out_path: Path) -> dict:
+    """Write a small connected molecule as a V2000 SDF. Returns provenance meta.
+
+    A chain of atoms with single bonds — valid MDL molfile that 3Dmol renders as
+    ball-and-stick. Element/length vary deterministically by seed.
+    """
+    rng = np.random.default_rng(seed)
+    n = int(rng.integers(4, 9))
+    coords = np.cumsum(rng.normal(0.0, 1.4, size=(n, 3)), axis=0)
+    elements = [_ELEMENTS[int(rng.integers(0, len(_ELEMENTS)))] for _ in range(n)]
+    bonds = [(i, i + 1) for i in range(1, n)]  # 1-indexed chain
+
+    header = ["arena-demo", "  Bio3DArena", ""]
+    counts = f"{n:>3}{len(bonds):>3}  0  0  0  0  0  0  0  0999 V2000"
+    atom_lines = [
+        f"{c[0]:>10.4f}{c[1]:>10.4f}{c[2]:>10.4f} {el:<3} 0  0  0  0  0  0  0  0  0  0  0  0"
+        for c, el in zip(coords, elements)
+    ]
+    bond_lines = [f"{a:>3}{b:>3}  1  0  0  0  0" for a, b in bonds]
+    block = header + [counts] + atom_lines + bond_lines + ["M  END", "$$$$"]
+    text = "\n".join(block) + "\n"
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(text)
+    return {"format": "sdf", "seed": int(seed), "atoms": n, "generated": True}

@@ -49,3 +49,27 @@ def test_sdf_content_type():
 
     assert storage.content_type_for("ligand.sdf") == "chemical/x-mdl-sdfile"
     assert storage.content_type_for("frag.mol") == "chemical/x-mdl-molfile"
+
+
+def test_build_molecule_sdf_roundtrips_through_validation(tmp_path):
+    from app import ingest
+    from app.molec_gen import build_molecule_sdf
+
+    out = tmp_path / "demo.sdf"
+    meta = build_molecule_sdf(7, out)
+    assert meta["format"] == "sdf"
+    assert meta["atoms"] >= 4
+    # The generated asset must pass our own ingest validator.
+    stats = ingest.validate_asset(out.read_bytes(), "sdf")
+    assert stats["atoms"] == meta["atoms"]
+
+
+def test_seed_creates_sdf_outputs():
+    from app.database import SessionLocal
+    from app.models import ModelOutput
+    from app.seed import seed_all
+
+    seed_all(force=True)
+    with SessionLocal() as db:
+        n = db.query(ModelOutput).filter_by(asset_format="sdf", is_gold=False).count()
+    assert n >= 1  # the ligand-sdf task produced SDF outputs
