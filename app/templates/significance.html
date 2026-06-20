@@ -55,12 +55,20 @@
       <tr>
         <th>{{ sig.labels[ri] }}</th>
         {% for p in row %}
-        <td class="mc {% if loop.index0 == ri %}mc-self{% elif p >= 0.95 %}mc-hi{% elif p >= 0.75 %}mc-mid{% elif p <= 0.05 %}mc-lo{% elif p <= 0.25 %}mc-lomid{% else %}mc-na{% endif %}">{{ '%.2f'|format(p) }}</td>
+        <td class="mc {% if loop.index0 == ri %}mc-self{% elif p >= 0.95 %}mc-hi{% elif p >= 0.75 %}mc-mid{% elif p <= 0.05 %}mc-lo{% elif p <= 0.25 %}mc-lomid{% else %}mc-na{% endif %}">{% if loop.index0 != ri %}{% if p >= 0.75 %}▲ {% elif p <= 0.25 %}▼ {% endif %}{% endif %}{{ '%.2f'|format(p) }}</td>
         {% endfor %}
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  </div>
+  <div class="matrix-legend">
+    <span><span class="swatch" style="background:#2f6fed"></span>▲ row clearly ahead (≥0.95)</span>
+    <span><span class="swatch" style="background:#8fb3f4"></span>leans row (≥0.75)</span>
+    <span><span class="swatch" style="background:#2a3548"></span>uncertain (~0.5)</span>
+    <span><span class="swatch" style="background:#e6b277"></span>leans column (≤0.25)</span>
+    <span><span class="swatch" style="background:#c2701a"></span>▼ column clearly ahead (≤0.05)</span>
+    <span class="subtle">Cell = P(row ranks above column).</span>
   </div>
   {% else %}
   <p>Not enough data for this slice yet. Cast votes in the <a href="/">Arena</a>.</p>

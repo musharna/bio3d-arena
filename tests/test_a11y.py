@@ -47,3 +47,20 @@ def test_style_has_focus_and_reduced_motion_rules():
     assert "prefers-reduced-motion" in css
     # muted bumped off the old marginal value
     assert "--muted: #8b98a9" not in css
+
+
+def test_significance_matrix_has_colorblind_legend():
+    # cast a handful of decisive votes so a matrix renders
+    import random
+
+    random.seed(11)
+    for i in range(12):
+        nxt = client.get("/api/next?criterion=overall&category=all").json()
+        client.post(
+            "/api/vote?criterion=overall&category=all",
+            json={"comparison_id": nxt["comparison_id"], "winner": "a" if i % 2 else "b"},
+        )
+    client.post("/admin/recompute", data={"token": "test-token"})
+    html = client.get("/significance?criterion=overall&category=all").text
+    assert "matrix-legend" in html  # legend block rendered
+    assert "row clearly ahead" in html  # legend explains the scale in words

@@ -25,24 +25,46 @@
   font-weight: 600;
 }
 .mc-hi {
-  background: #4cc38a;
-} /* row clearly beats col (>=0.95) */
+  background: #2f6fed;
+  color: #ffffff !important;
+} /* row clearly beats col (>=0.95) — strong blue */
 .mc-mid {
-  background: #9bd6b0;
-} /* leans row (>=0.75) */
+  background: #8fb3f4;
+  color: #0c1117 !important;
+} /* leans row (>=0.75) — light blue */
 .mc-na {
   background: #2a3548;
   color: #e6edf3 !important;
-} /* uncertain ~0.5 */
+} /* uncertain ~0.5 — neutral */
 .mc-lomid {
-  background: #c98a90;
-} /* leans col (<=0.25) */
+  background: #e6b277;
+  color: #0c1117 !important;
+} /* leans col (<=0.25) — light orange */
 .mc-lo {
-  background: #b9636b;
-} /* col clearly beats row (<=0.05) */
+  background: #c2701a;
+  color: #ffffff !important;
+} /* col clearly beats row (<=0.05) — strong orange */
 .mc-self {
   background: #161d28;
   color: #5c6b7e !important;
+}
+.matrix-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  margin: -0.5rem 0 1.5rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.matrix-legend .swatch {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 3px;
+  margin-right: 0.35rem;
+  vertical-align: -0.12rem;
+  border: 1px solid var(--border);
 }
 .sig-yes {
   color: #4cc38a;
