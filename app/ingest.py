@@ -23,7 +23,9 @@ from .models import Category, Generator, ModelOutput, Task
 from .storage import get_storage
 
 MESH_FORMATS = {"glb", "gltf"}  # rendered by <model-viewer>
-MOLECULAR_FORMATS = {"pdb", "cif", "mmcif", "ent"}  # rendered by 3Dmol.js
+PDB_FORMATS = {"pdb", "cif", "mmcif", "ent"}  # rendered by 3Dmol.js (atomic coords)
+SDF_FORMATS = {"sdf", "mol"}  # rendered by 3Dmol.js (connection-table molfiles)
+MOLECULAR_FORMATS = PDB_FORMATS | SDF_FORMATS
 ALLOWED_FORMATS = MESH_FORMATS | MOLECULAR_FORMATS
 
 
@@ -38,13 +40,16 @@ def sha256(data: bytes) -> str:
 def validate_asset(data: bytes, ext: str) -> dict:
     """Validate an asset by format family and return provenance stats.
 
-    Meshes (GLB/GLTF) must load with geometry; molecular files (PDB/mmCIF) must
-    contain atom records. Raises IngestError on unknown/unparseable/empty assets.
+    Meshes (GLB/GLTF) must load with geometry; PDB/mmCIF must contain atom
+    records; SDF/MOL must have a V2000/V3000 counts line with ≥1 atom. Raises
+    IngestError on unknown/unparseable/empty assets.
     """
     ext = ext.lower()
     if ext in MESH_FORMATS:
         return _validate_mesh(data, ext)
-    if ext in MOLECULAR_FORMATS:
+    if ext in SDF_FORMATS:
+        return _validate_sdf(data, ext)
+    if ext in PDB_FORMATS:
         return _validate_molecular(data, ext)
     raise IngestError(f"Unsupported format '{ext}'. Arena renders {sorted(ALLOWED_FORMATS)}.")
 
@@ -90,6 +95,36 @@ def _validate_molecular(data: bytes, ext: str) -> dict:
         raise IngestError("mmCIF/CIF missing the _atom_site loop (no atoms).")
     atoms = sum(1 for line in text.splitlines() if line.startswith(("ATOM ", "HETATM")))
     return {"kind": "molecular", "atoms": atoms}
+
+
+def _validate_sdf(data: bytes, ext: str) -> dict:
+    """Validate an MDL MOL/SDF connection-table file (V2000 or V3000)."""
+    text = data.decode("utf-8", errors="replace")
+    lines = text.splitlines()
+    # MOL/SDF layout: 3 header lines, then the counts line.
+    if len(lines) < 4:
+        raise IngestError("SDF/MOL too short — missing the counts line.")
+    counts = lines[3]
+    if "V2000" not in counts and "V3000" not in counts:
+        raise IngestError("SDF/MOL counts line missing V2000/V3000 tag.")
+    n_atoms = 0
+    if "V3000" in counts:
+        for ln in lines:
+            if ln.strip().startswith("M  V30 COUNTS"):
+                try:
+                    n_atoms = int(ln.split()[3])
+                except (IndexError, ValueError):
+                    n_atoms = 0
+                break
+    else:  # V2000 packs atom count in the first 3 columns of the counts line
+        try:
+            n_atoms = int(counts[:3])
+        except ValueError:
+            n_atoms = 0
+    if n_atoms <= 0:
+        raise IngestError("SDF/MOL has zero atoms.")
+    n_mols = text.count("$$$$") or 1
+    return {"kind": "molecular", "atoms": n_atoms, "molecules": n_mols, "subformat": "sdf"}
 
 
 def upsert_category(
