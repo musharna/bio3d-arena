@@ -42,7 +42,7 @@ screenshots + verify 3D viewer runtime before the visual fixes are called done.
       `rank = 1 + count(models whose lower CI > this model's upper CI)`. Most-copied gold-standard
       pattern (LMArena, Scale SEAL, Vals AI). _Low effort; we already have BT lower/upper._
 - [x] **[HIGH] Per-row CI + vote-count columns visible on the leaderboard.** We compute BT CIs but
-      the visible credibility layer (CI bar + n_games per row) needs surfacing. _Low._
+      the visible credibility layer (CI bar + n*games per row) needs surfacing. \_Low.*
 - [x] **[HIGH] Explicit tie handling in the BT fit** — standard recipe duplicates each tie 50/50
       into A-win + B-win. **Verify ties aren't silently dropped today.** _Low._
 - [ ] **[MED] Per-category / per-dimension leaderboards from one vote stream** (per molecule class:
@@ -145,10 +145,10 @@ render only **GLB/GLTF (mesh)** and **PDB/mmCIF (molecular)**.
 ### C2. Benchmarks gated by license / conversion / expert judgment
 
 - [~] **[MED] Docking / pose plausibility:** PoseBusters V2 (BSD-3), Astex Diverse, CrossDocked2020,
-      DockGen — **needs SDF support + protein+ligand co-display.**
-      _(SDF display path unblocked — Increment 1; content loading still needed.)_
+  DockGen — **needs SDF support + protein+ligand co-display.**
+  _(SDF display path unblocked — Increment 1; content loading still needed.)_
 - [~] **[MED] Conformer generation:** GEOM-Drugs / GEOM-QM9 — **needs SDF.**
-      _(SDF display path unblocked — Increment 1; content loading still needed.)_
+  _(SDF display path unblocked — Increment 1; content loading still needed.)_
 - [ ] **[MED] Protein/antibody design:** RFdiffusion binders (backbone-only — pre-pack), CDR-H3.
 - [ ] **[MED] Roots:** CPlantBox (GPL-3.0 — license-check assets) — skeleton→tube-mesh needed.
 - [ ] **[MED] Cells/organelles meshes:** Allen Cell shape meshes (VTK→GLB), OpenOrganelle/COSEM
@@ -192,15 +192,17 @@ the core product — ship with ZERO affordances. ~1 focused day on viewer afford
 
 ### D1. 3D viewer UX (core product — weakest area)
 
-- [ ] **[CRITICAL] No interaction hint on viewers** — bare gradient box; add a "drag to rotate ·
-      scroll to zoom" chip in each `.viewer-slot` (pointer-events:none, fades on first interaction).
-- [ ] **[CRITICAL] No loading state** — `mountMesh`/`mountMolecular` show nothing while a large GLB/
-      PDB loads. Inject spinner; remove on model-viewer `load` event / after `viewer.render()`.
-- [ ] **[CRITICAL] No asset-failure fallback** — molecular `fetch` has no try/catch; a 404 leaves a
-      blank slot next to a working one → silently biases the vote. Wrap both mounts, render "⚠ Failed to
-      load" on error.
-- [ ] **[HIGH] No reset-camera / fullscreen control** — 360px is small; users can't recenter after
-      zoom. Add a per-`.model-col` control strip.
+- [x] **[CRITICAL] No interaction hint on viewers** — DONE (Inc3 @c8f1294): hover "drag to rotate ·
+      scroll to zoom" chip (`.viewer-hint`, pointer-events:none) in each `.viewer-slot`.
+- [x] **[CRITICAL] No loading state** — DONE (Inc3 @c8f1294): spinner overlay injected by
+      `mountMesh`/`mountMolecular`, removed on model-viewer `load` / after `viewer.render()`.
+- [x] **[CRITICAL] No asset-failure fallback** — DONE (Inc3 @c8f1294): both mounts wrapped; 404/error
+      renders "⚠️ Model/Structure failed to load". Screenshot-verified via Playwright (broken-asset
+      injection → `.viewer-error`). Also fixed an async use-after-teardown race (per-slot generation
+      guard `slot._viewerGen`) caught in independent review.
+- [~] **[HIGH] No reset-camera / fullscreen control** — DEFERRED (YAGNI): `<model-viewer>` already has
+  camera-controls + 3Dmol drag; per-viewer fullscreen APIs differ and add complexity for low value.
+  Revisit if users report the 360px frame is too small.
 - [ ] **[HIGH] model-viewer missing `alt` / `poster` / `loading`** (accessibility + perceived load).
 - [ ] **[MED] Molecular bg `0x131a24` (flat) mismatches slot radial gradient** — the two columns
       won't look like peers. Make both transparent or both flat.
@@ -222,10 +224,11 @@ the core product — ship with ZERO affordances. ~1 focused day on viewer afford
 
 ### D3. Significance matrix & leaderboard
 
-- [ ] **[CRITICAL] Significance matrix NOT colorblind-safe** — red↔green coded, number is the only
-      redundant cue (and it's a probability, not good/bad). Add a non-color cue (▲/▼ arrows or diverging
-      blue↔orange) AND a visible legend.
-- [ ] **[HIGH] Matrix has no legend at all** — render a swatch key above the table.
+- [x] **[CRITICAL] Significance matrix NOT colorblind-safe** — DONE (Inc3 @c8f1294): recolored
+      green↔red → diverging blue↔orange (colorblind-safe) AND added ▲/▼ glyphs as a redundant
+      non-color cue on the strong cells.
+- [x] **[HIGH] Matrix has no legend at all** — DONE (Inc3 @c8f1294): `.matrix-legend` swatch key
+      below the table, with "Cell = P(row ranks above column)".
 - [ ] **[MED] Matrix doesn't scale past ~8–10 generators** — add sticky header + first column,
       truncate/rotate long labels.
 - [ ] **[MED] Leaderboard BT-score column has no visual encoding** — add a horizontal CI whisker
@@ -235,17 +238,19 @@ the core product — ship with ZERO affordances. ~1 focused day on viewer afford
 
 - [ ] **[HIGH] Empty states leak template fragments** — significance bias-audit table renders raw
       `{{ bias.* }}` / `—` when `sig.status != 'ok'`. Gate the whole bias block behind a data check.
-- [ ] **[HIGH] No visible focus styles anywhere** — add `:focus-visible{outline:2px solid
-var(--accent2)}`; the app advertises keyboard voting but gives no focus indication.
-- [ ] **[HIGH] `--muted #8b98a9` on `--bg #0f1419` ≈ 4.0:1 — fails WCAG AA** for body text (used in
-      `.subtle`, `.criterion`, nav, prompts). Lighten to ~#9fb0c3 (≈5:1) or reserve for large text.
-- [ ] **[HIGH] No favicon** — blank tab icon signals "unfinished." Add SVG + apple-touch-icon.
-- [ ] **[HIGH] Admin link in PUBLIC top nav** (base.html:27) — remove Admin/Moderation from public
-      nav even if token-gated server-side.
-- [ ] **[HIGH] "MVP" stamped in every footer** (base.html:32) + "Upload Model Output" admin headings
-      — undercuts the rigorous methodology; a researcher reads "MVP" as "don't cite." Drop from public
-      chrome.
-- [ ] **[MED] No `prefers-reduced-motion` block** (becomes mandatory once a spinner is added).
+- [x] **[HIGH] No visible focus styles anywhere** — DONE (Inc3 @c8f1294): `:focus-visible` ring
+      (2px `--accent2`) on a/button/select/input/textarea/[tabindex].
+- [x] **[CORRECTED — claim was false] `--muted #8b98a9` "fails WCAG AA"** — VERIFIED FALSE in Inc3
+      (code-level audit guess, no browser). Measured contrast vs bg/panel/panel2 = 6.31 / 5.44 / 4.79:1,
+      all ≥ the 4.5:1 AA floor for normal text. It DOES fail AAA (7:1) and is marginal on panel2, so
+      Inc3 bumped `--muted → #a3b0c2` (8.42 / 7.26 / 6.38) as AAA/small-text headroom — NOT an AA fix.
+- [x] **[HIGH] No favicon** — DONE (Inc3 @c8f1294): inline DNA-mark `favicon.svg` + `rel="icon"` link.
+      (apple-touch-icon not added — SVG favicon covers modern tabs; revisit if iOS pinning matters.)
+- [x] **[HIGH] Admin link in PUBLIC top nav** — DONE (Inc3 @c8f1294): removed from `<nav>`; `/admin`
+      route stays reachable by direct URL (test asserts both).
+- [~] **[HIGH] "MVP" stamped in every footer** — footer "· MVP" DROPPED (Inc3 @c8f1294). Remaining:
+  admin-page "Upload Model Output" headings unchanged (operator-facing, lower priority).
+- [x] **[MED] No `prefers-reduced-motion` block** — DONE (Inc3 @c8f1294): added alongside the spinner.
 - [ ] **[MED] Status updates not announced** — add `aria-live="polite"` to `#status-line` /
       `#submit-status`.
 - [ ] **[MED] 3D viewers fully inaccessible to screen readers** — add `aria-label`.
@@ -266,16 +271,20 @@ var(--accent2)}`; the app advertises keyboard voting but gives no focus indicati
 Ordered by leverage-per-effort. Each is one shippable increment in the established
 test → live-verify → commit → merge pattern.
 
-1. **Real benchmark content + SDF support** (C1 + C3 SDF) — the platform is empty without real tasks;
-   SDF unlocks the entire molecular-docking world. Highest product value.
-2. **Leaderboard credibility surface** (B1 CI-rank + CI bars + vote counts + tie handling) — low
-   effort, directly raises citability; verify ties aren't dropped.
-3. **Viewer affordances + accessibility pass** (D1 + D4 focus/contrast/favicon/MVP/admin-nav) — the
-   ~1-day fix that moves the _whole site_ from prototype to credible.
-4. **Domain moat: structure-validation track** (B3) — our strongest differentiator vs general arenas.
+1. ~~**Real benchmark content + SDF support**~~ **DONE+MERGED master @6905cf4** — SDF/MOL end-to-end +
+   benchmark manifest/loader + real CC0 assets.
+2. ~~**Leaderboard credibility surface**~~ **DONE+MERGED master @d0d48d1** — CI-grouped Rank (UB) + CI
+   whisker bars; tie handling verified already-correct.
+3. ~~**Viewer affordances + accessibility pass**~~ **DONE+MERGED master @c8f1294 (Inc3)** — viewer
+   loading/hint/failure-fallback (+ async-race fix), focus-visible, reduced-motion, colorblind-safe
+   blue/orange matrix + legend, favicon, dropped MVP footer + Admin nav, muted AAA bump. Playwright
+   installed in `.venv` (Chromium) and used to screenshot-verify. Corrected a false AA-failure claim.
+4. **Domain moat: structure-validation track** (B3) **← NEXT** — our strongest differentiator vs
+   general arenas.
 5. **Transparency: vote-data export + read API** (B4 + B5) — cheap, high trust ROI.
 6. **Engagement: embeddable rank badge** (B6) — unique white space, viral lever.
 7. **Voxel→GLB pipeline** (C3) — unlocks the largest corpus; bigger build, schedule after 1–4.
 
-**Get a headless browser (playwright) first** so the D-series visual fixes can be screenshot-verified
-rather than reasoned-about.
+**Headless browser (Playwright + Chromium) now installed in `.venv`** — reusable screenshot harnesses
+live under the job tmp dir (`shoot.py`, `shoot_sig.py`, `viewer_check.py`); promote to `scripts/` if
+the visual-verify loop recurs.
