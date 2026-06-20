@@ -32,3 +32,12 @@ def test_ci_grouped_rank_matches_formula():
     # Rank 1 always exists; ranks are non-decreasing down the (point-sorted) board.
     assert rows[0]["rank"] == 1
     assert all(rows[i]["rank"] <= rows[i + 1]["rank"] for i in range(len(rows) - 1))
+
+
+def test_leaderboard_page_renders_rank_ub_and_ci_bar():
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    html = TestClient(app).get("/leaderboard").text
+    assert "Rank (UB)" in html
+    assert "ci-bar" in html  # the whisker bar is present

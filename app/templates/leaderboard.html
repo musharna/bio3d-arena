@@ -20,9 +20,10 @@
     </label>
   </form>
   <p class="subtle">
-    {{ total_votes }} votes cast. BT = Bradley–Terry score (Elo-scaled) with 95%
-    bootstrap CI, recomputed in Admin. Elo updates live per vote (global/overall
-    scope). Select a category + criterion above to slice the rankings.
+    {{ total_votes }} votes cast. <b>Rank (UB)</b> groups models whose 95% bootstrap
+    CIs overlap into the same rank (they are not statistically separable). BT =
+    Bradley–Terry score (Elo-scaled); the bar shows the 95% CI with the point
+    estimate marked. Elo updates live per vote. Recompute in Admin.
   </p>
   <p class="subtle bias-line">
     Bias audit — left(A) win rate
@@ -33,8 +34,15 @@
   {% if rows %}
   <table class="ranktable">
     <thead>
-      <tr><th>#</th><th>Generator</th><th>Kind</th><th>BT score</th>
-        <th>95% CI</th><th>Elo</th><th>Games</th></tr>
+      <tr>
+        <th title="Models with overlapping 95% CIs share a rank">Rank (UB)</th>
+        <th>Generator</th>
+        <th>Kind</th>
+        <th>BT score</th>
+        <th>95% CI</th>
+        <th>Elo</th>
+        <th>Games</th>
+      </tr>
     </thead>
     <tbody>
       {% for r in rows %}
@@ -43,7 +51,19 @@
         <td class="gen">{{ r.generator }}</td>
         <td><span class="kind kind-{{ r.kind }}">{{ r.kind }}</span></td>
         <td class="num strong">{{ r.bt_score }}</td>
-        <td class="num subtle">[{{ r.bt_lower }}, {{ r.bt_upper }}]</td>
+        <td class="ci-cell">
+          <div
+            class="ci-bar"
+            title="95% bootstrap CI [{{ r.bt_lower }}, {{ r.bt_upper }}]"
+          >
+            <span
+              class="ci-range"
+              style="left: {{ r.ci_left }}%; width: {{ r.ci_width }}%;"
+            ></span>
+            <span class="ci-dot" style="left: {{ r.ci_point }}%;"></span>
+          </div>
+          <span class="ci-nums">[{{ r.bt_lower }}, {{ r.bt_upper }}]</span>
+        </td>
         <td class="num">{{ r.elo }}</td>
         <td class="num">{{ r.n_games }}</td>
       </tr>

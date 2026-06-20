@@ -391,6 +391,41 @@ main {
   color: var(--accent);
 }
 
+/* Leaderboard CI whisker bar */
+.ci-cell {
+  min-width: 140px;
+}
+.ci-bar {
+  position: relative;
+  height: 8px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  margin-bottom: 0.25rem;
+}
+.ci-range {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 6px;
+  background: rgba(91, 141, 239, 0.45); /* accent2 @ 45% */
+  border-radius: 999px;
+}
+.ci-dot {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.ci-nums {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Admin */
 .admin h2 {
   margin-top: 0;
