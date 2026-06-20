@@ -1,0 +1,11 @@
+# Optional dependencies for production scale-out. Install alongside requirements.txt
+# only when the corresponding backend is enabled — the core app never imports these
+# unless its config selects them.
+#
+#   BIO3D_DATABASE_URL=postgresql+psycopg://...   -> needs psycopg
+#   BIO3D_STORAGE_BACKEND=s3                       -> needs boto3
+#   BIO3D_REDIS_URL=redis://...                    -> needs redis
+
+psycopg[binary]==3.2.3
+boto3==1.35.49
+redis==5.2.0

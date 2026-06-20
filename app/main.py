@@ -18,6 +18,7 @@ from . import config, ingest, integrity, matchmaking, service
 from .database import get_db, init_db
 from .models import Category, Comparison, Criterion, Generator, ModelOutput, Rating, Task, Vote
 from .schemas import CategoryIn, GeneratorIn, TaskIn, VoteIn
+from .storage import get_storage
 
 config.ensure_dirs()
 init_db()
@@ -27,7 +28,10 @@ templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 
 app = FastAPI(title="Bio 3D Arena", version="0.1.0")
 app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
-app.mount("/assets", StaticFiles(directory=str(config.ASSET_DIR)), name="assets")
+# Local backend serves assets from disk; the S3 backend serves them from the bucket/CDN.
+storage = get_storage()
+if not storage.remote:
+    app.mount("/assets", StaticFiles(directory=str(config.ASSET_DIR)), name="assets")
 
 SESSION_COOKIE = "bio3d_session"
 
@@ -73,8 +77,8 @@ def _serialize(
         "comparison_id": comparison.id,
         "task": {"title": task.title, "prompt": task.prompt, "category": task.category.name},
         "criterion": {"slug": crit.slug, "name": crit.name},
-        "a": {"url": f"/assets/{out_a.asset_path}", "format": out_a.asset_format},
-        "b": {"url": f"/assets/{out_b.asset_path}", "format": out_b.asset_format},
+        "a": {"url": storage.url_for(out_a.asset_path), "format": out_a.asset_format},
+        "b": {"url": storage.url_for(out_b.asset_path), "format": out_b.asset_format},
     }
 
 
@@ -479,16 +483,14 @@ async def admin_upload_output(
 ):
     _require_admin(token)
     ext = (file.filename or "asset.glb").rsplit(".", 1)[-1].lower()
-    rel = Path("uploads") / f"{uuid.uuid4().hex}.{ext}"
-    dest = config.ASSET_DIR / rel
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(await file.read())
+    rel = str(Path("uploads") / f"{uuid.uuid4().hex}.{ext}").replace("\\", "/")
+    storage.save(rel, await file.read())
     db.add(
         ModelOutput(
             task_id=task_id,
             generator_id=generator_id,
             title=title,
-            asset_path=str(rel).replace("\\", "/"),
+            asset_path=rel,
             asset_format=ext,
             meta_json=json.dumps({"uploaded": True, "filename": file.filename}),
         )
@@ -620,7 +622,7 @@ async def api_register_output(
         "created": created,  # False if an identical asset was already registered
         "task_id": output.task_id,
         "generator_id": output.generator_id,
-        "asset_url": f"/assets/{output.asset_path}",
+        "asset_url": storage.url_for(output.asset_path),
         "format": output.asset_format,
         "meta": json.loads(output.meta_json),
     }

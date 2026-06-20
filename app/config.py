@@ -33,6 +33,21 @@ TRUST_THRESHOLD = float(os.environ.get("BIO3D_TRUST_THRESHOLD", "0.5"))
 # Optional human-verification (captcha). Off by default so local/dev needs no keys.
 REQUIRE_CAPTCHA = os.environ.get("BIO3D_REQUIRE_CAPTCHA", "false").lower() in ("1", "true", "yes")
 
+# --- Scale-out: storage, DB pooling, distributed rate limiting ---
+# Asset storage backend: "local" (filesystem + StaticFiles) or "s3" (object store).
+STORAGE_BACKEND = os.environ.get("BIO3D_STORAGE_BACKEND", "local").lower()
+S3_BUCKET = os.environ.get("BIO3D_S3_BUCKET", "")
+S3_PREFIX = os.environ.get("BIO3D_S3_PREFIX", "")
+S3_PUBLIC_BASE_URL = os.environ.get("BIO3D_S3_PUBLIC_BASE_URL", "")  # e.g. a CDN domain
+S3_PRESIGN_TTL = int(os.environ.get("BIO3D_S3_PRESIGN_TTL", "3600"))
+
+# SQLAlchemy connection pool (ignored for SQLite).
+DB_POOL_SIZE = int(os.environ.get("BIO3D_DB_POOL_SIZE", "5"))
+DB_MAX_OVERFLOW = int(os.environ.get("BIO3D_DB_MAX_OVERFLOW", "10"))
+
+# Distributed rate limiting: set a redis:// URL to share limits across workers.
+REDIS_URL = os.environ.get("BIO3D_REDIS_URL", "")
+
 
 def ensure_dirs() -> None:
     """Create data + asset directories if missing (idempotent)."""

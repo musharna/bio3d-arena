@@ -11,15 +11,25 @@ from . import config
 
 config.ensure_dirs()
 
-# check_same_thread=False so the SQLite connection can be shared across FastAPI's
-# threadpool workers. For Postgres this connect_arg is simply ignored.
-_connect_args = (
-    {"check_same_thread": False} if config.DATABASE_URL.startswith("sqlite") else {}
-)
-engine = create_engine(config.DATABASE_URL, connect_args=_connect_args, future=True)
-SessionLocal = sessionmaker(
-    bind=engine, autoflush=False, expire_on_commit=False, future=True
-)
+
+def engine_kwargs(url: str) -> dict:
+    """create_engine args by dialect.
+
+    SQLite (single-file dev): share the connection across FastAPI's threadpool.
+    Postgres/MySQL (production): a real connection pool with liveness checks so the
+    app survives idle-connection drops and many concurrent workers.
+    """
+    if url.startswith("sqlite"):
+        return {"connect_args": {"check_same_thread": False}}
+    return {
+        "pool_pre_ping": True,  # validate connections before use (drop stale ones)
+        "pool_size": config.DB_POOL_SIZE,
+        "max_overflow": config.DB_MAX_OVERFLOW,
+    }
+
+
+engine = create_engine(config.DATABASE_URL, future=True, **engine_kwargs(config.DATABASE_URL))
+SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
 
 
 class Base(DeclarativeBase):

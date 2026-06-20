@@ -19,8 +19,8 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import config
 from .models import Category, Generator, ModelOutput, Task
+from .storage import get_storage
 
 MESH_FORMATS = {"glb", "gltf"}  # rendered by <model-viewer>
 MOLECULAR_FORMATS = {"pdb", "cif", "mmcif", "ent"}  # rendered by 3Dmol.js
@@ -174,10 +174,8 @@ def register_output(
         except (ValueError, TypeError):
             continue
 
-    rel = Path("uploads") / f"{uuid.uuid4().hex}.{ext.lower()}"
-    dest = config.ASSET_DIR / rel
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(data)
+    rel = str(Path("uploads") / f"{uuid.uuid4().hex}.{ext.lower()}").replace("\\", "/")
+    get_storage().save(rel, data)
 
     provenance = {"sha256": digest, "ingested": True, **stats, **(meta or {})}
     output = ModelOutput(

@@ -101,6 +101,26 @@ browse benchmark tasks, `/admin` for admin tools (token below).
 
 **Change `BIO3D_ADMIN_TOKEN` before deploying.**
 
+### Production scale-out (optional)
+
+Each seam is a config switch; the core app stays dependency-free until you enable
+one. `pip install -r requirements-scale.txt` for the backends you turn on.
+
+| Variable                                       | Purpose                                                    |
+| ---------------------------------------------- | ---------------------------------------------------------- |
+| `BIO3D_DATABASE_URL`                           | `postgresql+psycopg://…` → pooled engine (`pool_pre_ping`) |
+| `BIO3D_DB_POOL_SIZE` / `BIO3D_DB_MAX_OVERFLOW` | connection pool sizing (non-SQLite)                        |
+| `BIO3D_STORAGE_BACKEND`                        | `local` (default) or `s3` (object storage)                 |
+| `BIO3D_S3_BUCKET` / `BIO3D_S3_PREFIX`          | bucket + key prefix for the S3 backend                     |
+| `BIO3D_S3_PUBLIC_BASE_URL`                     | serve assets via a CDN domain instead of presigned URLs    |
+| `BIO3D_REDIS_URL`                              | `redis://…` → rate limiting shared across workers          |
+
+Storage (`app/storage.py`) abstracts asset blobs behind a `StorageBackend`
+(local filesystem or S3, lazy `boto3`); the DB engine adds a real connection pool
+for Postgres; the rate limiter swaps to a Redis-backed fixed window. The S3/
+Postgres/Redis paths are implemented and unit-tested for selection/URL logic but
+need live infra to exercise end-to-end.
+
 ## Docker
 
 ```bash
@@ -111,7 +131,7 @@ docker run -p 8000:8000 -e BIO3D_ADMIN_TOKEN=... -v $PWD/data:/data bio3d-arena
 ## Tests
 
 ```bash
-pytest -q        # ranking, API, slices, ingestion, molecular, stats, integrity (33 tests)
+pytest -q        # ranking…integrity + scale-out seams (39 tests)
 ```
 
 ## Ingesting real generator outputs
@@ -191,10 +211,11 @@ category}) scope.
 - ✅ **Vote integrity / anti-abuse**: gold-standard attention checks + trust
   scoring, trust-gated Bradley–Terry, rate limiting, per-session dedup, captcha
   seam, and a `/methodology` transparency page.
-- ⬜ **Scale-out** (remaining): Postgres (works today via `BIO3D_DATABASE_URL`;
-  needs load-test + connection pooling) + object storage (S3/R2) with a storage
-  abstraction + CDN; Redis-backed rate limiting for multi-worker; model-author
-  submission + moderation queue.
+- ✅ **Scale-out seams**: storage abstraction (local + S3/CDN), Postgres-ready
+  pooled engine, Redis-backed distributed rate limiting — all config-switched
+  (see "Production scale-out"). Implemented + unit-tested for selection/URL logic.
+- ⬜ **Remaining for full production**: live load-test against real Postgres/S3/
+  Redis; model-author submission + moderation queue; horizontal-deploy guide.
 
 ## Notes
 

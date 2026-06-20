@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import functools
 import time
 from collections import defaultdict, deque
 
@@ -17,26 +18,63 @@ from sqlalchemy.orm import Session
 from . import config
 from .models import Comparison, VoterSession, Vote
 
-# session_id -> deque[monotonic timestamps] within the current window.
-_buckets: dict[str, deque[float]] = defaultdict(deque)
+
+class InMemoryRateLimiter:
+    """Per-process sliding-window limiter. Fine for a single worker / dev."""
+
+    def __init__(self) -> None:
+        self._buckets: dict[str, deque[float]] = defaultdict(deque)
+
+    def allow(self, session_id: str) -> bool:
+        now = time.monotonic()
+        dq = self._buckets[session_id]
+        cutoff = now - config.VOTE_RATE_WINDOW
+        while dq and dq[0] < cutoff:
+            dq.popleft()
+        if len(dq) >= config.VOTE_RATE_LIMIT:
+            return False
+        dq.append(now)
+        return True
+
+    def reset(self) -> None:
+        self._buckets.clear()
+
+
+class RedisRateLimiter:
+    """Distributed fixed-window limiter shared across workers (redis is lazy)."""
+
+    def __init__(self, redis_url: str) -> None:
+        import redis  # lazy: only when BIO3D_REDIS_URL is configured
+
+        self._redis = redis.Redis.from_url(redis_url)
+
+    def allow(self, session_id: str) -> bool:
+        window = int(config.VOTE_RATE_WINDOW)
+        # Bucket key per window slot → fixed-window counter with auto-expiry.
+        slot = int(time.time()) // window
+        key = f"bio3d:rl:{session_id}:{slot}"
+        count = self._redis.incr(key)
+        if count == 1:
+            self._redis.expire(key, window)
+        return count <= config.VOTE_RATE_LIMIT
+
+    def reset(self) -> None:  # best-effort; used by tests (not against real redis)
+        pass
+
+
+@functools.lru_cache(maxsize=1)
+def _limiter():
+    return RedisRateLimiter(config.REDIS_URL) if config.REDIS_URL else InMemoryRateLimiter()
 
 
 def check_rate_limit(session_id: str) -> bool:
-    """Sliding-window limiter. Returns True if the vote is allowed, False if over."""
-    now = time.monotonic()
-    dq = _buckets[session_id]
-    cutoff = now - config.VOTE_RATE_WINDOW
-    while dq and dq[0] < cutoff:
-        dq.popleft()
-    if len(dq) >= config.VOTE_RATE_LIMIT:
-        return False
-    dq.append(now)
-    return True
+    """Returns True if the vote is allowed, False if over the limit."""
+    return _limiter().allow(session_id)
 
 
 def reset_rate_limits() -> None:
-    """Clear in-memory rate state (used by tests)."""
-    _buckets.clear()
+    """Clear rate state (used by tests)."""
+    _limiter().reset()
 
 
 def verify_captcha(token: str | None) -> bool:

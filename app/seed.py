@@ -29,6 +29,15 @@ from .models import (
     VoterSession,
 )
 from .molec_gen import build_molecule_pdb
+from .storage import get_storage
+
+
+def _publish(rel: Path) -> None:
+    """Push a locally-generated seed asset to remote storage (no-op for local)."""
+    storage = get_storage()
+    if storage.remote:
+        storage.save(str(rel).replace("\\", "/"), (config.ASSET_DIR / rel).read_bytes())
+
 
 # (slug, name, description)
 CATEGORIES = [
@@ -176,6 +185,7 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
                     meta = build_molecule_pdb(seed, config.ASSET_DIR / rel)
                 else:
                     meta = build_asset(shape, seed, config.ASSET_DIR / rel)
+                _publish(rel)
                 meta["generator"] = gslug
                 db.add(
                     ModelOutput(
@@ -235,6 +245,8 @@ def _seed_gold(db: Session, task_by_slug: dict[str, tuple[Task, str]]) -> int:
         bad_rel = Path("gold") / f"{tslug}__bad.glb"
         build_asset(shape, _seed_int("gold-good", tslug), config.ASSET_DIR / good_rel)
         build_degenerate(config.ASSET_DIR / bad_rel)
+        _publish(good_rel)
+        _publish(bad_rel)
         good = ModelOutput(
             task_id=task.id,
             generator_id=calib.id,
