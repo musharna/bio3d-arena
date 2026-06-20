@@ -39,3 +39,11 @@ def test_favicon_link_present_and_served():
     html = client.get("/").text
     assert 'rel="icon"' in html
     assert client.get("/static/favicon.svg").status_code == 200
+
+
+def test_style_has_focus_and_reduced_motion_rules():
+    css = client.get("/static/style.css").text
+    assert ":focus-visible" in css
+    assert "prefers-reduced-motion" in css
+    # muted bumped off the old marginal value
+    assert "--muted: #8b98a9" not in css

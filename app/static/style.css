@@ -134,7 +134,7 @@
   --panel: #1a2230;
   --panel2: #222c3d;
   --text: #e6edf3;
-  --muted: #8b98a9;
+  --muted: #a3b0c2;
   --accent: #4cc38a;
   --accent2: #5b8def;
   --border: #2c3a4d;
@@ -160,6 +160,29 @@ a {
 }
 a:hover {
   text-decoration: underline;
+}
+
+/* Keyboard focus — visible ring on all interactive elements */
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Respect reduced-motion: kill transitions/animations for users who ask */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 .topbar {
