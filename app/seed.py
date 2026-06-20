@@ -221,6 +221,17 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
         # matchmaking or rankings — used only to score voter trust.
         n_gold = _seed_gold(db, task_by_slug)
 
+        # Register bundled real, openly-licensed benchmark assets (best-effort).
+        from .benchmarks import load_benchmarks
+
+        bench_dir = Path(__file__).resolve().parent / "data" / "benchmarks"
+        n_bench = {"tasks": 0, "outputs": 0}
+        if (bench_dir / "manifest.json").exists():
+            try:
+                n_bench = load_benchmarks(db, bench_dir / "manifest.json", bench_dir)
+            except Exception as exc:  # noqa: BLE001 — seeding must not fail on a bad asset
+                print(f"benchmark load skipped: {exc}")
+
         db.commit()
         return {
             "status": "seeded",
@@ -230,6 +241,7 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
             "tasks": len(TASKS),
             "outputs": n_outputs,
             "gold_pairs": n_gold,
+            "benchmarks": n_bench,
         }
     finally:
         if own:

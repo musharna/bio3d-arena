@@ -18,8 +18,10 @@ structural accuracy, visual quality, and scientific usefulness.
 - **Anonymous pairwise comparisons** — generator identity is never sent to the
   client during voting.
 - **Interactive 3D viewing** — orbit / zoom / pan via a format-keyed viewer
-  registry: Google `<model-viewer>` for GLB/GLTF meshes and **3Dmol.js** for
-  PDB/mmCIF molecular structures (point clouds slot in next).
+  registry: Google `<model-viewer>` for GLB/GLTF meshes, **3Dmol.js** for
+  PDB/mmCIF molecular structures, and **SDF/MOL** connection tables — unlocking
+  conformer generation, docking poses, and SBDD outputs natively (point clouds
+  slot in next).
 - **Voting** — A better / B better / tie / both-bad, with keyboard shortcuts
   (←/→/t/x).
 - **Rankings** — online **Elo** (instant, per-vote) + batch **Bradley–Terry MLE**
@@ -133,6 +135,53 @@ docker run -p 8000:8000 -e BIO3D_ADMIN_TOKEN=... -v $PWD/data:/data bio3d-arena
 ```bash
 pytest -q        # ranking…integrity + scale-out seams (39 tests)
 ```
+
+## Supported 3D formats
+
+| Format      | Viewer           | Notes                                                                                                                                                                                          |
+| ----------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GLB / GLTF  | `<model-viewer>` | mesh (cells, flowers, organs, …)                                                                                                                                                               |
+| PDB / mmCIF | 3Dmol.js         | atomic-resolution protein / nucleic-acid structures                                                                                                                                            |
+| SDF / MOL   | 3Dmol.js         | small-molecule connection tables — preserves bond orders and stereo; unlocks docking poses, conformer sets (GEOM), and SBDD outputs natively. Do **not** convert SDF→PDB (drops bonds/stereo). |
+
+Point-cloud, voxel, and Gaussian-splat formats are planned (see `docs/audits/`).
+
+## Loading benchmark content
+
+`app/data/benchmarks/` ships with a small set of real, openly-licensed reference
+structures that are registered automatically on first `seed_all` call. The bundled
+manifest (`manifest.json`) currently includes:
+
+- **Crambin (1CRN)** — a 46-residue protein fold from RCSB PDB (CC0).
+- **Heme (HEM)** — a real small-molecule SDF ligand from the RCSB Chemical
+  Component Dictionary (CC0).
+
+To add more benchmark assets:
+
+1. Drop the asset file under `app/data/benchmarks/assets/`.
+2. Append an entry to `app/data/benchmarks/manifest.json` with the fields:
+
+```json
+{
+  "task_slug": "unique-slug",
+  "category": "proteins",
+  "title": "Human-readable task name",
+  "prompt": "What should be generated here?",
+  "generator_slug": "source-name",
+  "generator_name": "Source Name (display)",
+  "file": "assets/filename.pdb",
+  "format": "pdb",
+  "source": "https://doi.org/...",
+  "license": "CC0",
+  "attribution": "RCSB PDB (1XYZ)"
+}
+```
+
+3. Re-seed: `python -m app.seed` (idempotent; new entries are deduplicated by
+   content hash so re-running is safe).
+
+For larger fetch-from-upstream workflows, see `scripts/fetch_benchmarks.py`
+(downloads and formats remote assets to the manifest schema).
 
 ## Ingesting real generator outputs
 

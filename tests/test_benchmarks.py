@@ -92,3 +92,14 @@ def test_bundled_manifest_loads(tmp_path):
         summary = benchmarks.load_benchmarks(db, bench_dir / "manifest.json", bench_dir)
         db.rollback()  # don't pollute the shared seeded DB for other tests
     assert summary["tasks"] >= 2  # crambin + heme
+
+
+def test_seed_includes_real_benchmarks():
+    summary = seed_all(force=True)
+    assert summary["benchmarks"]["tasks"] >= 2
+    with SessionLocal() as db:
+        from app.models import ModelOutput
+        import json as _json
+
+        outs = db.query(ModelOutput).all()
+        assert any(_json.loads(o.meta_json).get("benchmark") for o in outs)

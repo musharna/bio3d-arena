@@ -68,7 +68,7 @@ def test_leaderboard_and_recompute():
 
     board = client.get("/api/leaderboard").json()
     rows = board["rows"]
-    assert len(rows) == 5  # five seeded generators
+    assert len(rows) >= 5  # five seeded generators + any benchmark generators
     assert rows[0]["rank"] == 1
     # Sorted by BT score descending; CI bounds present.
     scores = [r["bt_score"] for r in rows]

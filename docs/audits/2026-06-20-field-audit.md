@@ -144,9 +144,11 @@ render only **GLB/GLTF (mesh)** and **PDB/mmCIF (molecular)**.
 
 ### C2. Benchmarks gated by license / conversion / expert judgment
 
-- [ ] **[MED] Docking / pose plausibility:** PoseBusters V2 (BSD-3), Astex Diverse, CrossDocked2020,
+- [~] **[MED] Docking / pose plausibility:** PoseBusters V2 (BSD-3), Astex Diverse, CrossDocked2020,
       DockGen — **needs SDF support + protein+ligand co-display.**
-- [ ] **[MED] Conformer generation:** GEOM-Drugs / GEOM-QM9 — **needs SDF.**
+      _(SDF display path unblocked — Increment 1; content loading still needed.)_
+- [~] **[MED] Conformer generation:** GEOM-Drugs / GEOM-QM9 — **needs SDF.**
+      _(SDF display path unblocked — Increment 1; content loading still needed.)_
 - [ ] **[MED] Protein/antibody design:** RFdiffusion binders (backbone-only — pre-pack), CDR-H3.
 - [ ] **[MED] Roots:** CPlantBox (GPL-3.0 — license-check assets) — skeleton→tube-mesh needed.
 - [ ] **[MED] Cells/organelles meshes:** Allen Cell shape meshes (VTK→GLB), OpenOrganelle/COSEM
@@ -156,9 +158,10 @@ render only **GLB/GLTF (mesh)** and **PDB/mmCIF (molecular)**.
 
 ### C3. Representation / format gaps (3D data types we CANNOT render today)
 
-- [ ] **[HIGH] Native SDF/MOL2** — unlocks EVERY conformer/docking/SBDD task (GEOM, CrossDocked,
+- [x] **[HIGH] Native SDF/MOL2** — unlocks EVERY conformer/docking/SBDD task (GEOM, CrossDocked,
       PoseBusters, EDM outputs). 3Dmol.js/NGL/Mol\* parse SDF directly; do NOT convert SDF→PDB (drops
       bond orders/stereo). **Highest-leverage single engineering add on the molecular branch.**
+      _(Done: SDF/MOL ingest + validation + 3Dmol.js viewer + seed demo + bundled heme reference — Increment 1 Tasks 1–6.)_
 - [ ] **[HIGH] Voxel → marching-cubes → GLB ingest pipeline** — unlocks the LARGEST corpus
       available: CellMap, MitoEM, OpenOrganelle, TotalSegmentator (CC-BY), Medical Segmentation
       Decathlon, AbdomenAtlas (NC), AMOS/FLARE, ROSE-X. Formats: NIfTI, OME-Zarr, HDF5, OME-TIFF, MRC/

@@ -41,7 +41,7 @@ def test_api_significance_shape():
     sig = client.get("/api/significance?criterion=overall&category=all").json()
     assert sig["status"] == "ok"
     n = len(sig["labels"])
-    assert n == 5
+    assert n >= 5  # five seeded generators + any benchmark generators
     assert len(sig["matrix"]) == n and all(len(r) == n for r in sig["matrix"])
     # ranked sorted by score desc; probabilities in range.
     scores = [r["score"] for r in sig["ranked"]]
