@@ -88,6 +88,14 @@ block content %}
       <p class="subtle">Refit Bradley–Terry + bootstrap CIs over all votes.</p>
       <button type="submit">Recompute now</button>
     </form>
+    <form class="card" method="post" action="/admin/revalidate">
+      <h3>Revalidate structures</h3>
+      <input type="hidden" name="token" class="token-mirror" />
+      <p class="subtle">
+        Recompute objective structure-validation metrics for all molecular outputs.
+      </p>
+      <button type="submit">Revalidate</button>
+    </form>
   </div>
 </section>
 <script>

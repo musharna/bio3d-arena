@@ -528,6 +528,15 @@ def admin_recompute(token: str = Form(...), db: Session = Depends(get_db)):
     return JSONResponse({"status": "recomputed", "detail": detail})
 
 
+@app.post("/admin/revalidate")
+def admin_revalidate(token: str = Form(...), db: Session = Depends(get_db)):
+    _require_admin(token)
+    from . import validation_service
+
+    detail = validation_service.revalidate_all(db)
+    return JSONResponse({"status": "revalidated", "detail": detail})
+
+
 # ------------------------------------------------------------------ data export
 
 

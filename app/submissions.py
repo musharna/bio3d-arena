@@ -83,6 +83,12 @@ def approve(db: Session, submission_id: int, note: str = "") -> ModelOutput:
     )
     db.add(output)
     db.flush()
+    try:
+        from . import validation_service
+
+        validation_service.validate_and_store(db, output)
+    except Exception:  # noqa: BLE001 — approval must not fail on a bad/odd asset
+        pass
     sub.status = "approved"
     sub.review_note = note
     sub.model_output_id = output.id

@@ -40,6 +40,52 @@ def _publish(rel: Path) -> None:
         storage.save(str(rel).replace("\\", "/"), (config.ASSET_DIR / rel).read_bytes())
 
 
+def _seed_reference_demo(db: Session) -> int:
+    """Wire the benchmark crambin-fold task as a reference + add perturbed near/far
+    generator outputs, so the reference-based validation path has real numbers."""
+    from . import validation
+
+    task = db.execute(select(Task).where(Task.title.like("Crambin%"))).scalars().first()
+    if task is None:
+        return 0
+    ref_out = (
+        db.execute(select(ModelOutput).where(ModelOutput.task_id == task.id)).scalars().first()
+    )
+    if ref_out is None:
+        return 0
+    task.reference_asset_id = ref_out.id
+    ref_text = get_storage().read(ref_out.asset_path).decode("utf-8", errors="replace")
+
+    added = 0
+    for gslug, gname, sigma in [
+        ("predictor-near", "Predictor (near)", 0.3),
+        ("predictor-far", "Predictor (far)", 2.5),
+    ]:
+        gen = db.execute(select(Generator).where(Generator.slug == gslug)).scalars().first()
+        if gen is None:
+            gen = Generator(slug=gslug, name=gname, kind="model", is_anonymous=True)
+            db.add(gen)
+            db.flush()
+        text = validation.perturb_pdb(ref_text, sigma, seed=abs(hash(gslug)) % 100000)
+        rel = Path("seed") / f"crambin__{gslug}.pdb"
+        (config.ASSET_DIR / rel).parent.mkdir(parents=True, exist_ok=True)
+        (config.ASSET_DIR / rel).write_text(text)
+        _publish(rel)
+        db.add(
+            ModelOutput(
+                task_id=task.id,
+                generator_id=gen.id,
+                title=f"{task.title} — {gname}",
+                asset_path=str(rel).replace("\\", "/"),
+                asset_format="pdb",
+                meta_json=json.dumps({"generator": gslug, "perturb_sigma": sigma}),
+            )
+        )
+        added += 1
+    db.flush()
+    return added
+
+
 # (slug, name, description)
 CATEGORIES = [
     ("cells", "Cells", "Single cells and organelles"),
@@ -231,6 +277,13 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
                 n_bench = load_benchmarks(db, bench_dir / "manifest.json", bench_dir)
             except Exception as exc:  # noqa: BLE001 — seeding must not fail on a bad asset
                 print(f"benchmark load skipped: {exc}")
+
+        # Reference demo + objective structure validation for every output.
+        _seed_reference_demo(db)
+        from . import validation_service
+
+        for out in db.execute(select(ModelOutput)).scalars().all():
+            validation_service.validate_and_store(db, out)
 
         db.commit()
         return {
