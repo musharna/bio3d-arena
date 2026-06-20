@@ -42,3 +42,10 @@ def test_validate_sdf_zero_atoms_rejected():
 def test_validate_sdf_garbage_rejected():
     with pytest.raises(ingest.IngestError):
         ingest.validate_asset(b"not a molfile", "sdf")
+
+
+def test_sdf_content_type():
+    from app import storage
+
+    assert storage.content_type_for("ligand.sdf") == "chemical/x-mdl-sdfile"
+    assert storage.content_type_for("frag.mol") == "chemical/x-mdl-molfile"

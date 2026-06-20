@@ -3,7 +3,7 @@
 // Used by both the arena (arena.js) and the moderation previews (moderation.js).
 (function () {
   const MESH = new Set(["glb", "gltf"]);
-  const MOL = new Set(["pdb", "cif", "mmcif", "ent"]);
+  const MOL = new Set(["pdb", "cif", "mmcif", "ent", "sdf", "mol"]);
 
   function mountMesh(slot, asset) {
     const mv = document.createElement("model-viewer");
@@ -22,7 +22,9 @@
       backgroundColor: "0x131a24",
     });
     const text = await (await fetch(asset.url)).text();
-    const modelType = fmt === "cif" || fmt === "mmcif" ? "cif" : "pdb";
+    let modelType = "pdb";
+    if (fmt === "cif" || fmt === "mmcif") modelType = "cif";
+    else if (fmt === "sdf" || fmt === "mol") modelType = "sdf";
     viewer.addModel(text, modelType);
     viewer.setStyle(
       {},

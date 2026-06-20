@@ -20,6 +20,8 @@ _CONTENT_TYPES = {
     "ent": "chemical/x-pdb",
     "cif": "chemical/x-cif",
     "mmcif": "chemical/x-cif",
+    "sdf": "chemical/x-mdl-sdfile",
+    "mol": "chemical/x-mdl-molfile",
 }
 
 
