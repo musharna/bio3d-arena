@@ -140,11 +140,29 @@ main {
   background: var(--panel2);
   letter-spacing: 0.05em;
 }
-model-viewer {
+.viewer-slot {
+  position: relative; /* 3Dmol positions its canvas absolutely inside */
   width: 100%;
   height: 360px;
+  overflow: hidden;
   background: radial-gradient(circle at 50% 35%, #243044, #131a24 70%);
+}
+.viewer-slot model-viewer {
+  width: 100%;
+  height: 100%;
   --poster-color: transparent;
+}
+.viewer-slot canvas {
+  display: block;
+}
+.fmt-chip {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--accent2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 0.4rem;
+  vertical-align: middle;
 }
 .vote-bar {
   display: grid;

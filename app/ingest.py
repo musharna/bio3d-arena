@@ -22,7 +22,9 @@ from sqlalchemy.orm import Session
 from . import config
 from .models import Category, Generator, ModelOutput, Task
 
-ALLOWED_FORMATS = {"glb", "gltf"}  # what <model-viewer> can render today
+MESH_FORMATS = {"glb", "gltf"}  # rendered by <model-viewer>
+MOLECULAR_FORMATS = {"pdb", "cif", "mmcif", "ent"}  # rendered by 3Dmol.js
+ALLOWED_FORMATS = MESH_FORMATS | MOLECULAR_FORMATS
 
 
 class IngestError(ValueError):
@@ -33,16 +35,25 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def validate_3d_asset(data: bytes, ext: str) -> dict:
-    """Confirm the bytes are a loadable mesh with geometry. Returns provenance stats.
+def validate_asset(data: bytes, ext: str) -> dict:
+    """Validate an asset by format family and return provenance stats.
 
-    Raises IngestError on unknown format, parse failure, or empty geometry.
+    Meshes (GLB/GLTF) must load with geometry; molecular files (PDB/mmCIF) must
+    contain atom records. Raises IngestError on unknown/unparseable/empty assets.
     """
     ext = ext.lower()
-    if ext not in ALLOWED_FORMATS:
-        raise IngestError(
-            f"Unsupported format '{ext}'. Arena renders {sorted(ALLOWED_FORMATS)} (GLB/GLTF)."
-        )
+    if ext in MESH_FORMATS:
+        return _validate_mesh(data, ext)
+    if ext in MOLECULAR_FORMATS:
+        return _validate_molecular(data, ext)
+    raise IngestError(f"Unsupported format '{ext}'. Arena renders {sorted(ALLOWED_FORMATS)}.")
+
+
+# Backwards-compatible alias.
+validate_3d_asset = validate_asset
+
+
+def _validate_mesh(data: bytes, ext: str) -> dict:
     import trimesh  # local import: heavy, not needed for most routes
 
     try:
@@ -59,7 +70,26 @@ def validate_3d_asset(data: bytes, ext: str) -> dict:
         n_meshes = 1
     if vtx == 0:
         raise IngestError("Asset has no geometry (zero vertices).")
-    return {"vertices": vtx, "meshes": n_meshes}
+    return {"kind": "mesh", "vertices": vtx, "meshes": n_meshes}
+
+
+def _validate_molecular(data: bytes, ext: str) -> dict:
+    try:
+        text = data.decode("utf-8", errors="replace")
+    except Exception as exc:  # noqa: BLE001
+        raise IngestError(f"Could not decode {ext} text: {exc}") from exc
+
+    if ext in ("pdb", "ent"):
+        atoms = sum(1 for line in text.splitlines() if line.startswith(("ATOM", "HETATM")))
+        if atoms == 0:
+            raise IngestError("PDB has no ATOM/HETATM records.")
+        return {"kind": "molecular", "atoms": atoms}
+
+    # mmCIF / CIF
+    if "_atom_site" not in text:
+        raise IngestError("mmCIF/CIF missing the _atom_site loop (no atoms).")
+    atoms = sum(1 for line in text.splitlines() if line.startswith(("ATOM ", "HETATM")))
+    return {"kind": "molecular", "atoms": atoms}
 
 
 def upsert_category(

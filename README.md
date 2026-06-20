@@ -17,9 +17,9 @@ structural accuracy, visual quality, and scientific usefulness.
 
 - **Anonymous pairwise comparisons** — generator identity is never sent to the
   client during voting.
-- **Interactive 3D viewing** — orbit / zoom / pan via Google `<model-viewer>`
-  (GLB/GLTF), with a pluggable viewer registry for future molecular/point-cloud
-  formats.
+- **Interactive 3D viewing** — orbit / zoom / pan via a format-keyed viewer
+  registry: Google `<model-viewer>` for GLB/GLTF meshes and **3Dmol.js** for
+  PDB/mmCIF molecular structures (point clouds slot in next).
 - **Voting** — A better / B better / tie / both-bad, with keyboard shortcuts
   (←/→/t/x).
 - **Rankings** — online **Elo** (instant, per-vote) + batch **Bradley–Terry MLE**
@@ -102,7 +102,7 @@ docker run -p 8000:8000 -e BIO3D_ADMIN_TOKEN=... -v $PWD/data:/data bio3d-arena
 ## Tests
 
 ```bash
-pytest -q        # ranking + e2e API + research slices + ingestion (19 tests)
+pytest -q        # ranking + e2e API + slices + ingestion + molecular (23 tests)
 ```
 
 ## Ingesting real generator outputs
@@ -165,8 +165,10 @@ category}) scope.
   deduped) + a Python client so generator pipelines (e.g. flower-sim,
   Blender/GeoNodes rose, plant world model) register GLBs directly; bake
   gene/params → GLB. See "Ingesting real generator outputs" above.
-- ⬜ **Molecular-format viewers** (Mol\*/3Dmol.js for PDB/mmCIF) via the viewer
-  registry; point clouds.
+- ✅ **Molecular-format viewers** — format-keyed viewer registry: `<model-viewer>`
+  for GLB/GLTF meshes, **3Dmol.js** for PDB/mmCIF structures. Ingestion validates
+  molecular files (atom records) and the seed ships a PDB demo task. (Point clouds
+  - Mol\* are future registry entries.)
 - ⬜ **Statistical rigor**: significance view ("is A meaningfully above B?"),
   position/format-bias controls, full Rao–Kupper tie model.
 - ⬜ **Public-arena hardening**: anti-abuse (rate limits, captcha, gold-standard
