@@ -129,10 +129,11 @@ def parse_atoms(text, fmt):
 
 
 def _infer_adjacency(atoms, bonds):
-    """Union of explicit bonds and distance-inferred covalent bonds (0.9–1.9 Å).
+    """Union of explicit bonds and distance-inferred covalent bonds (BOND_LO–BOND_HI).
 
-    Returns adj[i] = set of bonded neighbour indices. Used to exclude 1-2 and 1-3
-    pairs from clash detection so real covalent geometry doesn't read as clashes.
+    Returns adj[i] = set of bonded neighbour indices. Most real PDB files carry CONECT
+    only for disulfides/HET groups, so distance inference is what gives us the protein
+    backbone + sidechain connectivity used by both clash and bond-geometry checks.
     """
     from collections import defaultdict
 
@@ -168,12 +169,11 @@ def _near_in_bonds(adj, n, sep):
     return near
 
 
-def _clashscore(atoms, bonds):
+def _clashscore(atoms, adj):
     coords = np.array([a.xyz for a in atoms])
     n = len(atoms)
     if n == 0:
         return 0.0
-    adj = _infer_adjacency(atoms, bonds)
     near = _near_in_bonds(adj, n, CLASH_BOND_SEP)
     n_clash = 0
     for i in range(n):
@@ -189,13 +189,22 @@ def _clashscore(atoms, bonds):
     return 1000.0 * n_clash / n
 
 
-def _bond_outliers(atoms, bonds):
+def _bond_outliers(atoms, adj):
+    """Count covalent bonds whose length is >4σ off the ideal element-pair value.
+
+    Iterates the inferred-adjacency bonds (not just explicit CONECT/SDF bonds): real
+    protein PDBs lack CONECT for the backbone, so an explicit-only check would score
+    every protein at 0 outliers regardless of geometry.
+    """
     bad = 0
-    for bd in bonds:
-        d = float(np.linalg.norm(atoms[bd.i].xyz - atoms[bd.j].xyz))
-        ideal = _ideal_bond(atoms[bd.i].element, atoms[bd.j].element)
-        if abs(d - ideal) / BOND_SIGMA > 4.0:
-            bad += 1
+    for i in sorted(adj):
+        for j in adj[i]:
+            if j <= i:
+                continue  # each undirected bond once
+            d = float(np.linalg.norm(atoms[i].xyz - atoms[j].xyz))
+            ideal = _ideal_bond(atoms[i].element, atoms[j].element)
+            if abs(d - ideal) / BOND_SIGMA > 4.0:
+                bad += 1
     return bad
 
 
@@ -260,8 +269,9 @@ def _score_and_tier(clash, bond_out, rama_out):
 
 def validate_structure(text, fmt):
     atoms, bonds = _parse(text, fmt)
-    clash = _clashscore(atoms, bonds)
-    bond_out = _bond_outliers(atoms, bonds)
+    adj = _infer_adjacency(atoms, bonds)
+    clash = _clashscore(atoms, adj)
+    bond_out = _bond_outliers(atoms, adj)
     rama_out = _rama_outliers(atoms)
     score, tier = _score_and_tier(clash, bond_out, rama_out)
     return {

@@ -80,6 +80,18 @@ def test_rama_is_none_for_small_molecule():
     assert r["rama_outliers"] is None
 
 
+def test_bond_outlier_detected_without_explicit_conect():
+    # Protein backbone fragment with NO CONECT records but a badly stretched N–CA bond
+    # (~2.05 Å vs ideal ~1.47). Must be caught via distance-inferred connectivity.
+    stretched = (
+        "ATOM      1  N   ALA A   1       0.000   0.000   0.000  1.00  0.00           N  \n"
+        "ATOM      2  CA  ALA A   1       2.050   0.000   0.000  1.00  0.00           C  \n"
+        "ATOM      3  C   ALA A   1       3.540   0.000   0.000  1.00  0.00           C  \n"
+    )
+    r = validation.validate_structure(stretched, "pdb")
+    assert r["bond_outliers"] >= 1, r  # N–CA at 2.05 Å is >4σ off ideal
+
+
 def test_real_1crn_parses_and_scores_sane():
     text = (BENCH / "1crn.pdb").read_text()
     r = validation.validate_structure(text, "pdb")
@@ -99,10 +111,29 @@ def test_tm_and_rmsd_identical_is_perfect():
 
 
 def test_rmsd_invariant_to_rigid_motion():
+    # Apply a genuine rotation + translation to every atom; Kabsch must superpose it
+    # back to RMSD ~0 (this exercises the alignment, not just the reparse pipeline).
     text = (BENCH / "1crn.pdb").read_text()
-    moved = validation.perturb_pdb(text, sigma=0.0, seed=1)  # no jitter; exercises reparse
+    theta = 0.7
+    rot = np.array(
+        [
+            [np.cos(theta), -np.sin(theta), 0.0],
+            [np.sin(theta), np.cos(theta), 0.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+    trans = np.array([12.0, -5.0, 3.0])
+    out = []
+    for ln in text.splitlines():
+        if ln[:6].strip() in ("ATOM", "HETATM"):
+            xyz = np.array([float(ln[30:38]), float(ln[38:46]), float(ln[46:54])])
+            x, y, z = rot @ xyz + trans
+            ln = f"{ln[:30]}{x:8.3f}{y:8.3f}{z:8.3f}{ln[54:]}"
+        out.append(ln)
+    moved = "\n".join(out) + "\n"
     r = validation.compare_to_reference(moved, text, "pdb")
-    assert r["rmsd"] < 1e-6
+    assert r["rmsd"] < 1e-2  # rigid motion is fully removed by superposition
+    assert abs(r["tm_score"] - 1.0) < 1e-3
 
 
 def test_length_mismatch_is_na():
