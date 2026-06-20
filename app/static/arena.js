@@ -1,21 +1,50 @@
 // Arena client: fetch a comparison, render both models, record a vote, advance.
+// Category + criterion selectors scope what gets shown and which axis is judged.
 let current = null;
 let busy = false;
 
 const el = (id) => document.getElementById(id);
+const qs = () => {
+  const cat = el("sel-category").value;
+  const crit = el("sel-criterion").value;
+  const p = new URLSearchParams();
+  if (cat && cat !== "all") p.set("category", cat);
+  if (crit) p.set("criterion", crit);
+  const s = p.toString();
+  return s ? "?" + s : "";
+};
+
+async function loadMeta() {
+  const meta = await (await fetch("/api/meta")).json();
+  const catSel = el("sel-category");
+  meta.categories.forEach((c) => {
+    const o = document.createElement("option");
+    o.value = c.slug;
+    o.textContent = c.name;
+    catSel.appendChild(o);
+  });
+  const critSel = el("sel-criterion");
+  meta.criteria.forEach((c) => {
+    const o = document.createElement("option");
+    o.value = c.slug;
+    o.textContent = c.name;
+    critSel.appendChild(o);
+  });
+}
 
 async function loadNext() {
   busy = true;
   setStatus("Loading next comparison…");
   try {
-    const res = await fetch("/api/next");
+    const res = await fetch("/api/next" + qs());
     if (res.status === 404) {
-      setStatus("No comparisons available yet. Add tasks + outputs in Admin.");
+      setStatus(
+        "No comparisons available for this filter. Try another category.",
+      );
       current = null;
       return;
     }
-    const data = await res.json();
-    render(data);
+    render(await res.json());
   } catch (e) {
     setStatus("Error loading comparison: " + e);
   } finally {
@@ -39,7 +68,7 @@ async function vote(winner) {
   busy = true;
   setStatus("Recording vote…");
   try {
-    const res = await fetch("/api/vote", {
+    const res = await fetch("/api/vote" + qs(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ comparison_id: current.comparison_id, winner }),
@@ -49,7 +78,7 @@ async function vote(winner) {
       render(data.next);
       flash("Vote recorded ✓");
     } else {
-      setStatus("Vote recorded. No more comparisons available.");
+      setStatus("Vote recorded. No more comparisons for this filter.");
       current = null;
     }
   } catch (e) {
@@ -74,12 +103,20 @@ document.querySelectorAll(".vote-btn").forEach((btn) => {
   btn.addEventListener("click", () => vote(btn.dataset.winner));
 });
 
+// Re-fetch when the filters change.
+el("sel-category").addEventListener("change", loadNext);
+el("sel-criterion").addEventListener("change", loadNext);
+
 // Keyboard shortcuts: arrow keys for A/B, t for tie, x for bad.
 document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "SELECT") return;
   if (e.key === "ArrowLeft") vote("a");
   else if (e.key === "ArrowRight") vote("b");
   else if (e.key === "t") vote("tie");
   else if (e.key === "x") vote("bad");
 });
 
-loadNext();
+(async () => {
+  await loadMeta();
+  await loadNext();
+})();

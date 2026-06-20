@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import config, ranking
-from .models import Comparison, Criterion, ModelOutput, Rating, Vote
+from .models import Category, Comparison, Criterion, ModelOutput, Rating, Task, Vote
 
 
 def get_or_create_rating(
@@ -56,53 +56,93 @@ def apply_vote(db: Session, vote: Vote) -> None:
     rb.n_games += 1
 
 
-def recompute_leaderboard(db: Session, criterion_slug: str = "overall") -> dict:
-    """Refit Bradley-Terry over all decisive votes for a criterion and cache results.
+def _matches_for_scope(
+    db: Session, criterion_id: int, category_id: int | None, include_ties: bool = True
+) -> list[tuple[int, int]]:
+    """Decisive (winner_gen, loser_gen) pairs for a (criterion, category) scope.
 
-    Updates the global (category_id=NULL) Rating rows' bt_score/bt_lower/bt_upper.
+    A 'tie' is credited as a split — one win in each direction — so ties inform
+    Bradley-Terry without a separate tie parameter. 'bad' votes are excluded.
+    category_id=None means the global scope (all categories).
     """
-    criterion = (
-        db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
-    )
-    if criterion is None:
-        return {"status": "no-such-criterion"}
-
-    # Pull decisive votes joined to the generators behind each output.
-    rows = db.execute(
+    stmt = (
         select(Vote, Comparison)
         .join(Comparison, Vote.comparison_id == Comparison.id)
-        .where(Comparison.criterion_id == criterion.id)
-    ).all()
+        .where(Comparison.criterion_id == criterion_id)
+    )
+    if category_id is not None:
+        stmt = stmt.join(Task, Comparison.task_id == Task.id).where(Task.category_id == category_id)
 
-    # Build (winner_gen, loser_gen) decisive matches.
     matches: list[tuple[int, int]] = []
-    for vote, comparison in rows:
-        if vote.winner not in ("a", "b"):
+    for vote, comparison in db.execute(stmt).all():
+        if vote.winner == "bad":
             continue
         gen_a = db.get(ModelOutput, comparison.output_a_id).generator_id
         gen_b = db.get(ModelOutput, comparison.output_b_id).generator_id
         if vote.winner == "a":
             matches.append((gen_a, gen_b))
-        else:
+        elif vote.winner == "b":
             matches.append((gen_b, gen_a))
+        elif vote.winner == "tie" and include_ties:
+            matches.append((gen_a, gen_b))
+            matches.append((gen_b, gen_a))
+    return matches
 
-    # All generators that have a rating row for this criterion (so everyone shows).
-    rating_rows = (
-        db.execute(
-            select(Rating).where(Rating.criterion_id == criterion.id, Rating.category_id.is_(None))
+
+def _players_for_scope(db: Session, category_id: int | None) -> list[int]:
+    """All generators eligible to appear in a scope's leaderboard (so 0-game ones show)."""
+    stmt = select(ModelOutput.generator_id)
+    if category_id is not None:
+        stmt = stmt.join(Task, ModelOutput.task_id == Task.id).where(
+            Task.category_id == category_id
         )
-        .scalars()
-        .all()
-    )
-    players = sorted({r.generator_id for r in rating_rows} | {p for m in matches for p in m})
+    return sorted({gid for gid in db.execute(stmt).scalars().all()})
 
+
+def recompute_scope(
+    db: Session, criterion: Criterion, category_id: int | None, commit: bool = True
+) -> dict:
+    """Refit Bradley-Terry for one (criterion, category) scope and cache Rating rows."""
+    matches = _matches_for_scope(db, criterion.id, category_id)
+    players = sorted(set(_players_for_scope(db, category_id)) | {p for m in matches for p in m})
     result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP)
-
     for gid in players:
-        rating = get_or_create_rating(db, gid, criterion.id)
+        rating = get_or_create_rating(db, gid, criterion.id, category_id)
         rating.bt_score = result.scores.get(gid, ranking.BT_BASE)
         rating.bt_lower = result.lower.get(gid, ranking.BT_BASE)
         rating.bt_upper = result.upper.get(gid, ranking.BT_BASE)
         rating.n_games = int(result.n_games.get(gid, 0))
+    if commit:
+        db.commit()
+    return {"matches": len(matches), "players": len(players)}
+
+
+def recompute_leaderboard(db: Session, criterion_slug: str = "overall") -> dict:
+    """Backward-compatible single-criterion GLOBAL recompute."""
+    criterion = (
+        db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+    )
+    if criterion is None:
+        return {"status": "no-such-criterion"}
+    detail = recompute_scope(db, criterion, category_id=None)
+    return {"status": "ok", **detail}
+
+
+def recompute_all(db: Session) -> dict:
+    """Recompute every (criterion × {global + each category}) leaderboard scope."""
+    criteria = db.execute(select(Criterion)).scalars().all()
+    categories = db.execute(select(Category)).scalars().all()
+    n_scopes = 0
+    for criterion in criteria:
+        recompute_scope(db, criterion, category_id=None, commit=False)
+        n_scopes += 1
+        for cat in categories:
+            recompute_scope(db, criterion, category_id=cat.id, commit=False)
+            n_scopes += 1
     db.commit()
-    return {"status": "ok", "matches": len(matches), "players": len(players)}
+    return {
+        "status": "ok",
+        "scopes": n_scopes,
+        "criteria": len(criteria),
+        "categories": len(categories),
+    }

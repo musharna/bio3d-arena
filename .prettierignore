@@ -1,0 +1,2 @@
+# Jinja2 templates — prettier mangles {% ... %} tags (e.g. breaks `==`).
+app/templates/

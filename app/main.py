@@ -57,16 +57,38 @@ def _default_criterion(db: Session) -> Criterion:
     return crit
 
 
-def _build_comparison(db: Session, session_id: str) -> dict | None:
-    """Pick a task + pair, persist a Comparison row, return an anonymized payload."""
-    task = matchmaking.pick_task(db)
+def _resolve_category_id(db: Session, category_slug: str | None) -> int | None:
+    if not category_slug or category_slug == "all":
+        return None
+    cat = db.execute(select(Category).where(Category.slug == category_slug)).scalars().first()
+    return cat.id if cat else None
+
+
+def _build_comparison(
+    db: Session,
+    session_id: str,
+    criterion_slug: str | None = None,
+    category_slug: str | None = None,
+) -> dict | None:
+    """Pick a task + pair, persist a Comparison row, return an anonymized payload.
+
+    Optionally restrict to a category and/or judge a specific criterion.
+    """
+    category_id = _resolve_category_id(db, category_slug)
+    task = matchmaking.pick_task(db, category_id=category_id)
     if task is None:
         return None
     pair = matchmaking.pick_pair(db, task)
     if pair is None:
         return None
     out_a, out_b = pair
-    crit = _default_criterion(db)
+    crit = None
+    if criterion_slug:
+        crit = (
+            db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+        )
+    if crit is None:
+        crit = _default_criterion(db)
     comparison = Comparison(
         task_id=task.id,
         output_a_id=out_a.id,
@@ -99,16 +121,38 @@ def index(request: Request):
     return templates.TemplateResponse(request, "arena.html")
 
 
+@app.get("/api/meta")
+def api_meta(db: Session = Depends(get_db)):
+    """Categories + criteria for populating arena/leaderboard selectors."""
+    cats = db.execute(select(Category)).scalars().all()
+    crits = db.execute(select(Criterion)).scalars().all()
+    return {
+        "categories": [{"slug": c.slug, "name": c.name} for c in cats],
+        "criteria": [{"slug": c.slug, "name": c.name} for c in crits],
+    }
+
+
 @app.get("/api/next")
-def api_next(request: Request, db: Session = Depends(get_db)):
-    payload = _build_comparison(db, request.state.session_id)
+def api_next(
+    request: Request,
+    db: Session = Depends(get_db),
+    criterion: str | None = None,
+    category: str | None = None,
+):
+    payload = _build_comparison(db, request.state.session_id, criterion, category)
     if payload is None:
         return JSONResponse({"error": "no-comparisons-available"}, status_code=404)
     return payload
 
 
 @app.post("/api/vote")
-def api_vote(vote_in: VoteIn, request: Request, db: Session = Depends(get_db)):
+def api_vote(
+    vote_in: VoteIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    criterion: str | None = None,
+    category: str | None = None,
+):
     comparison = db.get(Comparison, vote_in.comparison_id)
     if comparison is None:
         raise HTTPException(404, "Unknown comparison")
@@ -123,23 +167,26 @@ def api_vote(vote_in: VoteIn, request: Request, db: Session = Depends(get_db)):
     db.flush()
     service.apply_vote(db, vote)
     db.commit()
-    nxt = _build_comparison(db, request.state.session_id)
+    # Keep the same criterion/category filter for the follow-up comparison.
+    nxt = _build_comparison(db, request.state.session_id, criterion, category)
     return {"status": "ok", "next": nxt}
 
 
 # ------------------------------------------------------------------ leaderboard
 
 
-def _leaderboard_rows(db: Session, criterion_slug: str = "overall") -> list[dict]:
+def _leaderboard_rows(
+    db: Session, criterion_slug: str = "overall", category_slug: str | None = None
+) -> list[dict]:
     crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
     if crit is None:
         return []
+    category_id = _resolve_category_id(db, category_slug)
+    scope = (
+        Rating.category_id.is_(None) if category_id is None else Rating.category_id == category_id
+    )
     ratings = (
-        db.execute(
-            select(Rating).where(Rating.criterion_id == crit.id, Rating.category_id.is_(None))
-        )
-        .scalars()
-        .all()
+        db.execute(select(Rating).where(Rating.criterion_id == crit.id, scope)).scalars().all()
     )
     rows = []
     for r in ratings:
@@ -162,17 +209,46 @@ def _leaderboard_rows(db: Session, criterion_slug: str = "overall") -> list[dict
 
 
 @app.get("/leaderboard", response_class=HTMLResponse)
-def leaderboard(request: Request, db: Session = Depends(get_db)):
-    rows = _leaderboard_rows(db)
+def leaderboard(
+    request: Request,
+    db: Session = Depends(get_db),
+    criterion: str = "overall",
+    category: str = "all",
+):
+    rows = _leaderboard_rows(db, criterion, category)
     total = matchmaking.total_votes(db)
+    cats = db.execute(select(Category)).scalars().all()
+    crits = db.execute(select(Criterion)).scalars().all()
+    # Precompute `selected` flags in Python so the template avoids `==` (which the
+    # HTML formatter mangles inside Jinja tags).
+    category_options = [{"slug": "all", "name": "All categories", "selected": category == "all"}]
+    category_options += [
+        {"slug": c.slug, "name": c.name, "selected": category == c.slug} for c in cats
+    ]
+    criterion_options = [
+        {"slug": c.slug, "name": c.name, "selected": criterion == c.slug} for c in crits
+    ]
     return templates.TemplateResponse(
-        request, "leaderboard.html", {"rows": rows, "total_votes": total}
+        request,
+        "leaderboard.html",
+        {
+            "rows": rows,
+            "total_votes": total,
+            "category_options": category_options,
+            "criterion_options": criterion_options,
+        },
     )
 
 
 @app.get("/api/leaderboard")
-def api_leaderboard(db: Session = Depends(get_db), criterion: str = "overall"):
-    return {"criterion": criterion, "rows": _leaderboard_rows(db, criterion)}
+def api_leaderboard(
+    db: Session = Depends(get_db), criterion: str = "overall", category: str = "all"
+):
+    return {
+        "criterion": criterion,
+        "category": category,
+        "rows": _leaderboard_rows(db, criterion, category),
+    }
 
 
 # ------------------------------------------------------------------------ tasks
@@ -300,10 +376,44 @@ async def admin_upload_output(
 @app.post("/admin/recompute")
 def admin_recompute(token: str = Form(...), db: Session = Depends(get_db)):
     _require_admin(token)
-    result = {}
-    for crit in db.execute(select(Criterion)).scalars().all():
-        result[crit.slug] = service.recompute_leaderboard(db, crit.slug)
-    return JSONResponse({"status": "recomputed", "detail": result})
+    detail = service.recompute_all(db)
+    return JSONResponse({"status": "recomputed", "detail": detail})
+
+
+# ------------------------------------------------------------------ data export
+
+
+@app.get("/api/export.json")
+def export_dataset(db: Session = Depends(get_db)):
+    """Reproducible research export: every decided comparison with full provenance.
+
+    Generators are revealed here (post-hoc), enabling offline ranking studies.
+    """
+    rows = db.execute(
+        select(Vote, Comparison).join(Comparison, Vote.comparison_id == Comparison.id)
+    ).all()
+    records = []
+    for vote, comp in rows:
+        out_a = db.get(ModelOutput, comp.output_a_id)
+        out_b = db.get(ModelOutput, comp.output_b_id)
+        task = db.get(Task, comp.task_id)
+        crit = db.get(Criterion, comp.criterion_id)
+        records.append(
+            {
+                "comparison_id": comp.id,
+                "task": task.title,
+                "category": task.category.slug,
+                "criterion": crit.slug,
+                "generator_a": db.get(Generator, out_a.generator_id).slug,
+                "generator_b": db.get(Generator, out_b.generator_id).slug,
+                "asset_a": out_a.asset_path,
+                "asset_b": out_b.asset_path,
+                "winner": vote.winner,  # a | b | tie | bad
+                "session": vote.session_id,
+                "voted_at": vote.created.isoformat(),
+            }
+        )
+    return {"n_votes": len(records), "votes": records}
 
 
 @app.get("/healthz")

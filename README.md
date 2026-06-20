@@ -102,8 +102,21 @@ docker run -p 8000:8000 -e BIO3D_ADMIN_TOKEN=... -v $PWD/data:/data bio3d-arena
 ## Tests
 
 ```bash
-pytest -q        # ranking (Elo/BT) + end-to-end API (10 tests)
+pytest -q        # ranking (Elo/BT) + end-to-end API + research slices (14 tests)
 ```
+
+## Research API
+
+- `GET /api/meta` — categories + criteria (drives the selectors).
+- `GET /api/next?criterion=<slug>&category=<slug>` — anonymized pair, scoped.
+- `POST /api/vote?criterion=&category=` — record + next (keeps the filter).
+- `GET /api/leaderboard?criterion=<slug>&category=<slug>` — sliced rankings.
+- `GET /api/export.json` — full reproducible dataset (votes + provenance,
+  generators revealed for offline analysis).
+
+Ties are credited as a split (one win each direction) so they inform
+Bradley–Terry. `POST /admin/recompute` refits every (criterion × {global + each
+category}) scope.
 
 ## Roadmap
 
@@ -112,9 +125,21 @@ pytest -q        # ranking (Elo/BT) + end-to-end API (10 tests)
 3. ✅ Elo + leaderboard
 4. ✅ Admin tools (CRUD + GLB upload + recompute)
 5. ✅ Bradley–Terry + bootstrap CIs
-6. ⬜ Anti-abuse polish (session dedup, rate limits, report-bad-asset), per-category
-   / per-criterion leaderboard slices in the UI, molecular-format viewers,
-   programmatic submission API, dataset export.
+6. ✅ Research-grade evaluation: multi-criterion + per-category voting,
+   per-(criterion × category) leaderboard slices, tie-aware ranking, dataset export.
+
+**Staged plan to a real tool** (research/internal first → public arena):
+
+- ⬜ **Real-generator ingestion API** — `POST /api/outputs` (token-gated) + a Python
+  client so generator pipelines (e.g. flower-sim, Blender/GeoNodes rose, plant
+  world model) register GLBs directly; bake gene/params → GLB.
+- ⬜ **Molecular-format viewers** (Mol\*/3Dmol.js for PDB/mmCIF) via the viewer
+  registry; point clouds.
+- ⬜ **Statistical rigor**: significance view ("is A meaningfully above B?"),
+  position/format-bias controls, full Rao–Kupper tie model.
+- ⬜ **Public-arena hardening**: anti-abuse (rate limits, captcha, gold-standard
+  attention checks, outlier-voter down-weighting), Postgres + object storage +
+  CDN, methodology/transparency page, model-author submission + moderation.
 
 ## Notes
 

@@ -1,23 +1,34 @@
-{% extends "base.html" %} {% block title %}Leaderboard · Bio 3D Arena{% endblock
-%} {% block content %}
+{% extends "base.html" %}
+{% block title %}Leaderboard · Bio 3D Arena{% endblock %}
+{% block content %}
 <section class="board">
-  <h2>Leaderboard <span class="subtle">— overall, global</span></h2>
+  <h2>Leaderboard</h2>
+  <form class="filter-row" method="get" action="/leaderboard">
+    <label>Category
+      <select name="category" onchange="this.form.submit()">
+        {% for opt in category_options %}
+        <option value="{{ opt.slug }}" {% if opt.selected %}selected{% endif %}>{{ opt.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Criterion
+      <select name="criterion" onchange="this.form.submit()">
+        {% for opt in criterion_options %}
+        <option value="{{ opt.slug }}" {% if opt.selected %}selected{% endif %}>{{ opt.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
   <p class="subtle">
     {{ total_votes }} votes cast. BT = Bradley–Terry score (Elo-scaled) with 95%
-    bootstrap CI. Elo updates live per vote; BT is recomputed in Admin.
+    bootstrap CI, recomputed in Admin. Elo updates live per vote (global/overall
+    scope). Select a category + criterion above to slice the rankings.
   </p>
   {% if rows %}
   <table class="ranktable">
     <thead>
-      <tr>
-        <th>#</th>
-        <th>Generator</th>
-        <th>Kind</th>
-        <th>BT score</th>
-        <th>95% CI</th>
-        <th>Elo</th>
-        <th>Games</th>
-      </tr>
+      <tr><th>#</th><th>Generator</th><th>Kind</th><th>BT score</th>
+        <th>95% CI</th><th>Elo</th><th>Games</th></tr>
     </thead>
     <tbody>
       {% for r in rows %}
@@ -34,7 +45,7 @@
     </tbody>
   </table>
   {% else %}
-  <p>No ratings yet. Cast some votes in the <a href="/">Arena</a>.</p>
+  <p>No ratings yet for this slice. Cast some votes in the <a href="/">Arena</a>.</p>
   {% endif %}
 </section>
 {% endblock %}

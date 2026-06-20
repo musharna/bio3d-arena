@@ -1,6 +1,19 @@
 {% extends "base.html" %} {% block title %}Arena · Bio 3D Arena{% endblock %} {%
 block content %}
 <section class="arena">
+  <div class="filter-row">
+    <label
+      >Category
+      <select id="sel-category">
+        <option value="all">All categories</option>
+      </select>
+    </label>
+    <label
+      >Judge on
+      <select id="sel-criterion"></select>
+    </label>
+  </div>
+
   <div id="task-card" class="task-card">
     <span class="cat-chip" id="task-cat">…</span>
     <h2 id="task-title">Loading a comparison…</h2>
