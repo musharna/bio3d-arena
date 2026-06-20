@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from app import integrity
 from app.main import app
 from app.seed import seed_all
 
@@ -12,6 +13,11 @@ client = TestClient(app)
 
 def setup_module(_module):
     seed_all(force=True)
+    # Reset the process-wide in-memory rate limiter so votes cast by earlier test
+    # modules don't throttle this module's vote loops (pre-existing cross-file flake:
+    # the shared TestClient identity accumulates counts across files within the 60s
+    # window, intermittently 429-ing this test's 14 votes below the >=6 floor).
+    integrity.reset_rate_limits()
 
 
 def test_meta_lists_categories_and_criteria():
@@ -29,6 +35,13 @@ def test_next_honors_criterion_and_category():
 
 
 def test_sliced_leaderboard_and_export():
+    # Matchmaking picks pairs with the global RNG (random.choice/shuffle); seed it so
+    # the sequence of served pairs is deterministic. Without this, per-session dedup
+    # rejects repeat pairs and the count of DISTINCT landed votes varies run-to-run,
+    # intermittently dropping below the >=6 floor (root cause of the prior flake).
+    import random
+
+    random.seed(20260620)
     # Cast scoped votes (flowers × realism), including a tie.
     for i in range(14):
         nxt = client.get("/api/next?criterion=realism&category=flowers").json()
