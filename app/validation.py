@@ -273,3 +273,82 @@ def validate_structure(text, fmt):
         "validity_score": score,
         "tier": tier,
     }
+
+
+# --- Reference-based similarity (Kabsch RMSD + TM-score) ---------------------
+
+
+def _ca_or_heavy(atoms):
+    """Comparison atoms in order: protein → CA atoms; else all heavy (non-H) atoms."""
+    cas = [a for a in atoms if a.name == "CA"]
+    pool = cas if cas else [a for a in atoms if a.element != "H"]
+    return np.array([a.xyz for a in pool])
+
+
+def _kabsch_rmsd_and_dists(P, Q):
+    """Superpose P onto Q (same length, ordered); return rmsd + per-point distances."""
+    Pc, Qc = P - P.mean(0), Q - Q.mean(0)
+    H = Pc.T @ Qc
+    U, _, Vt = np.linalg.svd(H)
+    d = np.sign(np.linalg.det(Vt.T @ U.T))
+    D = np.diag([1.0, 1.0, d])
+    R = Vt.T @ D @ U.T
+    Pr = Pc @ R.T
+    per = np.linalg.norm(Pr - Qc, axis=1)
+    rmsd = float(np.sqrt((per**2).mean()))
+    return rmsd, per
+
+
+def _tm_score(per_dists, length):
+    if length < 15:
+        d0 = 0.5
+    else:
+        d0 = max(0.5, 1.24 * (length - 15) ** (1.0 / 3.0) - 1.8)
+    return float(np.mean(1.0 / (1.0 + (per_dists / d0) ** 2)))
+
+
+def compare_to_reference(out_text, ref_text, fmt):
+    out_atoms = parse_atoms(out_text, fmt)
+    ref_atoms = parse_atoms(ref_text, fmt)
+    P, Q = _ca_or_heavy(out_atoms), _ca_or_heavy(ref_atoms)
+    if len(P) == 0 or len(Q) == 0 or len(P) != len(Q):
+        return {
+            "status": "n/a",
+            "reason": f"length mismatch (out={len(P)}, ref={len(Q)}) — "
+            "sequence-independent alignment not implemented",
+        }
+    rmsd, per = _kabsch_rmsd_and_dists(P, Q)
+    return {
+        "status": "ok",
+        "n_atoms": int(len(P)),
+        "rmsd": round(rmsd, 3),
+        "tm_score": round(_tm_score(per, len(P)), 4),
+    }
+
+
+def validate_output(text, fmt):
+    """Dispatch entry point: molecular fmt → stereochemistry; else n/a; parse err → error."""
+    fmt = (fmt or "").lower()
+    if fmt not in MOLECULAR:
+        return {"status": "n/a", "reason": "non-molecular asset"}
+    try:
+        return validate_structure(text, fmt)
+    except ValidationError as e:
+        return {"status": "error", "reason": str(e)}
+
+
+def perturb_pdb(text, sigma, seed):
+    """Rewrite ATOM/HETATM x/y/z columns with Gaussian jitter (σ Å). Builds demo outputs."""
+    rng = np.random.default_rng(seed)
+    out = []
+    for line in text.splitlines():
+        if line[:6].strip() in ("ATOM", "HETATM"):
+            try:
+                x = float(line[30:38]) + rng.normal(0, sigma)
+                y = float(line[38:46]) + rng.normal(0, sigma)
+                z = float(line[46:54]) + rng.normal(0, sigma)
+                line = f"{line[:30]}{x:8.3f}{y:8.3f}{z:8.3f}{line[54:]}"
+            except ValueError:
+                pass
+        out.append(line)
+    return "\n".join(out) + "\n"

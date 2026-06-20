@@ -88,3 +88,46 @@ def test_real_1crn_parses_and_scores_sane():
     # a real 1.5 Å crystal structure must not read as garbage
     assert r["tier"] in ("clean", "minor"), r
     assert r["rama_outliers"] is not None  # it IS a protein chain
+
+
+def test_tm_and_rmsd_identical_is_perfect():
+    text = (BENCH / "1crn.pdb").read_text()
+    r = validation.compare_to_reference(text, text, "pdb")
+    assert r["status"] == "ok"
+    assert r["rmsd"] < 1e-6
+    assert abs(r["tm_score"] - 1.0) < 1e-6
+
+
+def test_rmsd_invariant_to_rigid_motion():
+    text = (BENCH / "1crn.pdb").read_text()
+    moved = validation.perturb_pdb(text, sigma=0.0, seed=1)  # no jitter; exercises reparse
+    r = validation.compare_to_reference(moved, text, "pdb")
+    assert r["rmsd"] < 1e-6
+
+
+def test_length_mismatch_is_na():
+    text = (BENCH / "1crn.pdb").read_text()
+    # a valid but shorter structure: keep only the first 10 residues' atoms
+    kept = [
+        ln
+        for ln in text.splitlines()
+        if ln[:6].strip() not in ("ATOM", "HETATM") or int(ln[22:26]) <= 10
+    ]
+    short = "\n".join(kept) + "\n"
+    assert validation.parse_atoms(short, "pdb")  # genuinely parses (not the no-atom path)
+    r = validation.compare_to_reference(short, text, "pdb")
+    assert r["status"] == "n/a"
+
+
+def test_perturbation_ordering_near_beats_far():
+    text = (BENCH / "1crn.pdb").read_text()
+    near = validation.compare_to_reference(validation.perturb_pdb(text, 0.3, 7), text, "pdb")
+    far = validation.compare_to_reference(validation.perturb_pdb(text, 2.5, 7), text, "pdb")
+    assert near["rmsd"] < far["rmsd"]
+    assert near["tm_score"] > far["tm_score"]
+    assert near["rmsd"] < 1.0  # σ=0.3 jitter stays sub-Å
+
+
+def test_validate_output_glb_is_na():
+    r = validation.validate_output("glTF binary stub", "glb")
+    assert r["status"] == "n/a"
