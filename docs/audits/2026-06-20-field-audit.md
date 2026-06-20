@@ -77,11 +77,14 @@ screenshots + verify 3D viewer runtime before the visual fixes are called done.
 
 ### B3. Domain moat (unique to biology — no general arena has this)
 
-- [ ] **[HIGH] CASP-style structure-validation badges / a separate "is it physically valid?"
-      track**, distinct from the aesthetic vote. Objective automatable backstops: RMSD / TM-score /
-      GDT-TS vs reference, lDDT/pLDDT, reference-free stereochemistry (clashscore, Ramachandran
-      outliers — MolProbity-style). **Our strongest differentiator** and a direct counter to the
-      presentation confound. _Med-high — wire TM-align / MolProbity as a batch annotation step._
+- [x] **[HIGH] CASP-style structure-validation track** — DONE+MERGED master @9f5adee (Inc4). A
+      separate, objective `/validation` page distinct from the aesthetic vote: reference-free
+      stereochemistry (clashscore via inferred connectivity, bond-geometry outliers, approximate
+      Ramachandran → 0–100 validity score + tier) AND reference-based similarity (Kabsch RMSD +
+      CASP TM-score, equal-length-only). Pure Python/numpy, no external binaries. `app/validation.py` + `app/validation_service.py`, `/admin/revalidate` batch, 1CRN reference demo (near TM 0.94 /
+      far TM 0.27), 19 tests incl. a real-1CRN execution gate. Validation never enters the blind vote.
+      Deferred (not done): lDDT/pLDDT, GDT-TS, real MolProbity/TM-align binaries, sequence-independent
+      alignment (the equal-length boundary). Plan `docs/superpowers/plans/2026-06-20-structure-validation.md`.
 
 ### B4. Transparency
 
@@ -279,9 +282,10 @@ test → live-verify → commit → merge pattern.
    loading/hint/failure-fallback (+ async-race fix), focus-visible, reduced-motion, colorblind-safe
    blue/orange matrix + legend, favicon, dropped MVP footer + Admin nav, muted AAA bump. Playwright
    installed in `.venv` (Chromium) and used to screenshot-verify. Corrected a false AA-failure claim.
-4. **Domain moat: structure-validation track** (B3) **← NEXT** — our strongest differentiator vs
-   general arenas.
-5. **Transparency: vote-data export + read API** (B4 + B5) — cheap, high trust ROI.
+4. ~~**Domain moat: structure-validation track**~~ **DONE+MERGED master @9f5adee (Inc4)** — objective
+   `/validation` page (reference-free stereochemistry + reference-based RMSD/TM), distinct from the
+   aesthetic vote. Pure-Python; 1CRN reference demo; 19 tests incl. real-execution gate.
+5. **Transparency: vote-data export + read API** (B4 + B5) — cheap, high trust ROI. **← NEXT**
 6. **Engagement: embeddable rank badge** (B6) — unique white space, viral lever.
 7. **Voxel→GLB pipeline** (C3) — unlocks the largest corpus; bigger build, schedule after 1–4.
 
