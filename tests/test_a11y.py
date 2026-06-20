@@ -60,7 +60,10 @@ def test_significance_matrix_has_colorblind_legend():
             "/api/vote?criterion=overall&category=all",
             json={"comparison_id": nxt["comparison_id"], "winner": "a" if i % 2 else "b"},
         )
-    client.post("/admin/recompute", data={"token": "test-token"})
+    resp = client.post("/admin/recompute", data={"token": "test-token"})
+    assert resp.status_code == 200, f"recompute failed: {resp.status_code}"
     html = client.get("/significance?criterion=overall&category=all").text
+    # precondition: the matrix actually rendered (else the legend asserts pass/fail vacuously)
+    assert '<table class="matrix">' in html, "matrix did not render — not enough votes"
     assert "matrix-legend" in html  # legend block rendered
     assert "row clearly ahead" in html  # legend explains the scale in words

@@ -2,6 +2,11 @@
 // model-viewer for GLB/GLTF meshes; 3Dmol.js for PDB/mmCIF molecular structures.
 // Adds loading spinner, drag-to-rotate hint, and an asset-failure fallback so the
 // core product never silently shows an empty box.
+//
+// Each mount stamps the slot with an incrementing generation id. Async paths (the
+// molecular fetch; the mesh load/error events) re-check that id before touching the
+// DOM, so a fast re-mount (e.g. rapid voting) can't have an in-flight load append a
+// stale viewer into the slot it already tore down.
 (function () {
   const MESH = new Set(["glb", "gltf"]);
   const MOL = new Set(["pdb", "cif", "mmcif", "ent", "sdf", "mol"]);
@@ -31,6 +36,8 @@
   }
 
   function mountMesh(slot, asset) {
+    const myGen = slot._viewerGen;
+    const stale = () => slot._viewerGen !== myGen;
     const loading = spinner(slot, "Loading model…");
     const mv = document.createElement("model-viewer");
     mv.setAttribute("camera-controls", "");
@@ -41,19 +48,27 @@
     mv.style.width = "100%";
     mv.style.height = "100%";
     mv.addEventListener("load", () => {
+      if (stale()) return;
       loading.remove();
       hint(slot, "drag to rotate · scroll to zoom");
     });
-    mv.addEventListener("error", () => failed(slot, "Model failed to load"));
+    mv.addEventListener("error", () => {
+      if (stale()) return;
+      failed(slot, "Model failed to load");
+    });
     slot.appendChild(mv);
   }
 
   async function mountMolecular(slot, asset, fmt) {
+    const myGen = slot._viewerGen;
+    const stale = () => slot._viewerGen !== myGen;
     const loading = spinner(slot, "Loading structure…");
     try {
       const res = await fetch(asset.url);
+      if (stale()) return;
       if (!res.ok) throw new Error("HTTP " + res.status);
       const text = await res.text();
+      if (stale()) return;
       const viewer = window.$3Dmol.createViewer(slot, {
         backgroundColor: "0x131a24",
       });
@@ -74,6 +89,7 @@
       loading.remove();
       hint(slot, "drag to rotate · scroll to zoom");
     } catch (e) {
+      if (stale()) return;
       failed(slot, "Structure failed to load");
     }
   }
@@ -81,6 +97,7 @@
   // Mount the right viewer; returns the resolved format string.
   function mount(slot, asset) {
     slot.innerHTML = ""; // tear down any previous viewer
+    slot._viewerGen = (slot._viewerGen || 0) + 1; // invalidate any in-flight mount
     const fmt = (asset.format || "glb").toLowerCase();
     if (MOL.has(fmt)) mountMolecular(slot, asset, fmt);
     else if (MESH.has(fmt)) mountMesh(slot, asset);
