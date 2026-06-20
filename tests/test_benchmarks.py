@@ -82,3 +82,13 @@ def test_load_manifest_rejects_missing_field(tmp_path):
     manifest.write_text(json.dumps([{"task_slug": "x"}]))  # missing title, prompt, etc.
     with pytest.raises(ingest.IngestError):
         benchmarks.load_manifest(manifest)
+
+
+def test_bundled_manifest_loads(tmp_path):
+    from pathlib import Path
+
+    bench_dir = Path("app/data/benchmarks")
+    with SessionLocal() as db:
+        summary = benchmarks.load_benchmarks(db, bench_dir / "manifest.json", bench_dir)
+        db.rollback()  # don't pollute the shared seeded DB for other tests
+    assert summary["tasks"] >= 2  # crambin + heme
