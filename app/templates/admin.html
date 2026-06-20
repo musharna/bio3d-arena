@@ -1,0 +1,104 @@
+{% extends "base.html" %} {% block title %}Admin · Bio 3D Arena{% endblock %} {%
+block content %}
+<section class="admin">
+  <h2>Admin Tools</h2>
+  <p class="subtle">
+    Enter the admin token once; it is reused across the forms on this page (kept
+    client-side only). Default is set via <code>BIO3D_ADMIN_TOKEN</code>.
+  </p>
+  <label class="token-row"
+    >Admin token
+    <input type="password" id="admin-token" placeholder="admin token" />
+  </label>
+
+  <div class="admin-grid">
+    <form class="card" method="post" action="/admin/category">
+      <h3>Add Category</h3>
+      <input type="hidden" name="token" class="token-mirror" />
+      <input name="slug" placeholder="slug (e.g. fungi)" required />
+      <input name="name" placeholder="Name" required />
+      <input name="description" placeholder="Description" />
+      <button type="submit">Create category</button>
+    </form>
+
+    <form class="card" method="post" action="/admin/criterion">
+      <h3>Add Criterion</h3>
+      <input type="hidden" name="token" class="token-mirror" />
+      <input name="slug" placeholder="slug (e.g. texture)" required />
+      <input name="name" placeholder="Name" required />
+      <input name="description" placeholder="Description" />
+      <button type="submit">Create criterion</button>
+    </form>
+
+    <form class="card" method="post" action="/admin/generator">
+      <h3>Add Generator</h3>
+      <input type="hidden" name="token" class="token-mirror" />
+      <input name="slug" placeholder="slug" required />
+      <input name="name" placeholder="Name" required />
+      <select name="kind">
+        <option value="model">model</option>
+        <option value="baseline">baseline</option>
+        <option value="human">human</option>
+      </select>
+      <input name="description" placeholder="Description" />
+      <button type="submit">Create generator</button>
+    </form>
+
+    <form class="card" method="post" action="/admin/task">
+      <h3>Add Task</h3>
+      <input type="hidden" name="token" class="token-mirror" />
+      <select name="category_id" required>
+        {% for c in categories %}
+        <option value="{{ c.id }}">{{ c.name }}</option>
+        {% endfor %}
+      </select>
+      <input name="title" placeholder="Title" required />
+      <textarea name="prompt" placeholder="Prompt" required></textarea>
+      <input name="criteria_note" placeholder="Criteria note (optional)" />
+      <button type="submit">Create task</button>
+    </form>
+
+    <form
+      class="card"
+      method="post"
+      action="/admin/output"
+      enctype="multipart/form-data"
+    >
+      <h3>Upload Model Output (.glb)</h3>
+      <input type="hidden" name="token" class="token-mirror" />
+      <select name="task_id" required>
+        {% for t in tasks %}
+        <option value="{{ t.id }}">{{ t.title }}</option>
+        {% endfor %}
+      </select>
+      <select name="generator_id" required>
+        {% for g in generators %}
+        <option value="{{ g.id }}">{{ g.name }}</option>
+        {% endfor %}
+      </select>
+      <input name="title" placeholder="Output title (optional)" />
+      <input type="file" name="file" accept=".glb,.gltf" required />
+      <button type="submit">Upload output</button>
+    </form>
+
+    <form class="card" method="post" action="/admin/recompute">
+      <h3>Recompute Leaderboard</h3>
+      <input type="hidden" name="token" class="token-mirror" />
+      <p class="subtle">Refit Bradley–Terry + bootstrap CIs over all votes.</p>
+      <button type="submit">Recompute now</button>
+    </form>
+  </div>
+</section>
+<script>
+  // Mirror the single token input into every form's hidden token field.
+  const tokenInput = document.getElementById("admin-token");
+  const sync = () =>
+    document
+      .querySelectorAll(".token-mirror")
+      .forEach((i) => (i.value = tokenInput.value));
+  tokenInput.addEventListener("input", sync);
+  document
+    .querySelectorAll("form")
+    .forEach((f) => f.addEventListener("submit", sync));
+</script>
+{% endblock %}

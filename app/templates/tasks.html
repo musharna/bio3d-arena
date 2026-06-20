@@ -1,0 +1,34 @@
+{% extends "base.html" %} {% block title %}Tasks · Bio 3D Arena{% endblock %} {%
+block content %}
+<section class="board">
+  <h2>Benchmark Tasks</h2>
+  <p class="subtle">
+    {{ tasks|length }} tasks. Each task collects 3D outputs from multiple
+    generators for head-to-head comparison.
+  </p>
+  <table class="ranktable">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Title</th>
+        <th>Category</th>
+        <th>Outputs</th>
+        <th>Active</th>
+        <th>Prompt</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tasks %}
+      <tr>
+        <td>{{ t.id }}</td>
+        <td class="gen">{{ t.title }}</td>
+        <td><span class="cat-chip">{{ t.category }}</span></td>
+        <td class="num">{{ t.n_outputs }}</td>
+        <td>{{ "✓" if t.active else "—" }}</td>
+        <td class="subtle">{{ t.prompt }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

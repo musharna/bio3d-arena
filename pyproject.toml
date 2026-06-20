@@ -1,0 +1,13 @@
+[project]
+name = "bio3d-arena"
+version = "0.1.0"
+description = "Anonymous pairwise comparison + voting platform for biological 3D generations"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

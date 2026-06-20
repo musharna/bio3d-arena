@@ -1,0 +1,48 @@
+{% extends "base.html" %} {% block title %}Arena · Bio 3D Arena{% endblock %} {%
+block content %}
+<section class="arena">
+  <div id="task-card" class="task-card">
+    <span class="cat-chip" id="task-cat">…</span>
+    <h2 id="task-title">Loading a comparison…</h2>
+    <p id="task-prompt" class="prompt"></p>
+    <p class="criterion">
+      Vote on: <strong id="criterion-name">overall</strong> — rotate, zoom, and
+      pan each model, then pick the better one.
+    </p>
+  </div>
+
+  <div class="pair">
+    <div class="model-col">
+      <div class="model-label">Model A</div>
+      <model-viewer
+        id="viewer-a"
+        camera-controls
+        touch-action="pan-y"
+        shadow-intensity="1"
+        exposure="1.0"
+        ar-status="not-presenting"
+      ></model-viewer>
+    </div>
+    <div class="model-col">
+      <div class="model-label">Model B</div>
+      <model-viewer
+        id="viewer-b"
+        camera-controls
+        touch-action="pan-y"
+        shadow-intensity="1"
+        exposure="1.0"
+        ar-status="not-presenting"
+      ></model-viewer>
+    </div>
+  </div>
+
+  <div class="vote-bar">
+    <button class="vote-btn win" data-winner="a">👈 A is better</button>
+    <button class="vote-btn tie" data-winner="tie">🤝 Tie</button>
+    <button class="vote-btn bad" data-winner="bad">👎 Both bad</button>
+    <button class="vote-btn win" data-winner="b">B is better 👉</button>
+  </div>
+  <p id="status-line" class="status-line"></p>
+</section>
+<script src="/static/arena.js"></script>
+{% endblock %}
