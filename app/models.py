@@ -205,3 +205,33 @@ class GoldPair(Base):
     good_output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"))
     bad_output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"))
     note: Mapped[str] = mapped_column(Text, default="")
+
+
+class Submission(Base):
+    """A community-submitted 3D output awaiting moderation before entering the arena.
+
+    The asset is validated + stored at submit time; on approval a ModelOutput is
+    created that reuses the stored blob (no re-upload).
+    """
+
+    __tablename__ = "submission"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("task.id"), index=True)
+    generator_slug: Mapped[str] = mapped_column(String(64))
+    generator_name: Mapped[str] = mapped_column(String(128), default="")
+    title: Mapped[str] = mapped_column(String(200), default="")
+    asset_path: Mapped[str] = mapped_column(String(512))
+    asset_format: Mapped[str] = mapped_column(String(32), default="glb")
+    meta_json: Mapped[str] = mapped_column(Text, default="{}")
+    submitter: Mapped[str] = mapped_column(String(200), default="")  # free-form name/contact
+    session_id: Mapped[str] = mapped_column(String(64), default="", index=True)
+    status: Mapped[str] = mapped_column(
+        String(16), default="pending", index=True
+    )  # pending | approved | rejected
+    review_note: Mapped[str] = mapped_column(Text, default="")
+    model_output_id: Mapped[int | None] = mapped_column(
+        ForeignKey("model_output.id"), nullable=True
+    )
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+    reviewed_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)

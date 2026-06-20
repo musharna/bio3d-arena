@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Moderation · Bio 3D Arena{% endblock %}
+{% block content %}
+<section class="board">
+  <h2>Moderation queue <span class="subtle">— {{ pending|length }} pending</span></h2>
+  <p class="subtle">Review community submissions. Approve to add the output to the
+    arena (its generator is created if new); reject with an optional reason.</p>
+  <label class="token-row">Admin token
+    <input type="password" id="admin-token" placeholder="admin token" />
+  </label>
+  {% if pending %}
+  <div class="mod-grid">
+    {% for s in pending %}
+    <div class="card mod-card">
+      <div class="mod-meta">
+        <b>{{ s.task }}</b> <span class="cat-chip">{{ s.format | upper }}</span><br />
+        <span class="subtle">generator:</span> {{ s.generator_slug }}{% if s.generator_name %}
+        ({{ s.generator_name }}){% endif %}<br />
+        {% if s.title %}<span class="subtle">title:</span> {{ s.title }}<br />{% endif %}
+        {% if s.submitter %}<span class="subtle">by {{ s.submitter }}</span>{% endif %}
+      </div>
+      <div class="viewer-slot mod-viewer" data-url="{{ s.asset_url }}" data-format="{{ s.format }}"></div>
+      <div class="mod-actions">
+        <form method="post" action="/admin/submissions/{{ s.id }}/approve">
+          <input type="hidden" name="token" class="token-mirror" />
+          <button class="approve" type="submit">✓ Approve</button>
+        </form>
+        <form method="post" action="/admin/submissions/{{ s.id }}/reject">
+          <input type="hidden" name="token" class="token-mirror" />
+          <input name="note" placeholder="reason (optional)" />
+          <button class="reject" type="submit">✗ Reject</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p>No pending submissions. New ones from <a href="/submit">/submit</a> appear here.</p>
+  {% endif %}
+</section>
+<script src="/static/moderation.js"></script>
+{% endblock %}

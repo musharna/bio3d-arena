@@ -97,6 +97,12 @@ def test_gold_check_updates_trust(monkeypatch):
 
 def test_low_trust_votes_excluded_from_ranking():
     with SessionLocal() as db:
+        # Isolate: clear votes from earlier tests so the match set is exactly ours.
+        db.query(Vote).delete()
+        db.query(Comparison).delete()
+        db.query(VoterSession).delete()
+        db.commit()
+
         cid = _overall_id(db)
         a, b = _two_real_outputs(db)
         gen_a, gen_b = a.generator_id, b.generator_id

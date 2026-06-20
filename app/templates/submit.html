@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Submit · Bio 3D Arena{% endblock %}
+{% block content %}
+<section class="board prose">
+  <h2>Submit a model output</h2>
+  <p class="subtle">Upload a 3D output (GLB/GLTF mesh or PDB/mmCIF structure) for a
+    benchmark task. Submissions are validated, then reviewed by a moderator before
+    they enter the arena and the rankings.</p>
+  <form class="card submit-form" method="post" action="/api/submit"
+        enctype="multipart/form-data" id="submit-form">
+    <label>Task
+      <select name="task_id" required>
+        {% for t in tasks %}
+        <option value="{{ t.id }}">{{ t.title }} ({{ t.category }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Generator slug <input name="generator_slug" placeholder="my-model-v1" required /></label>
+    <label>Generator name <input name="generator_name" placeholder="My Model v1" /></label>
+    <label>Output title <input name="title" placeholder="optional" /></label>
+    <label>Your name / contact <input name="submitter" placeholder="optional" /></label>
+    <label>Asset file
+      <input type="file" name="file" accept=".glb,.gltf,.pdb,.cif,.mmcif,.ent" required />
+    </label>
+    <button type="submit">Submit for review</button>
+  </form>
+  <p id="submit-status" class="status-line"></p>
+</section>
+<script>
+  const form = document.getElementById("submit-form");
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const s = document.getElementById("submit-status");
+    s.textContent = "Uploading…";
+    try {
+      const res = await fetch("/api/submit", { method: "POST", body: new FormData(form) });
+      const data = await res.json();
+      if (res.ok) {
+        s.textContent = "✓ Submitted (#" + data.submission_id + ") — pending review.";
+        form.reset();
+      } else {
+        s.textContent = "Error: " + (data.detail || res.status);
+      }
+    } catch (err) {
+      s.textContent = "Error: " + err;
+    }
+  });
+</script>
+{% endblock %}

@@ -14,9 +14,18 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import config, ingest, integrity, matchmaking, service
+from . import config, ingest, integrity, matchmaking, service, submissions
 from .database import get_db, init_db
-from .models import Category, Comparison, Criterion, Generator, ModelOutput, Rating, Task, Vote
+from .models import (
+    Category,
+    Comparison,
+    Criterion,
+    Generator,
+    ModelOutput,
+    Rating,
+    Task,
+    Vote,
+)
 from .schemas import CategoryIn, GeneratorIn, TaskIn, VoteIn
 from .storage import get_storage
 
@@ -626,6 +635,135 @@ async def api_register_output(
         "format": output.asset_format,
         "meta": json.loads(output.meta_json),
     }
+
+
+# --------------------------------------------------- community submission queue
+
+
+@app.get("/submit", response_class=HTMLResponse)
+def submit_page(request: Request, db: Session = Depends(get_db)):
+    tasks = db.execute(select(Task).where(Task.active.is_(True))).scalars().all()
+    return templates.TemplateResponse(
+        request,
+        "submit.html",
+        {"tasks": [{"id": t.id, "title": t.title, "category": t.category.name} for t in tasks]},
+    )
+
+
+@app.post("/api/submit")
+async def api_submit(
+    request: Request,
+    task_id: int = Form(...),
+    generator_slug: str = Form(...),
+    generator_name: str = Form(default=""),
+    title: str = Form(default=""),
+    submitter: str = Form(default=""),
+    meta: str = Form(default="{}"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    x_captcha_token: str | None = Header(default=None),
+):
+    """Public: queue a community 3D output for moderation (rate-limited, validated)."""
+    sid = request.state.session_id
+    if not integrity.verify_captcha(x_captcha_token):
+        raise HTTPException(403, "Captcha verification required/failed")
+    if not integrity.check_rate_limit(sid):
+        raise HTTPException(429, "Rate limit exceeded — slow down")
+    ext = (file.filename or "asset.glb").rsplit(".", 1)[-1].lower()
+    try:
+        meta_dict = json.loads(meta) if meta else {}
+    except json.JSONDecodeError as exc:
+        raise HTTPException(400, f"meta must be valid JSON: {exc}") from exc
+    try:
+        sub = submissions.create_submission(
+            db,
+            task_id=task_id,
+            generator_slug=generator_slug,
+            data=await file.read(),
+            ext=ext,
+            title=title,
+            meta=meta_dict,
+            submitter=submitter,
+            session_id=sid,
+            generator_name=generator_name,
+        )
+    except ingest.IngestError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    db.commit()
+    return {"status": "pending", "submission_id": sub.id}
+
+
+@app.get("/api/submissions", dependencies=[Depends(require_admin_header)])
+def api_submissions(db: Session = Depends(get_db), status: str | None = None):
+    subs = submissions.list_submissions(db, status)
+    return {
+        "submissions": [
+            {
+                "id": s.id,
+                "task_id": s.task_id,
+                "generator_slug": s.generator_slug,
+                "title": s.title,
+                "status": s.status,
+                "submitter": s.submitter,
+                "asset_url": storage.url_for(s.asset_path),
+                "format": s.asset_format,
+            }
+            for s in subs
+        ]
+    }
+
+
+@app.get("/admin/moderation", response_class=HTMLResponse)
+def moderation_page(request: Request, db: Session = Depends(get_db)):
+    pending = submissions.list_submissions(db, status="pending")
+    rows = []
+    for s in pending:
+        task = db.get(Task, s.task_id)
+        rows.append(
+            {
+                "id": s.id,
+                "task": task.title if task else f"#{s.task_id}",
+                "generator_slug": s.generator_slug,
+                "generator_name": s.generator_name,
+                "title": s.title,
+                "submitter": s.submitter,
+                "asset_url": storage.url_for(s.asset_path),
+                "format": s.asset_format,
+            }
+        )
+    return templates.TemplateResponse(request, "moderation.html", {"pending": rows})
+
+
+@app.post("/admin/submissions/{submission_id}/approve")
+def admin_approve(
+    submission_id: int,
+    token: str = Form(...),
+    note: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    _require_admin(token)
+    try:
+        submissions.approve(db, submission_id, note)
+    except ingest.IngestError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    db.commit()
+    return RedirectResponse("/admin/moderation", status_code=303)
+
+
+@app.post("/admin/submissions/{submission_id}/reject")
+def admin_reject(
+    submission_id: int,
+    token: str = Form(...),
+    note: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    _require_admin(token)
+    try:
+        submissions.reject(db, submission_id, note)
+    except ingest.IngestError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    db.commit()
+    return RedirectResponse("/admin/moderation", status_code=303)
 
 
 @app.get("/healthz")

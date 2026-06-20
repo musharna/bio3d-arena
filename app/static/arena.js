@@ -52,64 +52,21 @@ async function loadNext() {
   }
 }
 
-// ---- Viewer registry: pick a renderer by asset format -----------------------
-const MESH_FORMATS = new Set(["glb", "gltf"]);
-const MOLECULAR_FORMATS = new Set(["pdb", "cif", "mmcif", "ent"]);
-
-function mountMesh(slot, asset) {
-  const mv = document.createElement("model-viewer");
-  mv.setAttribute("camera-controls", "");
-  mv.setAttribute("touch-action", "pan-y");
-  mv.setAttribute("shadow-intensity", "1");
-  mv.setAttribute("exposure", "1.0");
-  mv.setAttribute("src", asset.url);
-  mv.style.width = "100%";
-  mv.style.height = "100%";
-  slot.appendChild(mv);
-}
-
-async function mountMolecular(slot, asset, fmt) {
-  // 3Dmol renders into the slot div; fetch the structure text and style it.
-  const viewer = window.$3Dmol.createViewer(slot, {
-    backgroundColor: "0x131a24",
-  });
-  const text = await (await fetch(asset.url)).text();
-  const modelType = fmt === "cif" || fmt === "mmcif" ? "cif" : "pdb";
-  viewer.addModel(text, modelType);
-  // Cartoon shows for proteins (with backbone); stick+sphere covers small molecules.
-  viewer.setStyle(
-    {},
-    {
-      stick: { radius: 0.15 },
-      sphere: { scale: 0.28 },
-      cartoon: { color: "spectrum" },
-    },
-  );
-  viewer.zoomTo();
-  viewer.render();
-}
-
-function mountViewer(slot, asset) {
-  slot.innerHTML = ""; // tear down the previous viewer
-  const fmt = (asset.format || "glb").toLowerCase();
-  if (MOLECULAR_FORMATS.has(fmt)) {
-    mountMolecular(slot, asset, fmt);
-  } else if (MESH_FORMATS.has(fmt)) {
-    mountMesh(slot, asset);
-  } else {
-    slot.textContent = "Unsupported format: " + fmt;
-  }
-  return fmt;
-}
-
 function render(data) {
   current = data;
   el("task-cat").textContent = data.task.category;
   el("task-title").textContent = data.task.title;
   el("task-prompt").textContent = data.task.prompt;
   el("criterion-name").textContent = data.criterion.name;
-  el("fmt-a").textContent = mountViewer(el("slot-a"), data.a).toUpperCase();
-  el("fmt-b").textContent = mountViewer(el("slot-b"), data.b).toUpperCase();
+  // Shared viewer registry (viewer.js) picks model-viewer vs 3Dmol by format.
+  el("fmt-a").textContent = window.Bio3DViewer.mount(
+    el("slot-a"),
+    data.a,
+  ).toUpperCase();
+  el("fmt-b").textContent = window.Bio3DViewer.mount(
+    el("slot-b"),
+    data.b,
+  ).toUpperCase();
   setStatus("");
 }
 

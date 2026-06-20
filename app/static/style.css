@@ -63,6 +63,65 @@
 .prose h3 {
   margin-top: 1.4rem;
 }
+
+/* Submission form + moderation queue */
+.submit-form {
+  max-width: 520px;
+}
+.submit-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: #c8d2de;
+}
+.mod-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.mod-card {
+  gap: 0.6rem;
+}
+.mod-meta {
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.mod-viewer {
+  height: 240px;
+}
+.mod-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.mod-actions form {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  flex: 1;
+}
+.mod-actions input {
+  flex: 1;
+  min-width: 80px;
+}
+.mod-actions button {
+  padding: 0.5rem 0.7rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mod-actions .approve {
+  background: #4cc38a;
+  color: #06281b;
+}
+.mod-actions .reject {
+  background: #b9636b;
+  color: #1a0c0e;
+}
 .prose ul {
   padding-left: 1.2rem;
 }
