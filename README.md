@@ -133,7 +133,7 @@ docker run -p 8000:8000 -e BIO3D_ADMIN_TOKEN=... -v $PWD/data:/data bio3d-arena
 ## Tests
 
 ```bash
-pytest -q        # ranking…integrity + scale-out seams (39 tests)
+pytest -q        # ranking…integrity + scale-out seams (59 tests)
 ```
 
 ## Supported 3D formats
