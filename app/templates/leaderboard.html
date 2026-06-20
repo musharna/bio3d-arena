@@ -24,6 +24,12 @@
     bootstrap CI, recomputed in Admin. Elo updates live per vote (global/overall
     scope). Select a category + criterion above to slice the rankings.
   </p>
+  <p class="subtle bias-line">
+    Bias audit — left(A) win rate
+    <b>{% if bias.left_win_rate is none %}—{% else %}{{ bias.left_win_rate }}{% endif %}</b>
+    (≈0.50 = unbiased) · tie {{ bias.tie_rate }} · bad {{ bias.bad_rate }} ·
+    <a href="/significance?criterion={{ sel_criterion }}&category={{ sel_category }}">significance &amp; full audit →</a>
+  </p>
   {% if rows %}
   <table class="ranktable">
     <thead>

@@ -241,6 +241,9 @@ def leaderboard(
             "total_votes": total,
             "category_options": category_options,
             "criterion_options": criterion_options,
+            "bias": service.compute_bias(db),
+            "sel_criterion": criterion,
+            "sel_category": category,
         },
     )
 
@@ -254,6 +257,50 @@ def api_leaderboard(
         "category": category,
         "rows": _leaderboard_rows(db, criterion, category),
     }
+
+
+# --------------------------------------------------------- significance + bias
+
+
+@app.get("/api/significance")
+def api_significance(
+    db: Session = Depends(get_db), criterion: str = "overall", category: str = "all"
+):
+    return service.compute_significance(db, criterion, _resolve_category_id(db, category))
+
+
+@app.get("/api/bias")
+def api_bias(db: Session = Depends(get_db)):
+    return service.compute_bias(db)
+
+
+@app.get("/significance", response_class=HTMLResponse)
+def significance_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    criterion: str = "overall",
+    category: str = "all",
+):
+    sig = service.compute_significance(db, criterion, _resolve_category_id(db, category))
+    cats = db.execute(select(Category)).scalars().all()
+    crits = db.execute(select(Criterion)).scalars().all()
+    category_options = [{"slug": "all", "name": "All categories", "selected": category == "all"}]
+    category_options += [
+        {"slug": c.slug, "name": c.name, "selected": category == c.slug} for c in cats
+    ]
+    criterion_options = [
+        {"slug": c.slug, "name": c.name, "selected": criterion == c.slug} for c in crits
+    ]
+    return templates.TemplateResponse(
+        request,
+        "significance.html",
+        {
+            "sig": sig,
+            "bias": service.compute_bias(db),
+            "category_options": category_options,
+            "criterion_options": criterion_options,
+        },
+    )
 
 
 # ------------------------------------------------------------------------ tasks

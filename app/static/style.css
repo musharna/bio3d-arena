@@ -1,3 +1,63 @@
+/* Significance matrix + sig flags (appended at top so vars below still apply) */
+.matrix-wrap {
+  overflow-x: auto;
+}
+.matrix {
+  border-collapse: collapse;
+  margin: 0.5rem 0 1.5rem;
+  font-size: 0.82rem;
+}
+.matrix th,
+.matrix td {
+  padding: 0.4rem 0.55rem;
+  text-align: center;
+  border: 1px solid #2c3a4d;
+}
+.matrix thead th,
+.matrix tbody th {
+  color: #8b98a9;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.matrix td.mc {
+  font-variant-numeric: tabular-nums;
+  color: #0c1117;
+  font-weight: 600;
+}
+.mc-hi {
+  background: #4cc38a;
+} /* row clearly beats col (>=0.95) */
+.mc-mid {
+  background: #9bd6b0;
+} /* leans row (>=0.75) */
+.mc-na {
+  background: #2a3548;
+  color: #e6edf3 !important;
+} /* uncertain ~0.5 */
+.mc-lomid {
+  background: #c98a90;
+} /* leans col (<=0.25) */
+.mc-lo {
+  background: #b9636b;
+} /* col clearly beats row (<=0.05) */
+.mc-self {
+  background: #161d28;
+  color: #5c6b7e !important;
+}
+.sig-yes {
+  color: #4cc38a;
+  font-weight: 700;
+}
+.sig-no {
+  color: #8b98a9;
+}
+.bias-table td:first-child {
+  color: #c8d2de;
+}
+.bias-line a {
+  white-space: nowrap;
+}
+
 :root {
   --bg: #0f1419;
   --panel: #1a2230;

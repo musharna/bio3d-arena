@@ -24,6 +24,10 @@ structural accuracy, visual quality, and scientific usefulness.
   (←/→/t/x).
 - **Rankings** — online **Elo** (instant, per-vote) + batch **Bradley–Terry MLE**
   with **bootstrap 95% confidence intervals** (authoritative leaderboard).
+- **Statistical rigor** — paired-bootstrap **pairwise significance** ("is A
+  _meaningfully_ ahead of B?" → P(A ranks above B) matrix + "beats next rank?")
+  and a **position/format bias audit** (left-win-rate, tie/bad rate, cross-format
+  confound).
 - **Storage** — prompts, tasks, generators, 3D outputs, comparisons, and votes in
   SQLite via SQLAlchemy.
 - **Admin tools** — token-gated UI to add categories, criteria, tasks, and
@@ -102,7 +106,7 @@ docker run -p 8000:8000 -e BIO3D_ADMIN_TOKEN=... -v $PWD/data:/data bio3d-arena
 ## Tests
 
 ```bash
-pytest -q        # ranking + e2e API + slices + ingestion + molecular (23 tests)
+pytest -q        # ranking + API + slices + ingestion + molecular + stats (27 tests)
 ```
 
 ## Ingesting real generator outputs
@@ -144,6 +148,9 @@ gene/parameter vector or prompt.
 - `GET /api/leaderboard?criterion=<slug>&category=<slug>` — sliced rankings.
 - `GET /api/export.json` — full reproducible dataset (votes + provenance,
   generators revealed for offline analysis).
+- `GET /api/significance?criterion=&category=` — pairwise P(A ranks above B)
+  matrix + per-rank "beats next?" significance (paired bootstrap). Page: `/significance`.
+- `GET /api/bias` — position/format bias audit (left-win-rate, tie/bad, cross-format).
 
 Ties are credited as a split (one win each direction) so they inform
 Bradley–Terry. `POST /admin/recompute` refits every (criterion × {global + each
@@ -169,8 +176,9 @@ category}) scope.
   for GLB/GLTF meshes, **3Dmol.js** for PDB/mmCIF structures. Ingestion validates
   molecular files (atom records) and the seed ships a PDB demo task. (Point clouds
   - Mol\* are future registry entries.)
-- ⬜ **Statistical rigor**: significance view ("is A meaningfully above B?"),
-  position/format-bias controls, full Rao–Kupper tie model.
+- ✅ **Statistical rigor**: paired-bootstrap pairwise significance ("is A
+  meaningfully above B?") + position/format bias audit (`/significance`,
+  `/api/significance`, `/api/bias`). (Full Rao–Kupper tie model still future.)
 - ⬜ **Public-arena hardening**: anti-abuse (rate limits, captcha, gold-standard
   attention checks, outlier-voter down-weighting), Postgres + object storage +
   CDN, methodology/transparency page, model-author submission + moderation.

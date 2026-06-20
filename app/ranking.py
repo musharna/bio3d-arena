@@ -82,9 +82,7 @@ def _fit_strengths(
         return {}
 
     wins: dict[int, float] = defaultdict(float)  # total wins per player
-    pair_games: dict[tuple[int, int], float] = defaultdict(
-        float
-    )  # unordered pair -> games
+    pair_games: dict[tuple[int, int], float] = defaultdict(float)  # unordered pair -> games
     for w, loser in matches:
         wins[w] += 1.0
         key = (min(w, loser), max(w, loser))
@@ -113,9 +111,7 @@ def _fit_strengths(
             else:
                 new_strength[p] = wins[p] / denom
         # Renormalize to geometric mean 1 to prevent drift.
-        log_mean = sum(math.log(max(v, 1e-12)) for v in new_strength.values()) / len(
-            new_strength
-        )
+        log_mean = sum(math.log(max(v, 1e-12)) for v in new_strength.values()) / len(new_strength)
         norm = math.exp(log_mean)
         for p in players:
             new_strength[p] /= norm
@@ -124,6 +120,31 @@ def _fit_strengths(
         if max_change < tol:
             break
     return strength
+
+
+def _bootstrap_scores(
+    players: list[int],
+    matches: list[tuple[int, int]],
+    bootstrap: int,
+    reg: float = 0.1,
+    seed: int = 12345,
+) -> dict[int, list[float]]:
+    """Resample the match list `bootstrap` times; return per-player Elo-score samples.
+
+    Index b across players corresponds to the SAME resample, so the samples are
+    paired — enabling paired pairwise significance, not just marginal CIs.
+    """
+    samples: dict[int, list[float]] = defaultdict(list)
+    if bootstrap <= 0 or not matches:
+        return samples
+    rng = random.Random(seed)
+    n = len(matches)
+    for _ in range(bootstrap):
+        resampled = [matches[rng.randrange(n)] for _ in range(n)]
+        elo = _strength_to_elo(_fit_strengths(players, resampled, reg=reg))
+        for pid, val in elo.items():
+            samples[pid].append(val)
+    return samples
 
 
 def bradley_terry(
@@ -148,24 +169,61 @@ def bradley_terry(
 
     lower: dict[int, float] = dict(point)
     upper: dict[int, float] = dict(point)
-    if bootstrap > 0 and matches:
-        rng = random.Random(seed)
-        samples: dict[int, list[float]] = defaultdict(list)
-        n = len(matches)
-        for _ in range(bootstrap):
-            resampled = [matches[rng.randrange(n)] for _ in range(n)]
-            elo = _strength_to_elo(_fit_strengths(players, resampled, reg=reg))
-            for pid, val in elo.items():
-                samples[pid].append(val)
-        for pid in players:
-            vals = sorted(samples.get(pid, []))
-            if vals:
-                lower[pid] = vals[max(0, int(0.025 * len(vals)) - 1)]
-                upper[pid] = vals[min(len(vals) - 1, int(0.975 * len(vals)))]
+    samples = _bootstrap_scores(players, matches, bootstrap, reg=reg, seed=seed)
+    for pid in players:
+        vals = sorted(samples.get(pid, []))
+        if vals:
+            lower[pid] = vals[max(0, int(0.025 * len(vals)) - 1)]
+            upper[pid] = vals[min(len(vals) - 1, int(0.975 * len(vals)))]
 
     return BTResult(
         scores=point,
         lower={p: lower.get(p, BT_BASE) for p in players},
         upper={p: upper.get(p, BT_BASE) for p in players},
         n_games={p: n_games.get(p, 0.0) for p in players},
+    )
+
+
+@dataclass
+class SignificanceResult:
+    """Pairwise superiority probabilities from the paired bootstrap."""
+
+    order: list[int]  # players ranked by point score, best first
+    scores: dict[int, float]  # Elo-scaled BT point scores
+    p_better: dict[tuple[int, int], float]  # P(score_i > score_j) over resamples
+    p_beats_next: dict[int, float | None]  # P(beats the next-ranked player); None for last
+
+
+def significance_matrix(
+    players: list[int],
+    matches: list[tuple[int, int]],
+    bootstrap: int = 200,
+    reg: float = 0.1,
+    seed: int = 12345,
+) -> SignificanceResult:
+    """Bootstrap P(A ranks above B) for every pair — answers "is A *meaningfully* ahead?"."""
+    point = _strength_to_elo(_fit_strengths(players, matches, reg=reg))
+    order = sorted(players, key=lambda p: point.get(p, BT_BASE), reverse=True)
+    samples = _bootstrap_scores(players, matches, bootstrap, reg=reg, seed=seed)
+
+    p_better: dict[tuple[int, int], float] = {}
+    for i in players:
+        for j in players:
+            if i == j:
+                continue
+            si, sj = samples.get(i, []), samples.get(j, [])
+            if not si or not sj or len(si) != len(sj):
+                p_better[(i, j)] = 0.5  # no bootstrap data → uninformative
+                continue
+            wins = sum(1.0 for a, b in zip(si, sj) if a > b)
+            wins += 0.5 * sum(1.0 for a, b in zip(si, sj) if a == b)
+            p_better[(i, j)] = wins / len(si)
+
+    p_beats_next: dict[int, float | None] = {}
+    for idx, p in enumerate(order):
+        nxt = order[idx + 1] if idx + 1 < len(order) else None
+        p_beats_next[p] = p_better.get((p, nxt), 0.5) if nxt is not None else None
+
+    return SignificanceResult(
+        order=order, scores=point, p_better=p_better, p_beats_next=p_beats_next
     )

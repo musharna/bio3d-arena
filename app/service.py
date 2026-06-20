@@ -7,11 +7,13 @@ full decisive-vote record.
 
 from __future__ import annotations
 
+from collections import defaultdict
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import config, ranking
-from .models import Category, Comparison, Criterion, ModelOutput, Rating, Task, Vote
+from .models import Category, Comparison, Criterion, Generator, ModelOutput, Rating, Task, Vote
 
 
 def get_or_create_rating(
@@ -145,4 +147,92 @@ def recompute_all(db: Session) -> dict:
         "scopes": n_scopes,
         "criteria": len(criteria),
         "categories": len(categories),
+    }
+
+
+def compute_significance(
+    db: Session, criterion_slug: str = "overall", category_id: int | None = None
+) -> dict:
+    """Pairwise P(A ranks above B) for a scope — "is A *meaningfully* ahead of B?"."""
+    criterion = (
+        db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+    )
+    if criterion is None:
+        return {"status": "no-such-criterion"}
+    matches = _matches_for_scope(db, criterion.id, category_id)
+    players = sorted(set(_players_for_scope(db, category_id)) | {p for m in matches for p in m})
+    result = ranking.significance_matrix(players, matches, bootstrap=config.BT_BOOTSTRAP)
+    names = {g.id: g.name for g in db.execute(select(Generator)).scalars().all()}
+
+    ranked = []
+    for pid in result.order:
+        pn = result.p_beats_next.get(pid)
+        ranked.append(
+            {
+                "generator": names.get(pid, str(pid)),
+                "score": round(result.scores.get(pid, ranking.BT_BASE), 1),
+                "p_beats_next": (round(pn, 3) if pn is not None else None),
+                # A generator is "significantly" ahead of the next when it beats it in
+                # >=95% of bootstrap resamples.
+                "sig_above_next": (pn is not None and pn >= 0.95),
+            }
+        )
+    labels = [names.get(pid, str(pid)) for pid in result.order]
+    matrix = [
+        [(1.0 if i == j else round(result.p_better.get((i, j), 0.5), 3)) for j in result.order]
+        for i in result.order
+    ]
+    return {
+        "status": "ok",
+        "criterion": criterion_slug,
+        "n_matches": len(matches),
+        "labels": labels,
+        "ranked": ranked,
+        "matrix": matrix,  # matrix[i][j] = P(labels[i] ranks above labels[j])
+    }
+
+
+def compute_bias(db: Session) -> dict:
+    """Position/format-bias audit over all votes.
+
+    left_win_rate ≈ 0.5 means no position bias (A/B sides are randomized). A value
+    far from 0.5 signals voters favour a side regardless of content. cross_format
+    counts comparisons that pit different asset formats against each other (a
+    format-confound risk); format_win_rate breaks those down.
+    """
+    rows = db.execute(
+        select(Vote, Comparison).join(Comparison, Vote.comparison_id == Comparison.id)
+    ).all()
+    a = b = tie = bad = cross_format = 0
+    fmt_wins: dict[str, int] = defaultdict(int)
+    fmt_games: dict[str, int] = defaultdict(int)
+    for vote, comp in rows:
+        out_a = db.get(ModelOutput, comp.output_a_id)
+        out_b = db.get(ModelOutput, comp.output_b_id)
+        is_cross = out_a.asset_format != out_b.asset_format
+        if is_cross:
+            cross_format += 1
+        if vote.winner == "a":
+            a += 1
+        elif vote.winner == "b":
+            b += 1
+        elif vote.winner == "tie":
+            tie += 1
+        else:
+            bad += 1
+        if is_cross and vote.winner in ("a", "b"):
+            win_out, lose_out = (out_a, out_b) if vote.winner == "a" else (out_b, out_a)
+            fmt_wins[win_out.asset_format] += 1
+            fmt_games[win_out.asset_format] += 1
+            fmt_games[lose_out.asset_format] += 1
+    n = len(rows)
+    decisive = a + b
+    return {
+        "n_votes": n,
+        "decisive": decisive,
+        "left_win_rate": round(a / decisive, 3) if decisive else None,
+        "tie_rate": round(tie / n, 3) if n else None,
+        "bad_rate": round(bad / n, 3) if n else None,
+        "cross_format_comparisons": cross_format,
+        "format_win_rate": {f: round(fmt_wins[f] / g, 3) for f, g in fmt_games.items() if g},
     }
