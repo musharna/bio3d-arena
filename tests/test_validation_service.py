@@ -45,3 +45,20 @@ def test_reference_demo_produces_rmsd_and_tm():
         assert all("rmsd" in r and "tm_score" in r for r in ok)
     finally:
         db.close()
+
+
+def test_validation_page_and_api_render():
+    client.post("/admin/revalidate", data={"token": "test-token"})
+    html = client.get("/validation").text
+    assert "Physical validity" in html
+    assert "independent of the human aesthetic vote" in html
+    api = client.get("/api/validation").json()
+    assert "validity_leaderboard" in api
+    assert any(row["n_molecular"] >= 1 for row in api["validity_leaderboard"])
+    assert api["reference_accuracy"], "expected reference accuracy rows"
+
+
+def test_validation_in_nav():
+    html = client.get("/").text
+    nav = html.split("<nav>")[1].split("</nav>")[0]
+    assert ">Validation<" in nav

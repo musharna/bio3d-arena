@@ -537,6 +537,32 @@ def admin_revalidate(token: str = Form(...), db: Session = Depends(get_db)):
     return JSONResponse({"status": "revalidated", "detail": detail})
 
 
+@app.get("/validation", response_class=HTMLResponse)
+def validation_page(request: Request, db: Session = Depends(get_db)):
+    from . import validation_service
+
+    return templates.TemplateResponse(
+        request,
+        "validation.html",
+        {
+            "validity": validation_service.validity_leaderboard(db),
+            "reference": validation_service.reference_accuracy(db),
+        },
+    )
+
+
+@app.get("/api/validation")
+def api_validation(db: Session = Depends(get_db)):
+    from . import validation_service
+
+    return JSONResponse(
+        {
+            "validity_leaderboard": validation_service.validity_leaderboard(db),
+            "reference_accuracy": validation_service.reference_accuracy(db),
+        }
+    )
+
+
 # ------------------------------------------------------------------ data export
 
 
