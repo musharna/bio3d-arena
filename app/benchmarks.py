@@ -32,7 +32,7 @@ def load_manifest(path: Path) -> list[dict]:
 
 
 def _task_for_slug(db: Session, entry: dict) -> Task:
-    """Find-or-create the task for an entry, keyed by a synthetic title match."""
+    """Find-or-create the task for an entry, keyed by title (the grouping key by design)."""
     existing = db.execute(select(Task).where(Task.title == entry["title"])).scalars().first()
     if existing is not None:
         return existing
@@ -52,6 +52,7 @@ def register_benchmark_entry(db: Session, entry: dict, assets_dir: Path) -> tupl
     task = _task_for_slug(db, entry)
     meta = {
         "benchmark": True,
+        "task_slug": entry["task_slug"],
         "source": entry.get("source", ""),
         "license": entry.get("license", ""),
         "attribution": entry.get("attribution", ""),
@@ -72,17 +73,16 @@ def register_benchmark_entry(db: Session, entry: dict, assets_dir: Path) -> tupl
 def load_benchmarks(db: Session, manifest_path: Path, assets_dir: Path) -> dict:
     """Register every entry in a manifest. Idempotent (content-hash dedup).
 
-    entry["file"] paths are resolved relative to the manifest parent directory;
-    assets_dir is unused by the loader but kept in the signature for
-    forward-compatibility.
+    entry["file"] paths are resolved relative to assets_dir.
+    Multiple entries sharing the same title map to the same Task (by design).
     """
     manifest_path = Path(manifest_path)
-    base_dir = manifest_path.parent
+    assets_dir = Path(assets_dir)
     entries = load_manifest(manifest_path)
     tasks: set[str] = set()
     outputs = skipped = 0
     for entry in entries:
-        _, created = register_benchmark_entry(db, entry, base_dir)
+        _, created = register_benchmark_entry(db, entry, assets_dir)
         tasks.add(entry["title"])
         if created:
             outputs += 1

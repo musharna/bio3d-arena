@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 
-from app import benchmarks
+import pytest
+
+from app import benchmarks, ingest
 from app.database import SessionLocal
 from app.models import ModelOutput, Task
 from app.molec_gen import build_molecule_sdf
@@ -39,7 +41,9 @@ def _fixture(tmp_path):
             ]
         )
     )
-    return manifest, assets
+    # Return manifest and tmp_path as assets_dir so that
+    # assets_dir / "assets/lig.sdf" resolves correctly.
+    return manifest, tmp_path
 
 
 def test_load_manifest_parses(tmp_path):
@@ -49,9 +53,9 @@ def test_load_manifest_parses(tmp_path):
 
 
 def test_load_benchmarks_registers_task_and_output(tmp_path):
-    manifest, assets = _fixture(tmp_path)
+    manifest, assets_dir = _fixture(tmp_path)
     with SessionLocal() as db:
-        summary = benchmarks.load_benchmarks(db, manifest, assets)
+        summary = benchmarks.load_benchmarks(db, manifest, assets_dir)
         db.commit()
         assert summary["outputs"] == 1
         out = db.query(ModelOutput).join(Task, ModelOutput.task_id == Task.id).filter(Task.title == "Benchmark ligand").one()
@@ -59,14 +63,22 @@ def test_load_benchmarks_registers_task_and_output(tmp_path):
         meta = json.loads(out.meta_json)
         assert meta["license"] == "CC0"
         assert meta["source"].startswith("http")
+        assert meta["task_slug"] == "bench-lig"
 
 
 def test_load_benchmarks_idempotent(tmp_path):
-    manifest, assets = _fixture(tmp_path)
+    manifest, assets_dir = _fixture(tmp_path)
     with SessionLocal() as db:
-        benchmarks.load_benchmarks(db, manifest, assets)
+        benchmarks.load_benchmarks(db, manifest, assets_dir)
         db.commit()
-        second = benchmarks.load_benchmarks(db, manifest, assets)
+        second = benchmarks.load_benchmarks(db, manifest, assets_dir)
         db.commit()
     assert second["outputs"] == 0  # same bytes → dedup, nothing new
     assert second["skipped"] == 1
+
+
+def test_load_manifest_rejects_missing_field(tmp_path):
+    manifest = tmp_path / "bad.json"
+    manifest.write_text(json.dumps([{"task_slug": "x"}]))  # missing title, prompt, etc.
+    with pytest.raises(ingest.IngestError):
+        benchmarks.load_manifest(manifest)
