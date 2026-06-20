@@ -14,8 +14,14 @@
       an Elo-like range. <b>Bootstrap resampling</b> gives 95% confidence intervals.</li>
     <li><b>Significance</b>: a paired bootstrap reports P(A ranks above B) for every
       pair, so we can say whether A is <i>meaningfully</i> ahead — not just nominally.</li>
-    <li><b>Ties</b> are credited as a split (one win each direction). Comparisons are
-      drawn within a task, so the two outputs share a prompt and format.</li>
+    <li><b>Rank (UB)</b>: models whose 95% bootstrap confidence intervals overlap
+      share a rank; a model outranks another only when its lower bound strictly
+      exceeds the other's upper bound. Equal-CI models are co-ranked rather than
+      arbitrarily ordered.</li>
+    <li><b>Ties</b> are credited as a split — one win in each direction — so they
+      inform Bradley-Terry symmetrically without a separate tie parameter. Comparisons
+      marked "both bad" are recorded for audit but excluded from the fit entirely.
+      Comparisons are drawn within a task, so the two outputs share a prompt and format.</li>
   </ul>
 
   <h3>Vote integrity</h3>
