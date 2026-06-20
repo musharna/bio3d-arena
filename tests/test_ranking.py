@@ -43,3 +43,28 @@ def test_bradley_terry_recovers_known_ordering():
     for p in players:
         assert result.lower[p] <= result.scores[p] <= result.upper[p]
     assert result.n_games[1] == 20  # 10 decisive games vs p2 + 10 vs p3
+
+
+def test_rank_by_ci_groups_overlapping_intervals():
+    from app.ranking import rank_by_ci
+
+    # A clearly ahead (CI above all); B and C overlap each other; D clearly last.
+    #         A            B            C            D
+    bounds = [(1200, 1300), (1000, 1100), (1050, 1150), (800, 900)]
+    #  A: nobody's lower > 1300 -> rank 1
+    #  B: A's lower(1200) > B.upper(1100) -> 1 beats it -> rank 2
+    #  C: A's lower(1200) > C.upper(1150) -> 1 beats it -> rank 2 (ties B; C/B overlap)
+    #  D: A,B,C all have lower > D.upper(900) -> 3 beat it -> rank 4
+    assert rank_by_ci(bounds) == [1, 2, 2, 4]
+
+
+def test_rank_by_ci_all_overlap_share_rank_one():
+    from app.ranking import rank_by_ci
+
+    assert rank_by_ci([(1000, 1100), (1010, 1110), (990, 1090)]) == [1, 1, 1]
+
+
+def test_rank_by_ci_empty():
+    from app.ranking import rank_by_ci
+
+    assert rank_by_ci([]) == []

@@ -184,6 +184,17 @@ def bradley_terry(
     )
 
 
+def rank_by_ci(bounds: list[tuple[float, float]]) -> list[int]:
+    """CI-grouped 'Rank (Upper Bound)' — overlapping 95% CIs share a rank.
+
+    bounds[i] = (lower_i, upper_i). A model j outranks i only when its lower bound
+    is strictly above i's upper bound (non-overlapping intervals), so
+    rank_i = 1 + #{ j : lower_j > upper_i }. Mirrors LMArena's 'Rank (UB)': models
+    that are not statistically separable share a rank number.
+    """
+    return [1 + sum(1 for (lo_j, _hi_j) in bounds if lo_j > hi_i) for (_lo_i, hi_i) in bounds]
+
+
 @dataclass
 class SignificanceResult:
     """Pairwise superiority probabilities from the paired bootstrap."""
