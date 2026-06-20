@@ -331,6 +331,55 @@ main {
 .viewer-slot canvas {
   display: block;
 }
+.viewer-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  background: rgba(15, 20, 25, 0.72);
+  color: #c8d2de;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s;
+  z-index: 3;
+}
+.viewer-slot:hover .viewer-hint {
+  opacity: 1;
+}
+.viewer-loading,
+.viewer-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  z-index: 2;
+  text-align: center;
+  padding: 0 1rem;
+}
+.viewer-error {
+  color: #e6b277;
+}
+.viewer-spinner {
+  width: 26px;
+  height: 26px;
+  border: 3px solid rgba(91, 141, 239, 0.25);
+  border-top-color: var(--accent2);
+  border-radius: 50%;
+  animation: viewer-spin 0.8s linear infinite;
+}
+@keyframes viewer-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .fmt-chip {
   font-size: 0.62rem;
   font-weight: 700;
