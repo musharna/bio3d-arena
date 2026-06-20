@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}Bio 3D Arena{% endblock %}</title>
     <link rel="stylesheet" href="/static/style.css" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <!-- Viewer registry (loaded once, used per asset format):
          model-viewer → GLB/GLTF meshes; 3Dmol.js → PDB/mmCIF molecular structures -->
     <script
@@ -24,12 +25,11 @@
         <a href="/tasks">Tasks</a>
         <a href="/submit">Submit</a>
         <a href="/methodology">Methodology</a>
-        <a href="/admin">Admin</a>
       </nav>
     </header>
     <main>{% block content %}{% endblock %}</main>
     <footer class="foot">
-      Anonymous pairwise comparison of biological 3D generations · MVP
+      Anonymous pairwise comparison of biological 3D generations
     </footer>
   </body>
 </html>
