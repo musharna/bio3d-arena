@@ -78,6 +78,10 @@ criteria are added by inserting rows — no schema change.
   generators are ranked with uncertainty. Recompute from Admin (or `POST
 /admin/recompute`). Light symmetric regularization keeps the MLE finite when a
   generator has only wins or only losses.
+- **CI-grouped Rank (Upper Bound)** — generators whose 95% CIs overlap share a
+  rank (`rank = 1 + count(models whose lower CI > this model's upper CI)`), shown
+  as "Rank (UB)" in the leaderboard. Each row shows a **CI whisker bar** (shaded
+  confidence interval + point estimate) so statistical ties are visible at a glance.
 
 ## Quick start (local)
 
@@ -133,7 +137,7 @@ docker run -p 8000:8000 -e BIO3D_ADMIN_TOKEN=... -v $PWD/data:/data bio3d-arena
 ## Tests
 
 ```bash
-pytest -q        # ranking…integrity + scale-out seams (59 tests)
+pytest -q        # ranking…integrity + scale-out seams (68 tests)
 ```
 
 ## Supported 3D formats

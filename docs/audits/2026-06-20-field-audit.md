@@ -38,12 +38,12 @@ screenshots + verify 3D viewer runtime before the visual fixes are called done.
 
 ### B1. Statistical methodology & leaderboard rigor
 
-- [ ] **[HIGH] CI-grouped "Rank (Upper Bound)"** — models with overlapping 95% CIs share a rank;
+- [x] **[HIGH] CI-grouped "Rank (Upper Bound)"** — models with overlapping 95% CIs share a rank;
       `rank = 1 + count(models whose lower CI > this model's upper CI)`. Most-copied gold-standard
       pattern (LMArena, Scale SEAL, Vals AI). _Low effort; we already have BT lower/upper._
-- [ ] **[HIGH] Per-row CI + vote-count columns visible on the leaderboard.** We compute BT CIs but
+- [x] **[HIGH] Per-row CI + vote-count columns visible on the leaderboard.** We compute BT CIs but
       the visible credibility layer (CI bar + n_games per row) needs surfacing. _Low._
-- [ ] **[HIGH] Explicit tie handling in the BT fit** — standard recipe duplicates each tie 50/50
+- [x] **[HIGH] Explicit tie handling in the BT fit** — standard recipe duplicates each tie 50/50
       into A-win + B-win. **Verify ties aren't silently dropped today.** _Low._
 - [ ] **[MED] Per-category / per-dimension leaderboards from one vote stream** (per molecule class:
       protein / nucleic-acid / complex / small-molecule, and per prompt-type). _Med._
