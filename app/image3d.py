@@ -244,6 +244,8 @@ class ReplicateTransport:
         return {"get_url": (d.get("urls") or {}).get("get")}
 
     def poll(self, req: dict, api_key: str) -> tuple[str, str | None]:
+        if not req.get("get_url"):  # malformed submit response → surface as Image3DError
+            raise Image3DError("replicate: no prediction poll url in submit response")
         r = self._client.get(req["get_url"], headers=self._hdr(api_key))
         r.raise_for_status()
         d = r.json()

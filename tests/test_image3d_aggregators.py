@@ -88,3 +88,11 @@ def test_generate_replicate_raises_on_failed():
     t = FakeReplicateTransport(["failed"], "https://rep/x.glb", _box_glb())
     with pytest.raises(Image3DError):
         generate_replicate(b"img", api_key="k", model="m", transport=t, poll_interval_s=0)
+
+
+def test_generate_replicate_times_out():
+    t = FakeReplicateTransport(["processing"], "https://rep/x.glb", _box_glb())
+    with pytest.raises(Image3DError):
+        generate_replicate(
+            b"img", api_key="k", model="m", transport=t, timeout_s=0, poll_interval_s=0
+        )
