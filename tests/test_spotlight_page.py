@@ -169,3 +169,36 @@ def test_spotlight_route_renders(monkeypatch):
     assert page.status_code == 200
     assert "m-a" in page.text and "m-b" in page.text
     assert client.get("/spotlight/does-not-exist").status_code == 404
+
+
+def test_reference_image_resolved_to_served_url(monkeypatch):
+    from app.main import app
+    from app.storage import get_storage
+
+    db = SessionLocal()
+    try:
+        _seed_subject(db)  # existing helper in this module
+    finally:
+        db.close()
+    monkeypatch.setattr(
+        spotlight,
+        "SPOTLIGHTS",
+        [
+            {
+                "slug": "test",
+                "task_title": "Spotlight Test Subject",
+                "featured": True,
+                "order": 0,
+                "blurb": "b",
+                "reference_image": "reference/tomato_ref.jpg",
+            },
+        ],
+    )
+    page = TestClient(app).get("/spotlight/test")
+    assert page.status_code == 200
+    # url_for prefixes with the static mount (verified: LocalStorageBackend ->
+    # "/assets/reference/tomato_ref.jpg"). The RED state renders the RAW relative path
+    # ("reference/tomato_ref.jpg"); GREEN renders the resolved served URL.
+    expected = get_storage().url_for("reference/tomato_ref.jpg")
+    assert 'class="ref-img"' in page.text  # the reference <img> rendered
+    assert f'src="{expected}"' in page.text  # resolved served URL, not the raw relative path

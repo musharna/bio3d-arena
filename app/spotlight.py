@@ -48,7 +48,7 @@ SPOTLIGHTS: list[dict] = [
         "featured": True,
         "order": 0,
         "blurb": "How current image→3D models handle a whole tomato plant.",
-        "reference_image": None,
+        "reference_image": "reference/tomato_ref.jpg",
     },
     {
         "slug": "arabidopsis",
@@ -138,6 +138,8 @@ def build_spotlight(db: Session, slug: str) -> dict | None:
         "title": spot["task_title"],
         "blurb": spot["blurb"],
         "featured": spot["featured"],
-        "reference_image": spot["reference_image"],
+        "reference_image": (
+            storage.url_for(spot["reference_image"]) if spot["reference_image"] else None
+        ),
         "models": models,
     }
