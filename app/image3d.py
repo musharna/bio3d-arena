@@ -11,6 +11,7 @@ are NEVER logged here.
 from __future__ import annotations
 
 import base64
+import functools
 import time
 
 import httpx
@@ -273,4 +274,51 @@ class ReplicateTransport:
 # slug -> (generate fn, env-var name, display name). Adding Meshy later = one entry + one fn.
 PROVIDERS: dict[str, tuple] = {
     "tripo": (generate_tripo, "TRIPO_API_KEY", "Tripo"),
+    # fal.ai (one FAL_KEY) — verify exact model paths at impl against fal.ai/3d-models
+    "fal:hunyuan3d-v2": (
+        functools.partial(generate_fal, model="fal-ai/hunyuan3d/v2"),
+        "FAL_KEY",
+        "Hunyuan3D v2 (fal)",
+    ),
+    "fal:hunyuan3d-v3": (
+        functools.partial(generate_fal, model="fal-ai/hunyuan3d-v3/image-to-3d"),
+        "FAL_KEY",
+        "Hunyuan3D v3 (fal)",
+    ),
+    "fal:trellis": (
+        functools.partial(generate_fal, model="fal-ai/trellis"),
+        "FAL_KEY",
+        "TRELLIS (fal)",
+    ),
+    "fal:triposr": (
+        functools.partial(generate_fal, model="fal-ai/triposr"),
+        "FAL_KEY",
+        "TripoSR (fal)",
+    ),
+    "fal:hyper3d": (
+        functools.partial(generate_fal, model="fal-ai/hyper3d/rodin"),
+        "FAL_KEY",
+        "Rodin/Hyper3D (fal)",
+    ),
+    # Replicate (one REPLICATE_API_TOKEN) — verify exact model ids/versions at impl
+    "replicate:hunyuan3d-3.1": (
+        functools.partial(generate_replicate, model="tencent/hunyuan-3d-3.1"),
+        "REPLICATE_API_TOKEN",
+        "Hunyuan3D 3.1 (Replicate)",
+    ),
+    "replicate:trellis": (
+        functools.partial(generate_replicate, model="firtoz/trellis"),
+        "REPLICATE_API_TOKEN",
+        "TRELLIS (Replicate)",
+    ),
+    "replicate:trellis2": (
+        functools.partial(generate_replicate, model="fishwowater/trellis2"),
+        "REPLICATE_API_TOKEN",
+        "TRELLIS 2 (Replicate)",
+    ),
+    "replicate:rodin": (
+        functools.partial(generate_replicate, model="hyper3d/rodin"),
+        "REPLICATE_API_TOKEN",
+        "Rodin (Replicate)",
+    ),
 }

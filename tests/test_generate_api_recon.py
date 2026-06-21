@@ -113,3 +113,11 @@ def test_generate_api_recon_scoring_failure_keeps_hosted_object():
         assert out.asset_path  # the hosted GLB survived the scoring rollback
     finally:
         db.close()
+
+
+def test_provenance_by_slug_prefix():
+    from scripts.generate_api_recon import _provenance
+
+    assert _provenance("fal:trellis", "TRELLIS (fal)")[1] == "https://fal.ai"
+    assert _provenance("replicate:trellis", "TRELLIS (Replicate)")[1] == "https://replicate.com"
+    assert _provenance("tripo", "Tripo")[1] == "https://platform.tripo3d.ai"

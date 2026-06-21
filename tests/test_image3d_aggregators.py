@@ -96,3 +96,20 @@ def test_generate_replicate_times_out():
         generate_replicate(
             b"img", api_key="k", model="m", transport=t, timeout_s=0, poll_interval_s=0
         )
+
+
+def test_providers_registry_catalog():
+    from app.image3d import PROVIDERS
+
+    # direct + both aggregators present, sharing the right env vars
+    assert PROVIDERS["tripo"][1] == "TRIPO_API_KEY"
+    fal = {k: v for k, v in PROVIDERS.items() if k.startswith("fal:")}
+    rep = {k: v for k, v in PROVIDERS.items() if k.startswith("replicate:")}
+    assert len(fal) >= 5 and all(v[1] == "FAL_KEY" for v in fal.values())
+    assert len(rep) >= 4 and all(v[1] == "REPLICATE_API_TOKEN" for v in rep.values())
+    # the model is pre-bound via functools.partial, so the adapter can call fn(image, api_key=...)
+    import functools
+
+    fn = PROVIDERS["fal:trellis"][0]
+    assert isinstance(fn, functools.partial)
+    assert fn.keywords.get("model") == "fal-ai/trellis"
