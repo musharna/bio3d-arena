@@ -11,18 +11,5 @@
     "source": "https://www.rcsb.org/structure/1CRN",
     "license": "CC0",
     "attribution": "RCSB PDB (1CRN)"
-  },
-  {
-    "task_slug": "heme-ligand",
-    "category": "molecules",
-    "title": "Heme (HEM) — real ligand reference",
-    "prompt": "A real small-molecule ligand (heme) as an SDF connection-table reference.",
-    "generator_slug": "rcsb-ligand",
-    "generator_name": "RCSB ligand",
-    "file": "assets/hem.sdf",
-    "format": "sdf",
-    "source": "https://www.rcsb.org/ligand/HEM",
-    "license": "CC0",
-    "attribution": "RCSB PDB Chemical Component Dictionary (HEM)"
   }
 ]

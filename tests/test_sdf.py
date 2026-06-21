@@ -64,12 +64,6 @@ def test_build_molecule_sdf_roundtrips_through_validation(tmp_path):
     assert stats["atoms"] == meta["atoms"]
 
 
-def test_seed_creates_sdf_outputs():
-    from app.database import SessionLocal
-    from app.models import ModelOutput
-    from app.seed import seed_all
-
-    seed_all(force=True)
-    with SessionLocal() as db:
-        n = db.query(ModelOutput).filter_by(asset_format="sdf", is_gold=False).count()
-    assert n >= 1  # the ligand-sdf task produced SDF outputs
+# Note: no seed path produces SDF outputs anymore — the small-molecule demo task and the
+# heme ligand benchmark were removed as off-mission for the plant/bio benchmark. SDF FORMAT
+# support remains covered by the validation/build/content-type tests above.

@@ -58,7 +58,12 @@ def test_load_benchmarks_registers_task_and_output(tmp_path):
         summary = benchmarks.load_benchmarks(db, manifest, assets_dir)
         db.commit()
         assert summary["outputs"] == 1
-        out = db.query(ModelOutput).join(Task, ModelOutput.task_id == Task.id).filter(Task.title == "Benchmark ligand").one()
+        out = (
+            db.query(ModelOutput)
+            .join(Task, ModelOutput.task_id == Task.id)
+            .filter(Task.title == "Benchmark ligand")
+            .one()
+        )
         assert out.asset_format == "sdf"
         meta = json.loads(out.meta_json)
         assert meta["license"] == "CC0"
@@ -91,12 +96,12 @@ def test_bundled_manifest_loads(tmp_path):
     with SessionLocal() as db:
         summary = benchmarks.load_benchmarks(db, bench_dir / "manifest.json", bench_dir)
         db.rollback()  # don't pollute the shared seeded DB for other tests
-    assert summary["tasks"] >= 2  # crambin + heme
+    assert summary["tasks"] >= 1  # crambin (the heme ligand was removed as off-mission)
 
 
 def test_seed_includes_real_benchmarks():
     summary = seed_all(force=True)
-    assert summary["benchmarks"]["tasks"] >= 2
+    assert summary["benchmarks"]["tasks"] >= 1
     with SessionLocal() as db:
         from app.models import ModelOutput
         import json as _json

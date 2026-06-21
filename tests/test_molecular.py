@@ -39,9 +39,11 @@ def test_validate_rejects_empty_pdb():
 
 
 def test_ingest_pdb_output():
+    # Molecular FORMAT support is retained even though no demo task seeds it; attach the
+    # ingested PDB to an existing on-mission category (proteins).
     task = client.post(
         "/api/tasks",
-        json={"category": "molecules", "title": "Ingested PDB ligand", "prompt": "x"},
+        json={"category": "proteins", "title": "Ingested PDB ligand", "prompt": "x"},
         headers=AUTH,
     ).json()
     r = client.post(
@@ -57,21 +59,22 @@ def test_ingest_pdb_output():
     assert body["meta"]["atoms"] > 0
 
 
-def test_arena_serves_pdb_format_and_asset():
-    # The seeded molecules category has both a GLB and a PDB task; sample until
-    # we observe a PDB-format asset, then confirm the file is served and parses.
-    seen_formats = set()
-    pdb_url = None
-    for _ in range(60):
-        data = client.get("/api/next?category=molecules").json()
-        for side in ("a", "b"):
-            fmt = data[side]["format"]
-            seen_formats.add(fmt)
-            if fmt == "pdb":
-                pdb_url = data[side]["url"]
-        if pdb_url:
-            break
-    assert "pdb" in seen_formats, f"never saw a PDB asset; got {seen_formats}"
-    served = client.get(pdb_url)
+def test_pdb_asset_served_and_parses():
+    # No demo task seeds molecular content anymore, but the molecular-serving capability
+    # is retained: an ingested PDB output must still be served verbatim and parse.
+    task = client.post(
+        "/api/tasks",
+        json={"category": "proteins", "title": "Served PDB ligand", "prompt": "x"},
+        headers=AUTH,
+    ).json()
+    r = client.post(
+        "/api/outputs",
+        data={"task_id": str(task["id"]), "generator_slug": "pdb-serve-gen"},
+        files={"file": ("served.pdb", _pdb_bytes(5), "chemical/x-pdb")},
+        headers=AUTH,
+    )
+    assert r.status_code == 200
+    asset_url = r.json()["asset_url"]
+    served = client.get(asset_url)
     assert served.status_code == 200
     assert "HETATM" in served.text or "ATOM" in served.text

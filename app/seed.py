@@ -31,7 +31,6 @@ from .models import (
     Vote,
     VoterSession,
 )
-from .molec_gen import build_molecule_pdb, build_molecule_sdf
 from .storage import get_storage
 
 
@@ -244,7 +243,6 @@ CATEGORIES = [
     ("flowers", "Flowers", "Flowers and inflorescences"),
     ("roots", "Roots", "Root systems and architecture"),
     ("proteins", "Proteins", "Protein structures and folds"),
-    ("molecules", "Molecules", "Small molecules and ligands"),
 ]
 
 CRITERIA = [
@@ -265,8 +263,7 @@ GENERATORS = [
     ("baseline-blob", "Baseline (blob)", "baseline"),
 ]
 
-# (slug, category_slug, title, prompt, shape, kind)
-# kind: "mesh" → GLB via assets_gen · "pdb" → PDB via molec_gen · "sdf" → SDF via molec_gen
+# (slug, category_slug, title, prompt, shape) — all demo tasks render to GLB meshes.
 TASKS = [
     (
         "plant-cell",
@@ -274,7 +271,6 @@ TASKS = [
         "Plant cell with organelles",
         "Generate a 3D model of a plant cell showing the membrane and a nucleus.",
         "cell",
-        "mesh",
     ),
     (
         "rose-bloom",
@@ -282,7 +278,6 @@ TASKS = [
         "Rose flower in bloom",
         "Generate a 3D model of an open rose flower with layered petals.",
         "flower",
-        "mesh",
     ),
     (
         "wheat-root",
@@ -290,7 +285,6 @@ TASKS = [
         "Wheat seedling root system",
         "Generate a 3D model of a branching wheat root system.",
         "root",
-        "mesh",
     ),
     (
         "protein-fold",
@@ -298,31 +292,6 @@ TASKS = [
         "Small protein backbone fold",
         "Generate a 3D model of a small protein backbone (~12 residues).",
         "protein",
-        "mesh",
-    ),
-    (
-        "ligand",
-        "molecules",
-        "Small-molecule ligand",
-        "Generate a 3D ball-and-stick model of a small organic molecule.",
-        "molecule",
-        "mesh",
-    ),
-    (
-        "ligand-pdb",
-        "molecules",
-        "Small molecule (PDB structure)",
-        "Generate an atomic-resolution small molecule as a PDB structure.",
-        "molecule",
-        "pdb",
-    ),
-    (
-        "ligand-sdf",
-        "molecules",
-        "Small molecule (SDF/molfile)",
-        "Generate a small organic molecule as an MDL SDF connection table.",
-        "molecule",
-        "sdf",
     ),
 ]
 
@@ -382,21 +351,15 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
 
         n_outputs = 0
         task_by_slug: dict[str, tuple[Task, str]] = {}
-        for tslug, cslug, title, prompt, shape, kind in TASKS:
+        for tslug, cslug, title, prompt, shape in TASKS:
             t = Task(category_id=cats[cslug].id, title=title, prompt=prompt)
             db.add(t)
             db.flush()
             task_by_slug[tslug] = (t, shape)
-            ext = {"pdb": "pdb", "sdf": "sdf"}.get(kind, "glb")
             for gslug, gen in gens.items():
                 seed = _seed_int(tslug, gslug)
-                rel = Path("seed") / f"{tslug}__{gslug}.{ext}"
-                if kind == "pdb":
-                    meta = build_molecule_pdb(seed, config.ASSET_DIR / rel)
-                elif kind == "sdf":
-                    meta = build_molecule_sdf(seed, config.ASSET_DIR / rel)
-                else:
-                    meta = build_asset(shape, seed, config.ASSET_DIR / rel)
+                rel = Path("seed") / f"{tslug}__{gslug}.glb"
+                meta = build_asset(shape, seed, config.ASSET_DIR / rel)
                 _publish(rel)
                 meta["generator"] = gslug
                 db.add(
@@ -405,7 +368,7 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
                         generator_id=gen.id,
                         title=f"{title} — {gen.name}",
                         asset_path=str(rel).replace("\\", "/"),
-                        asset_format=ext,
+                        asset_format="glb",
                         meta_json=json.dumps(meta),
                     )
                 )
