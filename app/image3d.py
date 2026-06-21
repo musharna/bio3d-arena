@@ -171,6 +171,8 @@ class FalTransport:
         return r.json()  # {request_id, status_url, response_url}
 
     def poll(self, req: dict, api_key: str) -> tuple[str, str | None]:
+        if not req.get("status_url"):  # malformed submit response → Image3DError, not KeyError
+            raise Image3DError("fal: no status_url in submit response")
         r = self._client.get(req["status_url"], headers=self._hdr(api_key))
         r.raise_for_status()
         status = r.json().get("status", "")
