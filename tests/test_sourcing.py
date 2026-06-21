@@ -15,8 +15,14 @@ def test_classify_license_hosts_cc_and_public_domain():
         assert classify_license(lic) == "host", lic
 
 
+def test_classify_license_hosts_sketchfab_short_codes():
+    # Real values returned by objaverse.load_annotations()["license"]
+    for lic in ["cc0", "by", "by-sa", "by-nc", "by-nc-sa", "by-nc-nd", "by-nd"]:
+        assert classify_license(lic) == "host", lic
+
+
 def test_classify_license_excludes_arr_and_unmarked():
-    for lic in ["All Rights Reserved", "", None, "Standard", "Proprietary"]:
+    for lic in ["All Rights Reserved", "", None, "Standard", "Proprietary", "st", "ed"]:
         assert classify_license(lic) == "exclude", lic
 
 
@@ -24,6 +30,18 @@ def test_public_safe_only_cc0_by_sa():
     assert public_safe("CC0") and public_safe("CC-BY") and public_safe("CC-BY-SA")
     for lic in ["CC-BY-NC", "CC-BY-ND", "CC-BY-NC-SA", "All Rights Reserved", None]:
         assert not public_safe(lic), lic
+
+
+def test_public_safe_sketchfab_short_codes():
+    # Short codes: cc0/by/by-sa → safe; by-nc/by-nd/by-nc-sa/by-nc-nd → not safe
+    assert public_safe("cc0")
+    assert public_safe("by")
+    assert public_safe("by-sa")
+    assert not public_safe("by-nc")
+    assert not public_safe("by-nd")
+    assert not public_safe("by-nc-sa")
+    assert not public_safe("by-nc-nd")
+    assert not public_safe("st")
 
 
 def test_label_depiction():

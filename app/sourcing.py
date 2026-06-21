@@ -9,6 +9,9 @@ pre-public cleanup.
 from __future__ import annotations
 
 _CC_MARKERS = ("cc0", "cc-by", "cc by", "creativecommons", "creative commons", "public domain")
+# Sketchfab short codes returned by objaverse.load_annotations (license field).
+# "by*" codes are all CC licenses; "cc0" is public domain.
+_SKETCHFAB_SHORT_CODES = frozenset(("cc0", "by", "by-sa", "by-nc", "by-nc-sa", "by-nc-nd", "by-nd"))
 _PUBLIC_SAFE_BAD = ("nc", "nd")  # non-commercial / no-derivatives → not public-safe
 
 
@@ -17,6 +20,9 @@ def classify_license(license_str: str | None) -> str:
     if not license_str:
         return "exclude"
     s = license_str.strip().lower()
+    # Accept Sketchfab short codes (as returned by objaverse.load_annotations)
+    if s in _SKETCHFAB_SHORT_CODES:
+        return "host"
     return "host" if any(m in s for m in _CC_MARKERS) else "exclude"
 
 

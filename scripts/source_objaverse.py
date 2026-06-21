@@ -33,17 +33,26 @@ def ingest_found(
     task = db.execute(select(Task).where(Task.title == task_title)).scalars().first()
     if task is None:
         raise RuntimeError(f"subject task not found: {task_title!r}")
-    report = {"hosted": 0, "excluded": 0, "by_depiction": {}, "excluded_licenses": {}}
+    report = {
+        "hosted": 0,
+        "excluded": 0,
+        "off_subject": 0,
+        "by_depiction": {},
+        "excluded_licenses": {},
+    }
     anns = fetch_annotations(list(uids))
     for uid in uids:
         ann = anns.get(uid) or {}
+        name = ann.get("name") or uid
+        if "tomato" not in name.lower():
+            report["off_subject"] += 1
+            continue
         lic = ann.get("license")
         if classify_license(lic) != "host":
             report["excluded"] += 1
             key = lic or "unmarked"
             report["excluded_licenses"][key] = report["excluded_licenses"].get(key, 0) + 1
             continue
-        name = ann.get("name") or uid
         depiction = label_depiction(name)
         try:
             glb_path = fetch_objects([uid]).get(uid)
@@ -61,7 +70,7 @@ def ingest_found(
             out.source = "objaverse"
             out.license = lic
             out.attribution = ann.get("author") or ann.get("user", {}).get("displayName")
-            out.external_url = ann.get("uri")
+            out.external_url = ann.get("viewerUrl") or ann.get("uri")
             db.commit()  # provenance committed → object is hosted
             report["hosted"] += 1
             report["by_depiction"][depiction] = report["by_depiction"].get(depiction, 0) + 1
