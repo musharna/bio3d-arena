@@ -29,6 +29,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
+def parse_bakeoff_name(base: str) -> tuple[str, str, str | None] | None:
+    """Parse '<species_slug>__<method>[__<photo_id>]' → (species, method, photo_id|None).
+
+    The species slug uses single underscores; '__' is the field separator. The optional
+    third field is the P1 error-bar harvest's per-photo id (N photos/species → N distinct
+    recons per method). Returns None for a malformed name.
+    """
+    parts = base.split("__")
+    if len(parts) < 2 or not parts[0] or not parts[1]:
+        return None
+    return parts[0], parts[1], (parts[2] if len(parts) > 2 and parts[2] else None)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--bakeoff-dir", required=True, help="dir of <species>__<method>.glb files")
@@ -56,23 +69,27 @@ def main() -> int:
     ingested = 0
     for path in sorted(glob.glob(os.path.join(args.bakeoff_dir, "*.glb"))):
         base = os.path.basename(path)[: -len(".glb")]
-        if "__" not in base:
-            print(f"  SKIP {base}: expected <species>__<method>.glb")
+        parsed = parse_bakeoff_name(base)
+        if parsed is None:
+            print(f"  SKIP {base}: expected <species>__<method>[__<photo>].glb")
             continue
-        species, method = base.split("__", 1)
+        species, method, photo = parsed
         task_id = slug_to_task.get(species)
         if task_id is None:
             print(f"  SKIP {base}: no seeded Task for species '{species}'")
             continue
         data = Path(path).read_bytes()
+        meta = {"bakeoff": os.path.basename(args.bakeoff_dir.rstrip("/")), "method": method}
+        if photo:
+            meta["photo"] = photo  # per-photo recon → distinct ModelOutput (content-deduped)
         out, created = ingest.register_output(
             db,
             task_id=task_id,
             generator_slug=method,
             data=data,
             ext="glb",
-            title=f"{species} — {method}",
-            meta={"bakeoff": os.path.basename(args.bakeoff_dir.rstrip("/")), "method": method},
+            title=f"{species} — {method}" + (f" #{photo}" if photo else ""),
+            meta=meta,
         )
         ingested += 1
         print(f"  ingested {base} -> output #{out.id} ({len(data)} bytes, created={created})")
