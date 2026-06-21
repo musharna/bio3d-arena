@@ -44,6 +44,10 @@ def ingest_found(
     for uid in uids:
         ann = anns.get(uid) or {}
         name = ann.get("name") or uid
+        # Relevance: the LVIS "tomato" category is noisy (apples, persimmons), so require
+        # the word in the name. This is a precision filter for a one-shot, human-reviewed
+        # pull — it may drop a legit tomato whose name lacks the word; the /spotlight grid
+        # is hand-inspected, so favoring precision over recall is the right tradeoff here.
         if "tomato" not in name.lower():
             report["off_subject"] += 1
             continue

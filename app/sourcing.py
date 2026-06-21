@@ -8,6 +8,8 @@ pre-public cleanup.
 
 from __future__ import annotations
 
+import re
+
 _CC_MARKERS = ("cc0", "cc-by", "cc by", "creativecommons", "creative commons", "public domain")
 # Sketchfab short codes returned by objaverse.load_annotations (license field).
 # "by*" codes are all CC licenses; "cc0" is public domain.
@@ -32,7 +34,7 @@ def public_safe(license_str: str | None) -> bool:
         return False
     s = license_str.strip().lower()
     # split tokens on non-alpha so 'nc'/'nd' match as license components, not substrings
-    parts = set(filter(None, (p for p in __import__("re").split(r"[^a-z0-9]+", s))))
+    parts = set(filter(None, re.split(r"[^a-z0-9]+", s)))
     return not any(bad in parts for bad in _PUBLIC_SAFE_BAD)
 
 
