@@ -52,3 +52,37 @@ def label_depiction(text: str) -> str:
     ):
         return "fruit"
     return "other"
+
+
+# --- Source classes for the spotlight grid (ai recon / real scan / artist-found) ---
+SCAN_DATASETS: dict[str, dict] = {
+    "plant3d": {
+        "name": "Plant3D (Salk)",
+        "license": "CC-BY 4.0",
+        "attribution": "Salk Institute / Navlakha lab — Plant3D, Mendeley 10.17632/9k7zctdyhs.1",
+        "url": "https://data.mendeley.com/datasets/9k7zctdyhs/1",
+    },
+    "tomatowur": {
+        "name": "TomatoWUR",
+        "license": "CC-BY 4.0",
+        "attribution": "Wageningen University & Research — TomatoWUR (4TU.ResearchData)",
+        "url": "https://data.4tu.nl/",
+    },
+    "crops3d": {
+        "name": "Crops3D",
+        "license": "CC-BY-NC-ND 4.0",
+        "attribution": "Crops3D (Nature Scientific Data 2024)",
+        "url": "https://doi.org/10.1038/s41597-024-04290-0",
+    },
+}
+SCAN_SOURCES = frozenset(SCAN_DATASETS)
+
+
+def source_class(source: str | None) -> str:
+    """Group key for the spotlight: 'ai' (our recon), 'scan' (real scan dataset),
+    'found' (artist repos like Objaverse/Sketchfab)."""
+    if source == "bio3d-arena":
+        return "ai"
+    if source in SCAN_SOURCES:
+        return "scan"
+    return "found"
