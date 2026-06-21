@@ -277,6 +277,23 @@ class Metric(Base):
     computed: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
+class Critique(Base):
+    """Per-output Spotlight render + qualitative/perceptual critique. One row per
+    ModelOutput (upsert by output_id), best-effort. render_path is the captured
+    thumbnail; critic_note/dists/dreamsim are populated in Phase 2."""
+
+    __tablename__ = "critique"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"), unique=True, index=True)
+    render_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    critic_note: Mapped[str] = mapped_column(Text, default="")
+    dists: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dreamsim: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="ok")  # ok|error
+    computed: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
 class ReconTask(Base):
     """Binds a Task to its recon GT-bundle key (species slug). Kept as a separate table
     (not a Task column) so Task stays generic and we avoid an ALTER on the create_all-only
