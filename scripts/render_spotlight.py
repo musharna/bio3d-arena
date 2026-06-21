@@ -34,22 +34,27 @@ def render_outputs(db, output_ids: list[int], *, capture) -> dict:
     renders_dir.mkdir(parents=True, exist_ok=True)
     for oid in output_ids:
         out = db.get(ModelOutput, oid)
-        c = _get_or_create_critique(db, oid)
         if out is None:
+            # Write lock is held only for this short error-record write.
+            c = _get_or_create_critique(db, oid)
             c.status = "error"
             c.critic_note = f"output {oid} not found"
             errors += 1
             db.commit()
             continue
+        # Run the multi-second Playwright capture BEFORE acquiring any write lock.
         try:
             glb_abs = str(Path(config.ASSET_DIR) / out.asset_path)
             png = capture(glb_abs)
             rel = f"renders/{oid}.png"
             (Path(config.ASSET_DIR) / rel).write_bytes(png)
+            # Write phase: upsert Critique and commit (short lock window).
+            c = _get_or_create_critique(db, oid)
             c.render_path = rel
             c.status = "ok"
             rendered += 1
         except Exception as e:  # noqa: BLE001 — best-effort batch
+            c = _get_or_create_critique(db, oid)
             c.status = "error"
             c.critic_note = f"render failed: {e}"
             errors += 1

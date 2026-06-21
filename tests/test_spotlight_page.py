@@ -84,6 +84,65 @@ def test_build_spotlight_assembles_models(monkeypatch):
         db.close()
 
 
+def _seed_unscored_subject(db):
+    """Seed a curated subject with one output that has NO Metric row."""
+    cat = db.query(Category).filter_by(slug="plants-u").first() or Category(
+        slug="plants-u", name="Plants Unscored"
+    )
+    db.add(cat)
+    db.flush()
+    task = Task(category_id=cat.id, title="Spotlight Unscored Subject", prompt="p")
+    db.add(task)
+    db.flush()
+    out, _ = ingest.register_output(
+        db,
+        task_id=task.id,
+        generator_slug="m-unscored",
+        data=_glb_bytes(seed=7),
+        ext="glb",
+        title="out unscored",
+    )
+    # Deliberately no Metric row created.
+    db.commit()
+    return task
+
+
+_UNSCORED_SPOTLIGHT = [
+    {
+        "slug": "unscored-test",
+        "task_title": "Spotlight Unscored Subject",
+        "featured": False,
+        "order": 99,
+        "blurb": "unscored regression test",
+        "reference_image": None,
+    }
+]
+
+
+def test_unscored_output_no_500(monkeypatch):
+    """FIX-1 regression: output with no Metric row must not 500 the page."""
+    db = SessionLocal()
+    try:
+        _seed_unscored_subject(db)
+        monkeypatch.setattr(spotlight, "SPOTLIGHTS", _UNSCORED_SPOTLIGHT)
+        # Verify build_spotlight populates None metrics and unscored flag.
+        data = spotlight.build_spotlight(db, "unscored-test")
+        assert data is not None
+        assert len(data["models"]) == 1
+        model = data["models"][0]
+        assert model["metrics"]["chamfer"] is None
+        assert any(kind == "unscored" for kind, _ in model["flags"])
+    finally:
+        db.close()
+
+    # Verify the HTTP route returns 200, not 500.
+    monkeypatch.setattr(spotlight, "SPOTLIGHTS", _UNSCORED_SPOTLIGHT)
+    client = TestClient(app)
+    page = client.get("/spotlight/unscored-test")
+    assert page.status_code == 200
+    assert "—" in page.text
+
+
 def test_spotlight_route_renders(monkeypatch):
     db = SessionLocal()
     try:

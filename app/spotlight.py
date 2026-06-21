@@ -63,16 +63,14 @@ def find_spotlight(slug: str) -> dict | None:
 
 
 def _metrics_dict(m: Metric | None) -> dict:
-    if m is None:
-        return {}
     return {
-        "chamfer": m.chamfer,
-        "fscore": m.fscore,
-        "coverage": m.coverage,
-        "tau": m.tau,
-        "gt_band_lo": m.gt_band_lo,
-        "gt_band_hi": m.gt_band_hi,
-        "within_variation": m.species_verdict,
+        "chamfer": m.chamfer if m else None,
+        "fscore": m.fscore if m else None,
+        "coverage": m.coverage if m else None,
+        "tau": m.tau if m else None,
+        "gt_band_lo": m.gt_band_lo if m else None,
+        "gt_band_hi": m.gt_band_hi if m else None,
+        "within_variation": m.species_verdict if m else None,
     }
 
 
