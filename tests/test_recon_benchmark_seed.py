@@ -47,9 +47,9 @@ def test_seed_recon_benchmark_creates_tasks_slugs_generators():
         db.commit()
         slugs = {rt.species_slug for rt in db.query(ReconTask).all()}
         assert EXPECTED_SLUGS <= slugs
-        # the 2 method generators exist
+        # the method generators exist (v1 pair + InstantMesh expansion)
         gen_slugs = {g.slug for g in db.query(Generator).all()}
-        assert {"trellis", "hunyuan3d"} <= gen_slugs
+        assert {"trellis", "hunyuan3d", "instantmesh"} <= gen_slugs
         # every ReconTask points at a real Task
         for rt in db.query(ReconTask).all():
             assert db.get(Task, rt.task_id) is not None

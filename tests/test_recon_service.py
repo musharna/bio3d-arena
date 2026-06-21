@@ -164,6 +164,30 @@ def test_recon_method_leaderboard_aggregates_with_variance():
         db.close()
 
 
+def test_method_verdict_is_mean_based_not_best():
+    # fake_card band_p75 = 0.14. Two recons 0.13 & 0.17 → mean 0.15 (> band) FAIL, even
+    # though the BEST (0.13) is within the band. Verdict must follow the typical recon.
+    db = SessionLocal()
+    try:
+        out = _mk_output(db, "vmean")
+        out_b = ModelOutput(
+            task_id=out.task_id,
+            generator_id=out.generator_id,
+            asset_path="seed/x.glb",
+            asset_format="glb",
+        )
+        db.add(out_b)
+        db.flush()
+        recon_service.score_and_store(db, out, scorer=lambda b, t: fake_card(chamfer=0.13))
+        recon_service.score_and_store(db, out_b, scorer=lambda b, t: fake_card(chamfer=0.17))
+        db.commit()
+        row = recon_service.recon_method_leaderboard(db, out.task_id)[0]
+        assert row["chamfer_best"] == 0.13  # best is within band 0.14
+        assert row["species_verdict"] == "FAIL"  # but the mean (0.15) is not → FAIL
+    finally:
+        db.close()
+
+
 def test_recon_method_leaderboard_single_recon_no_std():
     db = SessionLocal()
     try:

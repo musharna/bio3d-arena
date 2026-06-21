@@ -70,9 +70,10 @@
 
   {% if board %}
   <p class="subtle pilot-note">
-    <b>v1 pilot — 2 baselines</b> (TRELLIS, Hunyuan3D), the Plant Methods 2025 head-to-head.
-    Below the ≥4-method ideal; the expansion roster (InstantMesh / One2345++ / Direct3D /
-    Unique3D) is planned. Chamfer is mean over a method's recons (± std once median-of-N lands).
+    <b>Pilot — {{ board|length }} baseline{{ 's' if board|length != 1 else '' }}</b>
+    ({% for r in board %}{{ r.generator }}{{ ', ' if not loop.last else '' }}{% endfor %}).
+    Toward the Plant Methods 2025 six (≥4-method ideal); roster expansion (One2345++ / Direct3D /
+    Unique3D) ongoing. Chamfer is the mean over a method's recons; ± is the std across them.
   </p>
   <table class="ranktable">
     <thead>

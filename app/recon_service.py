@@ -226,18 +226,26 @@ def recon_method_leaderboard(db: Session, task_id: int) -> list[dict]:
         fscores = [m.fscore for m in ms if m.fscore is not None]
         covs = [m.coverage for m in ms if m.coverage is not None]
         best_m = min(ms, key=lambda m: m.chamfer)
+        chamfer_mean = statistics.fmean(chamfers)
+        band_hi = best_m.gt_band_hi  # P75 band — shared across a species' recons
+        # Verdict on the TYPICAL recon (mean vs band P75), NOT the cherry-picked best —
+        # else a high-variance method with one lucky recon reads PASS while a consistently
+        # near-miss method reads FAIL, contradicting the mean ranking shown alongside.
+        verdict = None
+        if band_hi is not None:
+            verdict = "PASS" if chamfer_mean <= band_hi else "FAIL"
         rows.append(
             {
                 "generator": _gen_name(db, gid),
                 "n": len(chamfers),
-                "chamfer_mean": round(statistics.fmean(chamfers), 4),
+                "chamfer_mean": round(chamfer_mean, 4),
                 "chamfer_std": round(statistics.pstdev(chamfers), 4)
                 if len(chamfers) >= 2
                 else None,
                 "chamfer_best": round(min(chamfers), 4),
                 "fscore_mean": round(statistics.fmean(fscores), 3) if fscores else None,
                 "coverage_mean": round(statistics.fmean(covs), 4) if covs else None,
-                "species_verdict": best_m.species_verdict,
+                "species_verdict": verdict,
                 "gt_band": [best_m.gt_band_lo, best_m.gt_band_hi],
             }
         )

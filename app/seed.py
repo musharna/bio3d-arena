@@ -96,8 +96,13 @@ RECON_SPECIES = [
     ("zea_mays", "Zea mays", "maize whole plant"),
     ("pinus_sylvestris", "Pinus sylvestris", "Scots pine sapling"),
 ]
-# The launch method roster (D5): single-image→3D reconstructors.
-RECON_GENERATORS = [("trellis", "TRELLIS"), ("hunyuan3d", "Hunyuan3D")]
+# The method roster (D5): single-image→3D reconstructors. Expansion toward the Plant
+# Methods 2025 six — InstantMesh is the first comprehensive-baselines add beyond the v1 pair.
+RECON_GENERATORS = [
+    ("trellis", "TRELLIS"),
+    ("hunyuan3d", "Hunyuan3D"),
+    ("instantmesh", "InstantMesh"),
+]
 
 
 def seed_recon_benchmark(db: Session) -> dict:
