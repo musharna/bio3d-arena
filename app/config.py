@@ -48,6 +48,10 @@ DB_MAX_OVERFLOW = int(os.environ.get("BIO3D_DB_MAX_OVERFLOW", "10"))
 # Distributed rate limiting: set a redis:// URL to share limits across workers.
 REDIS_URL = os.environ.get("BIO3D_REDIS_URL", "")
 
+# Mode-B recon-accuracy scorer (AgriGen's /score microservice). bio3d-arena POSTs GLB
+# bytes here for objective chamfer/F-score grading vs held-out GT (never imports agrigen).
+RECON_SCORER_URL = os.environ.get("BIO3D_RECON_SCORER_URL", "http://127.0.0.1:8800")
+
 
 def ensure_dirs() -> None:
     """Create data + asset directories if missing (idempotent)."""

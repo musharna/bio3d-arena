@@ -537,6 +537,15 @@ def admin_revalidate(token: str = Form(...), db: Session = Depends(get_db)):
     return JSONResponse({"status": "revalidated", "detail": detail})
 
 
+@app.post("/admin/rescore")
+def admin_rescore(token: str = Form(...), db: Session = Depends(get_db)):
+    _require_admin(token)
+    from . import recon_service
+
+    detail = recon_service.rescore_all(db)
+    return JSONResponse({"status": "rescored", "detail": detail})
+
+
 @app.get("/validation", response_class=HTMLResponse)
 def validation_page(request: Request, db: Session = Depends(get_db)):
     from . import validation_service
