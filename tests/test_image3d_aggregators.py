@@ -1,7 +1,7 @@
 import pytest
 import trimesh
 
-from app.image3d import Image3DError, generate_fal
+from app.image3d import Image3DError, generate_fal, generate_replicate
 
 
 def _box_glb() -> bytes:
@@ -51,3 +51,40 @@ def test_generate_fal_times_out():
     t = FakeFalTransport(["IN_PROGRESS"], "https://fal/x.glb", _box_glb())
     with pytest.raises(Image3DError):
         generate_fal(b"img", api_key="k", model="m", transport=t, timeout_s=0, poll_interval_s=0)
+
+
+class FakeReplicateTransport:
+    def __init__(self, poll_statuses, glb_url, glb):
+        self._statuses = list(poll_statuses)
+        self._glb_url = glb_url
+        self._glb = glb
+        self.calls = []
+
+    def submit(self, image_bytes, model, api_key):
+        self.calls.append(("submit", model))
+        return {"get_url": "https://api.replicate.com/v1/predictions/p1"}
+
+    def poll(self, req, api_key):
+        self.calls.append("poll")
+        s = self._statuses.pop(0) if len(self._statuses) > 1 else self._statuses[0]
+        return s, (self._glb_url if s.lower() == "succeeded" else None)
+
+    def download(self, url):
+        self.calls.append("download")
+        return self._glb
+
+
+def test_generate_replicate_runs_and_returns_glb():
+    glb = _box_glb()
+    t = FakeReplicateTransport(["processing", "succeeded"], "https://rep/x.glb", glb)
+    out = generate_replicate(
+        b"img", api_key="k", model="firtoz/trellis", transport=t, poll_interval_s=0
+    )
+    assert out == glb
+    assert t.calls == [("submit", "firtoz/trellis"), "poll", "poll", "download"]
+
+
+def test_generate_replicate_raises_on_failed():
+    t = FakeReplicateTransport(["failed"], "https://rep/x.glb", _box_glb())
+    with pytest.raises(Image3DError):
+        generate_replicate(b"img", api_key="k", model="m", transport=t, poll_interval_s=0)

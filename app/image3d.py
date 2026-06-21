@@ -187,6 +187,87 @@ class FalTransport:
         return r.content
 
 
+def generate_replicate(
+    image_bytes: bytes,
+    *,
+    api_key: str,
+    model: str,
+    transport=None,
+    timeout_s: int = 300,
+    poll_interval_s: int = 5,
+) -> bytes:
+    """Replicate image->3D for a given model: create prediction → poll → download GLB."""
+    t = transport or ReplicateTransport()
+    req = t.submit(image_bytes, model, api_key)
+    waited = 0
+    while True:
+        status, glb_url = t.poll(req, api_key)
+        s = (status or "").lower()
+        if s in _SUCCESS:
+            if not glb_url:
+                raise Image3DError(f"replicate {model}: succeeded but no model url")
+            break
+        if s in _FAILED:
+            raise Image3DError(f"replicate {model}: {status}")
+        if waited >= timeout_s:
+            raise Image3DError(f"replicate {model}: timed out after {timeout_s}s")
+        time.sleep(poll_interval_s)
+        waited += poll_interval_s
+    glb = t.download(glb_url)
+    if not glb:
+        raise Image3DError(f"replicate {model}: empty download")
+    return glb
+
+
+class ReplicateTransport:
+    """Real Replicate predictions transport (LIVE BINDING — verify against replicate.com/docs
+    at impl; only the key-gated run exercises it). submit creates a prediction for the model
+    with the image input; poll returns (status, glb_url-when-succeeded); download fetches it.
+    Auth: `Authorization: Bearer <api_key>`."""
+
+    BASE = "https://api.replicate.com/v1"
+
+    def __init__(self, client: httpx.Client | None = None):
+        self._client = client or httpx.Client(timeout=60)
+
+    def _hdr(self, api_key: str) -> dict:
+        return {"Authorization": f"Bearer {api_key}"}
+
+    def submit(self, image_bytes: bytes, model: str, api_key: str) -> dict:
+        r = self._client.post(
+            f"{self.BASE}/models/{model}/predictions",
+            headers=self._hdr(api_key),
+            json={"input": {"image": _data_uri(image_bytes)}},
+        )
+        r.raise_for_status()
+        d = r.json()
+        return {"get_url": (d.get("urls") or {}).get("get")}
+
+    def poll(self, req: dict, api_key: str) -> tuple[str, str | None]:
+        r = self._client.get(req["get_url"], headers=self._hdr(api_key))
+        r.raise_for_status()
+        d = r.json()
+        status = d.get("status", "")
+        if status.lower() not in _SUCCESS:
+            return status, None
+        out = d.get("output")
+        # output may be a GLB url string, a list, or a dict with a mesh/glb url.
+        if isinstance(out, str):
+            url = out
+        elif isinstance(out, list):
+            url = out[-1] if out else None
+        elif isinstance(out, dict):
+            url = out.get("mesh") or out.get("glb") or out.get("model_file")
+        else:
+            url = None
+        return status, url
+
+    def download(self, url: str) -> bytes:
+        r = self._client.get(url)
+        r.raise_for_status()
+        return r.content
+
+
 # slug -> (generate fn, env-var name, display name). Adding Meshy later = one entry + one fn.
 PROVIDERS: dict[str, tuple] = {
     "tripo": (generate_tripo, "TRIPO_API_KEY", "Tripo"),
