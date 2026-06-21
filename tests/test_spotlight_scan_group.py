@@ -1,7 +1,9 @@
 import trimesh
+from fastapi.testclient import TestClient
 
 from app import ingest, spotlight
 from app.database import SessionLocal, init_db
+from app.main import app
 from app.models import Category, Task
 
 
@@ -54,3 +56,52 @@ def test_build_spotlight_marks_scan_class(tmp_path, monkeypatch):
         assert m["label"] == "scanA"
     finally:
         db.close()
+
+
+def test_scan_card_renders_under_scan_group_with_caveat(monkeypatch):
+    """Template-render gate: a scan output lands under the 'Real scan' heading and
+    the modality caveat is shown (so an 'outside natural variation' flag is not
+    misread as reconstruction error)."""
+    db = SessionLocal()
+    try:
+        cat = db.query(Category).filter_by(slug="plants").first() or Category(
+            slug="plants", name="Plants"
+        )
+        db.add(cat)
+        db.flush()
+        task = Task(category_id=cat.id, title="Scan Caveat Subject", prompt="p")
+        db.add(task)
+        db.flush()
+        glb = trimesh.creation.box().export(file_type="glb")
+        out, _ = ingest.register_output(
+            db,
+            task_id=task.id,
+            generator_slug="scan:plant3d",
+            generator_name="Plant3D (Salk)",
+            data=glb,
+            ext="glb",
+            title="scanCaveatA",
+            meta={"depiction": "whole_plant", "dataset": "plant3d"},
+        )
+        out.source = "plant3d"
+        db.commit()
+    finally:
+        db.close()
+    monkeypatch.setattr(
+        spotlight,
+        "SPOTLIGHTS",
+        [
+            {
+                "slug": "scancaveat",
+                "task_title": "Scan Caveat Subject",
+                "featured": True,
+                "order": 0,
+                "blurb": "b",
+                "reference_image": None,
+            },
+        ],
+    )
+    page = TestClient(app).get("/spotlight/scancaveat")
+    assert page.status_code == 200
+    assert "Real scan — whole plant" in page.text  # scan card grouped, not dropped
+    assert "scored against the synthetic GT bundle for context only" in page.text

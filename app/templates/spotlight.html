@@ -30,6 +30,15 @@
   <h3 class="group-title">
     {{ gname }} <span class="subtle">({{ gmodels | length }})</span>
   </h3>
+  {% if gname.startswith('Real scan') %}
+  <p class="subtle scan-caveat">
+    Real laser scans, scored against the synthetic GT bundle for context only. An
+    "outside natural variation" flag here reflects sensor/modality and growth-stage
+    differences (these are stressed plants at varied days), <em>not</em>
+    reconstruction error — they anchor what real morphology looks like, they are not
+    a target the AI models are required to match.
+  </p>
+  {% endif %}
   <div class="spotlight-grid">
     {% for m in gmodels %}
     <div class="spotlight-card">
