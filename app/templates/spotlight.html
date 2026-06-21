@@ -56,6 +56,9 @@
         {% endif %}
       </div>
       <div class="card-gen">{{ m.label }} <span class="subtle">#{{ m.id }}</span></div>
+      {% if m.render == 'points' %}
+      <div class="card-badge">point cloud</div>
+      {% endif %}
       <table class="metric-table">
         <tr>
           <td>chamfer</td>

@@ -104,6 +104,7 @@ def build_spotlight(db: Session, slug: str) -> dict | None:
         depiction = meta.get("depiction")
         cls = source_class(o.source)
         dataset = meta.get("dataset")
+        render = meta.get("render", "mesh")
         label = o.title if (found and o.title) else (gen.name if gen else "?")
         models.append(
             {
@@ -112,6 +113,7 @@ def build_spotlight(db: Session, slug: str) -> dict | None:
                 "generator_name": gen.name if gen else "?",
                 "cls": cls,
                 "dataset": dataset,
+                "render": render,
                 "found": found,
                 "label": label,
                 "depiction": depiction,

@@ -105,3 +105,51 @@ def test_scan_card_renders_under_scan_group_with_caveat(monkeypatch):
     assert page.status_code == 200
     assert "Real scan — whole plant" in page.text  # scan card grouped, not dropped
     assert "scored against the synthetic GT bundle for context only" in page.text
+
+
+def test_points_scan_card_renders_point_cloud_badge(monkeypatch):
+    monkeypatch.setattr(
+        spotlight,
+        "SPOTLIGHTS",
+        [
+            {
+                "slug": "pcbadge",
+                "task_title": "PC Badge Subject",
+                "featured": True,
+                "order": 0,
+                "blurb": "b",
+                "reference_image": None,
+            }
+        ],
+    )
+    db = SessionLocal()
+    try:
+        cat = db.query(Category).filter_by(slug="plants").first() or Category(
+            slug="plants", name="Plants"
+        )
+        db.add(cat)
+        db.flush()
+        task = Task(category_id=cat.id, title="PC Badge Subject", prompt="p")
+        db.add(task)
+        db.flush()
+        glb = trimesh.PointCloud([[0, 0, 0], [1, 1, 1], [0, 1, 0]]).export(file_type="glb")
+        out, _ = ingest.register_output(
+            db,
+            task_id=task.id,
+            generator_slug="scan:tomatowur",
+            generator_name="TomatoWUR",
+            data=glb,
+            ext="glb",
+            title="pcBadgeA",
+            meta={"depiction": "whole_plant", "dataset": "tomatowur", "render": "points"},
+        )
+        out.source = "tomatowur"
+        db.commit()
+        model = spotlight.build_spotlight(db, "pcbadge")["models"][0]
+        assert model["render"] == "points"
+    finally:
+        db.close()
+
+    page = TestClient(app).get("/spotlight/pcbadge")
+    assert page.status_code == 200
+    assert "point cloud" in page.text
