@@ -107,6 +107,13 @@ class ModelOutput(Base):
     is_gold: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
+    # Provenance (readies externally-sourced models). For our own assets:
+    # source="bio3d-arena", external_url=None (null ⇒ hosted locally).
+    source: Mapped[str] = mapped_column(String(64), default="bio3d-arena")
+    license: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    attribution: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    external_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
     task: Mapped["Task"] = relationship(back_populates="outputs", foreign_keys=[task_id])
     generator: Mapped["Generator"] = relationship(back_populates="outputs")
 
