@@ -78,3 +78,123 @@ def rescore_all(db: Session, *, scorer=_default_scorer) -> dict:
             errors += 1
     db.commit()
     return {"outputs": len(outs), "scored": scored, "errors": errors, "skipped": skipped}
+
+
+# --- Mode-B aggregations for the /benchmark page ----------------------------
+
+
+def _gen_name(db: Session, gid: int) -> str:
+    from .models import Generator
+
+    g = db.get(Generator, gid)
+    return g.name if g else str(gid)
+
+
+def recon_leaderboard(db: Session, task_id: int) -> list[dict]:
+    """Per-output objective scores for a task, best (lowest chamfer) first."""
+    outs = (
+        db.execute(
+            select(ModelOutput).where(
+                ModelOutput.task_id == task_id, ModelOutput.is_gold.is_(False)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    rows = []
+    for o in outs:
+        m = db.execute(select(Metric).where(Metric.output_id == o.id)).scalars().first()
+        if m is None or m.status != "ok":
+            continue
+        rows.append(
+            {
+                "generator": _gen_name(db, o.generator_id),
+                "chamfer": m.chamfer,
+                "fscore": m.fscore,
+                "coverage": m.coverage,
+                "species_verdict": m.species_verdict,
+                "gt_band": [m.gt_band_lo, m.gt_band_hi],
+            }
+        )
+    rows.sort(
+        key=lambda r: (r["chamfer"] is None, r["chamfer"] if r["chamfer"] is not None else 0.0)
+    )
+    return rows
+
+
+def _spearman(a: list[float], b: list[float]) -> float | None:
+    """Spearman rank correlation. Inputs are already ranks (1..n) → Pearson of them."""
+    import numpy as np
+
+    if len(a) < 2:
+        return None
+    x, y = np.array(a, dtype=float), np.array(b, dtype=float)
+    if x.std() == 0 or y.std() == 0:
+        return None
+    return round(float(np.corrcoef(x, y)[0, 1]), 3)
+
+
+def agreement(db: Session, task_id: int) -> dict:
+    """Vote↔metric agreement: metric rank (chamfer asc) vs Mode-A BT rank (bt desc).
+
+    Local rank-correlation only — the microservice boundary (D1) forbids importing
+    AgriGen's richer 2AFC eval/agreement.py; that becomes a service-returned field later.
+    """
+    from .models import Rating, Task
+
+    task = db.get(Task, task_id)
+    cat_id = task.category_id if task else None
+    outs = (
+        db.execute(
+            select(ModelOutput).where(
+                ModelOutput.task_id == task_id, ModelOutput.is_gold.is_(False)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    entries = []  # {generator, chamfer, bt}
+    for o in outs:
+        m = db.execute(select(Metric).where(Metric.output_id == o.id)).scalars().first()
+        if m is None or m.status != "ok" or m.chamfer is None:
+            continue
+        rating = (
+            db.execute(
+                select(Rating)
+                .where(
+                    Rating.generator_id == o.generator_id,
+                    (Rating.category_id == cat_id) | (Rating.category_id.is_(None)),
+                )
+                .order_by(Rating.category_id.is_(None))  # prefer category-scoped over global
+            )
+            .scalars()
+            .first()
+        )
+        entries.append(
+            {
+                "generator": _gen_name(db, o.generator_id),
+                "chamfer": m.chamfer,
+                "bt": rating.bt_score if rating else None,
+            }
+        )
+
+    by_chamfer = sorted(entries, key=lambda e: e["chamfer"])  # lower = better
+    metric_rank = {e["generator"]: i + 1 for i, e in enumerate(by_chamfer)}
+    with_bt = sorted(
+        [e for e in entries if e["bt"] is not None],
+        key=lambda e: -e["bt"],  # higher = better
+    )
+    vote_rank = {e["generator"]: i + 1 for i, e in enumerate(with_bt)}
+
+    common = [e["generator"] for e in entries if e["generator"] in vote_rank]
+    sp = _spearman([metric_rank[g] for g in common], [vote_rank[g] for g in common])
+    rows = [
+        {
+            "generator": e["generator"],
+            "metric_rank": metric_rank[e["generator"]],
+            "vote_rank": vote_rank.get(e["generator"]),
+        }
+        for e in by_chamfer
+    ]
+    return {"spearman": sp, "n": len(common), "rows": rows}

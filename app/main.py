@@ -572,6 +572,37 @@ def api_validation(db: Session = Depends(get_db)):
     )
 
 
+@app.get("/benchmark", response_class=HTMLResponse)
+def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int | None = None):
+    from . import recon_service
+    from .models import Task
+
+    tasks = db.execute(select(Task)).scalars().all()
+    if task_id is None and tasks:
+        task_id = tasks[0].id
+    board = recon_service.recon_leaderboard(db, task_id) if task_id else []
+    agree = recon_service.agreement(db, task_id) if task_id else {"spearman": None, "rows": []}
+    return templates.TemplateResponse(
+        request,
+        "benchmark.html",
+        {"tasks": tasks, "task_id": task_id, "board": board, "agree": agree},
+    )
+
+
+@app.get("/api/benchmark")
+def api_benchmark(db: Session = Depends(get_db), task_id: int | None = None):
+    from . import recon_service
+
+    if task_id is None:
+        return JSONResponse({"error": "task_id required"}, status_code=400)
+    return JSONResponse(
+        {
+            "leaderboard": recon_service.recon_leaderboard(db, task_id),
+            "agreement": recon_service.agreement(db, task_id),
+        }
+    )
+
+
 # ------------------------------------------------------------------ data export
 
 

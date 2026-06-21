@@ -116,3 +116,37 @@ def test_admin_rescore_requires_token():
 
     client = TestClient(app)
     assert client.post("/admin/rescore", data={"token": "wrong"}).status_code == 401
+
+
+def test_recon_leaderboard_sorts_by_chamfer():
+    db = SessionLocal()
+    try:
+        out = _mk_output(db, "lb")
+        gen2 = Generator(slug="g-lb2", name="M2")
+        db.add(gen2)
+        db.flush()
+        out2 = ModelOutput(
+            task_id=out.task_id, generator_id=gen2.id, asset_path="seed/x.glb", asset_format="glb"
+        )
+        db.add(out2)
+        db.flush()
+        recon_service.score_and_store(db, out, scorer=lambda b, t: {**FAKE_CARD, "chamfer": 0.05})
+        recon_service.score_and_store(db, out2, scorer=lambda b, t: {**FAKE_CARD, "chamfer": 0.01})
+        db.commit()
+        board = recon_service.recon_leaderboard(db, out.task_id)
+        assert [r["chamfer"] for r in board] == [0.01, 0.05]  # best (lowest) first
+    finally:
+        db.close()
+
+
+def test_agreement_returns_spearman_and_rows():
+    db = SessionLocal()
+    try:
+        out = _mk_output(db, "agr")
+        recon_service.score_and_store(db, out, scorer=lambda b, t: FAKE_CARD)
+        db.commit()
+        agr = recon_service.agreement(db, out.task_id)
+        assert "spearman" in agr
+        assert isinstance(agr["rows"], list)
+    finally:
+        db.close()
