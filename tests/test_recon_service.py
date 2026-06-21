@@ -115,6 +115,32 @@ def test_scorer_failure_records_error_not_crash():
         db.close()
 
 
+def test_scorer_runs_before_metric_write_no_lock_across_rpc():
+    """Concurrency invariant: the (slow, networked) scorer is invoked BEFORE the Metric row
+    is created/written, so the SQLite write lock is never held across the RPC — which was
+    what starved concurrent /api/next requests during a batch rescore."""
+    db = SessionLocal()
+    try:
+        out = _mk_output(db, "ordering")
+        seen_metric_during_scorer = {}
+
+        def probing_scorer(b, t):
+            # When the scorer runs, no Metric row may exist yet for this output — proving
+            # the write phase (and its lock) comes strictly after the network call.
+            seen_metric_during_scorer["row"] = (
+                db.execute(select(Metric).where(Metric.output_id == out.id)).scalars().first()
+            )
+            return fake_card(chamfer=0.05)
+
+        m = recon_service.score_and_store(db, out, scorer=probing_scorer)
+        assert seen_metric_during_scorer["row"] is None, (
+            "Metric row existed during the scorer call — write lock held across the RPC"
+        )
+        assert m.status == "ok" and m.chamfer == 0.05  # row written after scorer returned
+    finally:
+        db.close()
+
+
 def test_rescore_all_skips_non_glb():
     db = SessionLocal()
     try:

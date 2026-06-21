@@ -46,13 +46,32 @@ def score_and_store(db: Session, output: ModelOutput, *, scorer=_default_scorer)
 
     `scorer(glb_bytes, task_id) -> dict` is injectable so tests run without the live
     microservice. A scorer/read failure stores status='error' and never raises.
+
+    Ordering matters for concurrency: the (multi-second) scorer HTTP round-trip runs
+    FIRST, with only read-only DB access (the species-slug lookup). The Metric row is
+    created/written ONLY after the card is in hand — so the SQLite write lock is held for
+    the local field-mapping + flush (milliseconds), never across the network call. Holding
+    the write lock across the RPC was what starved concurrent /api/next requests.
     """
-    m = _get_or_create_metric(db, output.id)
+    slug = species_slug_for_task(db, output.task_id)  # read-only; no write lock held
+    card: dict | None = None
+    scorer_err: str | None = None
     try:
         glb = get_storage().read(output.asset_path)
         # The scorer resolves GT by SPECIES SLUG (not the bio3d Task PK); injected fakes
         # ignore the second arg, so unit tests pass with a None slug.
-        card = scorer(glb, species_slug_for_task(db, output.task_id))
+        card = scorer(glb, slug)
+    except Exception as e:  # noqa: BLE001 — best-effort; capture and continue the batch
+        scorer_err = str(e)
+
+    # --- write phase: short-lived lock only ---
+    m = _get_or_create_metric(db, output.id)
+    if scorer_err is not None or card is None:
+        m.status = "error"
+        m.detail = scorer_err or "scorer returned no card"
+        db.flush()
+        return m
+    try:
         # Live §11 envelope: {task_id, bundle_version, metrics:{..., params:{...}}}.
         metrics = card.get("metrics") or {}
         params = metrics.get("params") or {}
@@ -106,7 +125,9 @@ def rescore_all(db: Session, *, scorer=_default_scorer) -> dict:
             scored += 1
         else:
             errors += 1
-    db.commit()
+        db.commit()  # per-output: release the SQLite write lock between outputs so a
+        # concurrent arena request never waits on the whole batch (the lock is held for a
+        # single output's write, not the minutes-long run).
     return {"outputs": len(outs), "scored": scored, "errors": errors, "skipped": skipped}
 
 

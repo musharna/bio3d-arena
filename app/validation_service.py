@@ -62,7 +62,8 @@ def revalidate_all(db: Session) -> dict:
             molecular += 1
         elif status == "error":
             errors += 1
-    db.commit()
+        db.commit()  # per-output commit: keep the SQLite write lock short so a concurrent
+        # arena request never waits on the whole batch (see recon_service.rescore_all).
     return {"outputs": len(outputs), "molecular": molecular, "errors": errors}
 
 
