@@ -152,4 +152,5 @@ def test_points_scan_card_renders_point_cloud_badge(monkeypatch):
 
     page = TestClient(app).get("/spotlight/pcbadge")
     assert page.status_code == 200
-    assert "point cloud" in page.text
+    # Scope to the badge element (not a loose substring that any text could satisfy).
+    assert '<div class="card-badge">point cloud</div>' in page.text
