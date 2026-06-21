@@ -648,3 +648,122 @@ main {
     grid-template-columns: 1fr;
   }
 }
+
+/* --- Subject Spotlight (internal model-comparison deep-dive) --- */
+.spotlight-list {
+  list-style: none;
+  padding: 0;
+}
+.spotlight-list li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.reference-panel {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin: 0.5rem 0 1rem;
+}
+.reference-panel .ref-img {
+  max-height: 160px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.spotlight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+.spotlight-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.spotlight-card .thumb {
+  cursor: pointer;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.spotlight-card .thumb img {
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: contain;
+}
+.thumb-placeholder {
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.card-gen {
+  font-weight: 700;
+}
+.metric-table {
+  width: 100%;
+  font-size: 0.78rem;
+  border-collapse: collapse;
+}
+.metric-table td {
+  padding: 0.05rem 0.2rem;
+}
+.metric-table td:first-child {
+  color: var(--muted);
+}
+.metric-table td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.flag {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.08rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.flag-ok {
+  background: rgba(63, 185, 80, 0.16);
+  color: #3fb950;
+  border-color: rgba(63, 185, 80, 0.4);
+}
+.flag-shape {
+  background: rgba(248, 81, 73, 0.16);
+  color: #f85149;
+  border-color: rgba(248, 81, 73, 0.4);
+}
+.flag-coverage {
+  background: rgba(210, 153, 34, 0.16);
+  color: #d29922;
+  border-color: rgba(210, 153, 34, 0.4);
+}
+.flag-surface {
+  background: rgba(88, 166, 255, 0.16);
+  color: #58a6ff;
+  border-color: rgba(88, 166, 255, 0.4);
+}
+.flag-unscored {
+  background: var(--panel2);
+  color: var(--muted);
+  border-color: var(--border);
+}
+.critic-note {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--muted);
+}
+.provenance {
+  font-size: 0.7rem;
+}

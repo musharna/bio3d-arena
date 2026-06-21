@@ -100,6 +100,7 @@ def build_spotlight(db: Session, slug: str) -> dict | None:
         gen = db.get(Generator, o.generator_id)
         models.append(
             {
+                "id": o.id,  # distinguishes multiple outputs from the same generator
                 "generator": gen.slug if gen else "?",
                 "generator_name": gen.name if gen else "?",
                 "format": o.asset_format,
