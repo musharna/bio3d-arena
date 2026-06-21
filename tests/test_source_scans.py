@@ -53,3 +53,36 @@ def test_ingest_scans_hosts_mesh_skips_cloud(tmp_path):
         assert json.loads(out.meta_json)["dataset"] == "plant3d"
     finally:
         db.close()
+
+
+def test_ingest_scans_points_sets_render_meta(tmp_path):
+    import json
+
+    import numpy as np
+    import trimesh
+    from sqlalchemy import select
+
+    from app.database import SessionLocal, init_db
+    from app.models import ModelOutput
+    from scripts.source_scans import ingest_scans
+
+    init_db()
+    db = SessionLocal()
+    try:
+        _tomato_task(db)  # existing helper in this test module
+        ply = tmp_path / "c.ply"
+        trimesh.PointCloud(np.random.RandomState(0).rand(200, 3)).export(str(ply))
+
+        def fake_points_to_glb(path):
+            return trimesh.PointCloud(np.random.RandomState(0).rand(200, 3)).export(file_type="glb")
+
+        report = ingest_scans(
+            db, [str(ply)], dataset="tomatowur", to_glb=fake_points_to_glb, render_kind="points"
+        )
+        assert report["hosted"] == 1
+        out = (
+            db.execute(select(ModelOutput).where(ModelOutput.source == "tomatowur")).scalars().one()
+        )
+        assert json.loads(out.meta_json)["render"] == "points"
+    finally:
+        db.close()

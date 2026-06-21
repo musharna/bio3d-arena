@@ -21,7 +21,15 @@ TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
 
 
 def ingest_scans(
-    db, mesh_paths, *, dataset, to_glb, score_fn=None, task_title=TOMATO_TITLE, limit=15
+    db,
+    mesh_paths,
+    *,
+    dataset,
+    to_glb,
+    score_fn=None,
+    task_title=TOMATO_TITLE,
+    limit=15,
+    render_kind="mesh",
 ) -> dict:
     meta_d = SCAN_DATASETS[dataset]
     task = db.execute(select(Task).where(Task.title == task_title)).scalars().first()
@@ -46,7 +54,12 @@ def ingest_scans(
                 data=glb,
                 ext="glb",
                 title=scan_id,
-                meta={"depiction": depiction, "dataset": dataset, "scan_id": scan_id},
+                meta={
+                    "depiction": depiction,
+                    "dataset": dataset,
+                    "scan_id": scan_id,
+                    "render": render_kind,
+                },
             )
             out.source = dataset
             out.license = meta_d["license"]
@@ -88,21 +101,29 @@ def main() -> int:
         "to millions of triangles / tens of MB GLB; the default keeps the grid web-viable.",
     )
     ap.add_argument("--no-score", action="store_true")
+    ap.add_argument("--render", choices=("mesh", "points"), default="mesh")
     args = ap.parse_args()
 
     root = Path(args.dir)
     if not root.exists():
         print(f"dataset dir not found: {root} — download the dataset first")
         return 1
-    meshes = sorted(str(p) for ext in ("*.obj", "*.ply", "*.glb") for p in root.rglob(ext))
+    exts = ("*.obj", "*.ply", "*.glb") if args.render == "mesh" else ("*.ply", "*.pcd", "*.xyz")
+    meshes = sorted(str(p) for ext in exts for p in root.rglob(ext))
     if not meshes:
         print(f"no .obj/.ply/.glb meshes under {root}")
         return 1
 
-    max_faces = args.max_faces or None
+    if args.render == "points":
+        from app.points_convert import points_to_glb
 
-    def to_glb(path: str) -> bytes:
-        return _to_glb(path, max_faces=max_faces)
+        def to_glb(path: str) -> bytes:
+            return points_to_glb(path)
+    else:
+        max_faces = args.max_faces or None
+
+        def to_glb(path: str) -> bytes:
+            return _to_glb(path, max_faces=max_faces)
 
     db = SessionLocal()
     try:
@@ -113,6 +134,7 @@ def main() -> int:
             to_glb=to_glb,
             score_fn=None if args.no_score else recon_service.score_and_store,
             limit=args.limit,
+            render_kind=args.render,
         )
         print(report)
     finally:
