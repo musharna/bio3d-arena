@@ -7,7 +7,7 @@
     <label>Category
       <select name="category" onchange="this.form.submit()">
         {% for opt in category_options %}
-        <option value="{{ opt.slug }}" {% if opt.selected %}selected{% endif %}>{{ opt.name }}</option>
+        <option value="{{ opt.slug }}" {% if opt.selected %}selected{% endif %} {% if opt.coming_soon %}disabled{% endif %}>{{ opt.name }}{% if opt.coming_soon %} — coming soon{% endif %}</option>
         {% endfor %}
       </select>
     </label>

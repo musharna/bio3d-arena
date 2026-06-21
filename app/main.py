@@ -182,8 +182,10 @@ def api_meta(db: Session = Depends(get_db)):
     """Categories + criteria for populating arena/leaderboard selectors."""
     cats = db.execute(select(Category)).scalars().all()
     crits = db.execute(select(Criterion)).scalars().all()
+    # `coming_soon`: a category with no tasks is a roadmap placeholder (e.g. Fungi/Animals/
+    # Microbes) — it self-activates the moment its first task is added. No schema flag.
     return {
-        "categories": [{"slug": c.slug, "name": c.name} for c in cats],
+        "categories": [{"slug": c.slug, "name": c.name, "coming_soon": not c.tasks} for c in cats],
         "criteria": [{"slug": c.slug, "name": c.name} for c in crits],
     }
 
@@ -309,9 +311,17 @@ def leaderboard(
     crits = db.execute(select(Criterion)).scalars().all()
     # Precompute `selected` flags in Python so the template avoids `==` (which the
     # HTML formatter mangles inside Jinja tags).
-    category_options = [{"slug": "all", "name": "All categories", "selected": category == "all"}]
+    category_options = [
+        {
+            "slug": "all",
+            "name": "All categories",
+            "selected": category == "all",
+            "coming_soon": False,
+        }
+    ]
     category_options += [
-        {"slug": c.slug, "name": c.name, "selected": category == c.slug} for c in cats
+        {"slug": c.slug, "name": c.name, "selected": category == c.slug, "coming_soon": not c.tasks}
+        for c in cats
     ]
     criterion_options = [
         {"slug": c.slug, "name": c.name, "selected": criterion == c.slug} for c in crits
@@ -382,9 +392,17 @@ def significance_page(
     sig = service.compute_significance(db, criterion, _resolve_category_id(db, category))
     cats = db.execute(select(Category)).scalars().all()
     crits = db.execute(select(Criterion)).scalars().all()
-    category_options = [{"slug": "all", "name": "All categories", "selected": category == "all"}]
+    category_options = [
+        {
+            "slug": "all",
+            "name": "All categories",
+            "selected": category == "all",
+            "coming_soon": False,
+        }
+    ]
     category_options += [
-        {"slug": c.slug, "name": c.name, "selected": category == c.slug} for c in cats
+        {"slug": c.slug, "name": c.name, "selected": category == c.slug, "coming_soon": not c.tasks}
+        for c in cats
     ]
     criterion_options = [
         {"slug": c.slug, "name": c.name, "selected": criterion == c.slug} for c in crits

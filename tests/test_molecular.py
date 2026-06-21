@@ -43,7 +43,7 @@ def test_ingest_pdb_output():
     # ingested PDB to an existing category (cells).
     task = client.post(
         "/api/tasks",
-        json={"category": "cells", "title": "Ingested PDB ligand", "prompt": "x"},
+        json={"category": "plants", "title": "Ingested PDB ligand", "prompt": "x"},
         headers=AUTH,
     ).json()
     r = client.post(
@@ -64,7 +64,7 @@ def test_pdb_asset_served_and_parses():
     # is retained: an ingested PDB output must still be served verbatim and parse.
     task = client.post(
         "/api/tasks",
-        json={"category": "cells", "title": "Served PDB ligand", "prompt": "x"},
+        json={"category": "plants", "title": "Served PDB ligand", "prompt": "x"},
         headers=AUTH,
     ).json()
     r = client.post(

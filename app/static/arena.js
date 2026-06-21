@@ -20,7 +20,9 @@ async function loadMeta() {
   meta.categories.forEach((c) => {
     const o = document.createElement("option");
     o.value = c.slug;
-    o.textContent = c.name;
+    // Roadmap placeholders (no tasks yet) are shown but not selectable.
+    o.textContent = c.coming_soon ? `${c.name} — coming soon` : c.name;
+    o.disabled = !!c.coming_soon;
     catSel.appendChild(o);
   });
   const critSel = el("sel-criterion");

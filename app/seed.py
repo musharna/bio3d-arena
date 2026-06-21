@@ -192,10 +192,19 @@ def seed_synthetic_plants(db: Session) -> dict:
 
 
 # (slug, name, description)
+# Top-level taxonomy is the tree of life (one consistent axis). Plants is the flagship
+# active domain (AgriGen's focus); the rest are visible "coming soon" placeholders — a
+# category with no tasks renders as coming-soon (no schema flag needed). Scale/anatomy
+# (whole organism, organ, cell) is a property of the Task, not a category.
 CATEGORIES = [
-    ("cells", "Cells", "Single cells and organelles"),
-    ("flowers", "Flowers", "Flowers and inflorescences"),
-    ("roots", "Roots", "Root systems and architecture"),
+    (
+        "plants",
+        "Plants",
+        "Plants — whole organisms, organs, and cells. AgriGen's focus and the flagship domain.",
+    ),
+    ("fungi", "Fungi", "Fungi — mushrooms, brackets, and hyphal structures. Coming soon."),
+    ("animals", "Animals", "Animals — anatomy and whole organisms. Coming soon."),
+    ("microbes", "Microbes", "Microbes — bacteria, protists, and single-celled life. Coming soon."),
 ]
 
 CRITERIA = [
@@ -220,21 +229,21 @@ GENERATORS = [
 TASKS = [
     (
         "plant-cell",
-        "cells",
+        "plants",
         "Plant cell with organelles",
         "Generate a 3D model of a plant cell showing the membrane and a nucleus.",
         "cell",
     ),
     (
         "rose-bloom",
-        "flowers",
+        "plants",
         "Rose flower in bloom",
         "Generate a 3D model of an open rose flower with layered petals.",
         "flower",
     ),
     (
         "wheat-root",
-        "roots",
+        "plants",
         "Wheat seedling root system",
         "Generate a 3D model of a branching wheat root system.",
         "root",
