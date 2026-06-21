@@ -111,7 +111,7 @@ def main() -> int:
     exts = ("*.obj", "*.ply", "*.glb") if args.render == "mesh" else ("*.ply", "*.pcd", "*.xyz")
     meshes = sorted(str(p) for ext in exts for p in root.rglob(ext))
     if not meshes:
-        print(f"no .obj/.ply/.glb meshes under {root}")
+        print(f"no {'/'.join(e.lstrip('*') for e in exts)} files under {root}")
         return 1
 
     if args.render == "points":

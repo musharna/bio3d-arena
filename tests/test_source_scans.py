@@ -3,10 +3,12 @@ import json
 
 import numpy as np
 import trimesh
+from sqlalchemy import select
 
 from app.database import SessionLocal, init_db
 from app.mesh_convert import to_glb
 from app.models import Category, ModelOutput, Task
+from app.points_convert import PointsConvertError
 from scripts.source_scans import ingest_scans
 
 TOMATO = "Solanum lycopersicum — single-image → 3D reconstruction"
@@ -56,20 +58,9 @@ def test_ingest_scans_hosts_mesh_skips_cloud(tmp_path):
 
 
 def test_ingest_scans_points_sets_render_meta(tmp_path):
-    import json
-
-    import numpy as np
-    import trimesh
-    from sqlalchemy import select
-
-    from app.database import SessionLocal, init_db
-    from app.models import ModelOutput
-    from scripts.source_scans import ingest_scans
-
-    init_db()
     db = SessionLocal()
     try:
-        _tomato_task(db)  # existing helper in this test module
+        _tomato_task(db)
         ply = tmp_path / "c.ply"
         trimesh.PointCloud(np.random.RandomState(0).rand(200, 3)).export(str(ply))
 
@@ -84,5 +75,32 @@ def test_ingest_scans_points_sets_render_meta(tmp_path):
             db.execute(select(ModelOutput).where(ModelOutput.source == "tomatowur")).scalars().one()
         )
         assert json.loads(out.meta_json)["render"] == "points"
+    finally:
+        db.close()
+
+
+def test_ingest_scans_points_bad_cloud_counts_error_not_skip(tmp_path):
+    """On the POINTS path a PointsConvertError is a real error (counted in `errors`),
+    NOT a `skipped_pointcloud` — that counter is reserved for the MESH path meeting a
+    cloud (MeshConvertError). Guards the isolated-error contract against a regression
+    that accidentally catches PointsConvertError in the inner except."""
+    db = SessionLocal()
+    try:
+        _tomato_task(db)
+        bad = tmp_path / "bad.xyz"
+        bad.write_text("not a real point cloud\n")
+
+        def raising_points_to_glb(path):
+            raise PointsConvertError(f"{path}: no vertices")
+
+        report = ingest_scans(
+            db, [str(bad)], dataset="tomatowur", to_glb=raising_points_to_glb, render_kind="points"
+        )
+        # This call hosted nothing and counted the failure as a hard error, NOT a
+        # point-cloud skip. (Report counts are per-call, so they are isolated from the
+        # module's shared file-backed DB — a global ModelOutput count would not be.)
+        assert report["errors"] == 1
+        assert report["skipped_pointcloud"] == 0
+        assert report["hosted"] == 0
     finally:
         db.close()
