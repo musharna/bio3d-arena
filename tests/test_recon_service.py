@@ -1,8 +1,8 @@
 """Mode-B recon scoring service — fake-scorer unit tests.
 
-The live /score round-trip against AgriGen's microservice is a DEFERRED real-execution
-gate (needs §7A A2); these tests inject a fake scorer so the scaffold is exercised
-without the service.
+Fakes mirror the LIVE §11 service envelope ({task_id, bundle_version, metrics:{...,params}}).
+The real /score round-trip is exercised by the manual smoke against gt_bundle_smoke; these
+inject a fake scorer so the mapping/aggregation logic is covered without the service.
 """
 
 from __future__ import annotations
@@ -19,22 +19,29 @@ def setup_module(_module):
     get_storage().save("seed/x.glb", b"glTF-stub-bytes")
 
 
-FAKE_CARD = {
-    "chamfer": 0.013,
-    "nearest_shape_distance": 0.013,
-    "nearest_gt_idx": 1,
-    "fscore_at_tau": 0.79,
-    "tau": 0.01,
-    "coverage": 0.71,
-    "species_verdict": "PASS",
-    "gt_band": {"lo": 0.009, "hi": 0.021},
-    "confounds": {
-        "point_count": 16384,
-        "icp_seed": 0,
-        "scorer_version": "fake@1",
-        "gt_version_hash": "sha256:cafe",
-    },
-}
+def fake_card(chamfer: float = 0.013) -> dict:
+    """A live-shaped /score response envelope with a tunable chamfer."""
+    return {
+        "task_id": "arabidopsis",
+        "bundle_version": "sha256:cafe",
+        "metrics": {
+            "chamfer": chamfer,
+            "fscore_at_tau": 0.79,
+            "coverage": 0.71,
+            "matched_gt_index": 1,
+            "n_gt": 6,
+            "height_cm": 12.0,
+            "height_rel_error": None,
+            "aspect_error": 0.1,
+            "params": {
+                "tau": 0.05,
+                "seed": 0,
+                "metric": "unit_bbox_chamfer",
+                "n_points": 30000,
+                "scale_cm": None,
+            },
+        },
+    }
 
 
 def _mk_output(db, slug):
@@ -57,13 +64,20 @@ def test_score_and_store_maps_contract_to_metric():
     db = SessionLocal()
     try:
         out = _mk_output(db, "ok")
-        m = recon_service.score_and_store(db, out, scorer=lambda b, t: FAKE_CARD)
+        m = recon_service.score_and_store(db, out, scorer=lambda b, t: fake_card())
         assert m.status == "ok"
         assert m.chamfer == 0.013
+        assert m.nearest_shape_distance == 0.013  # chamfer is the matched min distance
+        assert m.nearest_gt_idx == 1  # matched_gt_index
         assert m.fscore == 0.79
-        assert m.point_count == 16384
-        assert m.gt_version_hash == "sha256:cafe"
-        assert m.gt_band_lo == 0.009 and m.gt_band_hi == 0.021
+        assert m.tau == 0.05
+        assert m.point_count == 30000  # params.n_points
+        assert m.icp_seed == 0  # params.seed
+        assert m.scorer_version == "unit_bbox_chamfer"  # params.metric
+        assert m.gt_version_hash == "sha256:cafe"  # bundle_version (D2 pin)
+        # live service has no PASS/FAIL verdict or GT-LOO band → null
+        assert m.species_verdict is None
+        assert m.gt_band_lo is None and m.gt_band_hi is None
     finally:
         db.close()
 
@@ -72,8 +86,8 @@ def test_score_and_store_upserts_not_duplicates():
     db = SessionLocal()
     try:
         out = _mk_output(db, "upsert")
-        recon_service.score_and_store(db, out, scorer=lambda b, t: {**FAKE_CARD, "chamfer": 0.1})
-        recon_service.score_and_store(db, out, scorer=lambda b, t: {**FAKE_CARD, "chamfer": 0.02})
+        recon_service.score_and_store(db, out, scorer=lambda b, t: fake_card(chamfer=0.1))
+        recon_service.score_and_store(db, out, scorer=lambda b, t: fake_card(chamfer=0.02))
         db.commit()
         rows = db.query(Metric).filter(Metric.output_id == out.id).all()
         assert len(rows) == 1
@@ -103,7 +117,7 @@ def test_rescore_all_skips_non_glb():
         out = _mk_output(db, "pdb")
         out.asset_format = "pdb"
         db.flush()
-        detail = recon_service.rescore_all(db, scorer=lambda b, t: FAKE_CARD)
+        detail = recon_service.rescore_all(db, scorer=lambda b, t: fake_card())
         assert detail["skipped"] >= 1
     finally:
         db.close()
@@ -130,8 +144,8 @@ def test_recon_leaderboard_sorts_by_chamfer():
         )
         db.add(out2)
         db.flush()
-        recon_service.score_and_store(db, out, scorer=lambda b, t: {**FAKE_CARD, "chamfer": 0.05})
-        recon_service.score_and_store(db, out2, scorer=lambda b, t: {**FAKE_CARD, "chamfer": 0.01})
+        recon_service.score_and_store(db, out, scorer=lambda b, t: fake_card(chamfer=0.05))
+        recon_service.score_and_store(db, out2, scorer=lambda b, t: fake_card(chamfer=0.01))
         db.commit()
         board = recon_service.recon_leaderboard(db, out.task_id)
         assert [r["chamfer"] for r in board] == [0.01, 0.05]  # best (lowest) first
@@ -143,7 +157,7 @@ def test_agreement_returns_spearman_and_rows():
     db = SessionLocal()
     try:
         out = _mk_output(db, "agr")
-        recon_service.score_and_store(db, out, scorer=lambda b, t: FAKE_CARD)
+        recon_service.score_and_store(db, out, scorer=lambda b, t: fake_card())
         db.commit()
         agr = recon_service.agreement(db, out.task_id)
         assert "spearman" in agr
@@ -166,8 +180,8 @@ def test_agreement_dedups_multiple_outputs_per_generator():
         )
         db.add(out2)
         db.flush()
-        recon_service.score_and_store(db, out, scorer=lambda b, t: {**FAKE_CARD, "chamfer": 0.09})
-        recon_service.score_and_store(db, out2, scorer=lambda b, t: {**FAKE_CARD, "chamfer": 0.02})
+        recon_service.score_and_store(db, out, scorer=lambda b, t: fake_card(chamfer=0.09))
+        recon_service.score_and_store(db, out2, scorer=lambda b, t: fake_card(chamfer=0.02))
         db.commit()
         agr = recon_service.agreement(db, out.task_id)
         names = [r["generator"] for r in agr["rows"]]

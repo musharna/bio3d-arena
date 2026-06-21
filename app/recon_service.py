@@ -17,7 +17,11 @@ MESH_FORMATS = {"glb", "gltf"}
 
 
 def _default_scorer(glb_bytes: bytes, task_id: int) -> dict:
-    return score_output(glb_bytes, task_id, base_url=config.RECON_SCORER_URL)
+    """Live scorer for the batch path. NOTE (B5 gap): the service GT bundle is keyed by
+    SPECIES SLUG, not bio3d Task PK — until Tasks carry a species slug (seed/B5), this
+    passes the PK as the slug and the service answers 404 (clear, fail-loud). Inject a
+    scorer that supplies the real slug to score live before B5 lands."""
+    return score_output(glb_bytes, str(task_id), base_url=config.RECON_SCORER_URL)
 
 
 def _get_or_create_metric(db: Session, output_id: int) -> Metric:
@@ -39,21 +43,25 @@ def score_and_store(db: Session, output: ModelOutput, *, scorer=_default_scorer)
     try:
         glb = get_storage().read(output.asset_path)
         card = scorer(glb, output.task_id)
-        conf = card.get("confounds", {}) or {}
-        band = card.get("gt_band", {}) or {}
-        m.chamfer = card.get("chamfer")
-        m.nearest_shape_distance = card.get("nearest_shape_distance")
-        m.nearest_gt_idx = card.get("nearest_gt_idx")
-        m.fscore = card.get("fscore_at_tau")
-        m.tau = card.get("tau")
-        m.coverage = card.get("coverage")
-        m.species_verdict = card.get("species_verdict")
-        m.gt_band_lo = band.get("lo")
-        m.gt_band_hi = band.get("hi")
-        m.point_count = conf.get("point_count")
-        m.icp_seed = conf.get("icp_seed")
-        m.scorer_version = conf.get("scorer_version", "")
-        m.gt_version_hash = conf.get("gt_version_hash", "")
+        # Live §11 envelope: {task_id, bundle_version, metrics:{..., params:{...}}}.
+        metrics = card.get("metrics") or {}
+        params = metrics.get("params") or {}
+        m.chamfer = metrics.get("chamfer")
+        # `chamfer` IS the ICP-matched min distance to the GT set (with matched_gt_index).
+        m.nearest_shape_distance = metrics.get("chamfer")
+        m.nearest_gt_idx = metrics.get("matched_gt_index")
+        m.fscore = metrics.get("fscore_at_tau")
+        m.tau = params.get("tau")
+        m.coverage = metrics.get("coverage")
+        # The live service returns no PASS/FAIL verdict or GT-LOO band — leave null
+        # (the /benchmark verdict + GT-band columns render '—' until a band channel ships).
+        m.species_verdict = metrics.get("species_verdict")
+        m.gt_band_lo = None
+        m.gt_band_hi = None
+        m.point_count = params.get("n_points")
+        m.icp_seed = params.get("seed")
+        m.scorer_version = str(params.get("metric") or "")
+        m.gt_version_hash = card.get("bundle_version") or ""  # D2 leakage pin (sha256)
         m.status = "ok"
         m.detail = ""
     except Exception as e:  # noqa: BLE001 — best-effort; capture and continue the batch

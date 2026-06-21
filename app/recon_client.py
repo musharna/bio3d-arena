@@ -16,18 +16,36 @@ class ScorerError(Exception):
 
 def score_output(
     glb_bytes: bytes,
-    task_id: int,
+    species_slug: str,
     *,
     base_url: str,
-    point_count: int = 16384,
-    seed: int = 0,
+    n_points: int = 30000,
+    tau: float = 0.05,
+    scale_cm: float | None = None,
     timeout: float = 120.0,
 ) -> dict:
-    """POST GLB bytes + task_id to {base_url}/score; return the metric-bundle dict."""
-    files = {"glb": ("output.glb", glb_bytes, "model/gltf-binary")}
-    data = {"task_id": str(task_id), "point_count": str(point_count), "seed": str(seed)}
+    """Score a GLB against a task's held-out GT via the live service (§11/§12 contract).
+
+    Wire format is RAW GLB bytes in the body + query params (no multipart → no
+    python-multipart dep). `species_slug` is the GT-bundle task key (e.g. "arabidopsis",
+    "zea_mays") — intentionally decoupled from bio3d-arena's Task PKs so the held-out GT
+    is reusable across DB resets. `n_points`/`tau`/`scale_cm` are scored confounds, echoed
+    back in the response's `metrics.params`. Returns `{task_id, bundle_version, metrics}`.
+    """
+    params: dict[str, str | int | float] = {
+        "task_id": species_slug,
+        "n_points": n_points,
+        "tau": tau,
+    }
+    if scale_cm is not None:
+        params["scale_cm"] = scale_cm
     try:
-        resp = httpx.post(f"{base_url}/score", files=files, data=data, timeout=timeout)
+        resp = httpx.post(
+            f"{base_url}/score",
+            params=params,
+            content=glb_bytes,  # raw GLB in the body, NOT multipart
+            timeout=timeout,
+        )
         resp.raise_for_status()
         return resp.json()
     except httpx.HTTPError as e:
