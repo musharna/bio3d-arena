@@ -1,0 +1,60 @@
+import json
+
+from app.assets_gen import build_asset
+from app.database import SessionLocal, init_db
+from app.models import Category, ModelOutput, Task
+from scripts.source_objaverse import ingest_found
+
+TOMATO = "Solanum lycopersicum — single-image → 3D reconstruction"
+
+
+def setup_module(_m):
+    init_db()
+
+
+def _tomato_task(db):
+    cat = db.query(Category).filter_by(slug="plants").first() or Category(
+        slug="plants", name="Plants"
+    )
+    db.add(cat)
+    db.flush()
+    t = Task(category_id=cat.id, title=TOMATO, prompt="p")
+    db.add(t)
+    db.commit()
+    return t
+
+
+def test_ingest_found_hosts_cc_excludes_arr(tmp_path):
+    db = SessionLocal()
+    try:
+        _tomato_task(db)
+        glb = tmp_path / "obj.glb"
+        build_asset("flower", 1, glb)  # a real, trimesh-valid GLB
+        annotations = {
+            "u_cc": {
+                "license": "CC-BY 4.0",
+                "name": "Tomato plant in pot",
+                "uri": "https://sketchfab.com/u_cc",
+            },
+            "u_arr": {
+                "license": "All Rights Reserved",
+                "name": "Ripe tomato",
+                "uri": "https://sketchfab.com/u_arr",
+            },
+        }
+        report = ingest_found(
+            db,
+            ["u_cc", "u_arr"],
+            fetch_annotations=lambda uids: {u: annotations[u] for u in uids},
+            fetch_objects=lambda uids: {u: str(glb) for u in uids},
+            score_fn=None,
+        )
+        assert report["hosted"] == 1
+        assert report["excluded"] == 1
+        out = db.query(ModelOutput).filter(ModelOutput.source == "objaverse").one()
+        assert out.license == "CC-BY 4.0"
+        assert out.external_url == "https://sketchfab.com/u_cc"
+        assert out.title == "Tomato plant in pot"
+        assert json.loads(out.meta_json)["depiction"] == "whole_plant"
+    finally:
+        db.close()
