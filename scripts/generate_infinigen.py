@@ -28,7 +28,7 @@ def ingest_infinigen(
     *,
     to_glb,
     score_fn=None,
-    factory="Flowerplant",
+    factory="Succulent",
     task_title=TOMATO_TITLE,
     limit=10,
 ) -> dict:
@@ -94,9 +94,11 @@ def main() -> int:
     from app.mesh_convert import to_glb as _to_glb
 
     ap = argparse.ArgumentParser(description=__doc__)
-    # Infinigen 1.19.1 plant factories (verified via generate_individual_assets --help):
-    # Flowerplant, Fern, Monocots, Succulent, SnakePlant, SpiderPlant, DecorativePlants.
-    ap.add_argument("--factory", default="Flowerplant")
+    # Infinigen 1.19.1 plant factories that EXPORT REAL GEOMETRY via --export obj (verified):
+    # Succulent, SnakePlant (~1.3M faces, decimated downstream). NOTE: Flowerplant/Fern are
+    # instanced/scatter assets whose --export obj is EMPTY (geometry only in instances); they
+    # would need a Blender realize+decimate path, so they are not the default.
+    ap.add_argument("--factory", default="Succulent")
     ap.add_argument("-n", type=int, default=3)
     ap.add_argument(
         "--env-python",

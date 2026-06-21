@@ -44,7 +44,7 @@ def test_ingest_infinigen_hosts_procedural(tmp_path):
         assert sourcing.source_class(out.source) == "procedural"
         assert "BSD-3" in out.license
         assert out.external_url and "infinigen" in out.external_url
-        assert json.loads(out.meta_json)["factory"] == "Flowerplant"  # the 1.19.1 default
+        assert json.loads(out.meta_json)["factory"] == "Succulent"  # the 1.19.1 default
     finally:
         db.close()
 
