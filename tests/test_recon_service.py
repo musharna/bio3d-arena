@@ -134,6 +134,47 @@ def test_admin_rescore_requires_token():
     assert client.post("/admin/rescore", data={"token": "wrong"}).status_code == 401
 
 
+def test_recon_method_leaderboard_aggregates_with_variance():
+    # N recons for the SAME method (median-of-N expansion) collapse to one row with
+    # n + mean ± std chamfer — error bars, not N point-estimate rows.
+    db = SessionLocal()
+    try:
+        out = _mk_output(db, "agg")
+        out_b = ModelOutput(
+            task_id=out.task_id,
+            generator_id=out.generator_id,  # SAME method, 2nd recon
+            asset_path="seed/x.glb",
+            asset_format="glb",
+        )
+        db.add(out_b)
+        db.flush()
+        recon_service.score_and_store(db, out, scorer=lambda b, t: fake_card(chamfer=0.04))
+        recon_service.score_and_store(db, out_b, scorer=lambda b, t: fake_card(chamfer=0.06))
+        db.commit()
+        board = recon_service.recon_method_leaderboard(db, out.task_id)
+        assert len(board) == 1  # one method, not two rows
+        row = board[0]
+        assert row["n"] == 2
+        assert abs(row["chamfer_mean"] - 0.05) < 1e-9
+        assert row["chamfer_std"] is not None and row["chamfer_std"] > 0
+        assert abs(row["chamfer_best"] - 0.04) < 1e-9
+    finally:
+        db.close()
+
+
+def test_recon_method_leaderboard_single_recon_no_std():
+    db = SessionLocal()
+    try:
+        out = _mk_output(db, "agg1")
+        recon_service.score_and_store(db, out, scorer=lambda b, t: fake_card(chamfer=0.07))
+        db.commit()
+        board = recon_service.recon_method_leaderboard(db, out.task_id)
+        assert board[0]["n"] == 1
+        assert board[0]["chamfer_std"] is None  # no spread from a single recon
+    finally:
+        db.close()
+
+
 def test_recon_leaderboard_sorts_by_chamfer():
     db = SessionLocal()
     try:

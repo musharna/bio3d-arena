@@ -194,6 +194,78 @@ def recon_leaderboard(db: Session, task_id: int) -> list[dict]:
     return rows
 
 
+def recon_method_leaderboard(db: Session, task_id: int) -> list[dict]:
+    """Per-METHOD board: collapse a method's N recons (median-of-N expansion) into one row
+    with n + mean ± std chamfer (error bars) + best. Degrades to n=1 (std None) today."""
+    import statistics
+    from collections import defaultdict
+
+    outs = (
+        db.execute(
+            select(ModelOutput).where(
+                ModelOutput.task_id == task_id, ModelOutput.is_gold.is_(False)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    by_gen: dict[int, list[Metric]] = defaultdict(list)
+    for o in outs:
+        m = db.execute(select(Metric).where(Metric.output_id == o.id)).scalars().first()
+        if m is not None and m.status == "ok" and m.chamfer is not None:
+            by_gen[o.generator_id].append(m)
+
+    rows = []
+    for gid, ms in by_gen.items():
+        chamfers = [m.chamfer for m in ms]
+        fscores = [m.fscore for m in ms if m.fscore is not None]
+        covs = [m.coverage for m in ms if m.coverage is not None]
+        best_m = min(ms, key=lambda m: m.chamfer)
+        rows.append(
+            {
+                "generator": _gen_name(db, gid),
+                "n": len(chamfers),
+                "chamfer_mean": round(statistics.fmean(chamfers), 4),
+                "chamfer_std": round(statistics.pstdev(chamfers), 4)
+                if len(chamfers) >= 2
+                else None,
+                "chamfer_best": round(min(chamfers), 4),
+                "fscore_mean": round(statistics.fmean(fscores), 3) if fscores else None,
+                "coverage_mean": round(statistics.fmean(covs), 4) if covs else None,
+                "species_verdict": best_m.species_verdict,
+                "gt_band": [best_m.gt_band_lo, best_m.gt_band_hi],
+            }
+        )
+    rows.sort(key=lambda r: r["chamfer_mean"])
+    return rows
+
+
+def recon_confounds(db: Session, task_id: int) -> dict | None:
+    """The pinned scoring confounds for a task's recons (criterion-2 reproducibility), or None.
+
+    Shared across the task's metrics (the leaderboard pins them) — return the first ok one.
+    """
+    outs = (
+        db.execute(
+            select(ModelOutput).where(
+                ModelOutput.task_id == task_id, ModelOutput.is_gold.is_(False)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for o in outs:
+        m = db.execute(select(Metric).where(Metric.output_id == o.id)).scalars().first()
+        if m is not None and m.status == "ok":
+            return {
+                "point_count": m.point_count,
+                "tau": m.tau,
+                "scorer_version": m.scorer_version,
+                "gt_version_hash": m.gt_version_hash,
+            }
+    return None
+
+
 def _spearman(a: list[float], b: list[float]) -> float | None:
     """Spearman rank correlation. Inputs are already ranks (1..n) → Pearson of them."""
     import numpy as np

@@ -580,7 +580,8 @@ def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int
     tasks = db.execute(select(Task)).scalars().all()
     if task_id is None and tasks:
         task_id = tasks[0].id
-    board = recon_service.recon_leaderboard(db, task_id) if task_id else []
+    board = recon_service.recon_method_leaderboard(db, task_id) if task_id else []
+    confounds = recon_service.recon_confounds(db, task_id) if task_id else None
     agree = (
         recon_service.agreement(db, task_id)
         if task_id
@@ -597,6 +598,7 @@ def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int
             "tasks": tasks,
             "task_id": task_id,
             "board": board,
+            "confounds": confounds,
             "agree": agree,
             "viewer_outputs": viewer_outputs,
             "reference": reference,
@@ -613,7 +615,9 @@ def api_benchmark(db: Session = Depends(get_db), task_id: int | None = None):
         return JSONResponse({"error": "task_id required"}, status_code=400)
     return JSONResponse(
         {
-            "leaderboard": recon_service.recon_leaderboard(db, task_id),
+            "leaderboard": recon_service.recon_method_leaderboard(db, task_id),
+            "per_output": recon_service.recon_leaderboard(db, task_id),
+            "confounds": recon_service.recon_confounds(db, task_id),
             "agreement": recon_service.agreement(db, task_id),
         }
     )
