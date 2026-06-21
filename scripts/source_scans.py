@@ -108,7 +108,10 @@ def main() -> int:
     if not root.exists():
         print(f"dataset dir not found: {root} — download the dataset first")
         return 1
-    exts = ("*.obj", "*.ply", "*.glb") if args.render == "mesh" else ("*.ply", "*.pcd", "*.xyz")
+    # Points path: only formats the installed trimesh can actually load. (.pcd needs an
+    # extra loader we deliberately don't add — "no new heavy dependency" — so we don't
+    # advertise it; a .pcd dataset would convert via a one-off cloud→.ply step first.)
+    exts = ("*.obj", "*.ply", "*.glb") if args.render == "mesh" else ("*.ply", "*.xyz")
     meshes = sorted(str(p) for ext in exts for p in root.rglob(ext))
     if not meshes:
         print(f"no {'/'.join(e.lstrip('*') for e in exts)} files under {root}")
