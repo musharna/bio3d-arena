@@ -36,15 +36,22 @@ def test_ingest_infinigen_hosts_procedural(tmp_path):
         def fake_to_glb(path):
             return trimesh.load(path, force="mesh").export(file_type="glb")
 
-        report = ingest_infinigen(db, [str(obj)], to_glb=fake_to_glb)
+        # Unique factory label: the shared file-backed test DB accumulates other
+        # source="infinigen" rows (e.g. the spotlight group test), so the read-back must
+        # filter on a label only THIS test uses — a bare source=="infinigen" .one() is
+        # order-dependent and collides (see test_..._scoring_failure for the same pattern).
+        report = ingest_infinigen(db, [str(obj)], to_glb=fake_to_glb, factory="SucculentHost")
         assert report["hosted"] == 1
         out = (
-            db.execute(select(ModelOutput).where(ModelOutput.source == "infinigen")).scalars().one()
+            db.execute(select(ModelOutput).where(ModelOutput.attribution.contains("SucculentHost")))
+            .scalars()
+            .one()
         )
         assert sourcing.source_class(out.source) == "procedural"
+        assert out.source == "infinigen"
         assert "BSD-3" in out.license
         assert out.external_url and "infinigen" in out.external_url
-        assert json.loads(out.meta_json)["factory"] == "Succulent"  # the 1.19.1 default
+        assert json.loads(out.meta_json)["factory"] == "SucculentHost"
     finally:
         db.close()
 
