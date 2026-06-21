@@ -49,6 +49,8 @@ SPOTLIGHTS: list[dict] = [
         "order": 0,
         "blurb": "How current image→3D models handle a whole tomato plant.",
         "reference_image": "reference/tomato_ref.jpg",
+        # CC-BY-SA-4.0 input photo — attribution shown in the panel (see docs/ATTRIBUTIONS.md).
+        "reference_credit": "Photo: Kolforn / Wikimedia Commons, CC-BY-SA-4.0",
     },
     {
         "slug": "arabidopsis",
@@ -141,5 +143,6 @@ def build_spotlight(db: Session, slug: str) -> dict | None:
         "reference_image": (
             storage.url_for(spot["reference_image"]) if spot["reference_image"] else None
         ),
+        "reference_credit": spot.get("reference_credit"),
         "models": models,
     }

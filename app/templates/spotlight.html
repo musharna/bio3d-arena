@@ -9,6 +9,7 @@
       alt="reference"
       class="ref-img"
     />
+    {% if s.reference_credit %}<div class="subtle ref-credit">{{ s.reference_credit }}</div>{% endif %}
     {% else %}
     <div class="subtle">No reference image curated.</div>
     {% endif %}

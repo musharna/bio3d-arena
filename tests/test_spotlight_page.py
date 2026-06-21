@@ -191,6 +191,7 @@ def test_reference_image_resolved_to_served_url(monkeypatch):
                 "order": 0,
                 "blurb": "b",
                 "reference_image": "reference/tomato_ref.jpg",
+                "reference_credit": "Photo: Someone, CC-BY-SA-4.0",
             },
         ],
     )
@@ -202,3 +203,4 @@ def test_reference_image_resolved_to_served_url(monkeypatch):
     expected = get_storage().url_for("reference/tomato_ref.jpg")
     assert 'class="ref-img"' in page.text  # the reference <img> rendered
     assert f'src="{expected}"' in page.text  # resolved served URL, not the raw relative path
+    assert "Photo: Someone, CC-BY-SA-4.0" in page.text  # attribution credit shown (CC compliance)

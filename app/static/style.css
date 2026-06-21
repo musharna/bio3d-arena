@@ -669,6 +669,10 @@ main {
   border-radius: 8px;
   border: 1px solid var(--border);
 }
+.reference-panel .ref-credit {
+  font-size: 0.7rem;
+  margin-top: 0.25rem;
+}
 .spotlight-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
