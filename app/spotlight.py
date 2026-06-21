@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import Critique, Generator, Metric, ModelOutput, Task
+from .sourcing import source_class
 from .storage import get_storage
 
 # Tunable thresholds (initial; see spec §Components).
@@ -99,13 +100,18 @@ def build_spotlight(db: Session, slug: str) -> dict | None:
         crit = db.execute(select(Critique).where(Critique.output_id == o.id)).scalars().first()
         gen = db.get(Generator, o.generator_id)
         found = o.source != "bio3d-arena"
-        depiction = json.loads(o.meta_json or "{}").get("depiction")
+        meta = json.loads(o.meta_json or "{}")
+        depiction = meta.get("depiction")
+        cls = source_class(o.source)
+        dataset = meta.get("dataset")
         label = o.title if (found and o.title) else (gen.name if gen else "?")
         models.append(
             {
                 "id": o.id,  # distinguishes multiple outputs from the same generator
                 "generator": gen.slug if gen else "?",
                 "generator_name": gen.name if gen else "?",
+                "cls": cls,
+                "dataset": dataset,
                 "found": found,
                 "label": label,
                 "depiction": depiction,
