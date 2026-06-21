@@ -1,0 +1,111 @@
+"""Ingest real scanned whole-plant meshes from an academic dataset onto the tomato
+spotlight Task. `ingest_scans` is the testable core (mesh→GLB + scorer injected);
+`main()` wires a dataset adapter (local mesh glob) + the recon scorer. Commits per object.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from sqlalchemy import select  # noqa: E402
+
+from app import ingest  # noqa: E402
+from app.mesh_convert import MeshConvertError  # noqa: E402
+from app.models import Task  # noqa: E402
+from app.sourcing import SCAN_DATASETS  # noqa: E402
+
+TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
+
+
+def ingest_scans(
+    db, mesh_paths, *, dataset, to_glb, score_fn=None, task_title=TOMATO_TITLE, limit=15
+) -> dict:
+    meta_d = SCAN_DATASETS[dataset]
+    task = db.execute(select(Task).where(Task.title == task_title)).scalars().first()
+    if task is None:
+        raise RuntimeError(f"subject task not found: {task_title!r}")
+    report = {"hosted": 0, "skipped_pointcloud": 0, "errors": 0, "by_depiction": {}}
+    for path in list(mesh_paths)[:limit]:
+        scan_id = Path(path).stem
+        try:
+            try:
+                glb = to_glb(path)
+            except MeshConvertError as e:
+                print(f"  skip (point-cloud) {scan_id}: {e}")
+                report["skipped_pointcloud"] += 1
+                continue
+            depiction = "whole_plant"
+            out, _created = ingest.register_output(
+                db,
+                task_id=task.id,
+                generator_slug=f"scan:{dataset}",
+                generator_name=meta_d["name"],
+                data=glb,
+                ext="glb",
+                title=scan_id,
+                meta={"depiction": depiction, "dataset": dataset, "scan_id": scan_id},
+            )
+            out.source = dataset
+            out.license = meta_d["license"]
+            out.attribution = meta_d["attribution"]
+            out.external_url = meta_d["url"]
+            db.commit()  # provenance committed → hosted
+            report["hosted"] += 1
+            report["by_depiction"][depiction] = report["by_depiction"].get(depiction, 0) + 1
+            if score_fn is not None and depiction == "whole_plant":
+                try:
+                    score_fn(db, out)
+                    db.commit()
+                except Exception as e:  # noqa: BLE001 — scoring best-effort; object stays hosted
+                    print(f"  score failed for {out.id}: {e}")
+                    db.rollback()
+        except Exception as e:  # noqa: BLE001 — one bad mesh never aborts the batch
+            print(f"  error {scan_id}: {e}")
+            report["errors"] += 1
+            db.rollback()
+    return report
+
+
+def main() -> int:
+    import argparse
+
+    from app import recon_service
+    from app.database import SessionLocal
+    from app.mesh_convert import to_glb
+
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--dataset", required=True, choices=sorted(SCAN_DATASETS))
+    ap.add_argument("--dir", required=True, help="local dir containing the tomato mesh files")
+    ap.add_argument("--limit", type=int, default=15)
+    ap.add_argument("--no-score", action="store_true")
+    args = ap.parse_args()
+
+    root = Path(args.dir)
+    if not root.exists():
+        print(f"dataset dir not found: {root} — download the dataset first")
+        return 1
+    meshes = sorted(str(p) for ext in ("*.obj", "*.ply", "*.glb") for p in root.rglob(ext))
+    if not meshes:
+        print(f"no .obj/.ply/.glb meshes under {root}")
+        return 1
+    db = SessionLocal()
+    try:
+        report = ingest_scans(
+            db,
+            meshes,
+            dataset=args.dataset,
+            to_glb=to_glb,
+            score_fn=None if args.no_score else recon_service.score_and_store,
+            limit=args.limit,
+        )
+        print(report)
+    finally:
+        db.close()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
