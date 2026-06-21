@@ -74,12 +74,19 @@ def main() -> int:
 
     from app import recon_service
     from app.database import SessionLocal
-    from app.mesh_convert import to_glb
+    from app.mesh_convert import to_glb as _to_glb
 
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", required=True, choices=sorted(SCAN_DATASETS))
     ap.add_argument("--dir", required=True, help="local dir containing the tomato mesh files")
     ap.add_argument("--limit", type=int, default=15)
+    ap.add_argument(
+        "--max-faces",
+        type=int,
+        default=150_000,
+        help="decimate meshes above this face budget (0 = full resolution). Laser scans run "
+        "to millions of triangles / tens of MB GLB; the default keeps the grid web-viable.",
+    )
     ap.add_argument("--no-score", action="store_true")
     args = ap.parse_args()
 
@@ -91,6 +98,12 @@ def main() -> int:
     if not meshes:
         print(f"no .obj/.ply/.glb meshes under {root}")
         return 1
+
+    max_faces = args.max_faces or None
+
+    def to_glb(path: str) -> bytes:
+        return _to_glb(path, max_faces=max_faces)
+
     db = SessionLocal()
     try:
         report = ingest_scans(
