@@ -25,3 +25,12 @@ def test_source_class_api_is_ai():
     assert source_class("plant3d") == "scan"  # unchanged
     assert source_class("objaverse") == "found"  # unchanged
     assert source_class(None) == "found"  # unchanged
+
+
+def test_source_class_infinigen_is_procedural():
+    from app.sourcing import source_class
+
+    assert source_class("infinigen") == "procedural"
+    assert source_class("api:tripo") == "ai"  # unchanged
+    assert source_class("plant3d") == "scan"  # unchanged
+    assert source_class("objaverse") == "found"  # unchanged

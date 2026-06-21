@@ -15,10 +15,12 @@
     {% endif %}
   </div>
   {% set ai = s.models | selectattr('cls', 'equalto', 'ai') | list %}
+  {% set procedural = s.models | selectattr('cls', 'equalto', 'procedural') | list %}
   {% set scan = s.models | selectattr('cls', 'equalto', 'scan') | list %}
   {% set found = s.models | selectattr('cls', 'equalto', 'found') | list %}
   {% set groups = [
     ('AI reconstruction', ai),
+    ('Procedural (Infinigen)', procedural),
     ('Real scan — whole plant', scan | selectattr('depiction', 'equalto', 'whole_plant') | list),
     ('Real scan — other', scan | rejectattr('depiction', 'equalto', 'whole_plant') | list),
     ('Found — whole plant', found | selectattr('depiction', 'equalto', 'whole_plant') | list),

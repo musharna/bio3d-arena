@@ -154,3 +154,53 @@ def test_points_scan_card_renders_point_cloud_badge(monkeypatch):
     assert page.status_code == 200
     # Scope to the badge element (not a loose substring that any text could satisfy).
     assert '<div class="card-badge">point cloud</div>' in page.text
+
+
+def test_procedural_card_renders_under_procedural_group(monkeypatch):
+    # monkeypatch FIRST — build_spotlight("proc") returns None (crashing on ["models"])
+    # if the "proc" slug is not registered before the call.
+    monkeypatch.setattr(
+        spotlight,
+        "SPOTLIGHTS",
+        [
+            {
+                "slug": "proc",
+                "task_title": "Proc Subject",
+                "featured": True,
+                "order": 0,
+                "blurb": "b",
+                "reference_image": None,
+            }
+        ],
+    )
+    db = SessionLocal()
+    try:
+        cat = db.query(Category).filter_by(slug="plants").first() or Category(
+            slug="plants", name="Plants"
+        )
+        db.add(cat)
+        db.flush()
+        task = Task(category_id=cat.id, title="Proc Subject", prompt="p")
+        db.add(task)
+        db.flush()
+        glb = trimesh.creation.box().export(file_type="glb")
+        out, _ = ingest.register_output(
+            db,
+            task_id=task.id,
+            generator_slug="infinigen",
+            generator_name="Infinigen",
+            data=glb,
+            ext="glb",
+            title="bush_0",
+            meta={"depiction": "whole_plant", "factory": "BushFactory", "render": "mesh"},
+        )
+        out.source = "infinigen"
+        db.commit()
+        model = spotlight.build_spotlight(db, "proc")["models"][0]
+        assert model["cls"] == "procedural"
+    finally:
+        db.close()
+
+    page = TestClient(app).get("/spotlight/proc")
+    assert page.status_code == 200
+    assert "Procedural (Infinigen)" in page.text
