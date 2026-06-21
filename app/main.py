@@ -581,11 +581,24 @@ def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int
     if task_id is None and tasks:
         task_id = tasks[0].id
     board = recon_service.recon_leaderboard(db, task_id) if task_id else []
-    agree = recon_service.agreement(db, task_id) if task_id else {"spearman": None, "rows": []}
+    agree = (
+        recon_service.agreement(db, task_id)
+        if task_id
+        else {"status": "empty", "spearman": None, "rows": []}
+    )
+    viewer_outputs = recon_service.recon_outputs_for_task(db, task_id) if task_id else []
+    reference = recon_service.reference_for_task(db, task_id) if task_id else None
     return templates.TemplateResponse(
         request,
         "benchmark.html",
-        {"tasks": tasks, "task_id": task_id, "board": board, "agree": agree},
+        {
+            "tasks": tasks,
+            "task_id": task_id,
+            "board": board,
+            "agree": agree,
+            "viewer_outputs": viewer_outputs,
+            "reference": reference,
+        },
     )
 
 

@@ -18,6 +18,56 @@
     </label>
   </form>
 
+  {% if viewer_outputs %}
+  <h3>Inspect <span class="subtle">— reconstruction vs reference</span></h3>
+  <label class="subtle">Method
+    <select id="recon-pick"></select>
+  </label>
+  <div class="recon-compare">
+    <div class="recon-pane">
+      <div class="model-label">
+        <span id="recon-name">Reconstruction</span>
+        <span class="fmt-chip">GLB</span>
+      </div>
+      <div class="viewer-slot" id="recon-slot"></div>
+    </div>
+    <div class="recon-pane">
+      <div class="model-label">
+        Reference
+        {% if not reference %}<span class="gt-note">held-out GT is private (scoring only)</span>{% endif %}
+      </div>
+      <div class="viewer-slot" id="ref-slot"></div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      const outs = {{ viewer_outputs | tojson }};
+      const ref = {{ reference | tojson }};
+      const pick = document.getElementById("recon-pick");
+      outs.forEach((o, i) => {
+        const opt = document.createElement("option");
+        opt.value = i;
+        opt.textContent = o.generator + (o.chamfer != null ? " (chamfer " + o.chamfer.toFixed(4) + ")" : "");
+        pick.appendChild(opt);
+      });
+      function mountPick() {
+        const o = outs[pick.value | 0];
+        document.getElementById("recon-name").textContent = o.generator;
+        window.Bio3DViewer.mount(document.getElementById("recon-slot"), { url: o.url, format: o.format });
+      }
+      pick.addEventListener("change", mountPick);
+      if (outs.length) mountPick();
+      const refSlot = document.getElementById("ref-slot");
+      if (ref) {
+        window.Bio3DViewer.mount(refSlot, { url: ref.url, format: ref.format });
+      } else {
+        refSlot.innerHTML =
+          '<div class="viewer-error" style="color:var(--muted)">ⓘ <span>Ground-truth scans are held private and used only for scoring (no public overlay).</span></div>';
+      }
+    })();
+  </script>
+  {% endif %}
+
   {% if board %}
   <table class="ranktable">
     <thead>
@@ -42,20 +92,32 @@
   </table>
 
   <h3>Vote ↔ metric agreement
-    <span class="subtle">— Spearman {{ '%.2f'|format(agree.spearman) if agree.spearman is not none else 'n/a' }}</span>
+    {% if agree.status == 'ok' %}
+    <span class="subtle">— Spearman {{ '%.2f'|format(agree.spearman) if agree.spearman is not none else 'n/a' }}
+      ({{ agree.n }} methods voted &amp; scored)</span>
+    {% endif %}
   </h3>
+  {% if agree.status == 'no_votes' %}
+  <p class="subtle">Scored, but <b>awaiting Mode-A votes</b> — cast pairwise votes in the Arena to
+    compare the perceptual ranking against the objective metric.</p>
+  {% elif agree.status == 'insufficient' %}
+  <p class="subtle">Need ≥2 scored methods on this task to compute agreement.</p>
+  {% endif %}
+  {% if agree.rows %}
   <table class="ranktable">
     <thead><tr><th>Method</th><th>Metric rank</th><th>Vote rank</th></tr></thead>
     <tbody>
       {% for r in agree.rows %}
-      <tr>
+      <tr {% if r.disagree %}class="row-disagree"{% endif %}>
         <td class="gen">{{ r.generator }}</td>
         <td class="num">{{ r.metric_rank }}</td>
-        <td class="num">{{ r.vote_rank if r.vote_rank is not none else '—' }}</td>
+        <td class="num">{{ r.vote_rank if r.vote_rank is not none else '—' }}
+          {%- if r.disagree %} <span class="disagree-flag" title="metric and votes rank this differently">≠</span>{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  {% endif %}
   {% else %}
   <p>No recon scores yet for this task. Run <b>Rescore</b> in Admin once outputs + the GT scorer are wired.</p>
   {% endif %}

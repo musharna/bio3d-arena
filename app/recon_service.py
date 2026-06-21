@@ -115,6 +115,53 @@ def _gen_name(db: Session, gid: int) -> str:
     return g.name if g else str(gid)
 
 
+def recon_outputs_for_task(db: Session, task_id: int) -> list[dict]:
+    """Viewable recon GLBs for a task (one per output) — for the B4 side-by-side viewer."""
+    outs = (
+        db.execute(
+            select(ModelOutput).where(
+                ModelOutput.task_id == task_id,
+                ModelOutput.is_gold.is_(False),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    storage = get_storage()
+    rows = []
+    for o in outs:
+        if (o.asset_format or "").lower() not in MESH_FORMATS:
+            continue
+        m = db.execute(select(Metric).where(Metric.output_id == o.id)).scalars().first()
+        rows.append(
+            {
+                "generator": _gen_name(db, o.generator_id),
+                "url": storage.url_for(o.asset_path),
+                "format": o.asset_format,
+                "chamfer": m.chamfer if (m and m.status == "ok") else None,
+            }
+        )
+    rows.sort(
+        key=lambda r: (r["chamfer"] is None, r["chamfer"] if r["chamfer"] is not None else 0.0)
+    )
+    return rows
+
+
+def reference_for_task(db: Session, task_id: int) -> dict | None:
+    """A PUBLIC reference exemplar for side-by-side (Task.reference_asset_id), if set.
+
+    NOT the held-out scoring GT — that stays private per D2 and is never served here.
+    """
+    from .models import Task
+
+    task = db.get(Task, task_id)
+    if task and task.reference_asset_id:
+        ref = db.get(ModelOutput, task.reference_asset_id)
+        if ref:
+            return {"url": get_storage().url_for(ref.asset_path), "format": ref.asset_format}
+    return None
+
+
 def recon_leaderboard(db: Session, task_id: int) -> list[dict]:
     """Per-output objective scores for a task, best (lowest chamfer) first."""
     outs = (
@@ -202,11 +249,15 @@ def agreement(db: Session, task_id: int) -> dict:
                 .scalars()
                 .first()
             )
+            # Only count a BT rank if the generator actually has votes — a Rating row
+            # exists at default bt_score=1000 before any game, which would otherwise
+            # fake an agreement signal. n_games>0 = real Mode-A data.
+            voted = rating is not None and rating.n_games > 0
             best[gid] = {
                 "generator_id": gid,
                 "generator": _gen_name(db, gid),
                 "chamfer": m.chamfer,
-                "bt": rating.bt_score if rating else None,
+                "bt": rating.bt_score if voted else None,
             }
     entries = list(best.values())
 
@@ -220,12 +271,37 @@ def agreement(db: Session, task_id: int) -> dict:
 
     common = [e["generator_id"] for e in entries if e["generator_id"] in vote_rank]
     sp = _spearman([metric_rank[g] for g in common], [vote_rank[g] for g in common])
-    rows = [
-        {
-            "generator": e["generator"],
-            "metric_rank": metric_rank[e["generator_id"]],
-            "vote_rank": vote_rank.get(e["generator_id"]),
-        }
-        for e in by_chamfer
-    ]
-    return {"spearman": sp, "n": len(common), "rows": rows}
+
+    # Status states for the real-data shape (the page renders the right message):
+    #   empty        — nothing scored yet (run /admin/rescore)
+    #   insufficient — <2 methods scored (can't correlate)
+    #   no_votes     — methods scored but Mode-A votes not in yet (the common early state)
+    #   ok           — both signals present; spearman meaningful
+    if not entries:
+        status = "empty"
+    elif len(entries) < 2:
+        status = "insufficient"
+    elif len(common) < 2:
+        status = "no_votes"
+    else:
+        status = "ok"
+
+    rows = []
+    for e in by_chamfer:
+        mr = metric_rank[e["generator_id"]]
+        vr = vote_rank.get(e["generator_id"])
+        rows.append(
+            {
+                "generator": e["generator"],
+                "metric_rank": mr,
+                "vote_rank": vr,
+                "disagree": vr is not None and mr != vr,  # metric and votes rank it differently
+            }
+        )
+    return {
+        "status": status,
+        "spearman": sp,
+        "n": len(common),
+        "n_methods": len(entries),
+        "rows": rows,
+    }

@@ -166,6 +166,43 @@ def test_agreement_returns_spearman_and_rows():
         db.close()
 
 
+def test_agreement_status_insufficient_one_method():
+    db = SessionLocal()
+    try:
+        out = _mk_output(db, "ins")
+        recon_service.score_and_store(db, out, scorer=lambda b, t: fake_card())
+        db.commit()
+        agr = recon_service.agreement(db, out.task_id)
+        assert agr["status"] == "insufficient"  # only 1 method scored
+    finally:
+        db.close()
+
+
+def test_agreement_status_no_votes_with_two_methods():
+    # Two scored methods but NO Mode-A votes (no Rating with n_games>0) → no_votes,
+    # not a fake "ok". Rows present with vote_rank None.
+    db = SessionLocal()
+    try:
+        out = _mk_output(db, "nv")
+        gen2 = Generator(slug="g-nv2", name="M-nv2")
+        db.add(gen2)
+        db.flush()
+        out2 = ModelOutput(
+            task_id=out.task_id, generator_id=gen2.id, asset_path="seed/x.glb", asset_format="glb"
+        )
+        db.add(out2)
+        db.flush()
+        recon_service.score_and_store(db, out, scorer=lambda b, t: fake_card(chamfer=0.03))
+        recon_service.score_and_store(db, out2, scorer=lambda b, t: fake_card(chamfer=0.06))
+        db.commit()
+        agr = recon_service.agreement(db, out.task_id)
+        assert agr["status"] == "no_votes"
+        assert agr["n_methods"] == 2
+        assert all(r["vote_rank"] is None for r in agr["rows"])
+    finally:
+        db.close()
+
+
 def test_agreement_dedups_multiple_outputs_per_generator():
     # A generator with TWO outputs on one task must appear exactly once in the
     # agreement rows (collapsed to its best chamfer) — not double-counted.
