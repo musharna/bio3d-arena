@@ -10,6 +10,7 @@ are NEVER logged here.
 
 from __future__ import annotations
 
+import base64
 import time
 
 import httpx
@@ -101,6 +102,84 @@ class TripoTransport:
         output = d.get("output") or {}
         url = output.get("pbr_model") or output.get("model") or output.get("base_model")
         return d.get("status", ""), url
+
+    def download(self, url: str) -> bytes:
+        r = self._client.get(url)
+        r.raise_for_status()
+        return r.content
+
+
+def _data_uri(image_bytes: bytes, mime: str = "image/jpeg") -> str:
+    """Inline an image as a data URI for APIs that take an image_url string."""
+    return f"data:{mime};base64," + base64.b64encode(image_bytes).decode("ascii")
+
+
+def generate_fal(
+    image_bytes: bytes,
+    *,
+    api_key: str,
+    model: str,
+    transport=None,
+    timeout_s: int = 300,
+    poll_interval_s: int = 5,
+) -> bytes:
+    """fal.ai image->3D for a given model id: submit → poll → download GLB."""
+    t = transport or FalTransport()
+    req = t.submit(image_bytes, model, api_key)
+    waited = 0
+    while True:
+        status, glb_url = t.poll(req, api_key)
+        s = (status or "").lower()
+        if s in _SUCCESS:
+            if not glb_url:
+                raise Image3DError(f"fal {model}: completed but no model url")
+            break
+        if s in _FAILED:
+            raise Image3DError(f"fal {model}: {status}")
+        if waited >= timeout_s:
+            raise Image3DError(f"fal {model}: timed out after {timeout_s}s")
+        time.sleep(poll_interval_s)
+        waited += poll_interval_s
+    glb = t.download(glb_url)
+    if not glb:
+        raise Image3DError(f"fal {model}: empty download")
+    return glb
+
+
+class FalTransport:
+    """Real fal.ai queue transport (LIVE BINDING — verify exact paths/fields against
+    fal.ai/docs at impl; only the key-gated run exercises it). submit POSTs the image to the
+    model's queue endpoint → request handle; poll returns (status, glb_url-when-COMPLETED);
+    download fetches the GLB. Auth: `Authorization: Key <api_key>`."""
+
+    BASE = "https://queue.fal.run"
+
+    def __init__(self, client: httpx.Client | None = None):
+        self._client = client or httpx.Client(timeout=60)
+
+    def _hdr(self, api_key: str) -> dict:
+        return {"Authorization": f"Key {api_key}"}
+
+    def submit(self, image_bytes: bytes, model: str, api_key: str) -> dict:
+        r = self._client.post(
+            f"{self.BASE}/{model}",
+            headers=self._hdr(api_key),
+            json={"input": {"image_url": _data_uri(image_bytes)}},
+        )
+        r.raise_for_status()
+        return r.json()  # {request_id, status_url, response_url}
+
+    def poll(self, req: dict, api_key: str) -> tuple[str, str | None]:
+        r = self._client.get(req["status_url"], headers=self._hdr(api_key))
+        r.raise_for_status()
+        status = r.json().get("status", "")
+        if status.lower() not in _SUCCESS:
+            return status, None
+        res = self._client.get(req["response_url"], headers=self._hdr(api_key))
+        res.raise_for_status()
+        d = res.json()
+        mesh = d.get("model_mesh") or d.get("mesh") or {}
+        return status, (mesh.get("url") if isinstance(mesh, dict) else mesh)
 
     def download(self, url: str) -> bytes:
         r = self._client.get(url)
