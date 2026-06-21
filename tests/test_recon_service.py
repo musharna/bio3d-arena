@@ -7,6 +7,8 @@ inject a fake scorer so the mapping/aggregation logic is covered without the ser
 
 from __future__ import annotations
 
+from sqlalchemy import select
+
 from app import recon_service
 from app.database import SessionLocal, init_db
 from app.models import Category, Generator, Metric, ModelOutput, Task
@@ -199,6 +201,81 @@ def test_agreement_status_no_votes_with_two_methods():
         assert agr["status"] == "no_votes"
         assert agr["n_methods"] == 2
         assert all(r["vote_rank"] is None for r in agr["rows"])
+    finally:
+        db.close()
+
+
+def test_agreement_uses_overall_criterion_bt_not_other_criteria():
+    # Mode-A votes feed the 'overall' criterion. agreement() must read the OVERALL BT
+    # rank, not whatever criterion .first() happens to return.
+    from app.models import Category, Criterion, Rating
+
+    db = SessionLocal()
+    try:
+        cat = Category(slug="c-crit", name="Plants")
+        db.add(cat)
+        # agreement() resolves the 'overall' criterion by slug — get-or-create it.
+        overall = db.execute(select(Criterion).where(Criterion.slug == "overall")).scalars().first()
+        if overall is None:
+            overall = Criterion(slug="overall", name="Overall")
+            db.add(overall)
+        other = Criterion(slug="other-crit", name="Other")
+        db.add(other)
+        db.flush()
+        task = Task(category_id=cat.id, title="t-crit", prompt="p")
+        ga = Generator(slug="ga-crit", name="GA")
+        gb = Generator(slug="gb-crit", name="GB")
+        db.add_all([task, ga, gb])
+        db.flush()
+        for g, ch in ((ga, 0.02), (gb, 0.08)):  # GA better by metric (lower chamfer)
+            o = ModelOutput(
+                task_id=task.id, generator_id=g.id, asset_path="seed/x.glb", asset_format="glb"
+            )
+            db.add(o)
+            db.flush()
+            recon_service.score_and_store(
+                db, o, scorer=(lambda c: lambda b, t: fake_card(chamfer=c))(ch)
+            )
+        # OVERALL: GA ahead (1100) — agrees with metric. OTHER criterion: reversed, to
+        # prove agreement ignores it.
+        db.add_all(
+            [
+                Rating(
+                    generator_id=ga.id,
+                    category_id=cat.id,
+                    criterion_id=overall.id,
+                    bt_score=1100,
+                    n_games=5,
+                ),
+                Rating(
+                    generator_id=gb.id,
+                    category_id=cat.id,
+                    criterion_id=overall.id,
+                    bt_score=1000,
+                    n_games=5,
+                ),
+                Rating(
+                    generator_id=ga.id,
+                    category_id=cat.id,
+                    criterion_id=other.id,
+                    bt_score=900,
+                    n_games=5,
+                ),
+                Rating(
+                    generator_id=gb.id,
+                    category_id=cat.id,
+                    criterion_id=other.id,
+                    bt_score=1200,
+                    n_games=5,
+                ),
+            ]
+        )
+        db.commit()
+        agr = recon_service.agreement(db, task.id)
+        assert agr["status"] == "ok"
+        ranks = {r["generator"]: r["vote_rank"] for r in agr["rows"]}
+        assert ranks["GA"] == 1 and ranks["GB"] == 2  # from OVERALL, not the reversed 'other'
+        assert agr["spearman"] == 1.0  # metric and overall-vote fully agree
     finally:
         db.close()
 

@@ -588,6 +588,8 @@ def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int
     )
     viewer_outputs = recon_service.recon_outputs_for_task(db, task_id) if task_id else []
     reference = recon_service.reference_for_task(db, task_id) if task_id else None
+    current = db.get(Task, task_id) if task_id else None
+    vote_category = current.category.slug if current and current.category else None
     return templates.TemplateResponse(
         request,
         "benchmark.html",
@@ -598,6 +600,7 @@ def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int
             "agree": agree,
             "viewer_outputs": viewer_outputs,
             "reference": reference,
+            "vote_category": vote_category,
         },
     )
 

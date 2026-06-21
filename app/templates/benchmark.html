@@ -100,7 +100,11 @@
   {% if agree.status == 'no_votes' %}
   <p class="subtle">Scored, but <b>awaiting Mode-A votes</b> — cast pairwise votes in the Arena to
     compare the perceptual ranking against the objective metric.</p>
-  {% elif agree.status == 'insufficient' %}
+  {% elif agree.status == 'insufficient' %}{# fall through to the vote CTA below #}{% endif %}
+  {% if vote_category and viewer_outputs|length >= 2 %}
+  <p><a class="vote-cta" href="/?category={{ vote_category }}&criterion=overall">🗳 Vote on these reconstructions →</a></p>
+  {% endif %}
+  {% if agree.status == 'insufficient' %}
   <p class="subtle">Need ≥2 scored methods on this task to compute agreement.</p>
   {% endif %}
   {% if agree.rows %}

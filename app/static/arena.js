@@ -123,7 +123,22 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "x") vote("bad");
 });
 
+// Preselect category/criterion from the URL (?category=plants&criterion=overall) so a
+// "Vote on these →" link from /benchmark scopes the arena to that benchmark's pairs.
+function preselectFromUrl() {
+  const p = new URLSearchParams(location.search);
+  for (const [key, id] of [
+    ["category", "sel-category"],
+    ["criterion", "sel-criterion"],
+  ]) {
+    const val = p.get(key);
+    const sel = el(id);
+    if (val && [...sel.options].some((o) => o.value === val)) sel.value = val;
+  }
+}
+
 (async () => {
   await loadMeta();
+  preselectFromUrl();
   await loadNext();
 })();

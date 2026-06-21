@@ -589,6 +589,21 @@ main {
   }
 }
 
+/* Recon benchmark — "vote on these" call-to-action into the scoped arena */
+.vote-cta {
+  display: inline-block;
+  background: var(--panel2);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.4rem 0.8rem;
+  font-weight: 600;
+}
+.vote-cta:hover {
+  background: #2c3a50;
+  text-decoration: none;
+}
+
 /* Recon benchmark — vote↔metric agreement disagreement highlight */
 .row-disagree {
   background: rgba(

@@ -212,10 +212,14 @@ def agreement(db: Session, task_id: int) -> dict:
     Local rank-correlation only — the microservice boundary (D1) forbids importing
     AgriGen's richer 2AFC eval/agreement.py; that becomes a service-returned field later.
     """
-    from .models import Rating, Task
+    from .models import Criterion, Rating, Task
 
     task = db.get(Task, task_id)
     cat_id = task.category_id if task else None
+    # Mode-A votes feed the 'overall' criterion (the arena default). Scope the BT lookup
+    # to it so vote_rank is well-defined even when other criteria also have ratings.
+    overall = db.execute(select(Criterion).where(Criterion.slug == "overall")).scalars().first()
+    overall_id = overall.id if overall else None
     outs = (
         db.execute(
             select(ModelOutput).where(
@@ -242,6 +246,7 @@ def agreement(db: Session, task_id: int) -> dict:
                     select(Rating)
                     .where(
                         Rating.generator_id == gid,
+                        Rating.criterion_id == overall_id,
                         (Rating.category_id == cat_id) | (Rating.category_id.is_(None)),
                     )
                     .order_by(Rating.category_id.is_(None))  # prefer category-scoped over global
