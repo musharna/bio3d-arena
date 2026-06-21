@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app import ingest, seed
@@ -13,6 +14,8 @@ from app.database import SessionLocal, init_db
 from app.main import app
 from app.models import Comparison, ModelOutput
 
+# The recon bake-off GLBs double as "generated plants" for the cross-paradigm matchup. They
+# live in the sibling AgriGen tree, absent in CI / on other checkouts — skip there.
 BAKE = Path("/home/mjarnold/agrigen/backend/data/bakeoff_v1")
 
 
@@ -20,6 +23,7 @@ def setup_module(_module):
     init_db()
 
 
+@pytest.mark.skipif(not BAKE.exists(), reason="AgriGen bakeoff_v1 GLBs not present")
 def test_synth_ingest_then_scoped_vote_ranks():
     db = SessionLocal()
     try:
