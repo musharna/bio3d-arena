@@ -44,7 +44,7 @@ def test_ingest_infinigen_hosts_procedural(tmp_path):
         assert sourcing.source_class(out.source) == "procedural"
         assert "BSD-3" in out.license
         assert out.external_url and "infinigen" in out.external_url
-        assert json.loads(out.meta_json)["factory"] == "BushFactory"
+        assert json.loads(out.meta_json)["factory"] == "Flowerplant"  # the 1.19.1 default
     finally:
         db.close()
 
@@ -60,5 +60,36 @@ def test_ingest_infinigen_skips_unconvertible(tmp_path):
         report = ingest_infinigen(db, [str(tmp_path / "x.obj")], to_glb=raising_to_glb)
         assert report["skipped"] == 1
         assert report["hosted"] == 0
+    finally:
+        db.close()
+
+
+def test_ingest_infinigen_scoring_failure_keeps_hosted_object(tmp_path):
+    """Core invariant: a scoring failure rolls back only the metric — the hosted
+    ModelOutput survives and `hosted` stays 1 (scoring failure is not an error).
+    Unique factory label avoids dedup collision in the shared file-backed test DB."""
+    db = SessionLocal()
+    try:
+        _tomato_task(db)
+        obj = tmp_path / "iso_0.obj"
+        trimesh.creation.box().export(str(obj))
+
+        def fake_to_glb(path):
+            return trimesh.load(path, force="mesh").export(file_type="glb")
+
+        def boom_score(db_, out):
+            raise RuntimeError("scorer unreachable")
+
+        report = ingest_infinigen(
+            db, [str(obj)], to_glb=fake_to_glb, score_fn=boom_score, factory="FernIso"
+        )
+        assert report["hosted"] == 1  # incremented before scoring
+        assert report["errors"] == 0  # a scoring failure is not a provider error
+        out = (
+            db.execute(select(ModelOutput).where(ModelOutput.attribution.contains("FernIso")))
+            .scalars()
+            .one()
+        )
+        assert out.asset_path  # the hosted GLB survived the scoring rollback
     finally:
         db.close()

@@ -28,7 +28,7 @@ def ingest_infinigen(
     *,
     to_glb,
     score_fn=None,
-    factory="BushFactory",
+    factory="Flowerplant",
     task_title=TOMATO_TITLE,
     limit=10,
 ) -> dict:
@@ -75,7 +75,11 @@ def ingest_infinigen(
         except Exception as e:  # noqa: BLE001 — one bad asset never aborts the batch
             print(f"  error {asset_id}: {e}")
             report["errors"] += 1
-            db.rollback()
+            # Guard the rollback so a secondary failure here can't abort the remaining batch.
+            try:
+                db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
     return report
 
 
@@ -90,7 +94,9 @@ def main() -> int:
     from app.mesh_convert import to_glb as _to_glb
 
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--factory", default="BushFactory")
+    # Infinigen 1.19.1 plant factories (verified via generate_individual_assets --help):
+    # Flowerplant, Fern, Monocots, Succulent, SnakePlant, SpiderPlant, DecorativePlants.
+    ap.add_argument("--factory", default="Flowerplant")
     ap.add_argument("-n", type=int, default=3)
     ap.add_argument(
         "--env-python",
@@ -103,8 +109,8 @@ def main() -> int:
 
     env_python = args.env_python or "python"
     out_dir = tempfile.mkdtemp(prefix="infinigen_")
-    # Verify the exact flags against `generate_individual_assets --help` at run time; this is
-    # the research-confirmed headless geometry-only invocation.
+    # Verified against `generate_individual_assets --help` (infinigen 1.19.1): -f/--factories,
+    # -n/--n_images, -r/--render {none}, --export {obj}. Headless geometry-only invocation.
     cmd = [
         env_python,
         "-m",
