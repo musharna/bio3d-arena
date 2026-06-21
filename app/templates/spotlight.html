@@ -13,8 +13,22 @@
     <div class="subtle">No reference image curated.</div>
     {% endif %}
   </div>
+  {% set ai = s.models | selectattr('found', 'equalto', false) | list %}
+  {% set found = s.models | selectattr('found', 'equalto', true) | list %}
+  {% set groups = [
+    ('AI reconstruction', ai),
+    ('Found — whole plant', found | selectattr('depiction', 'equalto', 'whole_plant') | list),
+    ('Found — fruit', found | selectattr('depiction', 'equalto', 'fruit') | list),
+    ('Found — leaf', found | selectattr('depiction', 'equalto', 'leaf') | list),
+    ('Found — other', found | selectattr('depiction', 'equalto', 'other') | list),
+  ] %}
+  {% for gname, gmodels in groups %}
+  {% if gmodels %}
+  <h3 class="group-title">
+    {{ gname }} <span class="subtle">({{ gmodels | length }})</span>
+  </h3>
   <div class="spotlight-grid">
-    {% for m in s.models %}
+    {% for m in gmodels %}
     <div class="spotlight-card">
       <div
         class="thumb"
@@ -29,7 +43,7 @@
         <div class="thumb-placeholder">▶ click to view</div>
         {% endif %}
       </div>
-      <div class="card-gen">{{ m.generator_name }} <span class="subtle">#{{ m.id }}</span></div>
+      <div class="card-gen">{{ m.label }} <span class="subtle">#{{ m.id }}</span></div>
       <table class="metric-table">
         <tr>
           <td>chamfer</td>
@@ -71,11 +85,16 @@
       {% endif %}
       <div class="provenance subtle">
         {{ m.provenance.source }}{% if m.provenance.license %} · {{
-        m.provenance.license }}{% endif %}
+        m.provenance.license }}{% endif %}{% if m.provenance.external_url %} ·
+        <a href="{{ m.provenance.external_url }}" target="_blank" rel="noopener"
+          >source</a
+        >{% endif %}
       </div>
     </div>
     {% endfor %}
   </div>
+  {% endif %}
+  {% endfor %}
   <div id="live-viewer-slot"></div>
 </section>
 <script type="module" src="/static/spotlight.js"></script>

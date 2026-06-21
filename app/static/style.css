@@ -767,3 +767,7 @@ main {
 .provenance {
   font-size: 0.7rem;
 }
+.group-title {
+  margin: 1.2rem 0 0.4rem;
+  font-size: 1rem;
+}

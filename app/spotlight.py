@@ -7,6 +7,8 @@ inspection tool — see docs/superpowers/specs/2026-06-21-subject-spotlight-desi
 
 from __future__ import annotations
 
+import json
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -96,11 +98,17 @@ def build_spotlight(db: Session, slug: str) -> dict | None:
         metric = db.execute(select(Metric).where(Metric.output_id == o.id)).scalars().first()
         crit = db.execute(select(Critique).where(Critique.output_id == o.id)).scalars().first()
         gen = db.get(Generator, o.generator_id)
+        found = o.source != "bio3d-arena"
+        depiction = json.loads(o.meta_json or "{}").get("depiction")
+        label = o.title if (found and o.title) else (gen.name if gen else "?")
         models.append(
             {
                 "id": o.id,  # distinguishes multiple outputs from the same generator
                 "generator": gen.slug if gen else "?",
                 "generator_name": gen.name if gen else "?",
+                "found": found,
+                "label": label,
+                "depiction": depiction,
                 "format": o.asset_format,
                 "asset_url": storage.url_for(o.asset_path),
                 "thumbnail_url": storage.url_for(crit.render_path)
