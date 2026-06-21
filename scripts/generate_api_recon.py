@@ -56,7 +56,12 @@ def generate_api_recon(
                     db.commit()
                 except Exception as e:  # noqa: BLE001 — scoring best-effort; object stays hosted
                     print(f"  score failed for {out.id}: {e}")
-                    db.rollback()
+                    # Guard the rollback itself: a secondary failure here must NOT escape to
+                    # the outer except (it would double-count this provider as generated+error).
+                    try:
+                        db.rollback()
+                    except Exception:  # noqa: BLE001
+                        pass
         except Exception as e:  # noqa: BLE001 — one provider never aborts the batch
             # Provider passes the key in a header, never in exception text, so str(e) is safe.
             print(f"  {slug} generation failed: {type(e).__name__}: {e}")

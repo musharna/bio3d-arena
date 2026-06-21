@@ -81,3 +81,35 @@ def test_generate_api_recon_counts_provider_error():
         assert report["generated"] == 0
     finally:
         db.close()
+
+
+def test_generate_api_recon_scoring_failure_keeps_hosted_object():
+    """Core invariant: a scoring failure rolls back ONLY the metric — the hosted
+    ModelOutput survives and `generated` stays 1 (a scoring failure is NOT a provider
+    error). Uses a unique slug so the shared file-backed test DB cannot dedup-collide
+    with the api:tripo row another test leaves behind."""
+    db = SessionLocal()
+    try:
+        _tomato_task(db)
+        glb = _box_glb()
+
+        def fake(image_bytes, *, api_key):
+            return glb
+
+        def boom_score(db_, out):
+            raise RuntimeError("scorer unreachable")
+
+        providers = {"tripoiso": (fake, "TRIPOISO_KEY", "TripoIso")}
+        report = generate_api_recon(
+            db, b"img", providers=providers, env={"TRIPOISO_KEY": "k"}, score_fn=boom_score
+        )
+        assert report["generated"] == 1  # incremented before scoring
+        assert report["errors"] == 0  # a scoring failure is not a provider error
+        out = (
+            db.execute(select(ModelOutput).where(ModelOutput.source == "api:tripoiso"))
+            .scalars()
+            .one()
+        )
+        assert out.asset_path  # the hosted GLB survived the scoring rollback
+    finally:
+        db.close()
