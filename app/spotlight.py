@@ -7,7 +7,11 @@ inspection tool — see docs/superpowers/specs/2026-06-21-subject-spotlight-desi
 
 from __future__ import annotations
 
-from .models import Metric
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from .models import Critique, Generator, Metric, ModelOutput, Task
+from .storage import get_storage
 
 # Tunable thresholds (initial; see spec §Components).
 COVERAGE_MIN = 0.5
@@ -30,3 +34,95 @@ def derive_flags(metric: Metric | None) -> list[tuple[str, str]]:
     if metric.fscore is not None and metric.fscore < FSCORE_MIN:
         flags.append(("surface", "low F-score@τ"))
     return flags or [("ok", "scored")]
+
+
+# Curated subjects (internal, hand-picked). reference_image is an optional public
+# real-photo path under the asset store; None ⇒ no reference image (Phase 1).
+SPOTLIGHTS: list[dict] = [
+    {
+        "slug": "tomato",
+        "task_title": "Solanum lycopersicum — single-image → 3D reconstruction",
+        "featured": True,
+        "order": 0,
+        "blurb": "How current image→3D models handle a whole tomato plant.",
+        "reference_image": None,
+    },
+    {
+        "slug": "arabidopsis",
+        "task_title": "Arabidopsis thaliana — single-image → 3D reconstruction",
+        "featured": False,
+        "order": 1,
+        "blurb": "Thale cress rosette — fine structure stress test.",
+        "reference_image": None,
+    },
+]
+
+
+def find_spotlight(slug: str) -> dict | None:
+    return next((s for s in SPOTLIGHTS if s["slug"] == slug), None)
+
+
+def _metrics_dict(m: Metric | None) -> dict:
+    if m is None:
+        return {}
+    return {
+        "chamfer": m.chamfer,
+        "fscore": m.fscore,
+        "coverage": m.coverage,
+        "tau": m.tau,
+        "gt_band_lo": m.gt_band_lo,
+        "gt_band_hi": m.gt_band_hi,
+        "within_variation": m.species_verdict,
+    }
+
+
+def build_spotlight(db: Session, slug: str) -> dict | None:
+    spot = find_spotlight(slug)
+    if spot is None:
+        return None
+    task = db.execute(select(Task).where(Task.title == spot["task_title"])).scalars().first()
+    if task is None:
+        return None
+    storage = get_storage()
+    outs = (
+        db.execute(
+            select(ModelOutput).where(
+                ModelOutput.task_id == task.id, ModelOutput.is_gold.is_(False)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    models = []
+    for o in outs:
+        metric = db.execute(select(Metric).where(Metric.output_id == o.id)).scalars().first()
+        crit = db.execute(select(Critique).where(Critique.output_id == o.id)).scalars().first()
+        gen = db.get(Generator, o.generator_id)
+        models.append(
+            {
+                "generator": gen.slug if gen else "?",
+                "generator_name": gen.name if gen else "?",
+                "format": o.asset_format,
+                "asset_url": storage.url_for(o.asset_path),
+                "thumbnail_url": storage.url_for(crit.render_path)
+                if crit and crit.render_path
+                else None,
+                "metrics": _metrics_dict(metric),
+                "flags": derive_flags(metric),
+                "critic_note": crit.critic_note if crit else "",
+                "provenance": {
+                    "source": o.source,
+                    "license": o.license,
+                    "attribution": o.attribution,
+                    "external_url": o.external_url,
+                },
+            }
+        )
+    return {
+        "slug": spot["slug"],
+        "title": spot["task_title"],
+        "blurb": spot["blurb"],
+        "featured": spot["featured"],
+        "reference_image": spot["reference_image"],
+        "models": models,
+    }

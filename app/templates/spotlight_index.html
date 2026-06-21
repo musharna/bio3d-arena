@@ -1,0 +1,18 @@
+{% extends "base.html" %} {% block title %}Spotlight · Bio 3D Arena{% endblock
+%} {% block content %}
+<section class="board">
+  <h2>Subject Spotlight <span class="subtle">(internal)</span></h2>
+  <p class="subtle">
+    Per-subject deep dive: every model side-by-side, all metrics, failure flags.
+  </p>
+  <ul class="spotlight-list">
+    {% for s in subjects %}
+    <li>
+      <a href="/spotlight/{{ s.slug }}">{{ s.task_title }}</a> {% if s.featured
+      %}<span class="cat-chip">featured</span>{% endif %}
+      <div class="subtle">{{ s.blurb }}</div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

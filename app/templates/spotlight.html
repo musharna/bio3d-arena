@@ -1,0 +1,82 @@
+{% extends "base.html" %} {% block title %}{{ s.title }} · Spotlight{% endblock
+%} {% block content %}
+<section class="board">
+  <h2>{{ s.title }}</h2>
+  <p class="subtle">{{ s.blurb }}</p>
+  <div class="reference-panel">
+    {% if s.reference_image %}<img
+      src="{{ s.reference_image }}"
+      alt="reference"
+      class="ref-img"
+    />
+    {% else %}
+    <div class="subtle">No reference image curated.</div>
+    {% endif %}
+  </div>
+  <div class="spotlight-grid">
+    {% for m in s.models %}
+    <div class="spotlight-card">
+      <div
+        class="thumb"
+        data-asset="{{ m.asset_url }}"
+        data-format="{{ m.format }}"
+      >
+        {% if m.thumbnail_url %}<img
+          src="{{ m.thumbnail_url }}"
+          alt="{{ m.generator }}"
+        />
+        {% else %}
+        <div class="thumb-placeholder">▶ click to view</div>
+        {% endif %}
+      </div>
+      <div class="card-gen">{{ m.generator_name }}</div>
+      <table class="metric-table">
+        <tr>
+          <td>chamfer</td>
+          <td>
+            {{ "%.3f"|format(m.metrics.chamfer) if m.metrics.chamfer is not none
+            else "—" }}
+          </td>
+        </tr>
+        <tr>
+          <td>F@τ</td>
+          <td>
+            {{ "%.2f"|format(m.metrics.fscore) if m.metrics.fscore is not none
+            else "—" }}
+          </td>
+        </tr>
+        <tr>
+          <td>coverage</td>
+          <td>
+            {{ "%.2f"|format(m.metrics.coverage) if m.metrics.coverage is not
+            none else "—" }}
+          </td>
+        </tr>
+        <tr>
+          <td>GT band</td>
+          <td>
+            {% if m.metrics.gt_band_lo is not none %}{{
+            "%.2f"|format(m.metrics.gt_band_lo) }}–{{
+            "%.2f"|format(m.metrics.gt_band_hi) }}{% else %}—{% endif %}
+          </td>
+        </tr>
+      </table>
+      <div class="flags">
+        {% for kind, label in m.flags %}<span class="flag flag-{{ kind }}"
+          >{{ label }}</span
+        >{% endfor %}
+      </div>
+      {% if m.critic_note %}
+      <div class="critic-note">{{ m.critic_note }}</div>
+      {% endif %}
+      <div class="provenance subtle">
+        {{ m.provenance.source }}{% if m.provenance.license %} · {{
+        m.provenance.license }}{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <div id="live-viewer-slot"></div>
+</section>
+<script type="module" src="/static/spotlight.js"></script>
+{% endblock %}

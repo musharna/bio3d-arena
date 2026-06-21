@@ -440,6 +440,24 @@ def tasks_page(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(request, "tasks.html", {"tasks": rows})
 
 
+@app.get("/spotlight", response_class=HTMLResponse)
+def spotlight_index(request: Request):
+    from . import spotlight
+
+    subjects = sorted(spotlight.SPOTLIGHTS, key=lambda s: (not s["featured"], s["order"]))
+    return templates.TemplateResponse(request, "spotlight_index.html", {"subjects": subjects})
+
+
+@app.get("/spotlight/{slug}", response_class=HTMLResponse)
+def spotlight_page(slug: str, request: Request, db: Session = Depends(get_db)):
+    from . import spotlight
+
+    data = spotlight.build_spotlight(db, slug)
+    if data is None:
+        raise HTTPException(404, "spotlight not found")
+    return templates.TemplateResponse(request, "spotlight.html", {"s": data})
+
+
 # ------------------------------------------------------------------------ admin
 
 
