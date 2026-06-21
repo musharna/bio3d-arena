@@ -62,12 +62,16 @@ def ingest_found(
             out.license = lic
             out.attribution = ann.get("author") or ann.get("user", {}).get("displayName")
             out.external_url = ann.get("uri")
-            db.commit()  # per-object: short write lock
-            if score_fn is not None and depiction == "whole_plant":
-                score_fn(db, out)
-                db.commit()
+            db.commit()  # provenance committed → object is hosted
             report["hosted"] += 1
             report["by_depiction"][depiction] = report["by_depiction"].get(depiction, 0) + 1
+            if score_fn is not None and depiction == "whole_plant":
+                try:
+                    score_fn(db, out)
+                    db.commit()
+                except Exception as e:  # noqa: BLE001 — scoring is best-effort; object stays hosted
+                    print(f"  score failed for {out.id}: {e}")
+                    db.rollback()
         except Exception as e:  # noqa: BLE001 — best-effort; one bad object never aborts
             print(f"  skip {uid}: {e}")
             db.rollback()
@@ -98,15 +102,17 @@ def main() -> int:
         return 0
 
     db = SessionLocal()
-    report = ingest_found(
-        db,
-        uids,
-        fetch_annotations=objaverse.load_annotations,
-        fetch_objects=lambda u: objaverse.load_objects(u),
-        score_fn=None if args.no_score else recon_service.score_and_store,
-    )
-    print(report)
-    db.close()
+    try:
+        report = ingest_found(
+            db,
+            uids,
+            fetch_annotations=objaverse.load_annotations,
+            fetch_objects=lambda u: objaverse.load_objects(u),
+            score_fn=None if args.no_score else recon_service.score_and_store,
+        )
+        print(report)
+    finally:
+        db.close()
     return 0
 
 

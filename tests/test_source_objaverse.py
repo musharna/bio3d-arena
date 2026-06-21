@@ -51,6 +51,7 @@ def test_ingest_found_hosts_cc_excludes_arr(tmp_path):
         )
         assert report["hosted"] == 1
         assert report["excluded"] == 1
+        assert report["by_depiction"]["whole_plant"] == 1
         out = db.query(ModelOutput).filter(ModelOutput.source == "objaverse").one()
         assert out.license == "CC-BY 4.0"
         assert out.external_url == "https://sketchfab.com/u_cc"
