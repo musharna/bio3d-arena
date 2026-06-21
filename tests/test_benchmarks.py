@@ -89,22 +89,14 @@ def test_load_manifest_rejects_missing_field(tmp_path):
         benchmarks.load_manifest(manifest)
 
 
-def test_bundled_manifest_loads(tmp_path):
+def test_bundled_manifest_loads_empty(tmp_path):
+    # The bundled manifest is intentionally empty: its real reference assets (crambin
+    # protein, heme ligand) were removed as off-mission for the plant benchmark. The
+    # loader must still handle an empty manifest cleanly — zero tasks, no error.
     from pathlib import Path
 
     bench_dir = Path("app/data/benchmarks")
     with SessionLocal() as db:
         summary = benchmarks.load_benchmarks(db, bench_dir / "manifest.json", bench_dir)
         db.rollback()  # don't pollute the shared seeded DB for other tests
-    assert summary["tasks"] >= 1  # crambin (the heme ligand was removed as off-mission)
-
-
-def test_seed_includes_real_benchmarks():
-    summary = seed_all(force=True)
-    assert summary["benchmarks"]["tasks"] >= 1
-    with SessionLocal() as db:
-        from app.models import ModelOutput
-        import json as _json
-
-        outs = db.query(ModelOutput).all()
-        assert any(_json.loads(o.meta_json).get("benchmark") for o in outs)
+    assert summary["tasks"] == 0

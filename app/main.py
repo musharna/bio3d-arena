@@ -528,15 +528,6 @@ def admin_recompute(token: str = Form(...), db: Session = Depends(get_db)):
     return JSONResponse({"status": "recomputed", "detail": detail})
 
 
-@app.post("/admin/revalidate")
-def admin_revalidate(token: str = Form(...), db: Session = Depends(get_db)):
-    _require_admin(token)
-    from . import validation_service
-
-    detail = validation_service.revalidate_all(db)
-    return JSONResponse({"status": "revalidated", "detail": detail})
-
-
 @app.post("/admin/rescore")
 def admin_rescore(token: str = Form(...), db: Session = Depends(get_db)):
     _require_admin(token)
@@ -544,32 +535,6 @@ def admin_rescore(token: str = Form(...), db: Session = Depends(get_db)):
 
     detail = recon_service.rescore_all(db)
     return JSONResponse({"status": "rescored", "detail": detail})
-
-
-@app.get("/validation", response_class=HTMLResponse)
-def validation_page(request: Request, db: Session = Depends(get_db)):
-    from . import validation_service
-
-    return templates.TemplateResponse(
-        request,
-        "validation.html",
-        {
-            "validity": validation_service.validity_leaderboard(db),
-            "reference": validation_service.reference_accuracy(db),
-        },
-    )
-
-
-@app.get("/api/validation")
-def api_validation(db: Session = Depends(get_db)):
-    from . import validation_service
-
-    return JSONResponse(
-        {
-            "validity_leaderboard": validation_service.validity_leaderboard(db),
-            "reference_accuracy": validation_service.reference_accuracy(db),
-        }
-    )
 
 
 @app.get("/benchmark", response_class=HTMLResponse)

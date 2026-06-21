@@ -1,6 +1,6 @@
 """DB wiring for Mode-B recon scoring: call the scorer, map the contract bundle into a
-Metric row (upsert by output_id), best-effort. Mirrors validation_service / the
-/admin/revalidate batch shape — the objective counterpart to the vote-driven Rating.
+Metric row (upsert by output_id), best-effort — the objective counterpart to the
+vote-driven Rating.
 """
 
 from __future__ import annotations

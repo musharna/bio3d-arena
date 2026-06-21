@@ -23,7 +23,7 @@ def setup_module(_module):
 def test_meta_lists_categories_and_criteria():
     meta = client.get("/api/meta").json()
     slugs = {c["slug"] for c in meta["categories"]}
-    assert {"flowers", "proteins", "cells"} <= slugs
+    assert {"flowers", "cells", "roots"} <= slugs
     crit_slugs = {c["slug"] for c in meta["criteria"]}
     assert {"overall", "realism", "morphology"} <= crit_slugs
 

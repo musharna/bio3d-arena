@@ -1,15 +1,1 @@
-[
-  {
-    "task_slug": "crambin-fold",
-    "category": "proteins",
-    "title": "Crambin (1CRN) — real fold reference",
-    "prompt": "A real small protein structure (crambin, 46 residues) as a benchmark reference fold.",
-    "generator_slug": "rcsb-experimental",
-    "generator_name": "RCSB experimental",
-    "file": "assets/1crn.pdb",
-    "format": "pdb",
-    "source": "https://www.rcsb.org/structure/1CRN",
-    "license": "CC0",
-    "attribution": "RCSB PDB (1CRN)"
-  }
-]
+[]

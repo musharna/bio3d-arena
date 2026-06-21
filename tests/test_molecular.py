@@ -40,10 +40,10 @@ def test_validate_rejects_empty_pdb():
 
 def test_ingest_pdb_output():
     # Molecular FORMAT support is retained even though no demo task seeds it; attach the
-    # ingested PDB to an existing on-mission category (proteins).
+    # ingested PDB to an existing category (cells).
     task = client.post(
         "/api/tasks",
-        json={"category": "proteins", "title": "Ingested PDB ligand", "prompt": "x"},
+        json={"category": "cells", "title": "Ingested PDB ligand", "prompt": "x"},
         headers=AUTH,
     ).json()
     r = client.post(
@@ -64,7 +64,7 @@ def test_pdb_asset_served_and_parses():
     # is retained: an ingested PDB output must still be served verbatim and parse.
     task = client.post(
         "/api/tasks",
-        json={"category": "proteins", "title": "Served PDB ligand", "prompt": "x"},
+        json={"category": "cells", "title": "Served PDB ligand", "prompt": "x"},
         headers=AUTH,
     ).json()
     r = client.post(
