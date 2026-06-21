@@ -150,3 +150,29 @@ def test_agreement_returns_spearman_and_rows():
         assert isinstance(agr["rows"], list)
     finally:
         db.close()
+
+
+def test_agreement_dedups_multiple_outputs_per_generator():
+    # A generator with TWO outputs on one task must appear exactly once in the
+    # agreement rows (collapsed to its best chamfer) — not double-counted.
+    db = SessionLocal()
+    try:
+        out = _mk_output(db, "dup")
+        out2 = ModelOutput(
+            task_id=out.task_id,
+            generator_id=out.generator_id,  # SAME generator, second output
+            asset_path="seed/x.glb",
+            asset_format="glb",
+        )
+        db.add(out2)
+        db.flush()
+        recon_service.score_and_store(db, out, scorer=lambda b, t: {**FAKE_CARD, "chamfer": 0.09})
+        recon_service.score_and_store(db, out2, scorer=lambda b, t: {**FAKE_CARD, "chamfer": 0.02})
+        db.commit()
+        agr = recon_service.agreement(db, out.task_id)
+        names = [r["generator"] for r in agr["rows"]]
+        assert len(names) == len(set(names))  # each generator at most once
+        gen_rows = [r for r in agr["rows"] if r["generator"] == "M-dup"]
+        assert len(gen_rows) == 1
+    finally:
+        db.close()

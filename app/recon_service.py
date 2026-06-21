@@ -154,46 +154,52 @@ def agreement(db: Session, task_id: int) -> dict:
         .all()
     )
 
-    entries = []  # {generator, chamfer, bt}
+    # Collapse to one entry per GENERATOR (keyed by stable generator_id, not display
+    # name) — a generator may have multiple outputs on a task and would otherwise be
+    # double-counted in the rank lists, distorting the Spearman. Keep the best (lowest)
+    # chamfer per generator, consistent with "this method's best recon".
+    best: dict[int, dict] = {}
     for o in outs:
         m = db.execute(select(Metric).where(Metric.output_id == o.id)).scalars().first()
         if m is None or m.status != "ok" or m.chamfer is None:
             continue
-        rating = (
-            db.execute(
-                select(Rating)
-                .where(
-                    Rating.generator_id == o.generator_id,
-                    (Rating.category_id == cat_id) | (Rating.category_id.is_(None)),
+        gid = o.generator_id
+        if gid not in best or m.chamfer < best[gid]["chamfer"]:
+            rating = (
+                db.execute(
+                    select(Rating)
+                    .where(
+                        Rating.generator_id == gid,
+                        (Rating.category_id == cat_id) | (Rating.category_id.is_(None)),
+                    )
+                    .order_by(Rating.category_id.is_(None))  # prefer category-scoped over global
                 )
-                .order_by(Rating.category_id.is_(None))  # prefer category-scoped over global
+                .scalars()
+                .first()
             )
-            .scalars()
-            .first()
-        )
-        entries.append(
-            {
-                "generator": _gen_name(db, o.generator_id),
+            best[gid] = {
+                "generator_id": gid,
+                "generator": _gen_name(db, gid),
                 "chamfer": m.chamfer,
                 "bt": rating.bt_score if rating else None,
             }
-        )
+    entries = list(best.values())
 
     by_chamfer = sorted(entries, key=lambda e: e["chamfer"])  # lower = better
-    metric_rank = {e["generator"]: i + 1 for i, e in enumerate(by_chamfer)}
+    metric_rank = {e["generator_id"]: i + 1 for i, e in enumerate(by_chamfer)}
     with_bt = sorted(
         [e for e in entries if e["bt"] is not None],
         key=lambda e: -e["bt"],  # higher = better
     )
-    vote_rank = {e["generator"]: i + 1 for i, e in enumerate(with_bt)}
+    vote_rank = {e["generator_id"]: i + 1 for i, e in enumerate(with_bt)}
 
-    common = [e["generator"] for e in entries if e["generator"] in vote_rank]
+    common = [e["generator_id"] for e in entries if e["generator_id"] in vote_rank]
     sp = _spearman([metric_rank[g] for g in common], [vote_rank[g] for g in common])
     rows = [
         {
             "generator": e["generator"],
-            "metric_rank": metric_rank[e["generator"]],
-            "vote_rank": vote_rank.get(e["generator"]),
+            "metric_rank": metric_rank[e["generator_id"]],
+            "vote_rank": vote_rank.get(e["generator_id"]),
         }
         for e in by_chamfer
     ]
