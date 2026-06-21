@@ -22,6 +22,7 @@ from .models import (
     Criterion,
     Generator,
     GoldPair,
+    Metric,
     ModelOutput,
     Rating,
     ReconTask,
@@ -256,8 +257,10 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
                 GoldPair,
                 Submission,
                 Rating,
+                Metric,  # child of ModelOutput — delete before it
                 VoterSession,
                 ModelOutput,
+                ReconTask,  # child of Task — delete before it
                 Task,
                 Generator,
                 Criterion,

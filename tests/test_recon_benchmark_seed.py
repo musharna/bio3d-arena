@@ -6,11 +6,30 @@ from __future__ import annotations
 
 from app import recon_service, seed
 from app.database import SessionLocal, init_db
-from app.models import Generator, ReconTask, Task
+from app.models import Generator, Metric, ModelOutput, ReconTask, Task
 
 
 def setup_module(_module):
     init_db()
+
+
+def test_force_reseed_does_not_orphan_recontask_or_metric():
+    # seed_all(force=True) must include ReconTask + Metric in its delete cascade, else
+    # re-seeding leaves rows pointing at deleted Tasks/outputs and counts grow unbounded.
+    seed.seed_all(force=True)
+    n1 = SessionLocal().query(ReconTask).count()
+    seed.seed_all(force=True)  # re-seed
+    db = SessionLocal()
+    try:
+        assert db.query(ReconTask).count() == n1  # no accumulation
+        # no orphans: every ReconTask points at a live Task, every Metric at a live output
+        for rt in db.query(ReconTask).all():
+            assert db.get(Task, rt.task_id) is not None
+        for m in db.query(Metric).all():
+            assert db.get(ModelOutput, m.output_id) is not None
+    finally:
+        db.close()
+        init_db()  # restore a clean schema for the module's other tests
 
 
 EXPECTED_SLUGS = {
