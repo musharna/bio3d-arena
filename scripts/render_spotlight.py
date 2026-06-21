@@ -98,7 +98,13 @@ def _browser_capture_factory():
                     "</head><body style='margin:0'>"
                     f'<model-viewer id="mv" src="/{glb_rel}" '
                     'camera-orbit="30deg 75deg auto" environment-image="neutral" '
-                    'style="width:512px;height:512px;background:#fff">'
+                    'shadow-intensity="1" shadow-softness="0.8" '
+                    # Mid-gray studio gradient (not white): untextured laser-scan meshes
+                    # render near-white and vanish on a white canvas (independent-critic
+                    # FAIL 2026-06-21). Gray lifts their silhouette; colored AI/artist
+                    # models still read well on neutral gray.
+                    'style="width:512px;height:512px;'
+                    'background:linear-gradient(180deg,#b4babf 0%,#6f767c 100%)">'
                     "</model-viewer></body></html>"
                 ).encode()
                 self.send_response(200)
