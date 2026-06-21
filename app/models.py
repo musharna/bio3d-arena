@@ -268,3 +268,18 @@ class Metric(Base):
     status: Mapped[str] = mapped_column(String(16), default="ok")  # ok|error|skipped
     detail: Mapped[str] = mapped_column(Text, default="")
     computed: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class ReconTask(Base):
+    """Binds a Task to its recon GT-bundle key (species slug). Kept as a separate table
+    (not a Task column) so Task stays generic and we avoid an ALTER on the create_all-only
+    schema. A Task with a ReconTask row IS a Mode-B recon benchmark; the slug (e.g.
+    'arabidopsis_thaliana') is the held-out GT key the scoring service resolves — decoupled
+    from bio3d DB PKs so the same private GT is reusable across DB resets (D2)."""
+
+    __tablename__ = "recon_task"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("task.id"), unique=True, index=True)
+    species_slug: Mapped[str] = mapped_column(String(64), index=True)
+    species_name: Mapped[str] = mapped_column(String(128), default="")

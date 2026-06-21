@@ -24,6 +24,7 @@ from .models import (
     GoldPair,
     ModelOutput,
     Rating,
+    ReconTask,
     Submission,
     Task,
     Vote,
@@ -84,6 +85,64 @@ def _seed_reference_demo(db: Session) -> int:
         added += 1
     db.flush()
     return added
+
+
+# The launch recon bake-off: (gt-bundle species slug, display name, prompt). The slug is
+# the held-out GT key the scoring service resolves (gt_bundle_prod) — keep these EXACT.
+RECON_SPECIES = [
+    ("arabidopsis_thaliana", "Arabidopsis thaliana", "thale cress whole-plant rosette"),
+    ("solanum_lycopersicum", "Solanum lycopersicum", "tomato whole plant"),
+    ("zea_mays", "Zea mays", "maize whole plant"),
+    ("pinus_sylvestris", "Pinus sylvestris", "Scots pine sapling"),
+]
+# The launch method roster (D5): single-image→3D reconstructors.
+RECON_GENERATORS = [("trellis", "TRELLIS"), ("hunyuan3d", "Hunyuan3D")]
+
+
+def seed_recon_benchmark(db: Session) -> dict:
+    """Idempotent B5-prep: a 'plants' category, the 4 species Tasks each bound to their
+    GT-bundle species slug (ReconTask), and the 2 method Generators. After this runs, the
+    moment recon GLBs are ingested onto a species Task, /admin/rescore resolves the slug and
+    scores against the live service — no further scaffolding needed."""
+    cat = db.execute(select(Category).where(Category.slug == "plants")).scalars().first()
+    if cat is None:
+        cat = Category(slug="plants", name="Plants", description="Whole plants (image→3D recon)")
+        db.add(cat)
+        db.flush()
+
+    n_tasks = 0
+    for slug, sci_name, descr in RECON_SPECIES:
+        title = f"{sci_name} — single-image → 3D reconstruction"
+        task = (
+            db.execute(select(Task).where(Task.title == title, Task.category_id == cat.id))
+            .scalars()
+            .first()
+        )
+        if task is None:
+            task = Task(
+                category_id=cat.id,
+                title=title,
+                prompt=f"Reconstruct a 3D model of a {descr} from a single RGB image.",
+                criteria_note="Scored against held-out GT scans (Mode-B) + perceptual votes (Mode-A).",
+            )
+            db.add(task)
+            db.flush()
+        rt = db.execute(select(ReconTask).where(ReconTask.task_id == task.id)).scalars().first()
+        if rt is None:
+            db.add(ReconTask(task_id=task.id, species_slug=slug, species_name=sci_name))
+        else:
+            rt.species_slug, rt.species_name = slug, sci_name
+        n_tasks += 1
+
+    n_gens = 0
+    for gslug, gname in RECON_GENERATORS:
+        gen = db.execute(select(Generator).where(Generator.slug == gslug)).scalars().first()
+        if gen is None:
+            db.add(Generator(slug=gslug, name=gname, kind="model", is_anonymous=True))
+        n_gens += 1
+
+    db.flush()
+    return {"tasks": n_tasks, "generators": n_gens}
 
 
 # (slug, name, description)
@@ -284,6 +343,10 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
 
         for out in db.execute(select(ModelOutput)).scalars().all():
             validation_service.validate_and_store(db, out)
+
+        # Recon Mode-B benchmark scaffolding (species Tasks + slug mapping + method gens),
+        # so ingested recon GLBs are scorable immediately.
+        seed_recon_benchmark(db)
 
         db.commit()
         return {

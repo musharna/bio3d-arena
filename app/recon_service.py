@@ -16,12 +16,20 @@ from .storage import get_storage
 MESH_FORMATS = {"glb", "gltf"}
 
 
-def _default_scorer(glb_bytes: bytes, task_id: int) -> dict:
-    """Live scorer for the batch path. NOTE (B5 gap): the service GT bundle is keyed by
-    SPECIES SLUG, not bio3d Task PK — until Tasks carry a species slug (seed/B5), this
-    passes the PK as the slug and the service answers 404 (clear, fail-loud). Inject a
-    scorer that supplies the real slug to score live before B5 lands."""
-    return score_output(glb_bytes, str(task_id), base_url=config.RECON_SCORER_URL)
+def species_slug_for_task(db: Session, task_id: int) -> str | None:
+    """The GT-bundle species slug bound to a Task (via ReconTask), or None if the Task
+    is not a Mode-B recon benchmark. This is the key the scoring service resolves GT by."""
+    from .models import ReconTask
+
+    rt = db.execute(select(ReconTask).where(ReconTask.task_id == task_id)).scalars().first()
+    return rt.species_slug if rt else None
+
+
+def _default_scorer(glb_bytes: bytes, species_slug: str | None) -> dict:
+    """Live scorer for the batch path. `species_slug` is the GT-bundle key resolved from
+    the output's Task (ReconTask). rescore_all only reaches this for recon-benchmark
+    outputs (slug present); a None slug here would 404 (fail-loud)."""
+    return score_output(glb_bytes, str(species_slug), base_url=config.RECON_SCORER_URL)
 
 
 def _get_or_create_metric(db: Session, output_id: int) -> Metric:
@@ -42,7 +50,9 @@ def score_and_store(db: Session, output: ModelOutput, *, scorer=_default_scorer)
     m = _get_or_create_metric(db, output.id)
     try:
         glb = get_storage().read(output.asset_path)
-        card = scorer(glb, output.task_id)
+        # The scorer resolves GT by SPECIES SLUG (not the bio3d Task PK); injected fakes
+        # ignore the second arg, so unit tests pass with a None slug.
+        card = scorer(glb, species_slug_for_task(db, output.task_id))
         # Live §11 envelope: {task_id, bundle_version, metrics:{..., params:{...}}}.
         metrics = card.get("metrics") or {}
         params = metrics.get("params") or {}
@@ -72,12 +82,19 @@ def score_and_store(db: Session, output: ModelOutput, *, scorer=_default_scorer)
 
 
 def rescore_all(db: Session, *, scorer=_default_scorer) -> dict:
-    """Batch: score every non-gold mesh output. Non-mesh (PDB/SDF) outputs are skipped."""
+    """Batch: score every non-gold mesh output that belongs to a recon-benchmark Task.
+
+    Skips non-mesh (PDB/SDF) outputs AND mesh outputs whose Task has no species slug
+    (the demo meshes) — only Mode-B recon-benchmark GLBs are scored against the service.
+    """
     outs = db.execute(select(ModelOutput).where(ModelOutput.is_gold.is_(False))).scalars().all()
     scored = errors = skipped = 0
     for o in outs:
         if (o.asset_format or "").lower() not in MESH_FORMATS:
             skipped += 1
+            continue
+        if species_slug_for_task(db, o.task_id) is None:
+            skipped += 1  # not a recon-benchmark task
             continue
         m = score_and_store(db, o, scorer=scorer)
         if m.status == "ok":
