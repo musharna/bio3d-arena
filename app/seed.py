@@ -151,6 +151,93 @@ def seed_recon_benchmark(db: Session) -> dict:
     return {"tasks": n_tasks, "generators": n_gens}
 
 
+# Synthetic-plant fidelity launch types — reuse the recon binomial slugs so the existing
+# bake-off GLBs populate these tasks day-one (cross-paradigm: procedural vs reconstructed).
+SYNTH_TYPES = [(slug, sci_name) for slug, sci_name, _descr in RECON_SPECIES]
+
+
+def _synth_title(sci_name: str) -> str:
+    return f"{sci_name} — botanical plausibility"
+
+
+def synth_task_for_slug(db: Session, slug: str):
+    """Resolve a binomial species slug to its synthetic-plants Task (by title), or None."""
+    by_slug = dict(SYNTH_TYPES)
+    sci = by_slug.get(slug)
+    if sci is None:
+        return None
+    cat = db.execute(select(Category).where(Category.slug == "synthetic-plants")).scalars().first()
+    if cat is None:
+        return None
+    return (
+        db.execute(select(Task).where(Task.title == _synth_title(sci), Task.category_id == cat.id))
+        .scalars()
+        .first()
+    )
+
+
+def seed_synthetic_plants(db: Session) -> dict:
+    """Idempotent: a 'synthetic-plants' category, a 'botanical_plausibility' criterion, one
+    Task per plant type, and the 'pd-archetype' procedural generator. Votes-only — the
+    existing arena + Bradley-Terry leaderboard rank generators by botanical plausibility."""
+    cat = db.execute(select(Category).where(Category.slug == "synthetic-plants")).scalars().first()
+    if cat is None:
+        cat = Category(
+            slug="synthetic-plants",
+            name="Synthetic Plants",
+            description="Procedurally/AI-generated 3D plants, judged on botanical plausibility.",
+        )
+        db.add(cat)
+        db.flush()
+
+    crit = (
+        db.execute(select(Criterion).where(Criterion.slug == "botanical_plausibility"))
+        .scalars()
+        .first()
+    )
+    if crit is None:
+        db.add(
+            Criterion(
+                slug="botanical_plausibility",
+                name="Botanical plausibility",
+                description="Which looks more like a botanically real plant?",
+            )
+        )
+
+    n_tasks = 0
+    for _slug, sci_name in SYNTH_TYPES:
+        title = _synth_title(sci_name)
+        task = (
+            db.execute(select(Task).where(Task.title == title, Task.category_id == cat.id))
+            .scalars()
+            .first()
+        )
+        if task is None:
+            db.add(
+                Task(
+                    category_id=cat.id,
+                    title=title,
+                    prompt=f"Generate a botanically plausible 3D model of {sci_name}.",
+                    criteria_note="Ranked by pairwise 'more botanically plausible?' votes (Mode-A).",
+                )
+            )
+        n_tasks += 1
+
+    gen = db.execute(select(Generator).where(Generator.slug == "pd-archetype")).scalars().first()
+    if gen is None:
+        db.add(
+            Generator(
+                slug="pd-archetype",
+                name="PD archetype (procedural)",
+                kind="model",
+                is_anonymous=True,
+            )
+        )
+
+    db.flush()
+    return {"tasks": n_tasks, "generators": 1}
+
+
 # (slug, name, description)
 CATEGORIES = [
     ("cells", "Cells", "Single cells and organelles"),
@@ -355,6 +442,7 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
         # Recon Mode-B benchmark scaffolding (species Tasks + slug mapping + method gens),
         # so ingested recon GLBs are scorable immediately.
         seed_recon_benchmark(db)
+        seed_synthetic_plants(db)
 
         db.commit()
         return {
