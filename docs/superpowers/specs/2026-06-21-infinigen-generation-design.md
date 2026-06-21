@@ -2,7 +2,16 @@
 
 > Status: approved approach (brainstorm 2026-06-21). Sixth source increment for Subject
 > Spotlight, after the image-to-3D API generation. Adds a PROCEDURAL generator class
-> (Infinigen, BSD-3, local, no API key) — a generic bush first, tomato-tuning deferred.
+> (Infinigen, BSD-3, local, no API key) — a generic plant first, tomato-tuning deferred.
+>
+> **OPERATIONAL REALITY (post-build, see .superpowers/sdd/progress-infinigen.md):** "BushFactory"
+> below does not exist in the pinned infinigen 1.19.1 (use `Succulent`/`SnakePlant`, the default).
+> `Flowerplant`/`Fern` export EMPTY OBJs (geometry only in instances; even infinigen.tools.export
+> gives empty) — they need a Blender realize+decimate path. The minimal install needs the
+> `infinigen_gpl` git submodule (`git submodule update --init`). The build (category + ingest
+> adapter, 150 tests) is MERGED; a _presentable_ live procedural render is a DEFERRED follow-up —
+> the Succulent instance renders as a low-relief blob (independent-critic FAIL), so the live
+> procedural card is deferred pending factory/seed/geometry iteration.
 
 ## Goal
 
