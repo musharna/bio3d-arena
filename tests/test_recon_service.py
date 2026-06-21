@@ -43,6 +43,8 @@ def fake_card(chamfer: float = 0.013) -> dict:
                 "scale_cm": None,
             },
         },
+        "band": {"band_median": 0.10, "band_p75": 0.14, "n_baseline": 5},
+        "within_variation": True,
     }
 
 
@@ -77,9 +79,9 @@ def test_score_and_store_maps_contract_to_metric():
         assert m.icp_seed == 0  # params.seed
         assert m.scorer_version == "unit_bbox_chamfer"  # params.metric
         assert m.gt_version_hash == "sha256:cafe"  # bundle_version (D2 pin)
-        # live service has no PASS/FAIL verdict or GT-LOO band → null
-        assert m.species_verdict is None
-        assert m.gt_band_lo is None and m.gt_band_hi is None
+        # GT natural-variation band + within-variation verdict (live channel)
+        assert m.gt_band_lo == 0.10 and m.gt_band_hi == 0.14  # band_median / band_p75
+        assert m.species_verdict == "PASS"  # within_variation True → PASS
     finally:
         db.close()
 

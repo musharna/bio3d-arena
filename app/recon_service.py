@@ -63,11 +63,16 @@ def score_and_store(db: Session, output: ModelOutput, *, scorer=_default_scorer)
         m.fscore = metrics.get("fscore_at_tau")
         m.tau = params.get("tau")
         m.coverage = metrics.get("coverage")
-        # The live service returns no PASS/FAIL verdict or GT-LOO band — leave null
-        # (the /benchmark verdict + GT-band columns render '—' until a band channel ships).
-        m.species_verdict = metrics.get("species_verdict")
-        m.gt_band_lo = None
-        m.gt_band_hi = None
+        # GT natural-variation band (gt-to-gt LOO) + within-variation verdict — the
+        # methodology's holistic measure: "is the recon within real conspecific shape
+        # variation?" (chamfer vs the P75 band), not just "is the number small?".
+        band = card.get("band") or {}
+        m.gt_band_lo = band.get("band_median")
+        m.gt_band_hi = band.get("band_p75")
+        wv = card.get("within_variation")
+        m.species_verdict = (
+            ("PASS" if wv else "FAIL") if wv is not None else metrics.get("species_verdict")
+        )
         m.point_count = params.get("n_points")
         m.icp_seed = params.get("seed")
         m.scorer_version = str(params.get("metric") or "")
