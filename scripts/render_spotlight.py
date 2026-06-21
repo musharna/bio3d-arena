@@ -35,6 +35,12 @@ def render_outputs(db, output_ids: list[int], *, capture) -> dict:
     for oid in output_ids:
         out = db.get(ModelOutput, oid)
         c = _get_or_create_critique(db, oid)
+        if out is None:
+            c.status = "error"
+            c.critic_note = f"output {oid} not found"
+            errors += 1
+            db.commit()
+            continue
         try:
             glb_abs = str(Path(config.ASSET_DIR) / out.asset_path)
             png = capture(glb_abs)
