@@ -65,7 +65,7 @@ def ingest_agrigen(
             out.source = "procedural:agrigen"
             out.license = AGRIGEN_LICENSE
             out.attribution = f"{AGRIGEN_ATTRIBUTION} [{variant}]"
-            out.external_url = ""
+            out.external_url = None  # internal generator: hosted locally, no external link
             db.commit()  # provenance committed → hosted
             report["hosted"] += 1
             report["by_variant"][variant] = report["by_variant"].get(variant, 0) + 1
