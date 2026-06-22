@@ -127,10 +127,13 @@ def main() -> int:
     import argparse
     import json
     import os
+    import socket
     import subprocess
     import tempfile
     import urllib.request
     import zipfile
+
+    socket.setdefaulttimeout(60)  # urlretrieve has no timeout arg; bound it via the socket default
 
     from app import recon_service
     from app.database import SessionLocal
@@ -179,6 +182,10 @@ def main() -> int:
             with zipfile.ZipFile(zpath) as z:
                 z.extractall(adir)
             glb = work / f"{asset['variant']}.glb"
+            gltfs = list(adir.rglob("*.gltf")) or list(adir.rglob("*.glb"))
+            if not gltfs:
+                print(f"  {asset['variant']}: no glTF in archive")
+                continue
             subprocess.run(
                 [
                     args.blender,
@@ -187,7 +194,7 @@ def main() -> int:
                     str(script),
                     "--",
                     json.dumps(
-                        {"src": str(adir / "scene.gltf"), "out": str(glb), "keep": asset["keep"]}
+                        {"src": str(gltfs[0]), "out": str(glb), "keep": asset["keep"]}
                     ),
                 ],
                 check=True,
