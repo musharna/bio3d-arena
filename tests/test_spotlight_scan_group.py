@@ -203,4 +203,6 @@ def test_procedural_card_renders_under_procedural_group(monkeypatch):
 
     page = TestClient(app).get("/spotlight/proc")
     assert page.status_code == 200
-    assert "Procedural (Infinigen)" in page.text
+    # generator-agnostic header (multiple procedural generators now share the column)
+    assert "Procedural" in page.text
+    assert "Procedural (Infinigen)" not in page.text

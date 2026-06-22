@@ -20,7 +20,7 @@
   {% set found = s.models | selectattr('cls', 'equalto', 'found') | list %}
   {% set groups = [
     ('AI reconstruction', ai),
-    ('Procedural (Infinigen)', procedural),
+    ('Procedural', procedural),
     ('Real scan — whole plant', scan | selectattr('depiction', 'equalto', 'whole_plant') | list),
     ('Real scan — other', scan | rejectattr('depiction', 'equalto', 'whole_plant') | list),
     ('Found — whole plant', found | selectattr('depiction', 'equalto', 'whole_plant') | list),

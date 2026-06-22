@@ -54,3 +54,10 @@ def test_force_mask_alpha_sets_mask_on_textured_material():
     assert mats["leaf"]["doubleSided"] is True
     # the colored (untextured) material is untouched
     assert "alphaMode" not in mats["fruit"]
+
+
+def test_force_mask_alpha_rejects_non_glb():
+    import pytest
+
+    with pytest.raises(ValueError):
+        force_mask_alpha(b"not a glb at all", cutoff=0.4)

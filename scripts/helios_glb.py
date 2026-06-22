@@ -73,6 +73,8 @@ def force_mask_alpha(glb_bytes: bytes, cutoff: float = 0.4) -> bytes:
     choice for billboard foliage. Materials without a base-color texture are left untouched.
     """
     magic, ver, _length = struct.unpack("<III", glb_bytes[:12])
+    if magic != 0x46546C67:  # 'glTF' — fail loud on a non-GLB rather than emitting garbage
+        raise ValueError(f"not a binary GLB (magic={magic:#x})")
     off = 12
     clen, _ctype = struct.unpack("<II", glb_bytes[off : off + 8])
     off += 8
