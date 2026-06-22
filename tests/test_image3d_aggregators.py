@@ -152,3 +152,27 @@ def test_providers_registry_catalog():
     fn = PROVIDERS["fal:trellis"][0]
     assert isinstance(fn, functools.partial)
     assert fn.keywords.get("model") == "fal-ai/trellis"
+
+
+def test_fal_transport_multiview_builds_image_urls():
+    """The real FalTransport.submit multiview branch packs N views into image_urls (no network)."""
+    from app.image3d import FalTransport
+
+    captured = {}
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"request_id": "r", "status_url": "s", "response_url": "x"}
+
+    class FakeClient:
+        def post(self, url, headers, json):
+            captured["json"] = json
+            return FakeResp()
+
+    t = FalTransport(client=FakeClient())
+    t.submit([b"v1", b"v2"], "fal-ai/trellis/multi", "k", "multiview")
+    urls = captured["json"]["input"]["image_urls"]
+    assert len(urls) == 2 and all(u.startswith("data:image") for u in urls)

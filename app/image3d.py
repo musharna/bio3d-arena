@@ -127,8 +127,9 @@ def generate_fal(
 ) -> bytes:
     """fal.ai →3D for a given model id: submit → poll → download GLB.
 
-    `source` is image bytes when mode="image" (default), or a text prompt (str) when mode="text"
-    (text→3D). Text→3D outputs are organ/part-level, not faithful whole plants.
+    `source` is image bytes when mode="image" (default), a text prompt (str) when mode="text"
+    (text→3D), or a list of view-image bytes when mode="multiview" (multi-view reconstruction).
+    Text→3D outputs are organ/part-level, not faithful whole plants.
     """
     t = transport or FalTransport()
     req = t.submit(source, model, api_key, mode)
@@ -167,7 +168,12 @@ class FalTransport:
         return {"Authorization": f"Key {api_key}"}
 
     def submit(self, source, model: str, api_key: str, mode: str = "image") -> dict:
-        inp = {"prompt": source} if mode == "text" else {"image_url": _data_uri(source)}
+        if mode == "text":
+            inp = {"prompt": source}
+        elif mode == "multiview":  # source is a list of view-image bytes
+            inp = {"image_urls": [_data_uri(v) for v in source]}
+        else:
+            inp = {"image_url": _data_uri(source)}
         r = self._client.post(
             f"{self.BASE}/{model}",
             headers=self._hdr(api_key),
@@ -372,5 +378,23 @@ TEXT_PROVIDERS: dict[str, tuple] = {
         functools.partial(generate_replicate, model="hyper3d/rodin", mode="text"),
         "REPLICATE_API_TOKEN",
         "Rodin text (Replicate)",
+    ),
+}
+
+
+# Multi-view reconstruction providers (mode="multiview"): feed N views → feed-forward MV→mesh GLB.
+# The "compose synthetic views → 3D" path — COLMAP fails to pose AI-generated views, so we skip SfM
+# and feed views directly to a feed-forward model. fn is called as fn(list_of_view_bytes, api_key=).
+# Verify exact endpoint paths/output shapes at the key-gated live run.
+MULTIVIEW_PROVIDERS: dict[str, tuple] = {
+    "recon:trellis-mv": (
+        functools.partial(generate_fal, model="fal-ai/trellis/multi", mode="multiview"),
+        "FAL_KEY",
+        "TRELLIS multi-view (fal)",
+    ),
+    "recon:hunyuan3d-v2-mv": (
+        functools.partial(generate_fal, model="fal-ai/hunyuan3d/v2/multi-view", mode="multiview"),
+        "FAL_KEY",
+        "Hunyuan3D v2 multi-view (fal)",
     ),
 }

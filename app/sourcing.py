@@ -82,7 +82,11 @@ def source_class(source: str | None) -> str:
     """Group key for the spotlight: 'ai' (our recon — local or via an image-to-3D API),
     'procedural' (rule-based generators: Infinigen, Helios, AgriGen, L-Py, ...), 'scan'
     (real scan dataset), 'found' (artist repos like Objaverse/Sketchfab)."""
-    if source == "bio3d-arena" or (source or "").startswith("api:"):
+    if (
+        source == "bio3d-arena"
+        or (source or "").startswith("api:")
+        or (source or "").startswith("recon:")  # multi-view reconstruction is AI recon
+    ):
         return "ai"
     if source == "infinigen" or (source or "").startswith("procedural:"):
         return "procedural"
