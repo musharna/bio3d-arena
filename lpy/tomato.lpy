@@ -80,7 +80,7 @@ def calyx_for(n=3, scale=1.0):
 
 module Apex(n)
 
-# start heading UP (+H along +Z): pitch turtle up front
+# relies on PlantGL's default turtle heading (+H = +Z); no explicit pitch needed
 Axiom: _(0.32) ,(5) Apex(9)
 
 derivation length: 9

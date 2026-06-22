@@ -61,7 +61,7 @@ def test_ingest_lpy_skips_unconvertible(tmp_path):
         def raising_to_glb(path):
             raise MeshConvertError("bad obj")
 
-        report = ingest_lpy(db, [str(tmp_path / "x.obj")], to_glb=raising_to_glb)
+        report = ingest_lpy(db, [str(tmp_path / "x.obj")], to_glb=raising_to_glb, variant="lpySkip")
         assert report["skipped"] == 1
         assert report["hosted"] == 0
     finally:
