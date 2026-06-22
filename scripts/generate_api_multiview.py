@@ -20,6 +20,7 @@ from sqlalchemy import select  # noqa: E402
 from app import ingest  # noqa: E402
 from app.models import Task  # noqa: E402
 
+# Reuses the recon subject Task (its GT bundle) so the recon scorer binds; the modality differs (N views).
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
 
 
@@ -71,6 +72,8 @@ def generate_api_multiview(
                     db.commit()
                 except Exception as e:  # noqa: BLE001 — scoring best-effort; object stays hosted
                     print(f"  score failed for {out.id}: {e}")
+                    # Guard the rollback: a secondary failure must NOT escape to the outer except
+                    # (it would double-count this provider as generated+error).
                     try:
                         db.rollback()
                     except Exception:  # noqa: BLE001

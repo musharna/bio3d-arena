@@ -110,8 +110,14 @@ class TripoTransport:
         return r.content
 
 
-def _data_uri(image_bytes: bytes, mime: str = "image/jpeg") -> str:
-    """Inline an image as a data URI for APIs that take an image_url string."""
+def _data_uri(image_bytes: bytes, mime: str | None = None) -> str:
+    """Inline an image as a data URI for APIs that take an image_url string.
+
+    Sniffs PNG vs JPEG from the magic bytes (multi-view view sets may be PNG) so the declared
+    mime matches the payload; falls back to image/jpeg.
+    """
+    if mime is None:
+        mime = "image/png" if image_bytes[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
     return f"data:{mime};base64," + base64.b64encode(image_bytes).decode("ascii")
 
 
