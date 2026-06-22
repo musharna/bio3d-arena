@@ -3,8 +3,9 @@
 prompt, TEXT_PROVIDERS, and the recon scorer. Commits per object. API keys come from env and are
 never logged.
 
-Text→3D produces ORGAN/part-level meshes, not faithful whole plants (field-map verified) — these are
-the generative-3D baseline the procedural path is measured against, flagged `modality=text` on ingest.
+Text→3D produces ORGAN/part-level meshes, not faithful whole plants (field-map verified) — these are the
+generative-3D baseline (organ/blob-level QUALITY) the procedural path is measured against; targets the
+whole plant (depiction=whole_plant, like the image-recon baseline) and is flagged `modality=text`.
 Key-gated: a live run needs FAL_KEY / REPLICATE_API_TOKEN.
 """
 

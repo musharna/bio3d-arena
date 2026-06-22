@@ -339,8 +339,8 @@ PROVIDERS: dict[str, tuple] = {
 
 
 # Text→3D providers (a text PROMPT instead of an image; mode="text"). These produce ORGAN/part-level
-# meshes, NOT faithful whole plants — wired as the generative-3D baseline, flagged organ-level on
-# ingest. Output key varies per model (model_glb vs model_mesh) — handled in the transports' poll.
+# meshes, NOT faithful whole plants — the generative-3D baseline, flagged modality=text on ingest.
+# Output key varies per model (model_glb vs model_mesh) — handled in the transports' poll.
 # Verify exact model paths/output shapes at the key-gated live run.
 TEXT_PROVIDERS: dict[str, tuple] = {
     "fal:hunyuan3d-v3-text": (

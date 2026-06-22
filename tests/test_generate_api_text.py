@@ -52,6 +52,7 @@ def test_generate_api_text_hosts_with_text_modality(tmp_path):
         assert len(hit) == 1
         meta = json.loads(hit[0].meta_json)
         assert meta["modality"] == "text" and meta["from_prompt"] is True
+        assert meta["depiction"] == "whole_plant"  # targets the whole plant, like image-recon baseline
         assert "text→3D" in hit[0].attribution
     finally:
         db.close()
