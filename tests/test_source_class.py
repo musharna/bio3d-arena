@@ -34,3 +34,14 @@ def test_source_class_infinigen_is_procedural():
     assert source_class("api:tripo") == "ai"  # unchanged
     assert source_class("plant3d") == "scan"  # unchanged
     assert source_class("objaverse") == "found"  # unchanged
+
+
+def test_source_class_procedural_prefix():
+    from app.sourcing import source_class
+
+    assert source_class("procedural:helios") == "procedural"
+    assert source_class("procedural:agrigen") == "procedural"
+    assert source_class("infinigen") == "procedural"  # unchanged
+    assert source_class("api:tripo") == "ai"  # unchanged
+    assert source_class("plant3d") == "scan"  # unchanged
+    assert source_class("objaverse") == "found"  # unchanged

@@ -80,11 +80,11 @@ SCAN_SOURCES = frozenset(SCAN_DATASETS)
 
 def source_class(source: str | None) -> str:
     """Group key for the spotlight: 'ai' (our recon — local or via an image-to-3D API),
-    'procedural' (rule-based generators like Infinigen), 'scan' (real scan dataset),
-    'found' (artist repos like Objaverse/Sketchfab)."""
+    'procedural' (rule-based generators: Infinigen, Helios, AgriGen, L-Py, ...), 'scan'
+    (real scan dataset), 'found' (artist repos like Objaverse/Sketchfab)."""
     if source == "bio3d-arena" or (source or "").startswith("api:"):
         return "ai"
-    if source == "infinigen":
+    if source == "infinigen" or (source or "").startswith("procedural:"):
         return "procedural"
     if source in SCAN_SOURCES:
         return "scan"
