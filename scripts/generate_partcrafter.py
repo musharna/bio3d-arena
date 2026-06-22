@@ -179,19 +179,24 @@ def main() -> int:
     if blender.exists():
         script = work / "dec.py"
         script.write_text(_DECIMATE)
-        subprocess.run(
-            [
-                str(blender),
-                "-b",
-                "-P",
-                str(script),
-                "--",
-                json.dumps({"src": str(raw), "out": str(glb), "max_faces": 60000}),
-            ],
-            check=True,
-            timeout=300,
-        )
+        try:
+            subprocess.run(
+                [
+                    str(blender),
+                    "-b",
+                    "-P",
+                    str(script),
+                    "--",
+                    json.dumps({"src": str(raw), "out": str(glb), "max_faces": 60000}),
+                ],
+                check=True,
+                timeout=300,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
+            print(f"  Blender decimate failed: {e}")
+            return 1
     else:
+        print(f"  Blender not found at {blender} — ingesting full-res")
         glb = raw  # no Blender → ingest full-res
 
     db = SessionLocal()
