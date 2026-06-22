@@ -18,8 +18,9 @@ class FakeFalTransport:
         self._glb = glb
         self.calls = []
 
-    def submit(self, image_bytes, model, api_key):
+    def submit(self, source, model, api_key, mode="image"):
         self.calls.append(("submit", model))
+        self.last_source, self.last_mode = source, mode
         return {"request_id": "r1"}
 
     def poll(self, req, api_key):
@@ -60,8 +61,9 @@ class FakeReplicateTransport:
         self._glb = glb
         self.calls = []
 
-    def submit(self, image_bytes, model, api_key):
+    def submit(self, source, model, api_key, mode="image"):
         self.calls.append(("submit", model))
+        self.last_source, self.last_mode = source, mode
         return {"get_url": "https://api.replicate.com/v1/predictions/p1"}
 
     def poll(self, req, api_key):
@@ -96,6 +98,43 @@ def test_generate_replicate_times_out():
         generate_replicate(
             b"img", api_key="k", model="m", transport=t, timeout_s=0, poll_interval_s=0
         )
+
+
+def test_generate_fal_text_mode_passes_prompt():
+    glb = _box_glb()
+    t = FakeFalTransport(["COMPLETED"], "https://fal/x.glb", glb)
+    out = generate_fal(
+        "a tomato plant", api_key="k", model="fal-ai/hunyuan3d-v3/text-to-3d",
+        mode="text", transport=t, poll_interval_s=0,
+    )
+    assert out == glb
+    assert t.last_mode == "text" and t.last_source == "a tomato plant"
+
+
+def test_generate_replicate_text_mode_passes_prompt():
+    glb = _box_glb()
+    t = FakeReplicateTransport(["succeeded"], "https://rep/x.glb", glb)
+    out = generate_replicate(
+        "a tomato fruit", api_key="k", model="tencent/hunyuan-3d-3.1",
+        mode="text", transport=t, poll_interval_s=0,
+    )
+    assert out == glb
+    assert t.last_mode == "text" and t.last_source == "a tomato fruit"
+
+
+def test_text_providers_catalog():
+    import functools
+
+    from app.image3d import TEXT_PROVIDERS
+
+    fal = {k: v for k, v in TEXT_PROVIDERS.items() if k.startswith("fal:")}
+    rep = {k: v for k, v in TEXT_PROVIDERS.items() if k.startswith("replicate:")}
+    assert len(fal) >= 3 and all(v[1] == "FAL_KEY" for v in fal.values())
+    assert len(rep) >= 2 and all(v[1] == "REPLICATE_API_TOKEN" for v in rep.values())
+    assert all(k.endswith("-text") for k in TEXT_PROVIDERS)
+    # text partials pre-bind mode="text" so the adapter can call fn(prompt, api_key=...)
+    fn = TEXT_PROVIDERS["fal:hunyuan3d-v3-text"][0]
+    assert isinstance(fn, functools.partial) and fn.keywords.get("mode") == "text"
 
 
 def test_providers_registry_catalog():

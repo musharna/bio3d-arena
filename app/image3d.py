@@ -116,17 +116,22 @@ def _data_uri(image_bytes: bytes, mime: str = "image/jpeg") -> str:
 
 
 def generate_fal(
-    image_bytes: bytes,
+    source,
     *,
     api_key: str,
     model: str,
+    mode: str = "image",
     transport=None,
     timeout_s: int = 300,
     poll_interval_s: int = 5,
 ) -> bytes:
-    """fal.ai image->3D for a given model id: submit → poll → download GLB."""
+    """fal.ai →3D for a given model id: submit → poll → download GLB.
+
+    `source` is image bytes when mode="image" (default), or a text prompt (str) when mode="text"
+    (text→3D). Text→3D outputs are organ/part-level, not faithful whole plants.
+    """
     t = transport or FalTransport()
-    req = t.submit(image_bytes, model, api_key)
+    req = t.submit(source, model, api_key, mode)
     waited = 0
     while True:
         status, glb_url = t.poll(req, api_key)
@@ -161,11 +166,12 @@ class FalTransport:
     def _hdr(self, api_key: str) -> dict:
         return {"Authorization": f"Key {api_key}"}
 
-    def submit(self, image_bytes: bytes, model: str, api_key: str) -> dict:
+    def submit(self, source, model: str, api_key: str, mode: str = "image") -> dict:
+        inp = {"prompt": source} if mode == "text" else {"image_url": _data_uri(source)}
         r = self._client.post(
             f"{self.BASE}/{model}",
             headers=self._hdr(api_key),
-            json={"input": {"image_url": _data_uri(image_bytes)}},
+            json={"input": inp},
         )
         r.raise_for_status()
         return r.json()  # {request_id, status_url, response_url}
@@ -181,7 +187,8 @@ class FalTransport:
         res = self._client.get(req["response_url"], headers=self._hdr(api_key))
         res.raise_for_status()
         d = res.json()
-        mesh = d.get("model_mesh") or d.get("mesh") or {}
+        # output key varies by model: image→3D uses model_mesh; some text→3D use model_glb.
+        mesh = d.get("model_mesh") or d.get("model_glb") or d.get("mesh") or {}
         return status, (mesh.get("url") if isinstance(mesh, dict) else mesh)
 
     def download(self, url: str) -> bytes:
@@ -191,17 +198,21 @@ class FalTransport:
 
 
 def generate_replicate(
-    image_bytes: bytes,
+    source,
     *,
     api_key: str,
     model: str,
+    mode: str = "image",
     transport=None,
     timeout_s: int = 300,
     poll_interval_s: int = 5,
 ) -> bytes:
-    """Replicate image->3D for a given model: create prediction → poll → download GLB."""
+    """Replicate →3D for a given model: create prediction → poll → download GLB.
+
+    `source` is image bytes when mode="image" (default), or a text prompt (str) when mode="text".
+    """
     t = transport or ReplicateTransport()
-    req = t.submit(image_bytes, model, api_key)
+    req = t.submit(source, model, api_key, mode)
     waited = 0
     while True:
         status, glb_url = t.poll(req, api_key)
@@ -236,11 +247,12 @@ class ReplicateTransport:
     def _hdr(self, api_key: str) -> dict:
         return {"Authorization": f"Bearer {api_key}"}
 
-    def submit(self, image_bytes: bytes, model: str, api_key: str) -> dict:
+    def submit(self, source, model: str, api_key: str, mode: str = "image") -> dict:
+        inp = {"prompt": source} if mode == "text" else {"image": _data_uri(source)}
         r = self._client.post(
             f"{self.BASE}/models/{model}/predictions",
             headers=self._hdr(api_key),
-            json={"input": {"image": _data_uri(image_bytes)}},
+            json={"input": inp},
         )
         r.raise_for_status()
         d = r.json()
@@ -322,5 +334,43 @@ PROVIDERS: dict[str, tuple] = {
         functools.partial(generate_replicate, model="hyper3d/rodin"),
         "REPLICATE_API_TOKEN",
         "Rodin (Replicate)",
+    ),
+}
+
+
+# Text→3D providers (a text PROMPT instead of an image; mode="text"). These produce ORGAN/part-level
+# meshes, NOT faithful whole plants — wired as the generative-3D baseline, flagged organ-level on
+# ingest. Output key varies per model (model_glb vs model_mesh) — handled in the transports' poll.
+# Verify exact model paths/output shapes at the key-gated live run.
+TEXT_PROVIDERS: dict[str, tuple] = {
+    "fal:hunyuan3d-v3-text": (
+        functools.partial(generate_fal, model="fal-ai/hunyuan3d-v3/text-to-3d", mode="text"),
+        "FAL_KEY",
+        "Hunyuan3D v3 text (fal)",
+    ),
+    "fal:tripo-p1-text": (
+        functools.partial(generate_fal, model="tripo3d/p1/text-to-3d", mode="text"),
+        "FAL_KEY",
+        "Tripo P1 text (fal)",
+    ),
+    "fal:tripo-h31-text": (
+        functools.partial(generate_fal, model="tripo3d/h3.1/text-to-3d", mode="text"),
+        "FAL_KEY",
+        "Tripo H3.1 text (fal)",
+    ),
+    "fal:rodin-text": (
+        functools.partial(generate_fal, model="fal-ai/hyper3d/rodin", mode="text"),
+        "FAL_KEY",
+        "Rodin text (fal)",
+    ),
+    "replicate:hunyuan3d-3.1-text": (
+        functools.partial(generate_replicate, model="tencent/hunyuan-3d-3.1", mode="text"),
+        "REPLICATE_API_TOKEN",
+        "Hunyuan3D 3.1 text (Replicate)",
+    ),
+    "replicate:rodin-text": (
+        functools.partial(generate_replicate, model="hyper3d/rodin", mode="text"),
+        "REPLICATE_API_TOKEN",
+        "Rodin text (Replicate)",
     ),
 }
