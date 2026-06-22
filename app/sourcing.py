@@ -86,6 +86,7 @@ def source_class(source: str | None) -> str:
         source == "bio3d-arena"
         or (source or "").startswith("api:")
         or (source or "").startswith("recon:")  # multi-view reconstruction is AI recon
+        or (source or "").startswith("frontier:")  # neural frontier generators (PartCrafter, ...)
     ):
         return "ai"
     if source == "infinigen" or (source or "").startswith("procedural:"):
