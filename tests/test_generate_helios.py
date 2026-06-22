@@ -53,6 +53,47 @@ def test_ingest_helios_hosts_procedural(tmp_path):
         db.close()
 
 
+def test_ingest_helios_caveat_flows_into_meta(tmp_path):
+    """A caveat is stored in meta_json (so the spotlight badges it); omitted when not given."""
+    db = SessionLocal()
+    try:
+        _tomato_task(db)
+        obj = tmp_path / "cav_0.obj"
+        trimesh.creation.box().export(str(obj))
+
+        def fake_to_glb(path):
+            return trimesh.load(path, force="mesh").export(file_type="glb")
+
+        ingest_helios(
+            db,
+            [str(obj)],
+            to_glb=fake_to_glb,
+            variant="heliosCaveat",
+            caveat="FSPM sim mesh \u2014 low standalone fidelity",
+        )
+        out = (
+            db.execute(select(ModelOutput).where(ModelOutput.attribution.contains("heliosCaveat")))
+            .scalars()
+            .one()
+        )
+        assert json.loads(out.meta_json)["caveat"] == "FSPM sim mesh \u2014 low standalone fidelity"
+
+        # no caveat -> no caveat key in meta
+        obj2 = tmp_path / "nocav_0.obj"
+        trimesh.creation.box().export(str(obj2))
+        ingest_helios(db, [str(obj2)], to_glb=fake_to_glb, variant="heliosNoCaveat")
+        out2 = (
+            db.execute(
+                select(ModelOutput).where(ModelOutput.attribution.contains("heliosNoCaveat"))
+            )
+            .scalars()
+            .one()
+        )
+        assert "caveat" not in json.loads(out2.meta_json)
+    finally:
+        db.close()
+
+
 def test_ingest_helios_skips_unconvertible(tmp_path):
     db = SessionLocal()
     try:

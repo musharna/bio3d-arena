@@ -119,6 +119,7 @@ def build_spotlight(db: Session, slug: str) -> dict | None:
                 "found": found,
                 "label": label,
                 "depiction": depiction,
+                "caveat": meta.get("caveat"),
                 "format": o.asset_format,
                 "asset_url": storage.url_for(o.asset_path),
                 "thumbnail_url": storage.url_for(crit.render_path)

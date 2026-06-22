@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.15)
+project(helios)
+set( BASE_DIRECTORY "../.." )
+set( EXECUTABLE_NAME "tomato_gen" )
+set( SOURCE_FILES "main.cpp" )
+set( PLUGINS "canopygenerator" )
+include( "${BASE_DIRECTORY}/core/CMake_project.cmake" )

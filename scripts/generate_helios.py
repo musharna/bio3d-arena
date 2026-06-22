@@ -21,10 +21,22 @@ from app.models import Task  # noqa: E402
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
 HELIOS_LICENSE = "GPL-2.0 (Helios, UC Davis Bailey Lab)"
 HELIOS_URL = "https://github.com/PlantSimulationLab/Helios"
+# Helios is a radiation-simulation FSPM: its tomato is botanically parameterized but exports as
+# billboard leaf-tiles on thin shoots, so a static GLB reads as scattered foliage rather than a
+# fully coherent plant. We ingest it for honest whole-field coverage with this caveat surfaced.
+HELIOS_CAVEAT = "FSPM sim mesh — low standalone fidelity"
 
 
 def ingest_helios(
-    db, obj_paths, *, to_glb, score_fn=None, variant="tomato", task_title=TOMATO_TITLE, limit=10
+    db,
+    obj_paths,
+    *,
+    to_glb,
+    score_fn=None,
+    variant="tomato",
+    task_title=TOMATO_TITLE,
+    limit=10,
+    caveat=None,
 ) -> dict:
     task = db.execute(select(Task).where(Task.title == task_title)).scalars().first()
     if task is None:
@@ -39,6 +51,9 @@ def ingest_helios(
                 print(f"  skip {asset_id}: {e}")
                 report["skipped"] += 1
                 continue
+            meta = {"depiction": "whole_plant", "variant": variant, "render": "mesh"}
+            if caveat:
+                meta["caveat"] = caveat
             out, _created = ingest.register_output(
                 db,
                 task_id=task.id,
@@ -47,7 +62,7 @@ def ingest_helios(
                 data=glb,
                 ext="glb",
                 title=asset_id,
-                meta={"depiction": "whole_plant", "variant": variant, "render": "mesh"},
+                meta=meta,
             )
             out.source = "procedural:helios"
             out.license = HELIOS_LICENSE
@@ -97,6 +112,12 @@ def main() -> int:
     ap.add_argument("-n", type=int, default=3, help="number of seeds/plants to generate")
     ap.add_argument("--max-faces", type=int, default=150_000)
     ap.add_argument("--no-score", action="store_true")
+    ap.add_argument("--caveat", default=HELIOS_CAVEAT, help="caveat badge text (empty to omit)")
+    ap.add_argument(
+        "--no-texture",
+        action="store_true",
+        help="skip the Blender alpha-cutout leaf texture (flat untextured leaves)",
+    )
     args = ap.parse_args()
 
     if not Path(args.bin).exists():
@@ -120,8 +141,28 @@ def main() -> int:
 
     max_faces = args.max_faces or None
 
-    def to_glb(path: str) -> bytes:
+    def mesh_to_glb(path: str) -> bytes:
         return _to_glb(path, max_faces=max_faces)
+
+    # Prefer the Blender pass that restores the alpha-cutout leaf texture Helios drops on export;
+    # fall back to a plain mesh convert (flat untextured leaves) when Blender is unavailable.
+    to_glb = mesh_to_glb
+    if not args.no_texture:
+        try:
+            from scripts.helios_glb import BlenderUnavailable, to_textured_glb
+
+            def _probe():
+                from pathlib import Path as _P
+
+                from scripts.helios_glb import DEFAULT_BLENDER, DEFAULT_LEAF_TEX
+                return _P(DEFAULT_BLENDER).exists() and _P(DEFAULT_LEAF_TEX).exists()
+
+            if _probe():
+                to_glb = to_textured_glb
+            else:
+                print("  Blender/leaf-texture unavailable — leaves will be flat/untextured")
+        except BlenderUnavailable as e:
+            print(f"  textured path unavailable ({e}) — flat/untextured leaves")
 
     db = SessionLocal()
     try:
@@ -130,6 +171,7 @@ def main() -> int:
             objs,
             to_glb=to_glb,
             score_fn=None if args.no_score else recon_service.score_and_store,
+            caveat=args.caveat or None,
         )
         print(report)
     finally:

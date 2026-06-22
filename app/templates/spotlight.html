@@ -62,6 +62,9 @@
       {% if m.render == 'points' %}
       <div class="card-badge">point cloud</div>
       {% endif %}
+      {% if m.caveat %}
+      <div class="card-badge caveat-badge" title="{{ m.caveat }}">{{ m.caveat }}</div>
+      {% endif %}
       <table class="metric-table">
         <tr>
           <td>chamfer</td>
