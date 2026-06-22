@@ -1,0 +1,98 @@
+import openalea.plantgl.all as pgl
+from math import pi
+
+def _leaflet(length, width):
+    """Small distinct pointed leaflet, midrib +X, blade in XY (normal +Z), fine even teeth."""
+    n = 12
+    pts = [pgl.Vector3(0, 0, 0)]
+    idx = []
+    for i in range(1, n + 1):
+        t = i / n
+        x = length * t
+        w = width * max(0.0, (1.0 - abs(t - 0.42) / 0.62)) ** 0.80
+        w *= (1.16 if i % 2 == 0 else 0.90)        # visible rounded teeth
+        pts.append(pgl.Vector3(x,  w, 0))
+        pts.append(pgl.Vector3(x, -w, 0))
+    for i in range(n):
+        l0, r0 = 1 + 2 * i, 2 + 2 * i
+        if i < n - 1:
+            l1, r1 = 1 + 2 * (i + 1), 2 + 2 * (i + 1)
+            idx += [pgl.Index3(0, l0, l1), pgl.Index3(0, r1, r0)]
+        else:
+            idx += [pgl.Index3(0, l0, r0)]
+    ts = pgl.TriangleSet(pts, idx)
+    ts.computeNormalList()
+    return ts
+
+def compound_leaf(scale=1.0):
+    """Pinnately compound leaf: long rachis (+X) bearing 5 well-separated leaflet PAIRS
+    (large + small interstitial, tomato-style) + a terminal leaflet. Clear gaps + visible rachis."""
+    L = 11.0 * scale
+    shapes = [pgl.AxisRotated((0, 1, 0), pi / 2, pgl.Cylinder(0.09 * scale, L, slices=5))]
+    pairs = 5
+    for k in range(pairs):
+        t = (k + 0.85) / (pairs + 0.6)
+        x = L * t
+        big = (k % 2 == 0)                          # alternate large / small interstitial leaflets
+        lflen = (3.2 if big else 1.7) * scale * (1.15 - 0.30 * t)
+        lfwid = lflen * 0.34                         # narrow -> distinct individual leaflets
+        for sgn in (1, -1):
+            ang = 62 * sgn                           # near-perpendicular -> reads as separate fingers
+            lf = _leaflet(lflen, lfwid)
+            placed = pgl.Translated(x, 0, 0, pgl.AxisRotated((0, 1, 0), 16*pi/180, pgl.AxisRotated((0, 0, 1), ang * pi / 180, lf)))
+            shapes.append(placed)
+    # terminal leaflet (slightly larger, points along rachis)
+    tip = _leaflet(3.6 * scale, 3.6 * scale * 0.52)
+    shapes.append(pgl.Translated(L, 0, 0, tip))
+    return pgl.Group(shapes)
+
+def truss(n=3, scale=1.0):
+    """A hanging truss of a few large round tomatoes, each crowned by a small green calyx star."""
+    import math
+    shapes = []
+    for i in range(n):
+        a = i * 2.2
+        x = 1.3 * scale * math.cos(a)
+        z = 1.3 * scale * math.sin(a)
+        y = -2.0 * scale - 1.4 * scale * i
+        r = 2.6 * scale
+        shapes.append(pgl.Translated(x, y, z, pgl.Sphere(r, slices=14, stacks=12)))
+    return pgl.Group(shapes)
+
+def calyx_for(n=3, scale=1.0):
+    """Green calyx stars sitting on top of each tomato in the matching truss."""
+    import math
+    shapes = []
+    for i in range(n):
+        a = i * 2.2
+        x = 1.3 * scale * math.cos(a)
+        z = 1.3 * scale * math.sin(a)
+        r = 2.6 * scale
+        y = -2.0 * scale - 1.4 * scale * i + r * 0.78
+        sep = []
+        for k in range(5):                          # 5 narrow green sepals splayed outward
+            b = k * (2 * math.pi / 5)
+            lf = _leaflet(1.5 * scale, 0.5 * scale)
+            sep.append(pgl.AxisRotated((0, 0, 1), b,
+                       pgl.AxisRotated((0, 1, 0), 1.15, lf)))
+        shapes.append(pgl.Translated(x, y, z, pgl.Group(sep)))
+    return pgl.Group(shapes)
+
+module Apex(n)
+
+# start heading UP (+H along +Z): pitch turtle up front
+Axiom: _(0.32) ,(5) Apex(9)
+
+derivation length: 9
+production:
+
+Apex(n):
+  if n <= 0:
+    produce [ ^(20) &(70) ,(3) @g(truss(3)) ,(5) @g(calyx_for(3)) ]
+  else:
+    nproduce ,(5) F(4.6) /(137.5)
+    # leaf: roll so the blade (local +Z face) presents outward, mild downward pitch
+    nproduce [ &(62) ,(2) /(90) @g(compound_leaf(1.5)) ]
+    if n in (8, 6, 4, 2):
+      nproduce [ +(40) ,(5) _(0.22) F(4.0) /(120) [ &(64) ,(2) /(90) @g(compound_leaf(1.0)) ] [ ^(15) &(70) ,(3) @g(truss(2)) ,(5) @g(calyx_for(2)) ] ]
+    produce Apex(n - 1)
