@@ -191,6 +191,37 @@ def seed_synthetic_plants(db: Session) -> dict:
     return {"tasks": n_tasks, "generators": 1}
 
 
+# Volumetric-modality subjects (CT/MRI). Cereal stand-in for the maize volumetric gap.
+VOLUMETRIC_SUBJECTS = [
+    (
+        "Hordeum vulgare — barley root system (3D MRI)",
+        "Volumetric MRI reference of a barley root system (marching-cubes iso-surface).",
+    ),
+]
+
+
+def seed_volumetric_subjects(db: Session) -> dict:
+    """Idempotent: ensure the 'plants' category + each volumetric subject Task exists, so a
+    volumetric GLB ingested onto the subject has a home and a spotlight to surface it."""
+    cat = db.execute(select(Category).where(Category.slug == "plants")).scalars().first()
+    if cat is None:
+        cat = Category(slug="plants", name="Plants", description="Whole plants (image→3D recon)")
+        db.add(cat)
+        db.flush()
+    n = 0
+    for title, prompt in VOLUMETRIC_SUBJECTS:
+        task = (
+            db.execute(select(Task).where(Task.title == title, Task.category_id == cat.id))
+            .scalars()
+            .first()
+        )
+        if task is None:
+            db.add(Task(category_id=cat.id, title=title, prompt=prompt))
+            n += 1
+    db.flush()
+    return {"subjects": n}
+
+
 # (slug, name, description)
 # Top-level taxonomy is the tree of life (one consistent axis). Plants is the flagship
 # active domain (AgriGen's focus); the rest are visible "coming soon" placeholders — a
@@ -354,6 +385,7 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
         # so ingested recon GLBs are scorable immediately.
         seed_recon_benchmark(db)
         seed_synthetic_plants(db)
+        seed_volumetric_subjects(db)
 
         db.commit()
         return {

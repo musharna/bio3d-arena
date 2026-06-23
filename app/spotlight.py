@@ -71,6 +71,16 @@ SPOTLIGHTS: list[dict] = [
         "blurb": "Thale cress rosette — fine structure stress test.",
         "reference_image": None,
     },
+    {
+        "slug": "barley-mri",
+        "task_title": "Hordeum vulgare — barley root system (3D MRI)",
+        "featured": False,
+        "order": 3,
+        "blurb": "The volumetric sensor axis: a real 3D MRI of a barley root system, surfaced via "
+        "marching cubes. A cereal stand-in — no open maize anatomy volume exists yet (logged gap). "
+        "The mesh is an approximate, threshold-dependent iso-surface, not a polished asset.",
+        "reference_image": None,
+    },
 ]
 
 

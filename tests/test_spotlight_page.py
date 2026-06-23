@@ -9,7 +9,7 @@ from app.assets_gen import build_asset
 from app.database import SessionLocal, init_db
 from app.main import app
 from app.models import Category, Metric, Task
-from app.seed import RECON_SPECIES
+from app.seed import RECON_SPECIES, VOLUMETRIC_SUBJECTS
 
 
 def setup_module(_m):
@@ -17,9 +17,11 @@ def setup_module(_m):
 
 
 def test_every_spotlight_task_title_matches_a_seeded_species():
-    """Each curated SPOTLIGHTS entry must point at a real seeded recon subject — guards against
-    title drift between the spotlight registry and the seed (e.g. the maize/Zea mays entry)."""
+    """Each curated SPOTLIGHTS entry must point at a real seeded recon or volumetric subject —
+    guards against title drift between the spotlight registry and the seed (e.g. the maize/Zea
+    mays entry, the barley-MRI volumetric entry)."""
     seeded = {f"{sci} — single-image → 3D reconstruction" for _slug, sci, _d in RECON_SPECIES}
+    seeded |= {title for title, _prompt in VOLUMETRIC_SUBJECTS}
     for s in spotlight.SPOTLIGHTS:
         assert s["task_title"] in seeded, (
             f"{s['slug']} -> {s['task_title']!r} has no seeded subject"
