@@ -20,7 +20,8 @@ from app.sourcing import SCAN_DATASETS  # noqa: E402
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
 MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
 # Map a CLI crop key → the subject task that real scans of that crop attach to.
-SCAN_TASKS = {"tomato": TOMATO_TITLE, "maize": MAIZE_TITLE}
+ROSE_TITLE = "Rosa — single-image → 3D reconstruction"
+SCAN_TASKS = {"tomato": TOMATO_TITLE, "maize": MAIZE_TITLE, "rose": ROSE_TITLE}
 
 
 def ingest_scans(

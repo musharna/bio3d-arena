@@ -31,9 +31,13 @@ def ingest_volumetric(
     score_fn=None,
     task_title,
     modality="MRI",
+    depiction="root_system",
     limit=5,
 ) -> dict:
-    """Host each volume as source=`<modality.lower()>:<dataset>` on the subject task."""
+    """Host each volume as source=`<modality.lower()>:<dataset>` on the subject task.
+
+    depiction labels what the volume shows (e.g. 'root_system' for root MRI, 'whole_plant' for a
+    whole-plant CT) — drives the spotlight grouping + which outputs are GT-scorable."""
     meta_d = VOLUMETRIC_DATASETS[dataset]
     source = f"{modality.lower()}:{dataset}"
     task = db.execute(select(Task).where(Task.title == task_title)).scalars().first()
@@ -49,7 +53,6 @@ def ingest_volumetric(
                 print(f"  skip {vid}: {e}")
                 report["skipped"] += 1
                 continue
-            depiction = "root_system"
             out, _created = ingest.register_output(
                 db,
                 task_id=task.id,
@@ -63,8 +66,8 @@ def ingest_volumetric(
                     "dataset": dataset,
                     "modality": modality,
                     "render": "mesh",
-                    "caveat": "approximate marching-cubes iso-surface (threshold-dependent); "
-                    "cereal stand-in for the maize volumetric gap",
+                    "caveat": "approximate marching-cubes iso-surface (threshold-dependent), "
+                    "not a polished asset",
                 },
             )
             out.source = source
@@ -92,7 +95,7 @@ def main() -> int:
     import argparse
 
     from app.database import SessionLocal
-    from app.seed import seed_volumetric_subjects
+    from app.seed import seed_rose_subject, seed_volumetric_subjects
     from app.volume_convert import volume_to_glb
 
     BARLEY_TITLE = "Hordeum vulgare — barley root system (3D MRI)"
@@ -100,6 +103,9 @@ def main() -> int:
     ap.add_argument("--dataset", default="ipk-barley-mri", choices=sorted(VOLUMETRIC_DATASETS))
     ap.add_argument("--task", default=BARLEY_TITLE, help="subject task title to attach to")
     ap.add_argument("--modality", default="MRI")
+    ap.add_argument(
+        "--depiction", default="root_system", help="what the volume shows (e.g. whole_plant)"
+    )
     ap.add_argument("--dir", required=True, help="local dir of volume files (.nii/.nii.gz/.tif)")
     ap.add_argument("--threshold", type=float, default=None, help="iso-level (default: Otsu)")
     ap.add_argument("--max-faces", type=int, default=200_000)
@@ -125,7 +131,8 @@ def main() -> int:
 
     db = SessionLocal()
     try:
-        seed_volumetric_subjects(db)  # ensure the subject Task exists
+        seed_volumetric_subjects(db)  # ensure the barley subject Task exists
+        seed_rose_subject(db)  # ensure the rose subject Task exists (for ct:rose-x)
         db.commit()
         report = ingest_volumetric(
             db,
@@ -134,6 +141,7 @@ def main() -> int:
             to_glb=to_glb,
             task_title=args.task,
             modality=args.modality,
+            depiction=args.depiction,
             limit=args.limit,
         )
         print(report)

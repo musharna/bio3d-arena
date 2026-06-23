@@ -200,6 +200,39 @@ VOLUMETRIC_SUBJECTS = [
 ]
 
 
+# Rose (Track A3) subject — genus-level (the spotlight mixes Rosa species: rugosa scan/volume,
+# multiflora/chinensis found). A plain subject (no ReconTask) so recon GT scoring isn't attempted
+# (rose has no GT bundle); found/scan/volumetric/procedural outputs all attach here by title.
+ROSE_SUBJECT_TITLE = "Rosa — single-image → 3D reconstruction"
+
+
+def seed_rose_subject(db: Session) -> dict:
+    """Idempotent: ensure the 'plants' category + the Rosa subject Task exists, so rose outputs
+    (found/scan/volumetric/procedural) have a home and the rose spotlight can surface them."""
+    cat = db.execute(select(Category).where(Category.slug == "plants")).scalars().first()
+    if cat is None:
+        cat = Category(slug="plants", name="Plants", description="Whole plants (image→3D recon)")
+        db.add(cat)
+        db.flush()
+    task = (
+        db.execute(select(Task).where(Task.title == ROSE_SUBJECT_TITLE, Task.category_id == cat.id))
+        .scalars()
+        .first()
+    )
+    n = 0
+    if task is None:
+        db.add(
+            Task(
+                category_id=cat.id,
+                title=ROSE_SUBJECT_TITLE,
+                prompt="Reconstruct a 3D model of a rose (Rosa) plant in bloom from a single RGB image.",
+            )
+        )
+        n = 1
+    db.flush()
+    return {"subjects": n}
+
+
 def seed_volumetric_subjects(db: Session) -> dict:
     """Idempotent: ensure the 'plants' category + each volumetric subject Task exists, so a
     volumetric GLB ingested onto the subject has a home and a spotlight to surface it."""
@@ -386,6 +419,7 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
         seed_recon_benchmark(db)
         seed_synthetic_plants(db)
         seed_volumetric_subjects(db)
+        seed_rose_subject(db)
 
         db.commit()
         return {

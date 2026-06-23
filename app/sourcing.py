@@ -78,6 +78,13 @@ SCAN_DATASETS: dict[str, dict] = {
         "data on Figshare 10.6084/m9.figshare.27313272 (record tagged CC0)",
         "url": "https://doi.org/10.6084/m9.figshare.27313272",
     },
+    "rose-x": {
+        "name": "ROSE-X (Rosa rugosa)",
+        "license": "CC0 1.0",
+        "attribution": "ROSE-X — 11 annotated Rosa rugosa plants, X-ray CT + labelled point "
+        "clouds (Dutagaci et al., Plant Methods 2020, 10.1186/s13007-020-00573-w); CC0",
+        "url": "https://doi.org/10.1186/s13007-020-00573-w",
+    },
 }
 SCAN_SOURCES = frozenset(SCAN_DATASETS)
 
@@ -91,6 +98,14 @@ VOLUMETRIC_DATASETS: dict[str, dict] = {
         "(Pflugfelder et al.; DOI 10.5447/IPK/2017/10)",
         "url": "https://doi.org/10.5447/IPK/2017/10",
         "modality": "MRI",
+    },
+    "rose-x": {
+        "name": "ROSE-X (Rosa rugosa X-ray CT)",
+        "license": "CC0 1.0",
+        "attribution": "ROSE-X — Rosa rugosa whole-plant X-ray CT binary volume "
+        "(Dutagaci et al., Plant Methods 2020, 10.1186/s13007-020-00573-w); CC0",
+        "url": "https://doi.org/10.1186/s13007-020-00573-w",
+        "modality": "CT",
     },
 }
 

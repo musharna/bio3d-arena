@@ -81,6 +81,18 @@ SPOTLIGHTS: list[dict] = [
         "The mesh is an approximate, threshold-dependent iso-surface, not a polished asset.",
         "reference_image": None,
     },
+    {
+        "slug": "rose",
+        "task_title": "Rosa — single-image → 3D reconstruction",
+        "featured": True,
+        "order": 4,
+        "blurb": "How 3D methods handle a rose (Rosa) — the 3rd crop spotlight. Spans a real CC0 "
+        "Rosa rugosa X-ray CT (scan + the volumetric sensor axis), found artist roses, image→3D "
+        "recon, and procedural generators (whose bloom fidelity is the open frontier).",
+        "reference_image": "reference/rose_ref.jpg",
+        # CC0 (public-domain) input photo — Rosa canina bush in bloom.
+        "reference_credit": "Photo: Cultureel Gelderland / Wikimedia Commons, CC0",
+    },
 ]
 
 
