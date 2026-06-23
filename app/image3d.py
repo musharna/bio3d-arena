@@ -434,7 +434,9 @@ PROVIDERS: dict[str, tuple] = {
         "TripoSR (fal)",
     ),
     "fal:hyper3d": (
-        functools.partial(generate_fal, model="fal-ai/hyper3d/rodin"),
+        functools.partial(
+            generate_fal, model="fal-ai/hyper3d/rodin", image_field="input_image_urls"
+        ),
         "FAL_KEY",
         "Rodin/Hyper3D (fal)",
     ),
@@ -450,11 +452,15 @@ PROVIDERS: dict[str, tuple] = {
         "TRELLIS (Replicate)",
     ),
     "replicate:trellis2": (
-        functools.partial(generate_replicate, model="fishwowater/trellis2"),
+        # TRELLIS 2 is slow (>300s); give it a longer budget so it isn't abandoned mid-run.
+        functools.partial(generate_replicate, model="fishwowater/trellis2", timeout_s=900),
         "REPLICATE_API_TOKEN",
         "TRELLIS 2 (Replicate)",
     ),
     "replicate:rodin": (
+        # Rodin on Replicate requires a text `prompt` (image alone → 422); the image-only recon
+        # path can't supply one, and Rodin is already covered by fal:hyper3d. Kept in the catalog
+        # but excluded from the image bake-off (PROMPT_REQUIRED).
         functools.partial(generate_replicate, model="hyper3d/rodin"),
         "REPLICATE_API_TOKEN",
         "Rodin (Replicate)",
