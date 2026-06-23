@@ -93,6 +93,18 @@ SPOTLIGHTS: list[dict] = [
         # CC0 (public-domain) input photo — Rosa canina bush in bloom.
         "reference_credit": "Photo: Cultureel Gelderland / Wikimedia Commons, CC0",
     },
+    {
+        "slug": "soybean",
+        "task_title": "Glycine max — single-image → 3D reconstruction",
+        "featured": True,
+        "order": 5,
+        "blurb": "How 3D methods handle soybean (Glycine max) — the Track-A2 legume spotlight. "
+        "Found artist + phenotyping scans, image→3D recon, and procedural (Demeter). The scan tier "
+        "is a CC-BY common-bean point-cloud stand-in — no open-licensed soybean scan exists.",
+        "reference_image": "reference/soybean_ref.jpg",
+        # CC0 (public-domain) input photo — soybean field.
+        "reference_credit": "Photo: René Hourdry / Wikimedia Commons, CC0",
+    },
 ]
 
 

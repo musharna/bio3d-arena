@@ -9,7 +9,12 @@ from app.assets_gen import build_asset
 from app.database import SessionLocal, init_db
 from app.main import app
 from app.models import Category, Metric, Task
-from app.seed import RECON_SPECIES, ROSE_SUBJECT_TITLE, VOLUMETRIC_SUBJECTS
+from app.seed import (
+    RECON_SPECIES,
+    ROSE_SUBJECT_TITLE,
+    SOYBEAN_SUBJECT_TITLE,
+    VOLUMETRIC_SUBJECTS,
+)
 
 
 def setup_module(_m):
@@ -23,6 +28,7 @@ def test_every_spotlight_task_title_matches_a_seeded_species():
     seeded = {f"{sci} — single-image → 3D reconstruction" for _slug, sci, _d in RECON_SPECIES}
     seeded |= {title for title, _prompt in VOLUMETRIC_SUBJECTS}
     seeded.add(ROSE_SUBJECT_TITLE)  # rose (Track A3) — seeded via seed_rose_subject
+    seeded.add(SOYBEAN_SUBJECT_TITLE)  # soybean (Track A2) — seeded via seed_soybean_subject
     for s in spotlight.SPOTLIGHTS:
         assert s["task_title"] in seeded, (
             f"{s['slug']} -> {s['task_title']!r} has no seeded subject"

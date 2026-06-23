@@ -206,30 +206,49 @@ VOLUMETRIC_SUBJECTS = [
 ROSE_SUBJECT_TITLE = "Rosa — single-image → 3D reconstruction"
 
 
-def seed_rose_subject(db: Session) -> dict:
-    """Idempotent: ensure the 'plants' category + the Rosa subject Task exists, so rose outputs
-    (found/scan/volumetric/procedural) have a home and the rose spotlight can surface them."""
+def _ensure_subject(db: Session, title: str, prompt: str) -> int:
+    """Idempotent: ensure the 'plants' category + a plain subject Task (no ReconTask, so recon GT
+    scoring isn't attempted) exists. Returns 1 if created, else 0."""
     cat = db.execute(select(Category).where(Category.slug == "plants")).scalars().first()
     if cat is None:
         cat = Category(slug="plants", name="Plants", description="Whole plants (image→3D recon)")
         db.add(cat)
         db.flush()
     task = (
-        db.execute(select(Task).where(Task.title == ROSE_SUBJECT_TITLE, Task.category_id == cat.id))
+        db.execute(select(Task).where(Task.title == title, Task.category_id == cat.id))
         .scalars()
         .first()
     )
-    n = 0
     if task is None:
-        db.add(
-            Task(
-                category_id=cat.id,
-                title=ROSE_SUBJECT_TITLE,
-                prompt="Reconstruct a 3D model of a rose (Rosa) plant in bloom from a single RGB image.",
-            )
-        )
-        n = 1
+        db.add(Task(category_id=cat.id, title=title, prompt=prompt))
+        db.flush()
+        return 1
     db.flush()
+    return 0
+
+
+def seed_rose_subject(db: Session) -> dict:
+    """Idempotent: ensure the Rosa subject Task exists (home for rose found/scan/volumetric/procedural)."""
+    n = _ensure_subject(
+        db,
+        ROSE_SUBJECT_TITLE,
+        "Reconstruct a 3D model of a rose (Rosa) plant in bloom from a single RGB image.",
+    )
+    return {"subjects": n}
+
+
+# Soybean (Track A2 legume) subject. Soybean-specific found/procedural/recon; the scan tier uses a
+# CC-BY common-bean legume point-cloud stand-in (no open-licensed soybean scan — Soybean-MVS is unmarked).
+SOYBEAN_SUBJECT_TITLE = "Glycine max — single-image → 3D reconstruction"
+
+
+def seed_soybean_subject(db: Session) -> dict:
+    """Idempotent: ensure the Glycine max (soybean) subject Task exists."""
+    n = _ensure_subject(
+        db,
+        SOYBEAN_SUBJECT_TITLE,
+        "Reconstruct a 3D model of a soybean (Glycine max) plant from a single RGB image.",
+    )
     return {"subjects": n}
 
 
@@ -420,6 +439,7 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
         seed_synthetic_plants(db)
         seed_volumetric_subjects(db)
         seed_rose_subject(db)
+        seed_soybean_subject(db)
 
         db.commit()
         return {

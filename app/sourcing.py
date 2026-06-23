@@ -85,6 +85,13 @@ SCAN_DATASETS: dict[str, dict] = {
         "clouds (Dutagaci et al., Plant Methods 2020, 10.1186/s13007-020-00573-w); CC0",
         "url": "https://doi.org/10.1186/s13007-020-00573-w",
     },
+    "icrisat-legume": {
+        "name": "ICRISAT broad-leaf legumes",
+        "license": "CC-BY 4.0",
+        "attribution": "ICRISAT — annotated 3D point clouds of broad-leaf legumes (common bean, "
+        "mungbean, cowpea, lima), PlantEye F600 structured-light; Figshare 10.6084/m9.figshare.28270742",
+        "url": "https://doi.org/10.6084/m9.figshare.28270742",
+    },
 }
 SCAN_SOURCES = frozenset(SCAN_DATASETS)
 
