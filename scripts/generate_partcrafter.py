@@ -23,8 +23,25 @@ from app.mesh_convert import MeshConvertError  # noqa: E402
 from app.models import Task  # noqa: E402
 
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
+MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
 PARTCRAFTER_LICENSE = "PartCrafter MIT (code+weights); generated from the CC reference photo"
 PARTCRAFTER_URL = "https://github.com/wgsxm/PartCrafter"
+
+# Per-crop config: subject task + default CC reference photo + inference tag (also the variant
+# slug + output subdir). PartCrafter runs the same self-hosted pipeline per crop; only the photo
+# changes. Defaults below preserve the original tomato behaviour.
+CROPS = {
+    "tomato": {
+        "task_title": TOMATO_TITLE,
+        "image": "data/assets/reference/tomato_ref.jpg",
+        "tag": "tomato",
+    },
+    "maize": {
+        "task_title": MAIZE_TITLE,
+        "image": "data/assets/reference/maize_ref.jpg",
+        "tag": "maize",
+    },
+}
 
 
 def ingest_partcrafter(
@@ -132,10 +149,20 @@ def main() -> int:
     ap.add_argument(
         "--blender", default=os.environ.get("BLENDER_BIN", str(Path.home() / "blender/blender"))
     )
-    ap.add_argument("--image", default=str(repo / "data/assets/reference/tomato_ref.jpg"))
+    ap.add_argument(
+        "--crop", default="tomato", choices=sorted(CROPS), help="which crop to reconstruct"
+    )
+    ap.add_argument(
+        "--image", default="", help="reference photo (default: the crop's CC reference photo)"
+    )
     ap.add_argument("--num-parts", type=int, default=3)
     ap.add_argument("--no-score", action="store_true")
     args = ap.parse_args()
+
+    crop = CROPS[args.crop]
+    tag = crop["tag"]
+    if not args.image:
+        args.image = str(repo / crop["image"])
 
     pc_dir, pc_py, blender = Path(args.pc_dir), Path(args.pc_python), Path(args.blender)
     if not pc_py.exists():
@@ -157,7 +184,7 @@ def main() -> int:
                 "--num_parts",
                 str(args.num_parts),
                 "--tag",
-                "tomato",
+                tag,
                 "--rmbg",
                 "--output_dir",
                 str(work),
@@ -170,12 +197,12 @@ def main() -> int:
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
         print(f"  PartCrafter inference failed: {e}")
         return 1
-    raw = work / "tomato" / "object.glb"
+    raw = work / tag / "object.glb"
     if not raw.exists():
         print(f"no object.glb produced at {raw}")
         return 1
 
-    glb = work / "tomato_decimated.glb"
+    glb = work / f"{tag}_decimated.glb"
     if blender.exists():
         script = work / "dec.py"
         script.write_text(_DECIMATE)
@@ -206,6 +233,8 @@ def main() -> int:
             [(str(glb), args.num_parts)],
             to_glb=lambda p: Path(p).read_bytes(),
             score_fn=None if args.no_score else recon_service.score_and_store,
+            variant=args.crop,
+            task_title=crop["task_title"],
         )
         print(report)
     finally:

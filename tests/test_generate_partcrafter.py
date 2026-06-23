@@ -7,7 +7,7 @@ from app import sourcing
 from app.database import SessionLocal, init_db
 from app.mesh_convert import MeshConvertError
 from app.models import Category, ModelOutput, Task
-from scripts.generate_partcrafter import ingest_partcrafter
+from scripts.generate_partcrafter import CROPS, MAIZE_TITLE, ingest_partcrafter
 
 TOMATO = "Solanum lycopersicum — single-image → 3D reconstruction"
 
@@ -16,14 +16,22 @@ def setup_module(_m):
     init_db()
 
 
-def _tomato_task(db):
+def _task(db, title):
+    # Get-or-create: the test DB is shared across modules, so adding a duplicate-title task on
+    # every call would make `Task.title == X` ambiguous for `.one()` lookups in later assertions.
+    if db.query(Task).filter_by(title=title).first():
+        return
     cat = db.query(Category).filter_by(slug="plants").first() or Category(
         slug="plants", name="Plants"
     )
     db.add(cat)
     db.flush()
-    db.add(Task(category_id=cat.id, title=TOMATO, prompt="p"))
+    db.add(Task(category_id=cat.id, title=title, prompt="p"))
     db.commit()
+
+
+def _tomato_task(db):
+    _task(db, TOMATO)
 
 
 def _fake_glb(path):
@@ -32,6 +40,42 @@ def _fake_glb(path):
 
 def test_frontier_source_class_is_ai():
     assert sourcing.source_class("frontier:partcrafter") == "ai"  # neural frontier = AI recon
+
+
+def test_crops_config_covers_maize():
+    maize = CROPS["maize"]
+    assert maize["task_title"] == MAIZE_TITLE
+    assert maize["tag"] == "maize"
+    assert maize["image"].endswith("maize_ref.jpg")
+
+
+def test_ingest_partcrafter_routes_to_maize_task(tmp_path):
+    """A maize run must attach to the Zea mays subject task, not tomato's."""
+    db = SessionLocal()
+    try:
+        _task(db, MAIZE_TITLE)
+        report = ingest_partcrafter(
+            db,
+            [(str(tmp_path / "m.glb"), 3)],
+            to_glb=_fake_glb,
+            variant="maize",
+            task_title=MAIZE_TITLE,
+        )
+        assert report["hosted"] == 1
+        maize_task = db.execute(select(Task).where(Task.title == MAIZE_TITLE)).scalars().first()
+        rows = (
+            db.execute(
+                select(ModelOutput).where(
+                    ModelOutput.source == "frontier:partcrafter",
+                    ModelOutput.task_id == maize_task.id,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert any("maize" in (o.meta_json or "") for o in rows)
+    finally:
+        db.close()
 
 
 def test_ingest_partcrafter_hosts_frontier(tmp_path):
