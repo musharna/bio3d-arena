@@ -9,10 +9,29 @@ from app.assets_gen import build_asset
 from app.database import SessionLocal, init_db
 from app.main import app
 from app.models import Category, Metric, Task
+from app.seed import RECON_SPECIES
 
 
 def setup_module(_m):
     init_db()
+
+
+def test_every_spotlight_task_title_matches_a_seeded_species():
+    """Each curated SPOTLIGHTS entry must point at a real seeded recon subject — guards against
+    title drift between the spotlight registry and the seed (e.g. the maize/Zea mays entry)."""
+    seeded = {f"{sci} — single-image → 3D reconstruction" for _slug, sci, _d in RECON_SPECIES}
+    for s in spotlight.SPOTLIGHTS:
+        assert s["task_title"] in seeded, (
+            f"{s['slug']} -> {s['task_title']!r} has no seeded subject"
+        )
+
+
+def test_maize_spotlight_registered_and_featured():
+    """Maize is the second featured crop spotlight (the Xfrog AG20 Zea mays subject)."""
+    maize = spotlight.find_spotlight("maize")
+    assert maize is not None, "maize spotlight not registered"
+    assert maize["task_title"] == "Zea mays — single-image → 3D reconstruction"
+    assert maize["featured"] is True
 
 
 def _glb_bytes(seed: int = 1) -> bytes:

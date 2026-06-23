@@ -53,10 +53,21 @@ SPOTLIGHTS: list[dict] = [
         "reference_credit": "Photo: Kolforn / Wikimedia Commons, CC-BY-SA-4.0",
     },
     {
+        "slug": "maize",
+        "task_title": "Zea mays — single-image → 3D reconstruction",
+        "featured": True,
+        "order": 1,
+        "blurb": "How current image→3D models handle a whole maize plant — a tall, two-ranked "
+        "monocot (distichous strap leaves, apical tassel, axillary ears).",
+        # reference photo TODO: a real CC whole-plant Zea mays input (see docs/ATTRIBUTIONS.md);
+        # None ⇒ no reference panel for now. The faithful entries are Xfrog AG20 found assets.
+        "reference_image": None,
+    },
+    {
         "slug": "arabidopsis",
         "task_title": "Arabidopsis thaliana — single-image → 3D reconstruction",
         "featured": False,
-        "order": 1,
+        "order": 2,
         "blurb": "Thale cress rosette — fine structure stress test.",
         "reference_image": None,
     },
