@@ -17,6 +17,15 @@ from app import ingest  # noqa: E402
 from app.models import Task  # noqa: E402
 
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
+MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
+ROSE_TITLE = "Rosa — single-image → 3D reconstruction"
+# Per-crop: subject task + its CC reference photo. The API recon path attaches api:<provider>
+# outputs to the subject by title (no GT/ReconTask needed); key-gated per provider.
+CROPS = {
+    "tomato": {"task_title": TOMATO_TITLE, "image": "data/assets/reference/tomato_ref.jpg"},
+    "maize": {"task_title": MAIZE_TITLE, "image": "data/assets/reference/maize_ref.jpg"},
+    "rose": {"task_title": ROSE_TITLE, "image": "data/assets/reference/rose_ref.jpg"},
+}
 
 
 def _provenance(slug: str, name: str) -> tuple[str, str]:
@@ -83,13 +92,19 @@ def generate_api_recon(
 
 
 def main() -> int:
+    import argparse
     import os
 
     from app import recon_service
     from app.database import SessionLocal
     from app.image3d import PROVIDERS
 
-    ref = Path(__file__).resolve().parent.parent / "data/assets/reference/tomato_ref.jpg"
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--crop", default="tomato", choices=sorted(CROPS))
+    args = ap.parse_args()
+    crop = CROPS[args.crop]
+
+    ref = Path(__file__).resolve().parent.parent / crop["image"]
     if not ref.exists():
         print(f"reference image missing: {ref} — source the CC photo first")
         return 1
@@ -106,6 +121,7 @@ def main() -> int:
             providers=active,
             env=os.environ,
             score_fn=recon_service.score_and_store,
+            task_title=crop["task_title"],
         )
         print(report)
     finally:

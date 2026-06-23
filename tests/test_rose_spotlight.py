@@ -52,6 +52,15 @@ def test_rose_in_procedural_scripts():
     assert "bloom" in AGRIGEN_CROPS["rose"]["caveat"].lower()  # honest flowerless caveat
 
 
+def test_rose_recon_ready():
+    # AI-recon path is rose-ready: the API recon script attaches api:* outputs by subject title.
+    from scripts.generate_api_recon import CROPS as RECON_CROPS
+
+    rose_title = "Rosa — single-image → 3D reconstruction"
+    assert RECON_CROPS["rose"]["task_title"] == rose_title
+    assert RECON_CROPS["rose"]["image"].endswith("rose_ref.jpg")
+
+
 def test_seed_rose_subject_idempotent_and_buildable():
     db = SessionLocal()
     try:

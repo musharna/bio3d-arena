@@ -30,6 +30,7 @@ def ingest_infinigen(
     score_fn=None,
     factory="Succulent",
     task_title=TOMATO_TITLE,
+    caveat=None,
     limit=10,
 ) -> dict:
     task = db.execute(select(Task).where(Task.title == task_title)).scalars().first()
@@ -53,7 +54,12 @@ def ingest_infinigen(
                 data=glb,
                 ext="glb",
                 title=asset_id,
-                meta={"depiction": "whole_plant", "factory": factory, "render": "mesh"},
+                meta={
+                    "depiction": "whole_plant",
+                    "factory": factory,
+                    "render": "mesh",
+                    **({"caveat": caveat} if caveat else {}),
+                },
             )
             out.source = "infinigen"
             out.license = INFINIGEN_LICENSE
