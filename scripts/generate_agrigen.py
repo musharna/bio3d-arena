@@ -18,11 +18,31 @@ from app.mesh_convert import MeshConvertError  # noqa: E402
 from app.models import Task  # noqa: E402
 
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
+MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
 AGRIGEN_LICENSE = "AgriGen (internal research generator — not for redistribution)"
 AGRIGEN_ATTRIBUTION = "AgriGen UnifiedGenerator (Solanum lycopersicum plant descriptor)"
 # Honest caveat: AgriGen is a coherent L-system + neural-leaf plant, but its neural leaf blades are
 # rounded lobes (not serrated tomato leaflets), it has no fruit in this config, and low fidelity.
 AGRIGEN_CAVEAT = "L-system + neural-leaf — rounded leaflets, no fruit, low fidelity"
+
+# Per-crop config. Each runs AgriGen's UnifiedGenerator against that species' plant descriptor.
+# Maize verdict (gated 2026-06-22): the zea_mays PD yields a tall culm of SHORT spiky leaves (not
+# the long broad arching straps of real maize) with no tassel/ear — caveat-class, like the tomato.
+AGRIGEN_CROPS = {
+    "tomato": {
+        "variant": "tomato",
+        "task_title": TOMATO_TITLE,
+        "attribution": AGRIGEN_ATTRIBUTION,
+        "caveat": AGRIGEN_CAVEAT,
+    },
+    "maize": {
+        "variant": "maize",
+        "task_title": MAIZE_TITLE,
+        "attribution": "AgriGen UnifiedGenerator (Zea mays plant descriptor)",
+        "caveat": "L-system + neural-leaf — short spiky leaves (not long maize straps), "
+        "no tassel/ear, low fidelity",
+    },
+}
 
 
 def ingest_agrigen(
@@ -33,6 +53,7 @@ def ingest_agrigen(
     score_fn=None,
     variant="tomato",
     task_title=TOMATO_TITLE,
+    attribution=AGRIGEN_ATTRIBUTION,
     limit=10,
     caveat=None,
 ) -> dict:
@@ -64,7 +85,7 @@ def ingest_agrigen(
             )
             out.source = "procedural:agrigen"
             out.license = AGRIGEN_LICENSE
-            out.attribution = f"{AGRIGEN_ATTRIBUTION} [{variant}]"
+            out.attribution = f"{attribution} [{variant}]"
             out.external_url = None  # internal generator: hosted locally, no external link
             db.commit()  # provenance committed → hosted
             report["hosted"] += 1
@@ -106,10 +127,18 @@ def main() -> int:
         help="path to the AgriGen checkout (or set AGRIGEN_DIR)",
     )
     ap.add_argument("-n", type=int, default=1, help="number of seeds/plants to generate")
+    ap.add_argument("--crop", default="tomato", choices=sorted(AGRIGEN_CROPS))
     ap.add_argument("--no-score", action="store_true")
     ap.add_argument("--no-recolor", action="store_true", help="keep AgriGen's authored leaf color")
-    ap.add_argument("--caveat", default=AGRIGEN_CAVEAT, help="caveat badge text (empty to omit)")
+    ap.add_argument(
+        "--caveat",
+        default=None,
+        help="caveat badge text (default: the crop's caveat; empty string to omit)",
+    )
     args = ap.parse_args()
+
+    crop = AGRIGEN_CROPS[args.crop]
+    caveat = crop["caveat"] if args.caveat is None else args.caveat
 
     backend = Path(args.agrigen_dir) / "backend"
     venv_py = backend / ".venv/bin/python"
@@ -122,10 +151,10 @@ def main() -> int:
     glbs = []
     env = {**os.environ, "PYTHONPATH": str(backend)}
     for seed in range(args.n):
-        glb = str(Path(out_dir) / f"tomato_{seed}.glb")
+        glb = str(Path(out_dir) / f"{args.crop}_{seed}.glb")
         try:
             subprocess.run(
-                [str(venv_py), str(runner), glb, str(seed)],
+                [str(venv_py), str(runner), glb, str(seed), "20000", "--crop", args.crop],
                 check=True,
                 timeout=600,
                 env=env,
@@ -149,7 +178,10 @@ def main() -> int:
             glbs,
             to_glb=to_glb,
             score_fn=None if args.no_score else recon_service.score_and_store,
-            caveat=args.caveat or None,
+            variant=crop["variant"],
+            task_title=crop["task_title"],
+            attribution=crop["attribution"],
+            caveat=caveat or None,
         )
         print(report)
     finally:
