@@ -22,6 +22,7 @@ from app.models import Task  # noqa: E402
 
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
 MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
+SOYBEAN_TITLE = "Glycine max — single-image → 3D reconstruction"
 LPY_LICENSE = "L-Py/PlantGL (OpenAlea, CeCILL-C); L-system authored for bio3d-arena"
 LPY_URL = "https://github.com/openalea/lpy"
 
@@ -29,6 +30,7 @@ LPY_URL = "https://github.com/openalea/lpy"
 CROPS = {
     "tomato": {"model": "lpy/tomato.lpy", "task_title": TOMATO_TITLE, "variant": "tomato"},
     "maize": {"model": "lpy/maize.lpy", "task_title": MAIZE_TITLE, "variant": "maize"},
+    "soybean": {"model": "lpy/soybean.lpy", "task_title": SOYBEAN_TITLE, "variant": "soybean"},
 }
 
 

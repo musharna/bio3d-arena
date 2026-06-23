@@ -1,0 +1,86 @@
+import openalea.plantgl.all as pgl
+from math import pi
+
+# Authored soybean (Glycine max) L-system for bio3d-arena — Track B LLM-synth.
+# Dicot legume: erect branching stem, alternate TRIFOLIATE leaves (3 ovate leaflets), and clusters
+# of short curved pods in the leaf axils. The trifoliate leaf + pods are the soybean hallmarks.
+
+
+def _leaflet(length, width):
+    """A smooth ovate soybean leaflet (no teeth). Midrib +X, blade in XY (normal +Z), broadest
+    near the middle, rounded base, pointed tip — triangle strip between cross-sections."""
+    n = 12
+    pts = [pgl.Vector3(0.0, 0.0, 0.0)]
+    for i in range(1, n + 1):
+        t = i / n
+        x = length * t
+        w = width * max(0.0, (1.0 - abs(t - 0.45) / 0.78)) ** 0.62  # ovate, broad mid
+        pts.append(pgl.Vector3(x, w, 0.0))
+        pts.append(pgl.Vector3(x, -w, 0.0))
+    idx = [pgl.Index3(0, 1, 2)]
+    for i in range(1, n):
+        l0, r0 = 2 * i - 1, 2 * i
+        l1, r1 = 2 * i + 1, 2 * i + 2
+        idx += [pgl.Index3(l0, l1, r1), pgl.Index3(l0, r1, r0)]
+    ts = pgl.TriangleSet(pts, idx)
+    ts.computeNormalList()
+    return ts
+
+
+def trifoliate(scale=1.0):
+    """A trifoliate soybean leaf: a short petiole bearing one terminal leaflet (+X) and two
+    lateral leaflets splayed ±. The 3-leaflet unit is the soybean signature."""
+    L = 4.0 * scale  # longer petiole so the 3 leaflets sit apart and read as distinct
+    shapes = [pgl.AxisRotated((0, 1, 0), pi / 2, pgl.Cylinder(0.06 * scale, L, slices=5))]
+    leaflen, leafwid = 3.2 * scale, 3.2 * scale * 0.5  # narrower ovate → crisp separate leaflets
+    # two lateral leaflets near the petiole tip, splayed wide so the trifoliate reads
+    for sgn in (1, -1):
+        lf = _leaflet(leaflen, leafwid)
+        shapes.append(
+            pgl.Translated(L * 0.78, 0, 0, pgl.AxisRotated((0, 0, 1), 68 * sgn * pi / 180, lf))
+        )
+    # terminal leaflet (slightly larger, along the rachis, clearly beyond the laterals)
+    tip = _leaflet(leaflen * 1.15, leaflen * 1.15 * 0.5)
+    shapes.append(pgl.Translated(L, 0, 0, tip))
+    return pgl.Group(shapes)
+
+
+def pod_cluster(n=3, scale=1.0):
+    """A small axillary cluster of short fuzzy soybean pods (each a lumpy capsule of 2-3 seeds)."""
+    shapes = []
+    for i in range(n):
+        a = i * 2.1
+        x = 0.6 * scale * (i - n / 2)
+        pod = pgl.Group(
+            [
+                pgl.Translated(0, 0, 0.9 * scale * k, pgl.Sphere(0.55 * scale, slices=6, stacks=5))
+                for k in range(3)
+            ]
+        )
+        shapes.append(pgl.Translated(x, 0, 0, pgl.AxisRotated((0, 1, 0), 1.2 + 0.2 * a, pod)))
+    return pgl.Group(shapes)
+
+
+module Apex(n)
+
+# +H = +Z up the stem; ,(c): 2→leaf, 3→fruit/pod, 5→stem. Spiral phyllotaxy 137.5°.
+Axiom: _(0.45) ,(5) Apex(8)
+
+derivation length: 8
+production:
+
+Apex(n):
+  if n <= 0:
+    # a small terminal trifoliate crown
+    produce [ &(35) ,(2) /(90) @g(trifoliate(0.8)) ]
+  else:
+    nproduce ,(5) _(0.42 * (0.45 + n / 16.0)) F(4.6) /(137.5)
+    # alternate trifoliate leaf on a short petiole, pitched up off the stem
+    nproduce [ &(48) ,(2) /(90) @g(trifoliate(1.0)) ]
+    # axillary pod clusters on the mid/lower nodes
+    if n in (6, 4, 2):
+      nproduce [ +(30) ,(3) F(0.8) @g(pod_cluster(3, 1.0)) ]
+    # one lateral branch low on the plant (soybean is bushy/branched)
+    if n == 6:
+      nproduce [ +(38) ,(5) _(0.30) F(3.2) /(137.5) [ &(50) ,(2) /(90) @g(trifoliate(0.9)) ] [ &(55) ,(2) /(90) @g(trifoliate(0.8)) ] ]
+    produce Apex(n - 1)

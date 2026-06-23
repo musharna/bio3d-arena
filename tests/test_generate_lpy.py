@@ -12,10 +12,12 @@ from scripts.generate_lpy import CROPS, ingest_lpy
 TOMATO = "Solanum lycopersicum — single-image → 3D reconstruction"
 
 
-def test_lpy_crops_include_maize():
-    # Track B LLM-synth: an authored maize L-system wired as a crop variant.
+def test_lpy_crops_include_maize_and_soybean():
+    # Track B LLM-synth: authored per-crop L-systems wired as crop variants.
     assert CROPS["maize"]["task_title"] == "Zea mays — single-image → 3D reconstruction"
     assert CROPS["maize"]["model"].endswith("maize.lpy")
+    assert CROPS["soybean"]["task_title"] == "Glycine max — single-image → 3D reconstruction"
+    assert CROPS["soybean"]["model"].endswith("soybean.lpy")
     assert CROPS["tomato"]["variant"] == "tomato"
 
 
