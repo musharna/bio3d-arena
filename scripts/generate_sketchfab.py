@@ -23,6 +23,7 @@ from app.models import Task  # noqa: E402
 
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
 MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
+ROSE_TITLE = "Rosa — single-image → 3D reconstruction"
 
 # Verified on the Sketchfab API (license slug + isDownloadable) 2026-06-22. `keep` isolates the
 # fruiting-stage mesh for the multi-stage PolyOne pack (drops the title text + earlier stages).
@@ -90,10 +91,50 @@ MAIZE_ASSETS = [
     },
 ]
 
+# Whole-rose-plant/bush assets (Rosa). Verified on the Sketchfab API (license slug 'by'/'by-sa' +
+# isDownloadable + a glTF flavour) 2026-06-23 — all public-safe CC, gallery-weight (no decimation
+# needed). The heavy CC0 botanical whole-plant scans (Rosa multiflora/rugosa, 88-138MB) are held
+# back pending a decimate pass on the sketchfab convert.
+ROSE_ASSETS = [
+    {
+        "variant": "sketchfab-rose-overhead",
+        "uid": "139cd6e42a3e43bd9117fb44d6091abf",
+        "name": "Plant | Rosa chinensis",
+        "author": "OVERHEAD",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+    {
+        "variant": "sketchfab-rose-giantbooley",
+        "uid": "a92d6bdc2a364f50b838f62a528fbf40",
+        "name": "Rose Bush Scan",
+        "author": "giantbooley",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+    {
+        "variant": "sketchfab-rose-rosticostafi",
+        "uid": "3f97dc47b0fd4b1382f169d2f1d3b309",
+        "name": "Rose bush",
+        "author": "RosticOstafi",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+    {
+        "variant": "sketchfab-rose-ramakarl",
+        "uid": "f4d81ec952d04452a2f8421985875e56",
+        "name": "Rose Bush - Detailed",
+        "author": "ramakarl",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+]
+
 # Per-crop: subject task + curated asset set. Defaults preserve the original tomato behaviour.
 CROPS = {
     "tomato": {"task_title": TOMATO_TITLE, "assets": TOMATO_ASSETS},
     "maize": {"task_title": MAIZE_TITLE, "assets": MAIZE_ASSETS},
+    "rose": {"task_title": ROSE_TITLE, "assets": ROSE_ASSETS},
 }
 
 

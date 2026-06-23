@@ -24,6 +24,7 @@ from app.models import Task  # noqa: E402
 
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
 MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
+ROSE_TITLE = "Rosa — single-image → 3D reconstruction"
 PARTCRAFTER_LICENSE = "PartCrafter MIT (code+weights); generated from the CC reference photo"
 PARTCRAFTER_URL = "https://github.com/wgsxm/PartCrafter"
 
@@ -40,6 +41,11 @@ CROPS = {
         "task_title": MAIZE_TITLE,
         "image": "data/assets/reference/maize_ref.jpg",
         "tag": "maize",
+    },
+    "rose": {
+        "task_title": ROSE_TITLE,
+        "image": "data/assets/reference/rose_ref.jpg",
+        "tag": "rose",
     },
 }
 

@@ -27,6 +27,20 @@ def test_rose_x_registries_cc0():
     assert source_class("rose-x") == "scan"  # rose-x is a SCAN_DATASETS key
 
 
+def test_rose_in_crop_parametric_scripts():
+    # Tier 2 found + frontier: rose wired into the crop-parametric ingest scripts.
+    from scripts.generate_partcrafter import CROPS as PC_CROPS
+    from scripts.generate_sketchfab import CROPS as SF_CROPS
+    from scripts.source_scans import SCAN_TASKS
+
+    rose_title = "Rosa — single-image → 3D reconstruction"
+    assert SCAN_TASKS["rose"] == rose_title
+    assert SF_CROPS["rose"]["task_title"] == rose_title
+    assert len(SF_CROPS["rose"]["assets"]) >= 3
+    assert PC_CROPS["rose"]["task_title"] == rose_title
+    assert PC_CROPS["rose"]["image"].endswith("rose_ref.jpg")
+
+
 def test_seed_rose_subject_idempotent_and_buildable():
     db = SessionLocal()
     try:
