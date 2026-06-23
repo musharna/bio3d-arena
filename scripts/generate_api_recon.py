@@ -25,6 +25,10 @@ CROPS = {
     "tomato": {"task_title": TOMATO_TITLE, "image": "data/assets/reference/tomato_ref.jpg"},
     "maize": {"task_title": MAIZE_TITLE, "image": "data/assets/reference/maize_ref.jpg"},
     "rose": {"task_title": ROSE_TITLE, "image": "data/assets/reference/rose_ref.jpg"},
+    "soybean": {
+        "task_title": "Glycine max — single-image → 3D reconstruction",
+        "image": "data/assets/reference/soybean_ref.jpg",
+    },
 }
 
 

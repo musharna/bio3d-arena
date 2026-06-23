@@ -25,8 +25,9 @@ from app.models import Task  # noqa: E402
 
 MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
 ROSE_TITLE = "Rosa — single-image → 3D reconstruction"
+SOYBEAN_TITLE = "Glycine max — single-image → 3D reconstruction"
 # Map a Demeter --species to the bio3d-arena subject it attaches to.
-SPECIES_TASKS = {"maize": MAIZE_TITLE, "rose": ROSE_TITLE}
+SPECIES_TASKS = {"maize": MAIZE_TITLE, "rose": ROSE_TITLE, "soybean": SOYBEAN_TITLE}
 DEMETER_LICENSE = (
     "Demeter (academic non-commercial research generator — internal use; re-vet before public)"
 )

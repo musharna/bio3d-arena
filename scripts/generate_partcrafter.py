@@ -47,6 +47,11 @@ CROPS = {
         "image": "data/assets/reference/rose_ref.jpg",
         "tag": "rose",
     },
+    "soybean": {
+        "task_title": "Glycine max — single-image → 3D reconstruction",
+        "image": "data/assets/reference/soybean_ref.jpg",
+        "tag": "soybean",
+    },
 }
 
 

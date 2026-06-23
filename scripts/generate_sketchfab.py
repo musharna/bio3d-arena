@@ -24,6 +24,7 @@ from app.models import Task  # noqa: E402
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
 MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
 ROSE_TITLE = "Rosa — single-image → 3D reconstruction"
+SOYBEAN_TITLE = "Glycine max — single-image → 3D reconstruction"
 
 # Verified on the Sketchfab API (license slug + isDownloadable) 2026-06-22. `keep` isolates the
 # fruiting-stage mesh for the multi-stage PolyOne pack (drops the title text + earlier stages).
@@ -148,11 +149,49 @@ ROSE_ASSETS = [
     },
 ]
 
+# Soybean / legume assets. Verified CC-BY (license slug + glTF + isDownloadable) 2026-06-23. The
+# phenospex scan is a real whole soybean plant; marcosramone are whole bean seedlings (legume kin).
+SOYBEAN_ASSETS = [
+    {
+        "variant": "sketchfab-soy-phenospex",
+        "uid": "a70d4c333ba9447f90f38d5649e4b398",
+        "name": "Soy Bean (chemical-treatment experiment scan)",
+        "author": "phenospex_nl",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+    {
+        "variant": "sketchfab-soy-beanseedling1",
+        "uid": "83d907b3dbd848af8fb20620464a6ba3",
+        "name": "Bean Sprouting Scan 01",
+        "author": "marcosramone25",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+    {
+        "variant": "sketchfab-soy-beanseedling2",
+        "uid": "b1a34a492ced415295202543ad6b408c",
+        "name": "Bean Sprouting Scan 02",
+        "author": "marcosramone25",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+    {
+        "variant": "sketchfab-soy-seed",
+        "uid": "0d4505aac3a44a3eb921d65e82c0922d",
+        "name": "Soybean",
+        "author": "mrSpeedle",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+]
+
 # Per-crop: subject task + curated asset set. Defaults preserve the original tomato behaviour.
 CROPS = {
     "tomato": {"task_title": TOMATO_TITLE, "assets": TOMATO_ASSETS},
     "maize": {"task_title": MAIZE_TITLE, "assets": MAIZE_ASSETS},
     "rose": {"task_title": ROSE_TITLE, "assets": ROSE_ASSETS},
+    "soybean": {"task_title": SOYBEAN_TITLE, "assets": SOYBEAN_ASSETS},
 }
 
 

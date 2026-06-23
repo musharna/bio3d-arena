@@ -31,6 +31,20 @@ def test_soybean_in_scan_tasks():
     assert SCAN_TASKS["soybean"] == SOYBEAN_SUBJECT_TITLE
 
 
+def test_soybean_in_crop_parametric_scripts():
+    # Tier 2/3: soybean wired into found (sketchfab), frontier (partcrafter), recon (api), procedural (demeter).
+    from scripts.generate_api_recon import CROPS as RECON_CROPS
+    from scripts.generate_demeter import SPECIES_TASKS
+    from scripts.generate_partcrafter import CROPS as PC_CROPS
+    from scripts.generate_sketchfab import CROPS as SF_CROPS
+
+    assert SF_CROPS["soybean"]["task_title"] == SOYBEAN_SUBJECT_TITLE
+    assert len(SF_CROPS["soybean"]["assets"]) >= 3
+    assert PC_CROPS["soybean"]["image"].endswith("soybean_ref.jpg")
+    assert RECON_CROPS["soybean"]["task_title"] == SOYBEAN_SUBJECT_TITLE
+    assert SPECIES_TASKS["soybean"] == SOYBEAN_SUBJECT_TITLE
+
+
 def test_seed_soybean_subject_idempotent_and_buildable():
     db = SessionLocal()
     try:
