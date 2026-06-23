@@ -104,8 +104,12 @@ def test_generate_fal_text_mode_passes_prompt():
     glb = _box_glb()
     t = FakeFalTransport(["COMPLETED"], "https://fal/x.glb", glb)
     out = generate_fal(
-        "a tomato plant", api_key="k", model="fal-ai/hunyuan3d-v3/text-to-3d",
-        mode="text", transport=t, poll_interval_s=0,
+        "a tomato plant",
+        api_key="k",
+        model="fal-ai/hunyuan3d-v3/text-to-3d",
+        mode="text",
+        transport=t,
+        poll_interval_s=0,
     )
     assert out == glb
     assert t.last_mode == "text" and t.last_source == "a tomato plant"
@@ -115,8 +119,12 @@ def test_generate_replicate_text_mode_passes_prompt():
     glb = _box_glb()
     t = FakeReplicateTransport(["succeeded"], "https://rep/x.glb", glb)
     out = generate_replicate(
-        "a tomato fruit", api_key="k", model="tencent/hunyuan-3d-3.1",
-        mode="text", transport=t, poll_interval_s=0,
+        "a tomato fruit",
+        api_key="k",
+        model="tencent/hunyuan-3d-3.1",
+        mode="text",
+        transport=t,
+        poll_interval_s=0,
     )
     assert out == glb
     assert t.last_mode == "text" and t.last_source == "a tomato fruit"
@@ -155,7 +163,8 @@ def test_providers_registry_catalog():
 
 
 def test_fal_transport_multiview_builds_image_urls():
-    """The real FalTransport.submit multiview branch packs N views into image_urls (no network)."""
+    """The real FalTransport.submit multiview branch packs N views into image_urls (no network).
+    The fal queue body carries input fields at the ROOT — no {"input": ...} wrapper."""
     from app.image3d import FalTransport
 
     captured = {}
@@ -174,5 +183,98 @@ def test_fal_transport_multiview_builds_image_urls():
 
     t = FalTransport(client=FakeClient())
     t.submit([b"v1", b"v2"], "fal-ai/trellis/multi", "k", "multiview")
-    urls = captured["json"]["input"]["image_urls"]
+    assert "input" not in captured["json"]  # input fields live at the body root
+    urls = captured["json"]["image_urls"]
     assert len(urls) == 2 and all(u.startswith("data:image") for u in urls)
+
+
+def _tiny_jpeg() -> bytes:
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 24), (200, 50, 50)).save(buf, "JPEG")
+    return buf.getvalue()
+
+
+def test_fal_transport_image_body_is_unwrapped_and_downscaled():
+    """Image mode posts {"image_url": <data-uri>} at the body root (no wrapper)."""
+    from app.image3d import FalTransport
+
+    captured = {}
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"request_id": "r", "status_url": "s", "response_url": "x"}
+
+    class FakeClient:
+        def post(self, url, headers, json):
+            captured["json"] = json
+            return FakeResp()
+
+    t = FalTransport(client=FakeClient())
+    t.submit(_tiny_jpeg(), "fal-ai/trellis", "k", "image")
+    assert "input" not in captured["json"]
+    assert captured["json"]["image_url"].startswith("data:image/jpeg;base64,")
+
+
+def test_replicate_transport_uses_version_endpoint_and_schema_field():
+    """Submit GETs the model for its latest version + input schema, then POSTs to
+    /predictions with {"version", "input"} using the schema's image field (images→list)."""
+    from app.image3d import ReplicateTransport
+
+    captured = {}
+
+    class FakeResp:
+        def __init__(self, payload):
+            self._p = payload
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self._p
+
+    class FakeClient:
+        def get(self, url, headers):
+            captured["get_url"] = url
+            return FakeResp(
+                {
+                    "latest_version": {
+                        "id": "ver123",
+                        "openapi_schema": {
+                            "components": {
+                                "schemas": {
+                                    "Input": {
+                                        "properties": {
+                                            "images": {},
+                                            "seed": {},
+                                            "generate_model": {},
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                    }
+                }
+            )
+
+        def post(self, url, headers, json):
+            captured["post_url"] = url
+            captured["body"] = json
+            return FakeResp({"urls": {"get": "https://api.replicate.com/v1/predictions/p1"}})
+
+    t = ReplicateTransport(client=FakeClient())
+    req = t.submit(_tiny_jpeg(), "firtoz/trellis", "k", "image")
+    assert captured["get_url"].endswith("/models/firtoz/trellis")
+    assert captured["post_url"].endswith(
+        "/predictions"
+    )  # version endpoint, not /models/.../predictions
+    assert captured["body"]["version"] == "ver123"
+    imgs = captured["body"]["input"]["images"]  # 'images' schema field → list
+    assert isinstance(imgs, list) and imgs[0].startswith("data:image")
+    assert req["get_url"].endswith("/predictions/p1")

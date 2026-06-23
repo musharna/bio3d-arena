@@ -121,6 +121,34 @@ def _data_uri(image_bytes: bytes, mime: str | None = None) -> str:
     return f"data:{mime};base64," + base64.b64encode(image_bytes).decode("ascii")
 
 
+def _downscale_image(image_bytes: bytes, *, max_dim: int = 1024, quality: int = 88) -> bytes:
+    """Downscale an image to fit max_dim and re-encode as JPEG.
+
+    Reference photos can be several MB; inlined as a base64 data URI they produce multi-MB
+    request bodies that providers reject (fal returns 422) and that trip TLS resets mid-upload.
+    Image-to-3D models work from ~1024px, so shrink first. Returns the original bytes unchanged
+    if Pillow cannot decode them (don't fail a generation over a thumbnailing edge case).
+    """
+    import io
+
+    from PIL import Image
+
+    try:
+        im = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    except Exception:  # noqa: BLE001 — undecodable input: pass through rather than abort the job
+        return image_bytes
+    if max(im.size) > max_dim:
+        im.thumbnail((max_dim, max_dim))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=quality)
+    return buf.getvalue()
+
+
+def _image_data_uri(image_bytes: bytes) -> str:
+    """Downscale then inline an image as a data URI (the size-safe path for image inputs)."""
+    return _data_uri(_downscale_image(image_bytes))
+
+
 def generate_fal(
     source,
     *,
@@ -177,13 +205,15 @@ class FalTransport:
         if mode == "text":
             inp = {"prompt": source}
         elif mode == "multiview":  # source is a list of view-image bytes
-            inp = {"image_urls": [_data_uri(v) for v in source]}
+            inp = {"image_urls": [_image_data_uri(v) for v in source]}
         else:
-            inp = {"image_url": _data_uri(source)}
+            inp = {"image_url": _image_data_uri(source)}
+        # The fal queue endpoint takes the input fields at the body ROOT — NOT wrapped in
+        # {"input": ...} (a wrapper yields 422 "image_url field required").
         r = self._client.post(
             f"{self.BASE}/{model}",
             headers=self._hdr(api_key),
-            json={"input": inp},
+            json=inp,
         )
         r.raise_for_status()
         return r.json()  # {request_id, status_url, response_url}
@@ -259,12 +289,44 @@ class ReplicateTransport:
     def _hdr(self, api_key: str) -> dict:
         return {"Authorization": f"Bearer {api_key}"}
 
+    # image input field name varies by model (TRELLIS=images[list], Hunyuan/Rodin=image, …);
+    # resolved from the model's input schema rather than hard-coded.
+    _IMAGE_FIELDS = ("images", "image", "image_url", "input_image")
+
     def submit(self, source, model: str, api_key: str, mode: str = "image") -> dict:
-        inp = {"prompt": source} if mode == "text" else {"image": _data_uri(source)}
+        # Community models require the version-pinned /predictions endpoint;
+        # /models/{owner}/{name}/predictions 404s for them (official models only).
+        m = self._client.get(f"{self.BASE}/models/{model}", headers=self._hdr(api_key))
+        m.raise_for_status()
+        md = m.json()
+        ver = md.get("latest_version") or {}
+        version = ver.get("id")
+        if not version:
+            raise Image3DError(f"replicate {model}: no latest_version to pin")
+        inp: dict[str, object]
+        if mode == "text":
+            inp = {"prompt": source}
+        else:
+            props = (
+                (((ver.get("openapi_schema") or {}).get("components") or {}).get("schemas") or {})
+                .get("Input", {})
+                .get("properties", {})
+            )
+            field = next((f for f in self._IMAGE_FIELDS if f in props), None)
+            if field is None:
+                raise Image3DError(
+                    f"replicate {model}: no known image input field in schema {list(props)}"
+                )
+            uri = _image_data_uri(source)
+            inp = {field: [uri]} if field == "images" else {field: uri}
+            # Some models gate the GLB export behind a flag (TRELLIS: generate_model defaults
+            # False → only video/gaussian, no mesh). We want the mesh, so opt in when offered.
+            if "generate_model" in props:
+                inp["generate_model"] = True
         r = self._client.post(
-            f"{self.BASE}/models/{model}/predictions",
+            f"{self.BASE}/predictions",
             headers=self._hdr(api_key),
-            json={"input": inp},
+            json={"version": version, "input": inp},
         )
         r.raise_for_status()
         d = r.json()
