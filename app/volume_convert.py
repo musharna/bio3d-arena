@@ -116,6 +116,12 @@ def volume_to_glb(
     mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
     if len(mesh.faces) > max_faces:
         mesh = mesh.simplify_quadric_decimation(face_count=max_faces)
+    if len(mesh.faces) > max_faces:
+        print(
+            f"WARNING: {src_path}: mesh exceeds face budget after decimation "
+            f"({len(mesh.faces)} faces > {max_faces} limit); returning over-budget mesh",
+            flush=True,
+        )
     glb = mesh.export(file_type="glb")
     if not glb:
         raise VolumeConvertError(f"{src_path}: empty GLB export")
