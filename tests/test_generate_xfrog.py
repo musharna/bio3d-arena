@@ -10,20 +10,25 @@ from app.models import Category, ModelOutput, Task
 from scripts.generate_xfrog import ingest_xfrog
 
 TOMATO = "Solanum lycopersicum — single-image → 3D reconstruction"
+MAIZE = "Zea mays — single-image → 3D reconstruction"
 
 
 def setup_module(_m):
     init_db()
 
 
-def _tomato_task(db):
+def _task(db, title):
     cat = db.query(Category).filter_by(slug="plants").first() or Category(
         slug="plants", name="Plants"
     )
     db.add(cat)
     db.flush()
-    db.add(Task(category_id=cat.id, title=TOMATO, prompt="p"))
+    db.add(Task(category_id=cat.id, title=title, prompt="p"))
     db.commit()
+
+
+def _tomato_task(db):
+    _task(db, TOMATO)
 
 
 def _fake_glb(path):
@@ -49,6 +54,37 @@ def test_ingest_xfrog_hosts_found_growth_stage(tmp_path):
         )  # purchased asset = found, not procedural
         assert "XfrogPlants" in out.license and "re-vet" in out.license  # commercial + re-vet flag
         assert json.loads(out.meta_json)["growth_stage"] == 7
+    finally:
+        db.close()
+
+
+def test_ingest_xfrog_maize_crop_labeling(tmp_path):
+    """A second crop (maize/AG20) labels variant, title, and attribution from its own crop fields."""
+    db = SessionLocal()
+    try:
+        _task(db, MAIZE)
+        report = ingest_xfrog(
+            db,
+            [(str(tmp_path / "s8.glb"), 8)],
+            to_glb=_fake_glb,
+            ag_code="AG20",
+            species="Zea mays",
+            common="maize",
+            task_title=MAIZE,
+        )
+        assert report["hosted"] == 1
+        out = (
+            db.execute(
+                select(ModelOutput).where(ModelOutput.attribution.contains("Zea mays (AG20)"))
+            )
+            .scalars()
+            .one()
+        )
+        assert out.source == "found:xfrog"
+        meta = json.loads(out.meta_json)
+        assert meta["variant"] == "xfrog-AG20-s8"
+        assert meta["growth_stage"] == 8
+        assert "maize" in out.title
     finally:
         db.close()
 
