@@ -21,8 +21,15 @@ from app.mesh_convert import MeshConvertError  # noqa: E402
 from app.models import Task  # noqa: E402
 
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
-LPY_LICENSE = "L-Py/PlantGL (OpenAlea, CeCILL-C); tomato L-system authored for bio3d-arena"
+MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
+LPY_LICENSE = "L-Py/PlantGL (OpenAlea, CeCILL-C); L-system authored for bio3d-arena"
 LPY_URL = "https://github.com/openalea/lpy"
+
+# Per-crop authored L-system. Track B LLM-synth: an LLM authors a per-crop .lpy → critic-gate → ingest.
+CROPS = {
+    "tomato": {"model": "lpy/tomato.lpy", "task_title": TOMATO_TITLE, "variant": "tomato"},
+    "maize": {"model": "lpy/maize.lpy", "task_title": MAIZE_TITLE, "variant": "maize"},
+}
 
 
 def ingest_lpy(
@@ -97,9 +104,16 @@ def main() -> int:
         ),
         help="python of the conda env with openalea.lpy + plantgl (or set LPY_ENV_PYTHON)",
     )
-    ap.add_argument("--model", default=str(repo / "lpy/tomato.lpy"), help="path to the .lpy model")
+    ap.add_argument(
+        "--crop", default="tomato", choices=sorted(CROPS), help="which crop's authored L-system"
+    )
+    ap.add_argument("--model", default="", help="override .lpy path (default: the crop's model)")
     ap.add_argument("--no-score", action="store_true")
     args = ap.parse_args()
+
+    crop = CROPS[args.crop]
+    if not args.model:
+        args.model = str(repo / crop["model"])
 
     lpy_py = Path(args.lpy_python)
     runner = repo / "scripts/lpy_runner.py"
@@ -128,6 +142,8 @@ def main() -> int:
             [obj],
             to_glb=obj_to_glb,
             score_fn=None if args.no_score else recon_service.score_and_store,
+            variant=crop["variant"],
+            task_title=crop["task_title"],
         )
         print(report)
     finally:

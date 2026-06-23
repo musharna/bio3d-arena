@@ -7,9 +7,16 @@ from app import sourcing
 from app.database import SessionLocal, init_db
 from app.mesh_convert import MeshConvertError
 from app.models import Category, ModelOutput, Task
-from scripts.generate_lpy import ingest_lpy
+from scripts.generate_lpy import CROPS, ingest_lpy
 
 TOMATO = "Solanum lycopersicum — single-image → 3D reconstruction"
+
+
+def test_lpy_crops_include_maize():
+    # Track B LLM-synth: an authored maize L-system wired as a crop variant.
+    assert CROPS["maize"]["task_title"] == "Zea mays — single-image → 3D reconstruction"
+    assert CROPS["maize"]["model"].endswith("maize.lpy")
+    assert CROPS["tomato"]["variant"] == "tomato"
 
 
 def setup_module(_m):
