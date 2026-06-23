@@ -73,7 +73,29 @@ def _maize_traits():
     )
 
 
-_TRAITS = {"tomato": _tomato_traits, "maize": _maize_traits}
+def _rose_traits():
+    # Literal Rosa canina traits; growth_form="shrub" resolves AgriGen's canonical rosa_canina PD
+    # (the shrub anchor: multi-stem woody perennial ~1-3 m, swept_circle canes). NB the PD models
+    # canes + leaves only — no flower/bloom (AgriGen has no petal organ) → a flowerless rose bush.
+    from agrigen.traits.schema import TraitValue, TraitVector, UniversalTraits
+
+    return TraitVector(
+        species_id=7,
+        scientific_name="Rosa canina",
+        generated_at=datetime.now(timezone.utc),
+        trait_vector_hash="bio3d_rose",
+        universal=UniversalTraits(
+            plant_height_cm=TraitValue(value=150.0, unit="cm", confidence=0.9, source="lit"),
+            stem_diameter_mm=TraitValue(value=20.0, unit="mm", confidence=0.9, source="lit"),
+            leaf_area_cm2=TraitValue(value=15.0, unit="cm²", confidence=0.9, source="lit"),
+            growth_form="shrub",
+        ),
+        overall_confidence=0.9,
+        low_confidence_traits=[],
+    )
+
+
+_TRAITS = {"tomato": _tomato_traits, "maize": _maize_traits, "rose": _rose_traits}
 
 
 def main() -> int:

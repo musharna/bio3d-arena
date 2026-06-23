@@ -41,6 +41,17 @@ def test_rose_in_crop_parametric_scripts():
     assert PC_CROPS["rose"]["image"].endswith("rose_ref.jpg")
 
 
+def test_rose_in_procedural_scripts():
+    # Tier 3 procedural (flowerless caveats): rose wired into demeter + agrigen.
+    from scripts.generate_agrigen import AGRIGEN_CROPS
+    from scripts.generate_demeter import SPECIES_TASKS
+
+    rose_title = "Rosa — single-image → 3D reconstruction"
+    assert SPECIES_TASKS["rose"] == rose_title
+    assert AGRIGEN_CROPS["rose"]["task_title"] == rose_title
+    assert "bloom" in AGRIGEN_CROPS["rose"]["caveat"].lower()  # honest flowerless caveat
+
+
 def test_seed_rose_subject_idempotent_and_buildable():
     db = SessionLocal()
     try:

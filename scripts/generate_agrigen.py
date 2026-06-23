@@ -19,6 +19,7 @@ from app.models import Task  # noqa: E402
 
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
 MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
+ROSE_TITLE = "Rosa — single-image → 3D reconstruction"
 AGRIGEN_LICENSE = "AgriGen (internal research generator — not for redistribution)"
 AGRIGEN_ATTRIBUTION = "AgriGen UnifiedGenerator (Solanum lycopersicum plant descriptor)"
 # Honest caveat: AgriGen is a coherent L-system + neural-leaf plant, but its neural leaf blades are
@@ -41,6 +42,14 @@ AGRIGEN_CROPS = {
         "attribution": "AgriGen UnifiedGenerator (Zea mays plant descriptor)",
         "caveat": "L-system + neural-leaf — short spiky leaves (not long maize straps), "
         "no tassel/ear, low fidelity",
+    },
+    "rose": {
+        "variant": "rose",
+        "task_title": ROSE_TITLE,
+        "attribution": "AgriGen UnifiedGenerator (Rosa canina plant descriptor)",
+        # rosa_canina PD = the shrub anchor: swept_circle canes + leaves, NO flower (AgriGen has
+        # no petal organ) → a flowerless rose bush. Honest caveat-class, like the maize/tomato.
+        "caveat": "L-system + neural-leaf shrub — canes + leaves only, NO bloom, low fidelity",
     },
 }
 

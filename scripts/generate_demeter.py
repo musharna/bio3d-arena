@@ -24,10 +24,13 @@ from app.mesh_convert import MeshConvertError  # noqa: E402
 from app.models import Task  # noqa: E402
 
 MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
+ROSE_TITLE = "Rosa — single-image → 3D reconstruction"
+# Map a Demeter --species to the bio3d-arena subject it attaches to.
+SPECIES_TASKS = {"maize": MAIZE_TITLE, "rose": ROSE_TITLE}
 DEMETER_LICENSE = (
     "Demeter (academic non-commercial research generator — internal use; re-vet before public)"
 )
-DEMETER_ATTRIBUTION = "Demeter learned-morphable plant generator (Zea mays plant graph)"
+DEMETER_ATTRIBUTION = "Demeter learned-morphable plant generator (learned PCA plant graph)"
 DEMETER_CAVEAT = "learned PCA-morphable mesh — clumpy uncolored leaves, no tassel/ear, low fidelity"
 
 
@@ -196,6 +199,7 @@ def main() -> int:
             to_glb=obj_to_glb_yup,
             score_fn=None if args.no_score else recon_service.score_and_store,
             variant=args.species,
+            task_title=SPECIES_TASKS.get(args.species, MAIZE_TITLE),
             caveat=caveat or None,
         )
         print(report)
