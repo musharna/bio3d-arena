@@ -128,6 +128,24 @@ ROSE_ASSETS = [
         "license": "CC-BY 4.0",
         "keep": None,
     },
+    # CC0 botanical whole-plant photogrammetry scans (ffishAsia-and-floraZia), full Linnaean
+    # taxonomy. HEAVY (1.4-1.5M faces) → ingest with --max-faces (decimate). Cleanest license.
+    {
+        "variant": "sketchfab-rose-multiflora",
+        "uid": "696091d213a44b6680e91c7fa472d26e",
+        "name": "Wild Rose (Rosa multiflora)",
+        "author": "ffishAsia-and-floraZia",
+        "license": "CC0",
+        "keep": None,
+    },
+    {
+        "variant": "sketchfab-rose-rugosa",
+        "uid": "78127e37fa104f01a8187893574349a8",
+        "name": "Hamanasu Rose (Rosa rugosa)",
+        "author": "ffishAsia-and-floraZia",
+        "license": "CC0",
+        "keep": None,
+    },
 ]
 
 # Per-crop: subject task + curated asset set. Defaults preserve the original tomato behaviour.
@@ -204,7 +222,30 @@ if keep:
     for o in list(bpy.data.objects):
         if o.type == "MESH" and o.name not in keep:
             bpy.data.objects.remove(o, do_unlink=True)
-bpy.ops.export_scene.gltf(filepath=a["out"], export_format="GLB", use_selection=False)
+# Decimate to a gallery face budget for heavy scans (e.g. the 1-2M-face CC0 botanical roses); the
+# light game/scan assets stay untouched. Preserves per-part materials; export_apply bakes the modifier.
+mf = a.get("max_faces") or 0
+if mf:
+    total = sum(len(o.data.polygons) for o in bpy.data.objects if o.type == "MESH")
+    if total > mf:
+        ratio = max(0.02, mf / total)
+        for o in bpy.data.objects:
+            if o.type == "MESH":
+                o.modifiers.new("dec", "DECIMATE").ratio = ratio
+# Downscale textures too: photogrammetry scans bake huge images (the real GLB-weight driver, not
+# the face count). Cap the longest side so the embedded GLB textures are gallery-weight.
+mt = a.get("max_tex") or 0
+if mt:
+    for img in list(bpy.data.images):
+        w, h = img.size
+        if w and h and max(w, h) > mt:
+            s = mt / max(w, h)
+            try:
+                img.scale(max(1, int(w * s)), max(1, int(h * s)))
+            except Exception as e:
+                print("tex scale skip", img.name, e)
+bpy.ops.export_scene.gltf(filepath=a["out"], export_format="GLB", use_selection=False,
+                          export_apply=True)
 """
 
 
@@ -230,10 +271,29 @@ def main() -> int:
     ap.add_argument(
         "--crop", default="tomato", choices=sorted(CROPS), help="which crop's curated asset set"
     )
+    ap.add_argument(
+        "--max-faces",
+        type=int,
+        default=0,
+        help="decimate meshes above this face budget (0 = off; e.g. 150000 for heavy scans)",
+    )
+    ap.add_argument(
+        "--max-tex",
+        type=int,
+        default=0,
+        help="downscale textures to this longest-side px (0 = off; e.g. 2048 for heavy scans)",
+    )
+    ap.add_argument(
+        "--only",
+        default="",
+        help="comma-separated variant slugs to ingest (default: the crop's whole set)",
+    )
     ap.add_argument("--no-score", action="store_true")
     args = ap.parse_args()
 
     crop = CROPS[args.crop]
+    only = {v.strip() for v in args.only.split(",") if v.strip()}
+    assets = [a for a in crop["assets"] if not only or a["variant"] in only]
 
     token = os.environ.get("SKETCHFAB_TOKEN")
     if not token:
@@ -251,7 +311,7 @@ def main() -> int:
     script = work / "convert.py"
     script.write_text(_BLENDER_CONVERT)
     items = []
-    for asset in crop["assets"]:
+    for asset in assets:
         uid = asset["uid"]
         try:
             req = urllib.request.Request(
@@ -283,7 +343,15 @@ def main() -> int:
                     "-P",
                     str(script),
                     "--",
-                    json.dumps({"src": str(gltfs[0]), "out": str(glb), "keep": asset["keep"]}),
+                    json.dumps(
+                        {
+                            "src": str(gltfs[0]),
+                            "out": str(glb),
+                            "keep": asset["keep"],
+                            "max_faces": args.max_faces,
+                            "max_tex": args.max_tex,
+                        }
+                    ),
                 ],
                 check=True,
                 timeout=300,
