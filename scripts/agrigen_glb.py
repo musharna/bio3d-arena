@@ -48,3 +48,26 @@ def recolor_leaves(glb_bytes: bytes, color=LEAF_GREEN) -> bytes:
         if "leaf" in (m.get("name") or "").lower():
             m.setdefault("pbrMetallicRoughness", {})["baseColorFactor"] = rgba
     return _repack(ver, js, bin_chunk)
+
+
+# AgriGen writes the plant growing along glTF +Z (a horizontal/depth axis), so <model-viewer>
+# (glTF is +Y up) shows it lying on its side. A −90° rotation about X maps +Z → +Y (upright).
+# Quaternion [x,y,z,w] for −90° about X = [sin(−45°), 0, 0, cos(−45°)].
+_UPRIGHT_QUAT = [-0.7071067811865476, 0.0, 0.0, 0.7071067811865476]
+
+
+def reorient_upright(glb_bytes: bytes, rotation=_UPRIGHT_QUAT) -> bytes:
+    """Stand the plant up for +Y-up viewers by wrapping the default scene's root nodes under a new
+    parent node carrying `rotation`. Composes with any existing node transforms (child TRS/matrix
+    are preserved); returns a valid GLB. No-op (still valid) if the GLB has no scene nodes.
+    """
+    ver, js, bin_chunk = _split_glb(glb_bytes)
+    nodes = js.setdefault("nodes", [])
+    scenes = js.get("scenes") or []
+    scene = scenes[js.get("scene", 0)] if scenes else None
+    if not scene or not scene.get("nodes"):
+        return _repack(ver, js, bin_chunk)
+    wrapper = {"rotation": [float(c) for c in rotation], "children": list(scene["nodes"])}
+    nodes.append(wrapper)
+    scene["nodes"] = [len(nodes) - 1]
+    return _repack(ver, js, bin_chunk)

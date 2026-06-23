@@ -118,7 +118,7 @@ def main() -> int:
 
     from app import recon_service
     from app.database import SessionLocal
-    from scripts.agrigen_glb import recolor_leaves
+    from scripts.agrigen_glb import recolor_leaves, reorient_upright
 
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
@@ -169,7 +169,10 @@ def main() -> int:
 
     def to_glb(path: str) -> bytes:
         data = Path(path).read_bytes()
-        return data if args.no_recolor else recolor_leaves(data)
+        if not args.no_recolor:
+            data = recolor_leaves(data)
+        # AgriGen writes plants growing along glTF +Z; stand them up for +Y-up <model-viewer>.
+        return reorient_upright(data)
 
     db = SessionLocal()
     try:
