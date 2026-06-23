@@ -51,3 +51,22 @@ def test_label_depiction():
     assert label_depiction("cherry tomatoes") == "fruit"
     assert label_depiction("tomato leaf closeup") == "leaf"
     assert label_depiction("tomato soup can") == "other"
+
+
+from app.sourcing import VOLUMETRIC_DATASETS, source_class
+
+
+def test_source_class_volumetric():
+    assert source_class("mri:ipk-barley-mri") == "volumetric"
+    assert source_class("ct:some-dataset") == "volumetric"
+    # existing classes still resolve
+    assert source_class("crops3d") == "scan"
+    assert source_class("bio3d-arena") == "ai"
+    assert source_class("procedural:lpy") == "procedural"
+
+
+def test_volumetric_dataset_registry_barley():
+    d = VOLUMETRIC_DATASETS["ipk-barley-mri"]
+    assert d["license"] == "CC-BY 4.0"
+    assert d["modality"] == "MRI"
+    assert "10.5447/IPK/2017/10" in d["url"]

@@ -81,6 +81,19 @@ SCAN_DATASETS: dict[str, dict] = {
 }
 SCAN_SOURCES = frozenset(SCAN_DATASETS)
 
+# Volumetric / tomographic datasets (CT / MRI / X-ray). A real measured-3D sensor axis distinct
+# from the LiDAR/photogrammetry `scan` class. Source strings are `<modality>:<dataset>`.
+VOLUMETRIC_DATASETS: dict[str, dict] = {
+    "ipk-barley-mri": {
+        "name": "IPK barley root MRI",
+        "license": "CC-BY 4.0",
+        "attribution": "3D MRI of three-week-old barley roots — IPK Gatersleben e!DAL-PGP "
+        "(Pflugfelder et al.; DOI 10.5447/IPK/2017/10)",
+        "url": "https://doi.org/10.5447/IPK/2017/10",
+        "modality": "MRI",
+    },
+}
+
 
 def source_class(source: str | None) -> str:
     """Group key for the spotlight: 'ai' (our recon — local or via an image-to-3D API),
@@ -95,6 +108,8 @@ def source_class(source: str | None) -> str:
         return "ai"
     if source == "infinigen" or (source or "").startswith("procedural:"):
         return "procedural"
+    if (source or "").startswith(("ct:", "mri:")):
+        return "volumetric"  # CT/MRI/X-ray tomography — a real-measured-3D sensor axis
     if source in SCAN_SOURCES:
         return "scan"
     return "found"
