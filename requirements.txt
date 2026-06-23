@@ -7,6 +7,11 @@ pydantic==2.13.4
 numpy==2.4.6
 trimesh==4.12.2
 fast-simplification==0.1.13  # quadric decimation backend for to_glb(max_faces=...) — dense laser scans
+# volumetric (CT/MRI) conversion
+scikit-image>=0.24
+scipy>=1.13
+nibabel>=5.2
+tifffile>=2024.1.30
 # dev/test
 pytest==9.1.1
 httpx==0.28.1
