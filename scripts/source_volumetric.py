@@ -86,3 +86,61 @@ def ingest_volumetric(
             report["errors"] += 1
             db.rollback()
     return report
+
+
+def main() -> int:
+    import argparse
+
+    from app.database import SessionLocal
+    from app.seed import seed_volumetric_subjects
+    from app.volume_convert import volume_to_glb
+
+    BARLEY_TITLE = "Hordeum vulgare — barley root system (3D MRI)"
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--dataset", default="ipk-barley-mri", choices=sorted(VOLUMETRIC_DATASETS))
+    ap.add_argument("--task", default=BARLEY_TITLE, help="subject task title to attach to")
+    ap.add_argument("--modality", default="MRI")
+    ap.add_argument("--dir", required=True, help="local dir of volume files (.nii/.nii.gz/.tif)")
+    ap.add_argument("--threshold", type=float, default=None, help="iso-level (default: Otsu)")
+    ap.add_argument("--max-faces", type=int, default=200_000)
+    ap.add_argument("--step", type=int, default=1, help="marching-cubes downsample stride")
+    ap.add_argument("--limit", type=int, default=1)
+    args = ap.parse_args()
+
+    root = Path(args.dir)
+    if not root.exists():
+        print(f"volume dir not found: {root}")
+        return 1
+    vols = sorted(
+        str(p) for ext in ("*.nii", "*.nii.gz", "*.tif", "*.tiff") for p in root.rglob(ext)
+    )
+    if not vols:
+        print(f"no .nii/.nii.gz/.tif volumes under {root}")
+        return 1
+
+    def to_glb(path: str) -> bytes:
+        return volume_to_glb(
+            path, threshold=args.threshold, max_faces=args.max_faces, step_size=args.step
+        )
+
+    db = SessionLocal()
+    try:
+        seed_volumetric_subjects(db)  # ensure the subject Task exists
+        db.commit()
+        report = ingest_volumetric(
+            db,
+            vols,
+            dataset=args.dataset,
+            to_glb=to_glb,
+            task_title=args.task,
+            modality=args.modality,
+            limit=args.limit,
+        )
+        print(report)
+    finally:
+        db.close()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
