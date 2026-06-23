@@ -25,6 +25,38 @@ class Image3DError(Exception):
 _SUCCESS = {"success", "succeeded", "completed"}
 _FAILED = {"failed", "error", "cancelled", "canceled", "banned", "expired"}
 
+# Transient HTTP failures worth retrying: provider rate limits + gateway errors.
+_RETRY_STATUS = {429, 500, 502, 503, 504}
+
+
+def _send_with_retry(call, *, attempts: int = 5, base_delay: float = 2.0):
+    """Run an HTTP thunk with exponential backoff over transient failures.
+
+    Retries on network/TLS blips (httpx.TransportError — the intermittent SSL "bad record mac"
+    seen against fal/replicate) and on retryable status codes (429 rate-limit, 5xx), honouring a
+    numeric Retry-After when present. Non-retryable responses are returned as-is for the caller's
+    own raise_for_status. Bounded so a persistently-down provider still fails loudly.
+    """
+    last_exc = None
+    for i in range(attempts):
+        try:
+            resp = call()
+        except httpx.TransportError as e:  # connection reset / SSL alert / read error
+            last_exc = e
+            if i == attempts - 1:
+                raise
+            time.sleep(base_delay * (2**i))
+            continue
+        if getattr(resp, "status_code", 200) in _RETRY_STATUS and i < attempts - 1:
+            ra = resp.headers.get("Retry-After") if hasattr(resp, "headers") else None
+            delay = float(ra) if (ra and str(ra).isdigit()) else base_delay * (2**i)
+            time.sleep(delay)
+            continue
+        return resp
+    if last_exc is not None:  # pragma: no cover — loop returns or raises before here
+        raise last_exc
+    raise Image3DError("retry loop exhausted without a response")
+
 
 def generate_tripo(
     image_bytes: bytes,
@@ -155,6 +187,7 @@ def generate_fal(
     api_key: str,
     model: str,
     mode: str = "image",
+    image_field: str = "image_url",
     transport=None,
     timeout_s: int = 300,
     poll_interval_s: int = 5,
@@ -164,9 +197,13 @@ def generate_fal(
     `source` is image bytes when mode="image" (default), a text prompt (str) when mode="text"
     (text→3D), or a list of view-image bytes when mode="multiview" (multi-view reconstruction).
     Text→3D outputs are organ/part-level, not faithful whole plants.
+
+    `image_field` is the model's image input key — it differs per fal model (trellis/triposr use
+    `image_url`; hunyuan3d uses `input_image_url`; rodin uses `input_image_urls` (a list)). A
+    field name ending in "urls" is sent as a single-element list.
     """
     t = transport or FalTransport()
-    req = t.submit(source, model, api_key, mode)
+    req = t.submit(source, model, api_key, mode, image_field)
     waited = 0
     while True:
         status, glb_url = t.poll(req, api_key)
@@ -201,19 +238,22 @@ class FalTransport:
     def _hdr(self, api_key: str) -> dict:
         return {"Authorization": f"Key {api_key}"}
 
-    def submit(self, source, model: str, api_key: str, mode: str = "image") -> dict:
+    def submit(
+        self, source, model: str, api_key: str, mode: str = "image", image_field: str = "image_url"
+    ) -> dict:
         if mode == "text":
             inp = {"prompt": source}
         elif mode == "multiview":  # source is a list of view-image bytes
-            inp = {"image_urls": [_image_data_uri(v) for v in source]}
+            field = image_field if image_field.endswith("urls") else "image_urls"
+            inp = {field: [_image_data_uri(v) for v in source]}
+        elif image_field.endswith("urls"):  # list-typed image field (e.g. rodin input_image_urls)
+            inp = {image_field: [_image_data_uri(source)]}
         else:
-            inp = {"image_url": _image_data_uri(source)}
+            inp = {image_field: _image_data_uri(source)}
         # The fal queue endpoint takes the input fields at the body ROOT — NOT wrapped in
         # {"input": ...} (a wrapper yields 422 "image_url field required").
-        r = self._client.post(
-            f"{self.BASE}/{model}",
-            headers=self._hdr(api_key),
-            json=inp,
+        r = _send_with_retry(
+            lambda: self._client.post(f"{self.BASE}/{model}", headers=self._hdr(api_key), json=inp)
         )
         r.raise_for_status()
         return r.json()  # {request_id, status_url, response_url}
@@ -221,12 +261,16 @@ class FalTransport:
     def poll(self, req: dict, api_key: str) -> tuple[str, str | None]:
         if not req.get("status_url"):  # malformed submit response → Image3DError, not KeyError
             raise Image3DError("fal: no status_url in submit response")
-        r = self._client.get(req["status_url"], headers=self._hdr(api_key))
+        r = _send_with_retry(
+            lambda: self._client.get(req["status_url"], headers=self._hdr(api_key))
+        )
         r.raise_for_status()
         status = r.json().get("status", "")
         if status.lower() not in _SUCCESS:
             return status, None
-        res = self._client.get(req["response_url"], headers=self._hdr(api_key))
+        res = _send_with_retry(
+            lambda: self._client.get(req["response_url"], headers=self._hdr(api_key))
+        )
         res.raise_for_status()
         d = res.json()
         # output key varies by model: image→3D uses model_mesh; some text→3D use model_glb.
@@ -234,7 +278,7 @@ class FalTransport:
         return status, (mesh.get("url") if isinstance(mesh, dict) else mesh)
 
     def download(self, url: str) -> bytes:
-        r = self._client.get(url)
+        r = _send_with_retry(lambda: self._client.get(url))
         r.raise_for_status()
         return r.content
 
@@ -296,7 +340,9 @@ class ReplicateTransport:
     def submit(self, source, model: str, api_key: str, mode: str = "image") -> dict:
         # Community models require the version-pinned /predictions endpoint;
         # /models/{owner}/{name}/predictions 404s for them (official models only).
-        m = self._client.get(f"{self.BASE}/models/{model}", headers=self._hdr(api_key))
+        m = _send_with_retry(
+            lambda: self._client.get(f"{self.BASE}/models/{model}", headers=self._hdr(api_key))
+        )
         m.raise_for_status()
         md = m.json()
         ver = md.get("latest_version") or {}
@@ -323,10 +369,12 @@ class ReplicateTransport:
             # False → only video/gaussian, no mesh). We want the mesh, so opt in when offered.
             if "generate_model" in props:
                 inp["generate_model"] = True
-        r = self._client.post(
-            f"{self.BASE}/predictions",
-            headers=self._hdr(api_key),
-            json={"version": version, "input": inp},
+        r = _send_with_retry(
+            lambda: self._client.post(
+                f"{self.BASE}/predictions",
+                headers=self._hdr(api_key),
+                json={"version": version, "input": inp},
+            )
         )
         r.raise_for_status()
         d = r.json()
@@ -335,7 +383,7 @@ class ReplicateTransport:
     def poll(self, req: dict, api_key: str) -> tuple[str, str | None]:
         if not req.get("get_url"):  # malformed submit response → surface as Image3DError
             raise Image3DError("replicate: no prediction poll url in submit response")
-        r = self._client.get(req["get_url"], headers=self._hdr(api_key))
+        r = _send_with_retry(lambda: self._client.get(req["get_url"], headers=self._hdr(api_key)))
         r.raise_for_status()
         d = r.json()
         status = d.get("status", "")
@@ -354,7 +402,7 @@ class ReplicateTransport:
         return status, url
 
     def download(self, url: str) -> bytes:
-        r = self._client.get(url)
+        r = _send_with_retry(lambda: self._client.get(url))
         r.raise_for_status()
         return r.content
 
@@ -364,12 +412,14 @@ PROVIDERS: dict[str, tuple] = {
     "tripo": (generate_tripo, "TRIPO_API_KEY", "Tripo"),
     # fal.ai (one FAL_KEY) — verify exact model paths at impl against fal.ai/3d-models
     "fal:hunyuan3d-v2": (
-        functools.partial(generate_fal, model="fal-ai/hunyuan3d/v2"),
+        functools.partial(generate_fal, model="fal-ai/hunyuan3d/v2", image_field="input_image_url"),
         "FAL_KEY",
         "Hunyuan3D v2 (fal)",
     ),
     "fal:hunyuan3d-v3": (
-        functools.partial(generate_fal, model="fal-ai/hunyuan3d-v3/image-to-3d"),
+        functools.partial(
+            generate_fal, model="fal-ai/hunyuan3d-v3/image-to-3d", image_field="input_image_url"
+        ),
         "FAL_KEY",
         "Hunyuan3D v3 (fal)",
     ),

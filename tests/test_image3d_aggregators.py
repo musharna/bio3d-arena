@@ -18,9 +18,9 @@ class FakeFalTransport:
         self._glb = glb
         self.calls = []
 
-    def submit(self, source, model, api_key, mode="image"):
+    def submit(self, source, model, api_key, mode="image", image_field="image_url"):
         self.calls.append(("submit", model))
-        self.last_source, self.last_mode = source, mode
+        self.last_source, self.last_mode, self.last_field = source, mode, image_field
         return {"request_id": "r1"}
 
     def poll(self, req, api_key):
@@ -278,3 +278,101 @@ def test_replicate_transport_uses_version_endpoint_and_schema_field():
     imgs = captured["body"]["input"]["images"]  # 'images' schema field → list
     assert isinstance(imgs, list) and imgs[0].startswith("data:image")
     assert req["get_url"].endswith("/predictions/p1")
+
+
+def _capture_fal_submit(image_field):
+    """Drive the real FalTransport.submit for an image and return the posted body."""
+    from app.image3d import FalTransport
+
+    captured = {}
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"request_id": "r", "status_url": "s", "response_url": "x"}
+
+    class FakeClient:
+        def post(self, url, headers, json):
+            captured["json"] = json
+            return FakeResp()
+
+    FalTransport(client=FakeClient()).submit(_tiny_jpeg(), "m", "k", "image", image_field)
+    return captured["json"]
+
+
+def test_fal_image_field_single_vs_list():
+    """Per-model image field: a *_url field is a string; a *_urls field is a single-item list."""
+    body = _capture_fal_submit("input_image_url")  # hunyuan3d
+    assert isinstance(body["input_image_url"], str)
+    assert body["input_image_url"].startswith("data:image")
+
+    body = _capture_fal_submit("input_image_urls")  # rodin/hyper3d
+    assert isinstance(body["input_image_urls"], list)
+    assert body["input_image_urls"][0].startswith("data:image")
+
+
+def test_generate_fal_threads_image_field_to_submit():
+    """generate_fal forwards the model's image_field down to the transport."""
+    t = FakeFalTransport(["COMPLETED"], "https://fal/x.glb", _box_glb())
+    generate_fal(
+        b"img",
+        api_key="k",
+        model="fal-ai/hyper3d/rodin",
+        image_field="input_image_urls",
+        transport=t,
+        poll_interval_s=0,
+    )
+    assert t.last_field == "input_image_urls"
+
+
+def test_send_with_retry_backs_off_then_succeeds():
+    """A 429 then a 200 → retried and the 200 returned (no sleep in the test)."""
+    import app.image3d as m
+
+    calls = {"n": 0}
+
+    class Resp:
+        def __init__(self, code):
+            self.status_code = code
+            self.headers = {}
+
+    def flaky():
+        calls["n"] += 1
+        return Resp(429) if calls["n"] == 1 else Resp(200)
+
+    orig = m.time.sleep
+    m.time.sleep = lambda *_: None
+    try:
+        r = m._send_with_retry(flaky, base_delay=0)
+    finally:
+        m.time.sleep = orig
+    assert r.status_code == 200 and calls["n"] == 2
+
+
+def test_send_with_retry_retries_transport_error():
+    """A network/SSL TransportError is retried, not propagated, when attempts remain."""
+    import httpx
+
+    import app.image3d as m
+
+    calls = {"n": 0}
+
+    class Resp:
+        status_code = 200
+        headers: dict = {}
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.ReadError("ssl bad record mac")
+        return Resp()
+
+    orig = m.time.sleep
+    m.time.sleep = lambda *_: None
+    try:
+        r = m._send_with_retry(flaky, base_delay=0)
+    finally:
+        m.time.sleep = orig
+    assert r.status_code == 200 and calls["n"] == 2
