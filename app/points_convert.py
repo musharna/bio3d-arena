@@ -18,19 +18,28 @@ class PointsConvertError(Exception):
     """Raised when an asset has no usable vertices to render as a point cloud."""
 
 
-def points_to_glb(src_path: str, *, max_points: int = 200_000, seed: int = 0) -> bytes:
+def points_to_glb(
+    src_path: str, *, max_points: int = 200_000, seed: int = 0, up_axis: str | None = None
+) -> bytes:
     """Load a point-cloud asset and export a glTF POINTS GLB.
 
     Raises PointsConvertError if the asset has no vertices. A mesh source is accepted —
     its vertices become the point set (still faithful to the scan). Clouds larger than
     max_points are randomly subsampled (fixed seed → reproducible) so the GLB stays
     web-renderable; vertex colours, when present, are preserved through the subsample.
+
+    up_axis: source up-axis. Default None keeps coordinates as-is. "z" handles +Z-up scans
+    (e.g. Crops3D field LiDAR) by rotating −90° about X (Z→Y) and recentring, so the plant
+    stands up in the +Y-up <model-viewer> instead of lying on its side.
     """
     loaded = trimesh.load(src_path)  # NOT force="mesh" — keep the cloud
     verts = getattr(loaded, "vertices", None)
     if verts is None or len(verts) == 0:
         raise PointsConvertError(f"{src_path}: no vertices, nothing to render")
-    verts = np.asarray(verts)
+    verts = np.asarray(verts, dtype=float)
+    if up_axis == "z":  # (x, y, z) → (x, z, −y); then recentre on the bbox centre
+        verts = np.column_stack([verts[:, 0], verts[:, 2], -verts[:, 1]])
+        verts = verts - (verts.min(axis=0) + verts.max(axis=0)) / 2.0
 
     colors = None
     if getattr(loaded, "colors", None) is not None and len(loaded.colors) == len(verts):

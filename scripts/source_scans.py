@@ -18,6 +18,9 @@ from app.models import Task  # noqa: E402
 from app.sourcing import SCAN_DATASETS  # noqa: E402
 
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
+MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
+# Map a CLI crop key → the subject task that real scans of that crop attach to.
+SCAN_TASKS = {"tomato": TOMATO_TITLE, "maize": MAIZE_TITLE}
 
 
 def ingest_scans(
@@ -91,7 +94,8 @@ def main() -> int:
 
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", required=True, choices=sorted(SCAN_DATASETS))
-    ap.add_argument("--dir", required=True, help="local dir containing the tomato mesh files")
+    ap.add_argument("--task", default="tomato", choices=sorted(SCAN_TASKS))
+    ap.add_argument("--dir", required=True, help="local dir containing the scan mesh/cloud files")
     ap.add_argument("--limit", type=int, default=15)
     ap.add_argument(
         "--max-faces",
@@ -102,6 +106,12 @@ def main() -> int:
     )
     ap.add_argument("--no-score", action="store_true")
     ap.add_argument("--render", choices=("mesh", "points"), default="mesh")
+    ap.add_argument(
+        "--up-axis",
+        choices=("none", "z"),
+        default="none",
+        help="point-cloud source up-axis; 'z' stands +Z-up scans (e.g. Crops3D) upright for +Y viewers",
+    )
     args = ap.parse_args()
 
     root = Path(args.dir)
@@ -120,8 +130,10 @@ def main() -> int:
     if args.render == "points":
         from app.points_convert import points_to_glb
 
+        up_axis = None if args.up_axis == "none" else args.up_axis
+
         def to_glb(path: str) -> bytes:
-            return points_to_glb(path)
+            return points_to_glb(path, up_axis=up_axis)
     else:
         max_faces = args.max_faces or None
 
@@ -136,6 +148,7 @@ def main() -> int:
             dataset=args.dataset,
             to_glb=to_glb,
             score_fn=None if args.no_score else recon_service.score_and_store,
+            task_title=SCAN_TASKS[args.task],
             limit=args.limit,
             render_kind=args.render,
         )

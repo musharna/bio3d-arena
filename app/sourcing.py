@@ -69,10 +69,14 @@ SCAN_DATASETS: dict[str, dict] = {
         "url": "https://data.4tu.nl/",
     },
     "crops3d": {
+        # License discrepancy: the article text is CC-BY-NC-ND 4.0 but the Figshare data record
+        # is tagged CC0. Keep the conservative NC-ND here (→ internal-only) until the pre-public
+        # re-vet confirms which governs the point-cloud data.
         "name": "Crops3D",
         "license": "CC-BY-NC-ND 4.0",
-        "attribution": "Crops3D (Nature Scientific Data 2024)",
-        "url": "https://doi.org/10.1038/s41597-024-04290-0",
+        "attribution": "Crops3D (Nature Scientific Data 2024, 10.1038/s41597-024-04290-0); "
+        "data on Figshare 10.6084/m9.figshare.27313272 (record tagged CC0)",
+        "url": "https://doi.org/10.6084/m9.figshare.27313272",
     },
 }
 SCAN_SOURCES = frozenset(SCAN_DATASETS)

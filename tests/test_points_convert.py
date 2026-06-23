@@ -47,6 +47,30 @@ def test_points_to_glb_preserves_colors(tmp_path):
     assert mean[1] > mean[0] and mean[1] > mean[2]
 
 
+def test_points_to_glb_up_axis_z_stands_cloud_upright(tmp_path):
+    """A +Z-up scan (tall in Z) must come out +Y-up (tall in Y) for model-viewer."""
+    pts = np.random.RandomState(3).rand(400, 3) * np.array([0.3, 0.3, 2.0])
+    ply = tmp_path / "ztall.ply"
+    trimesh.PointCloud(pts).export(str(ply))
+    rt = trimesh.load(
+        trimesh.util.wrap_as_stream(points_to_glb(str(ply), up_axis="z")), file_type="glb"
+    )
+    geom = rt if hasattr(rt, "vertices") else rt.geometry[next(iter(rt.geometry))]
+    ex = geom.extents
+    assert ex[1] == max(ex)  # tallest axis is now Y
+    assert np.allclose(geom.bounds.mean(axis=0), 0, atol=1e-6)  # recentred
+
+
+def test_points_to_glb_default_keeps_orientation(tmp_path):
+    """Default up_axis=None must not rotate (the tomato mesh-vertices path is unaffected)."""
+    pts = np.random.RandomState(4).rand(400, 3) * np.array([0.3, 0.3, 2.0])
+    ply = tmp_path / "asis.ply"
+    trimesh.PointCloud(pts).export(str(ply))
+    rt = trimesh.load(trimesh.util.wrap_as_stream(points_to_glb(str(ply))), file_type="glb")
+    geom = rt if hasattr(rt, "vertices") else rt.geometry[next(iter(rt.geometry))]
+    assert geom.extents[2] == max(geom.extents)  # still tallest in Z (unrotated)
+
+
 def test_points_to_glb_raises_on_empty(tmp_path):
     # trimesh's PLY exporter crashes on 0-vertex PointClouds (color dtype mismatch).
     # Write the empty PLY directly — the intent is to give points_to_glb a zero-vertex
