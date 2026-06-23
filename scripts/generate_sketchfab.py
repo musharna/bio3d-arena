@@ -1,4 +1,4 @@
-"""Ingest CC-licensed game-ready tomato-PLANT assets from Sketchfab as `found:sketchfab` entries.
+"""Ingest CC-licensed game-ready crop-PLANT assets from Sketchfab as `found:sketchfab` entries.
 
 These are downloaded artist assets, NOT procedural generations — they represent the "game-ready
 asset" corner of the field (what a game artist ships), a distinct data point from the procedural
@@ -22,10 +22,11 @@ from app.mesh_convert import MeshConvertError  # noqa: E402
 from app.models import Task  # noqa: E402
 
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
+MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
 
 # Verified on the Sketchfab API (license slug + isDownloadable) 2026-06-22. `keep` isolates the
 # fruiting-stage mesh for the multi-stage PolyOne pack (drops the title text + earlier stages).
-ASSETS = [
+TOMATO_ASSETS = [
     {
         "variant": "sketchfab-polyone",
         "uid": "7613f2aec8f54695b7c219946473cb24",
@@ -51,6 +52,49 @@ ASSETS = [
         "keep": None,
     },
 ]
+
+# Single whole-maize-plant assets (not cobs/kernels/fields/dioramas). Verified on the Sketchfab API
+# (license slug 'by'/'by-sa' + isDownloadable + a glTF flavour) 2026-06-22 — all public-safe CC.
+MAIZE_ASSETS = [
+    {
+        "variant": "sketchfab-maize-gilles",
+        "uid": "5fd3b104d8104519b061469c365d4974",
+        "name": "Maize Corn Plant",
+        "author": "gilles.schaeck",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+    {
+        "variant": "sketchfab-maize-boyce",
+        "uid": "773c4a1bd7fc44049b59c177aa162566",
+        "name": "corn_plant",
+        "author": "boyceojinta",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+    {
+        "variant": "sketchfab-maize-merp",
+        "uid": "421a0d96b7ab4c499fa63e857974e144",
+        "name": "Corn Stalk",
+        "author": "merpcutemr",
+        "license": "CC-BY-SA 4.0",
+        "keep": None,
+    },
+    {
+        "variant": "sketchfab-maize-arigura",
+        "uid": "a3c4fa7b1b4d4d28b5d480ee7f5c29c6",
+        "name": "Corn stalk",
+        "author": "arigura",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+]
+
+# Per-crop: subject task + curated asset set. Defaults preserve the original tomato behaviour.
+CROPS = {
+    "tomato": {"task_title": TOMATO_TITLE, "assets": TOMATO_ASSETS},
+    "maize": {"task_title": MAIZE_TITLE, "assets": MAIZE_ASSETS},
+}
 
 
 def ingest_sketchfab(
@@ -142,8 +186,13 @@ def main() -> int:
     ap.add_argument(
         "--blender", default=os.environ.get("BLENDER_BIN", str(Path.home() / "blender/blender"))
     )
+    ap.add_argument(
+        "--crop", default="tomato", choices=sorted(CROPS), help="which crop's curated asset set"
+    )
     ap.add_argument("--no-score", action="store_true")
     args = ap.parse_args()
+
+    crop = CROPS[args.crop]
 
     token = os.environ.get("SKETCHFAB_TOKEN")
     if not token:
@@ -161,7 +210,7 @@ def main() -> int:
     script = work / "convert.py"
     script.write_text(_BLENDER_CONVERT)
     items = []
-    for asset in ASSETS:
+    for asset in crop["assets"]:
         uid = asset["uid"]
         try:
             req = urllib.request.Request(
@@ -193,9 +242,7 @@ def main() -> int:
                     "-P",
                     str(script),
                     "--",
-                    json.dumps(
-                        {"src": str(gltfs[0]), "out": str(glb), "keep": asset["keep"]}
-                    ),
+                    json.dumps({"src": str(gltfs[0]), "out": str(glb), "keep": asset["keep"]}),
                 ],
                 check=True,
                 timeout=300,
@@ -215,6 +262,7 @@ def main() -> int:
             items,
             to_glb=lambda p: Path(p).read_bytes(),
             score_fn=None if args.no_score else recon_service.score_and_store,
+            task_title=crop["task_title"],
         )
         print(report)
     finally:
