@@ -59,9 +59,9 @@ SPOTLIGHTS: list[dict] = [
         "order": 1,
         "blurb": "How current image→3D models handle a whole maize plant — a tall, two-ranked "
         "monocot (distichous strap leaves, apical tassel, axillary ears).",
-        # reference photo TODO: a real CC whole-plant Zea mays input (see docs/ATTRIBUTIONS.md);
-        # None ⇒ no reference panel for now. The faithful entries are Xfrog AG20 found assets.
-        "reference_image": None,
+        "reference_image": "reference/maize_ref.jpg",
+        # CC0 (public-domain) input photo — credit shown in the panel (see maize_ref.json sidecar).
+        "reference_credit": "Photo: swords / iNaturalist, CC0 (public domain)",
     },
     {
         "slug": "arabidopsis",
