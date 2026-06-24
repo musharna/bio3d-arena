@@ -204,7 +204,7 @@ def generate_fal(
     """
     t = transport or FalTransport()
     req = t.submit(source, model, api_key, mode, image_field)
-    waited = 0
+    start = time.monotonic()  # wall-clock budget: counts retry/backoff time inside poll(), too
     while True:
         status, glb_url = t.poll(req, api_key)
         s = (status or "").lower()
@@ -214,10 +214,9 @@ def generate_fal(
             break
         if s in _FAILED:
             raise Image3DError(f"fal {model}: {status}")
-        if waited >= timeout_s:
+        if time.monotonic() - start >= timeout_s:
             raise Image3DError(f"fal {model}: timed out after {timeout_s}s")
         time.sleep(poll_interval_s)
-        waited += poll_interval_s
     glb = t.download(glb_url)
     if not glb:
         raise Image3DError(f"fal {model}: empty download")
@@ -299,7 +298,7 @@ def generate_replicate(
     """
     t = transport or ReplicateTransport()
     req = t.submit(source, model, api_key, mode)
-    waited = 0
+    start = time.monotonic()  # wall-clock budget: counts retry/backoff time inside poll(), too
     while True:
         status, glb_url = t.poll(req, api_key)
         s = (status or "").lower()
@@ -309,10 +308,9 @@ def generate_replicate(
             break
         if s in _FAILED:
             raise Image3DError(f"replicate {model}: {status}")
-        if waited >= timeout_s:
+        if time.monotonic() - start >= timeout_s:
             raise Image3DError(f"replicate {model}: timed out after {timeout_s}s")
         time.sleep(poll_interval_s)
-        waited += poll_interval_s
     glb = t.download(glb_url)
     if not glb:
         raise Image3DError(f"replicate {model}: empty download")
