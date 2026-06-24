@@ -416,3 +416,50 @@ def test_send_with_retry_retries_transport_error():
     finally:
         m.time.sleep = orig
     assert r.status_code == 200 and calls["n"] == 2
+
+
+def test_send_with_retry_heals_flaky_403():
+    """fal's transient post-top-up 403 lock-flap is retried, then succeeds."""
+    import app.image3d as m
+
+    calls = {"n": 0}
+
+    class Resp:
+        def __init__(self, c):
+            self.status_code = c
+            self.headers = {}
+
+    def flaky():
+        calls["n"] += 1
+        return Resp(403) if calls["n"] == 1 else Resp(200)
+
+    orig = m.time.sleep
+    m.time.sleep = lambda *_: None
+    try:
+        r = m._send_with_retry(flaky, base_delay=0)
+    finally:
+        m.time.sleep = orig
+    assert r.status_code == 200 and calls["n"] == 2
+
+
+def test_send_with_retry_gives_up_fast_on_persistent_403():
+    """A genuinely locked account (persistent 403) stops at the short 403 budget, not full attempts."""
+    import app.image3d as m
+
+    calls = {"n": 0}
+
+    class Resp:
+        status_code = 403
+        headers: dict = {}
+
+    def locked():
+        calls["n"] += 1
+        return Resp()
+
+    orig = m.time.sleep
+    m.time.sleep = lambda *_: None
+    try:
+        r = m._send_with_retry(locked, base_delay=0)
+    finally:
+        m.time.sleep = orig
+    assert r.status_code == 403 and calls["n"] == m._FLAKY_403_ATTEMPTS

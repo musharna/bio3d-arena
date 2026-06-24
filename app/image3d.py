@@ -27,15 +27,20 @@ _FAILED = {"failed", "error", "cancelled", "canceled", "banned", "expired"}
 
 # Transient HTTP failures worth retrying: provider rate limits + gateway errors.
 _RETRY_STATUS = {429, 500, 502, 503, 504}
+# fal returns a transient 403 ("User is locked") that flaps for a few seconds right after a
+# balance top-up, then self-heals — retry it a FEW times only (a genuine exhausted balance keeps
+# returning 403 and should fail fast, not retry the full budget).
+_FLAKY_403_ATTEMPTS = 3
 
 
 def _send_with_retry(call, *, attempts: int = 5, base_delay: float = 2.0):
     """Run an HTTP thunk with exponential backoff over transient failures.
 
     Retries on network/TLS blips (httpx.TransportError — the intermittent SSL "bad record mac"
-    seen against fal/replicate) and on retryable status codes (429 rate-limit, 5xx), honouring a
-    numeric Retry-After when present. Non-retryable responses are returned as-is for the caller's
-    own raise_for_status. Bounded so a persistently-down provider still fails loudly.
+    seen against fal/replicate), on retryable status codes (429 rate-limit, 5xx), and on a
+    short budget of 403s (fal's post-top-up lock flap), honouring a numeric Retry-After when
+    present. Non-retryable responses are returned as-is for the caller's own raise_for_status.
+    Bounded so a persistently-down (or genuinely locked) provider still fails loudly.
     """
     last_exc = None
     for i in range(attempts):
@@ -47,7 +52,9 @@ def _send_with_retry(call, *, attempts: int = 5, base_delay: float = 2.0):
                 raise
             time.sleep(base_delay * (2**i))
             continue
-        if getattr(resp, "status_code", 200) in _RETRY_STATUS and i < attempts - 1:
+        code = getattr(resp, "status_code", 200)
+        retryable = code in _RETRY_STATUS or (code == 403 and i < _FLAKY_403_ATTEMPTS - 1)
+        if retryable and i < attempts - 1:
             ra = resp.headers.get("Retry-After") if hasattr(resp, "headers") else None
             delay = float(ra) if (ra and str(ra).isdigit()) else base_delay * (2**i)
             time.sleep(delay)
