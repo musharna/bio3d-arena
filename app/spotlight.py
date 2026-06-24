@@ -49,8 +49,9 @@ SPOTLIGHTS: list[dict] = [
         "order": 0,
         "blurb": "How current image→3D models handle a whole tomato plant.",
         "reference_image": "reference/tomato_ref.jpg",
-        # CC-BY-SA-4.0 input photo — attribution shown in the panel (see docs/ATTRIBUTIONS.md).
-        "reference_credit": "Photo: Kolforn / Wikimedia Commons, CC-BY-SA-4.0",
+        # PRIVATE / non-CC: isolated potted-tomato product photo (white bg). Relicense before public
+        # use (prior CC-BY-SA windowsill photo at reference/tomato_ref_prev.jpg).
+        "reference_credit": "Photo: product image (PRIVATE — relicense before public use)",
     },
     {
         "slug": "maize",
@@ -60,8 +61,9 @@ SPOTLIGHTS: list[dict] = [
         "blurb": "How current image→3D models handle a whole maize plant — a tall, two-ranked "
         "monocot (distichous strap leaves, apical tassel, axillary ears).",
         "reference_image": "reference/maize_ref.jpg",
-        # CC0 (public-domain) input photo — credit shown in the panel (see maize_ref.json sidecar).
-        "reference_credit": "Photo: swords / iNaturalist, CC0 (public domain)",
+        # PRIVATE / non-CC: single corn plant isolated on white (faint stock watermark). Relicense
+        # before public use (prior CC0 field photo at reference/maize_ref_field_old.jpg).
+        "reference_credit": "Photo: stock comp (PRIVATE/watermarked — replace before public use)",
     },
     {
         "slug": "arabidopsis",
@@ -90,11 +92,11 @@ SPOTLIGHTS: list[dict] = [
         "Rosa rugosa X-ray CT (scan + the volumetric sensor axis), found artist roses, image→3D "
         "recon, and procedural generators (whose bloom fidelity is the open frontier).",
         "reference_image": "reference/rose_ref.jpg",
-        # PRIVATE / non-CC: isolated potted-rose photo (iStock comp, watermarked) — swapped in to
-        # replace the CC0 hedge-and-meadow photo that gave no isolated subject. RELICENSE / replace
-        # with a clean unwatermarked image before any public launch (old hedge at
-        # reference/rose_ref_hedge_old.jpg).
-        "reference_credit": "Photo: iStock comp (PRIVATE/watermarked — replace before public use)",
+        # PRIVATE / non-CC: isolated potted-rose product photo (plain wall, multi-bloom; minor pot
+        # label only). Replaced the CC0 hedge-and-meadow photo that gave no isolated subject.
+        # Relicense before public use (old hedge at reference/rose_ref_hedge_old.jpg; earlier iStock
+        # comp at reference/rose_ref_istock_old.jpg).
+        "reference_credit": "Photo: product image (PRIVATE — relicense before public use)",
     },
     {
         "slug": "soybean",
