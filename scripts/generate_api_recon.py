@@ -46,8 +46,10 @@ def _provenance(slug: str, name: str) -> tuple[str, str]:
 
 
 def generate_api_recon(
-    db, image_bytes, *, providers, env, score_fn=None, task_title=TOMATO_TITLE
+    db, image_bytes, *, providers, env, score_fn=None, task_title=TOMATO_TITLE, input_image_rel=None
 ) -> dict:
+    """`input_image_rel` is the storage-relative path of the photo fed to the models (e.g.
+    'reference/maize_ref.jpg'); recorded per output so the page can show which image produced it."""
     task = db.execute(select(Task).where(Task.title == task_title)).scalars().first()
     if task is None:
         raise RuntimeError(f"subject task not found: {task_title!r}")
@@ -67,7 +69,11 @@ def generate_api_recon(
                 data=glb,
                 ext="glb",
                 title=f"{name} recon",
-                meta={"depiction": "whole_plant", "provider": slug, "from_reference": "tomato_ref"},
+                meta={
+                    "depiction": "whole_plant",
+                    "provider": slug,
+                    "input_image": input_image_rel,
+                },
             )
             out.source = f"api:{slug}"
             out.license, out.external_url = _provenance(slug, name)
@@ -113,6 +119,8 @@ def main() -> int:
         print(f"reference image missing: {ref} — source the CC photo first")
         return 1
     image_bytes = ref.read_bytes()
+    # storage-relative path of the reference (asset store root is data/assets/) for per-output provenance
+    input_image_rel = crop["image"].split("data/assets/", 1)[-1]
     active = {s: v for s, v in PROVIDERS.items() if os.environ.get(v[1])}
     if not active:
         print("no provider API key in env (e.g. TRIPO_API_KEY) — nothing to generate")
@@ -126,6 +134,7 @@ def main() -> int:
             env=os.environ,
             score_fn=recon_service.score_and_store,
             task_title=crop["task_title"],
+            input_image_rel=input_image_rel,
         )
         print(report)
     finally:

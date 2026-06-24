@@ -59,6 +59,16 @@
         {% endif %}
       </div>
       <div class="card-gen">{{ m.label }} <span class="subtle">#{{ m.id }}</span></div>
+      {% if m.input_image_url %}
+      <div class="card-input subtle" title="the photo this model reconstructed from">
+        input ▸
+        <img
+          src="{{ m.input_image_url }}"
+          alt="input photo"
+          style="width:56px;height:42px;object-fit:cover;border-radius:4px;vertical-align:middle;border:1px solid #444"
+        />
+      </div>
+      {% endif %}
       {% if m.render == 'points' %}
       <div class="card-badge">point cloud</div>
       {% endif %}

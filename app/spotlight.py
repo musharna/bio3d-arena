@@ -149,6 +149,7 @@ def build_spotlight(db: Session, slug: str) -> dict | None:
         found = o.source != "bio3d-arena"
         meta = json.loads(o.meta_json or "{}")
         depiction = meta.get("depiction")
+        input_image = meta.get("input_image")  # the photo this recon was generated from (if any)
         cls = source_class(o.source)
         dataset = meta.get("dataset")
         render = meta.get("render", "mesh")
@@ -164,6 +165,7 @@ def build_spotlight(db: Session, slug: str) -> dict | None:
                 "found": found,
                 "label": label,
                 "depiction": depiction,
+                "input_image_url": storage.url_for(input_image) if input_image else None,
                 "caveat": meta.get("caveat"),
                 "format": o.asset_format,
                 "asset_url": storage.url_for(o.asset_path),
