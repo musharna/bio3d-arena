@@ -18,9 +18,12 @@ class FakeFalTransport:
         self._glb = glb
         self.calls = []
 
-    def submit(self, source, model, api_key, mode="image", image_field="image_url"):
+    def submit(
+        self, source, model, api_key, mode="image", image_field="image_url", extra_input=None
+    ):
         self.calls.append(("submit", model))
         self.last_source, self.last_mode, self.last_field = source, mode, image_field
+        self.last_extra = extra_input
         return {"request_id": "r1"}
 
     def poll(self, req, api_key):
@@ -325,6 +328,43 @@ def test_generate_fal_threads_image_field_to_submit():
         poll_interval_s=0,
     )
     assert t.last_field == "input_image_urls"
+
+
+def test_fal_extra_input_merged_into_body():
+    """Model-specific params (e.g. hunyuan3d/v2 textured_mesh) merge into the body root."""
+    body = None
+
+    from app.image3d import FalTransport
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"request_id": "r", "status_url": "s", "response_url": "x"}
+
+    captured = {}
+
+    class FakeClient:
+        def post(self, url, headers, json):
+            captured["json"] = json
+            return FakeResp()
+
+    FalTransport(client=FakeClient()).submit(
+        _tiny_jpeg(), "m", "k", "image", "input_image_url", {"textured_mesh": True}
+    )
+    body = captured["json"]
+    assert body["input_image_url"].startswith("data:image")
+    assert body["textured_mesh"] is True
+
+
+def test_providers_hunyuan_v2_requests_textured_mesh():
+    """hunyuan3d-v2 must request textured_mesh — its default is an untextured white mesh."""
+    from app.image3d import PROVIDERS
+
+    fn = PROVIDERS["fal:hunyuan3d-v2"][0]
+    assert fn.keywords.get("extra_input") == {"textured_mesh": True}
+    assert fn.keywords.get("image_field") == "input_image_url"
 
 
 def test_send_with_retry_backs_off_then_succeeds():

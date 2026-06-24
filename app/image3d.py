@@ -188,6 +188,7 @@ def generate_fal(
     model: str,
     mode: str = "image",
     image_field: str = "image_url",
+    extra_input: dict | None = None,
     transport=None,
     timeout_s: int = 300,
     poll_interval_s: int = 5,
@@ -201,9 +202,12 @@ def generate_fal(
     `image_field` is the model's image input key — it differs per fal model (trellis/triposr use
     `image_url`; hunyuan3d uses `input_image_url`; rodin uses `input_image_urls` (a list)). A
     field name ending in "urls" is sent as a single-element list.
+
+    `extra_input` merges model-specific input params into the request (e.g. hunyuan3d/v2 needs
+    `textured_mesh=True` or it returns an untextured white mesh).
     """
     t = transport or FalTransport()
-    req = t.submit(source, model, api_key, mode, image_field)
+    req = t.submit(source, model, api_key, mode, image_field, extra_input)
     start = time.monotonic()  # wall-clock budget: counts retry/backoff time inside poll(), too
     while True:
         status, glb_url = t.poll(req, api_key)
@@ -238,8 +242,15 @@ class FalTransport:
         return {"Authorization": f"Key {api_key}"}
 
     def submit(
-        self, source, model: str, api_key: str, mode: str = "image", image_field: str = "image_url"
+        self,
+        source,
+        model: str,
+        api_key: str,
+        mode: str = "image",
+        image_field: str = "image_url",
+        extra_input: dict | None = None,
     ) -> dict:
+        inp: dict
         if mode == "text":
             inp = {"prompt": source}
         elif mode == "multiview":  # source is a list of view-image bytes
@@ -249,6 +260,8 @@ class FalTransport:
             inp = {image_field: [_image_data_uri(source)]}
         else:
             inp = {image_field: _image_data_uri(source)}
+        if extra_input:  # model-specific params (e.g. hunyuan3d/v2 textured_mesh=True)
+            inp.update(extra_input)
         # The fal queue endpoint takes the input fields at the body ROOT — NOT wrapped in
         # {"input": ...} (a wrapper yields 422 "image_url field required").
         r = _send_with_retry(
@@ -410,7 +423,12 @@ PROVIDERS: dict[str, tuple] = {
     "tripo": (generate_tripo, "TRIPO_API_KEY", "Tripo"),
     # fal.ai (one FAL_KEY) — verify exact model paths at impl against fal.ai/3d-models
     "fal:hunyuan3d-v2": (
-        functools.partial(generate_fal, model="fal-ai/hunyuan3d/v2", image_field="input_image_url"),
+        functools.partial(
+            generate_fal,
+            model="fal-ai/hunyuan3d/v2",
+            image_field="input_image_url",
+            extra_input={"textured_mesh": True},  # else returns an untextured white mesh
+        ),
         "FAL_KEY",
         "Hunyuan3D v2 (fal)",
     ),

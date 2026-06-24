@@ -102,8 +102,10 @@ SPOTLIGHTS: list[dict] = [
         "Found artist + phenotyping scans, image→3D recon, and procedural (Demeter). The scan tier "
         "is a CC-BY common-bean point-cloud stand-in — no open-licensed soybean scan exists.",
         "reference_image": "reference/soybean_ref.jpg",
-        # CC0 (public-domain) input photo — soybean field.
-        "reference_credit": "Photo: René Hourdry / Wikimedia Commons, CC0",
+        # PRIVATE / non-CC: user-supplied isolated single-plant photo (black background) — swapped in
+        # to replace the CC0 field photo that forced "box of canopy" recon. RELICENSE before any public
+        # launch (old CC0 field photo kept at reference/soybean_ref_field_old.jpg).
+        "reference_credit": "Photo: user-supplied (PRIVATE — relicense before public use)",
     },
 ]
 
