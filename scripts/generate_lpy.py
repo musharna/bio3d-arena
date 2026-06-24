@@ -62,7 +62,7 @@ def ingest_lpy(
             )
             out.source = "procedural:lpy"
             out.license = LPY_LICENSE
-            out.attribution = f"Authored L-Py/PlantGL tomato L-system [{variant}]"
+            out.attribution = f"Authored L-Py/PlantGL {variant} L-system"
             out.external_url = LPY_URL
             db.commit()  # provenance committed → hosted
             report["hosted"] += 1
@@ -127,7 +127,8 @@ def main() -> int:
         return 1
 
     out_dir = tempfile.mkdtemp(prefix="lpy_")
-    obj = str(Path(out_dir) / "tomato.obj")
+    # name the OBJ per crop so the ingested output's title is the crop, not a stray "tomato"
+    obj = str(Path(out_dir) / f"{args.crop}.obj")
     try:
         subprocess.run([str(lpy_py), str(runner), args.model, obj], check=True, timeout=300)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
