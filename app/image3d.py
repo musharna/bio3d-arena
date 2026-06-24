@@ -432,8 +432,12 @@ PROVIDERS: dict[str, tuple] = {
         "TripoSR (fal)",
     ),
     "fal:hyper3d": (
+        # Rodin cold-boots can exceed the 300s default; give it a longer wall-clock budget.
         functools.partial(
-            generate_fal, model="fal-ai/hyper3d/rodin", image_field="input_image_urls"
+            generate_fal,
+            model="fal-ai/hyper3d/rodin",
+            image_field="input_image_urls",
+            timeout_s=600,
         ),
         "FAL_KEY",
         "Rodin/Hyper3D (fal)",
