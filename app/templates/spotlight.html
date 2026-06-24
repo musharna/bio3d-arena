@@ -28,11 +28,15 @@
     ('Found — leaf', found | selectattr('depiction', 'equalto', 'leaf') | list),
     ('Found — other', found | selectattr('depiction', 'equalto', 'other') | list),
   ] %}
+  {% set open_groups = ['AI reconstruction', 'Procedural', 'Real scan — whole plant', 'Found — whole plant'] %}
+  <div class="spotlight-layout">
+  <div class="spotlight-main">
   {% for gname, gmodels in groups %}
   {% if gmodels %}
-  <h3 class="group-title">
+  <details class="group"{% if gname in open_groups %} open{% endif %}>
+  <summary class="group-title">
     {{ gname }} <span class="subtle">({{ gmodels | length }})</span>
-  </h3>
+  </summary>
   {% if gname.startswith('Real scan') %}
   <p class="subtle scan-caveat">
     Real laser scans, scored against the synthetic GT bundle for context only. An
@@ -124,9 +128,14 @@
     </div>
     {% endfor %}
   </div>
+  </details>
   {% endif %}
   {% endfor %}
-  <div id="live-viewer-slot"></div>
+  </div>
+  <aside class="viewer-aside">
+    <div id="live-viewer-slot" class="viewer-empty">Click any model ▸ it loads here</div>
+  </aside>
+  </div>
 </section>
 <script type="module" src="/static/spotlight.js"></script>
 {% endblock %}
