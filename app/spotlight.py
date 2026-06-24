@@ -49,9 +49,10 @@ SPOTLIGHTS: list[dict] = [
         "order": 0,
         "blurb": "How current image→3D models handle a whole tomato plant.",
         "reference_image": "reference/tomato_ref.jpg",
-        # PRIVATE / non-CC: isolated potted-tomato product photo (white bg). Relicense before public
-        # use (prior CC-BY-SA windowsill photo at reference/tomato_ref_prev.jpg).
-        "reference_credit": "Photo: product image (PRIVATE — relicense before public use)",
+        # CC-BY-SA-4.0 canonical photo (the original potted seedling — won the input A/B over a
+        # Roma-on-white product shot, whose black pot got misread as a bin). The Roma set is kept on
+        # the page as a private/non-CC A/B demo (reference/tomato_ref_roma.jpg, relicense before public).
+        "reference_credit": "Photo: Kolforn / Wikimedia Commons, CC-BY-SA-4.0",
     },
     {
         "slug": "maize",
