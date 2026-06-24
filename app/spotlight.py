@@ -90,8 +90,11 @@ SPOTLIGHTS: list[dict] = [
         "Rosa rugosa X-ray CT (scan + the volumetric sensor axis), found artist roses, image→3D "
         "recon, and procedural generators (whose bloom fidelity is the open frontier).",
         "reference_image": "reference/rose_ref.jpg",
-        # CC0 (public-domain) input photo — Rosa canina bush in bloom.
-        "reference_credit": "Photo: Cultureel Gelderland / Wikimedia Commons, CC0",
+        # PRIVATE / non-CC: isolated potted-rose photo (iStock comp, watermarked) — swapped in to
+        # replace the CC0 hedge-and-meadow photo that gave no isolated subject. RELICENSE / replace
+        # with a clean unwatermarked image before any public launch (old hedge at
+        # reference/rose_ref_hedge_old.jpg).
+        "reference_credit": "Photo: iStock comp (PRIVATE/watermarked — replace before public use)",
     },
     {
         "slug": "soybean",
