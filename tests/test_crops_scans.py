@@ -10,7 +10,7 @@ def test_arabidopsis_scan_task_registered():
 
 def test_romi_arabidopsis_dataset_metadata_truthful():
     meta = SCAN_DATASETS["romi-arabidopsis"]
-    assert meta["license"] == "CC-BY-4.0"
+    assert meta["license"] == "CC-BY 4.0"
     assert "ROMI" in meta["attribution"]
     assert "10379172" in meta["attribution"] or "10379172" in meta["url"]
     assert meta["url"].startswith("https://zenodo.org/records/10379172")

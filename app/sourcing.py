@@ -94,7 +94,7 @@ SCAN_DATASETS: dict[str, dict] = {
     },
     "romi-arabidopsis": {
         "name": "ROMI Arabidopsis scan",
-        "license": "CC-BY-4.0",
+        "license": "CC-BY 4.0",
         "attribution": "ROMI (Robotics for Microfarms) — real Col-0 Arabidopsis thaliana "
         "space-carved scan, 'ROMI - Plant phenotyping test data' (Legrand & Besnard), "
         "Zenodo 10379172",
