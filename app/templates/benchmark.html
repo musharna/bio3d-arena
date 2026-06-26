@@ -74,12 +74,17 @@
     ({% for r in board %}{{ r.generator }}{{ ', ' if not loop.last else '' }}{% endfor %}).
     Toward the Plant Methods 2025 six (≥4-method ideal); roster expansion (One2345++ / Direct3D /
     Unique3D) ongoing. Chamfer is the mean over a method's recons; ± is the std across them.
+    <br><b>Two axes:</b> <b>Chamfer ↓</b> = appearance/shape vs a held-out GT scan (lower is better);
+    <b>Organ&nbsp;fidelity ↑</b> = botanical <i>structure</i> (organ counts/angles) vs the cited
+    reference, for structure-known (procedural) methods only — recon methods are "—" there (no
+    declared structure). A plant can score well on one and poorly on the other; an organ
+    fidelity of 0.00 is a real structural gap (a valid finding), not an error.
   </p>
   <table class="ranktable">
     <thead>
       <tr>
         <th>#</th><th>Method</th><th>n</th><th>Chamfer ↓</th><th>Best</th><th>F-score ↑</th>
-        <th>Coverage ↑</th><th>Verdict</th><th>GT band</th>
+        <th>Coverage ↑</th><th>Organ&nbsp;fidelity ↑</th><th>Verdict</th><th>GT band</th>
       </tr>
     </thead>
     <tbody>
@@ -93,6 +98,10 @@
         <td class="num">{{ '%.4f'|format(r.chamfer_best) }}</td>
         <td class="num">{{ '%.3f'|format(r.fscore_mean) if r.fscore_mean is not none else '—' }}</td>
         <td class="num">{{ '%.3f'|format(r.coverage_mean) if r.coverage_mean is not none else '—' }}</td>
+        <td class="num"{% if r.organ_note %} title="{{ r.organ_note }}"{% elif r.organ_attributes %} title="{% for k, v in r.organ_attributes.items() %}{{ k }}: {{ v.status }} (got {{ v.extracted }}, expect {{ v.expected }}){{ '; ' if not loop.last else '' }}{% endfor %}"{% endif %}>
+          {%- if r.organ_fidelity is not none %}{{ '%.2f'|format(r.organ_fidelity) }}
+          {%- elif r.organ_note %}— <span class="subtle">N/A</span>
+          {%- else %}—{% endif %}</td>
         <td>{{ r.species_verdict or '—' }}</td>
         <td class="num">{{ '%.3f–%.3f'|format(r.gt_band[0], r.gt_band[1]) if r.gt_band[0] is not none else '—' }}</td>
       </tr>

@@ -567,10 +567,12 @@ def admin_recompute(token: str = Form(...), db: Session = Depends(get_db)):
 @app.post("/admin/rescore")
 def admin_rescore(token: str = Form(...), db: Session = Depends(get_db)):
     _require_admin(token)
-    from . import recon_service
+    from . import recon_service, structure_service
 
     detail = recon_service.rescore_all(db)
-    return JSONResponse({"status": "rescored", "detail": detail})
+    # Second Mode-B axis: organ-structure fidelity for structure-known (procedural) outputs.
+    organ_detail = structure_service.rescore_all(db)
+    return JSONResponse({"status": "rescored", "detail": detail, "organ": organ_detail})
 
 
 @app.get("/benchmark", response_class=HTMLResponse)

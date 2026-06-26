@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import config
-from .models import Metric, ModelOutput
+from .models import Metric, ModelOutput, OrganMetric
 from .recon_client import score_output
 from .storage import get_storage
 
@@ -236,10 +236,16 @@ def recon_method_leaderboard(db: Session, task_id: int) -> list[dict]:
         .all()
     )
     by_gen: dict[int, list[Metric]] = defaultdict(list)
+    organ_by_gen: dict[int, list[OrganMetric]] = defaultdict(list)
     for o in outs:
         m = db.execute(select(Metric).where(Metric.output_id == o.id)).scalars().first()
         if m is not None and m.status == "ok" and m.chamfer is not None:
             by_gen[o.generator_id].append(m)
+        # The organ-fidelity axis is independent of chamfer: a procedural method declares
+        # organ structure even when (here, always) it is also recon-scored vs GT.
+        om = db.execute(select(OrganMetric).where(OrganMetric.output_id == o.id)).scalars().first()
+        if om is not None:
+            organ_by_gen[o.generator_id].append(om)
 
     rows = []
     for gid, ms in by_gen.items():
@@ -255,23 +261,56 @@ def recon_method_leaderboard(db: Session, task_id: int) -> list[dict]:
         verdict = None
         if band_hi is not None:
             verdict = "PASS" if chamfer_mean <= band_hi else "FAIL"
-        rows.append(
-            {
-                "generator": _gen_name(db, gid),
-                "n": len(chamfers),
-                "chamfer_mean": round(chamfer_mean, 4),
-                "chamfer_std": round(statistics.pstdev(chamfers), 4)
-                if len(chamfers) >= 2
-                else None,
-                "chamfer_best": round(min(chamfers), 4),
-                "fscore_mean": round(statistics.fmean(fscores), 3) if fscores else None,
-                "coverage_mean": round(statistics.fmean(covs), 4) if covs else None,
-                "species_verdict": verdict,
-                "gt_band": [best_m.gt_band_lo, best_m.gt_band_hi],
-            }
-        )
+        row = {
+            "generator": _gen_name(db, gid),
+            "n": len(chamfers),
+            "chamfer_mean": round(chamfer_mean, 4),
+            "chamfer_std": round(statistics.pstdev(chamfers), 4) if len(chamfers) >= 2 else None,
+            "chamfer_best": round(min(chamfers), 4),
+            "fscore_mean": round(statistics.fmean(fscores), 3) if fscores else None,
+            "coverage_mean": round(statistics.fmean(covs), 4) if covs else None,
+            "species_verdict": verdict,
+            "gt_band": [best_m.gt_band_lo, best_m.gt_band_hi],
+        }
+        row.update(_organ_summary(organ_by_gen.get(gid, [])))
+        rows.append(row)
     rows.sort(key=lambda r: r["chamfer_mean"])
     return rows
+
+
+def _organ_summary(oms: list[OrganMetric]) -> dict:
+    """Collapse a method's OrganMetric rows into the board's organ-fidelity cell.
+
+    `organ_fidelity` = mean of scored fidelities (None when the method is N/A on this axis —
+    no structure-known rows — so the board renders "—"). An honest 0.0 (structural gap) is a
+    valid finding and IS averaged in. `organ_note` surfaces the un-referenced-species / not-
+    modeled caveat for the explain-row; `organ_attributes` is one representative per-attribute
+    detail (identical across a method's same-species recons)."""
+    import json
+    import statistics
+
+    scored = [
+        o.botanical_fidelity
+        for o in oms
+        if o.status == "scored" and o.botanical_fidelity is not None
+    ]
+    no_ref = [o for o in oms if o.status == "no_reference"]
+    if scored:
+        attrs_src = next((o for o in oms if o.status == "scored"), None)
+        fidelity = round(statistics.fmean(scored), 3)
+        note = ""
+    elif no_ref:
+        attrs_src = no_ref[0]
+        fidelity = None
+        note = no_ref[0].note or "no botanical reference"
+    else:
+        # No structure-known rows for this method → N/A on the organ axis.
+        return {"organ_fidelity": None, "organ_note": "", "organ_attributes": {}}
+    try:
+        attributes = json.loads(attrs_src.attributes) if attrs_src else {}
+    except (ValueError, TypeError):
+        attributes = {}
+    return {"organ_fidelity": fidelity, "organ_note": note, "organ_attributes": attributes}
 
 
 def recon_confounds(db: Session, task_id: int) -> dict | None:

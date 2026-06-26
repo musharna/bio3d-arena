@@ -277,6 +277,43 @@ class Metric(Base):
     computed: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
+class OrganMetric(Base):
+    """Mode-B *organ-structure* fidelity for one ModelOutput — the second objective axis
+    beside chamfer (recon appearance). Higher = better (∈[0,1]); chamfer is lower=better.
+
+    Populated by structure_service from AgriGen's /score_structure microservice, for
+    STRUCTURE-KNOWN (procedural) outputs only — i.e. outputs that carry a declared organ
+    record (counts/angles). Recon/scan/found/volumetric outputs have NO row here (no
+    declared structure) and render "—". A separate table (not Metric columns) mirrors the
+    ReconTask convention: the schema is create_all-only, so a new table is picked up but a
+    new column on the existing `metric` table would not be (no ALTER).
+
+    `status` disambiguates a NULL `botanical_fidelity`:
+      scored        — graded against the reference (value present; an honest 0.0 = a real
+                       structural gap, a valid finding, NOT an error).
+      no_reference  — species has no botanical reference yet (only 5 covered) → honest N/A.
+      error         — the scoring service was unreachable / returned non-2xx (offline).
+    """
+
+    __tablename__ = "organ_metric"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"), unique=True, index=True)
+    species_slug: Mapped[str] = mapped_column(String(64), default="")  # resolved record species
+    botanical_fidelity: Mapped[float | None] = mapped_column(
+        Float, nullable=True
+    )  # [0,1], ↑ better
+    n_attributes: Mapped[int] = mapped_column(Integer, default=0)
+    attributes: Mapped[str] = mapped_column(Text, default="{}")  # per-attr explain detail (JSON)
+    note: Mapped[str] = mapped_column(
+        Text, default=""
+    )  # service note (e.g. "no botanical reference")
+    metric_version: Mapped[str] = mapped_column(String(64), default="botanical_organ_fidelity_v1")
+    status: Mapped[str] = mapped_column(String(16), default="scored")  # scored|no_reference|error
+    detail: Mapped[str] = mapped_column(Text, default="")
+    computed: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
 class Critique(Base):
     """Per-output Spotlight render + qualitative/perceptual critique. One row per
     ModelOutput (upsert by output_id), best-effort. render_path is the captured

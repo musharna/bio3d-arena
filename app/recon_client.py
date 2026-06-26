@@ -50,3 +50,27 @@ def score_output(
         return resp.json()
     except httpx.HTTPError as e:
         raise ScorerError(f"recon scorer at {base_url}: {e}") from e
+
+
+def score_structure(
+    record: dict,
+    *,
+    base_url: str,
+    timeout: float = 30.0,
+) -> dict:
+    """Score a structure-known organ record on the Mode-B *organ-fidelity* axis (§ contract
+    2026-06-26). POSTs the record as JSON to `/score_structure` (same service as `/score`,
+    no GT bundle required) and returns the explainable board row
+    `{species, botanical_fidelity, n_attributes, attributes}` (or `{..., note}` for an
+    un-referenced species). `record` is the request body verbatim — a structure sidecar or a
+    seed-PD record: `{"species": ..., "leaf_axis_count": ..., ...}`.
+
+    Mirrors `score_output`'s offline handling: any HTTP failure (unreachable/non-2xx) raises
+    ScorerError so the caller can store status='error' best-effort and never crash a batch.
+    """
+    try:
+        resp = httpx.post(f"{base_url}/score_structure", json=record, timeout=timeout)
+        resp.raise_for_status()
+        return resp.json()
+    except httpx.HTTPError as e:
+        raise ScorerError(f"structure scorer at {base_url}: {e}") from e
