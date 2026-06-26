@@ -25,10 +25,13 @@ def main() -> int:
 
     ls = Lsystem(lpy_file)
     ctx = ls.context()
-    # turtle colour indices used in the .lpy: 2=leaf/calyx-sepal, 3=fruit, 5=stem
+    # turtle colour indices used in the .lpy (PlantGL valid range 0-6):
+    # 2=leaf/calyx-sepal/needle, 3=fruit/silique, 4=flower, 5=stem, 6=wood/bark
     ctx.turtle.setMaterial(2, pgl.Material("leaf", (34, 82, 26)))
     ctx.turtle.setMaterial(3, pgl.Material("fruit", (204, 36, 24), diffuse=1.0, shininess=0.15))
+    ctx.turtle.setMaterial(4, pgl.Material("flower", (232, 224, 120), diffuse=1.0, shininess=0.1))
     ctx.turtle.setMaterial(5, pgl.Material("stem", (60, 92, 40)))
+    ctx.turtle.setMaterial(6, pgl.Material("wood", (122, 84, 50)))
     scene = ls.sceneInterpretation(ls.iterate())
     scene.save(out_obj)
     print(f"WROTE {out_obj} ({len(scene)} shapes)")
