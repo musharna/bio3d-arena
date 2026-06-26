@@ -5,7 +5,17 @@ from app import sourcing
 from app.database import SessionLocal, init_db
 from app.mesh_convert import MeshConvertError
 from app.models import Category, ModelOutput, Task
-from scripts.generate_sketchfab import MAIZE_ASSETS, MAIZE_TITLE, ingest_sketchfab
+from scripts.generate_sketchfab import (
+    ARABIDOPSIS_ASSETS,
+    ARABIDOPSIS_TITLE,
+    CROPS,
+    MAIZE_ASSETS,
+    MAIZE_TITLE,
+    PINE_ASSETS,
+    PINE_TITLE,
+    ingest_sketchfab,
+)
+from tests._coverage_helpers import assert_crop_entry
 
 TOMATO = "Solanum lycopersicum — single-image → 3D reconstruction"
 
@@ -116,6 +126,27 @@ def test_maize_assets_are_distinct_public_safe_cc():
     for a in MAIZE_ASSETS:
         assert sourcing.classify_license(a["license"]) == "host"
         assert sourcing.public_safe(a["license"]), f"{a['variant']} not public-safe: {a['license']}"
+
+
+def test_pine_and_arabidopsis_assets_are_distinct_public_safe_cc():
+    """Best-effort coverage sets (Task 6): unique uids/variants, all hostable public-safe CC."""
+    for assets in (PINE_ASSETS, ARABIDOPSIS_ASSETS):
+        assert len(assets) >= 1
+        uids = [a["uid"] for a in assets]
+        variants = [a["variant"] for a in assets]
+        assert len(set(uids)) == len(uids), "duplicate Sketchfab uid"
+        assert len(set(variants)) == len(variants), "duplicate variant slug"
+        for a in assets:
+            assert sourcing.classify_license(a["license"]) == "host"
+            assert sourcing.public_safe(a["license"]), f"{a['variant']} not public-safe"
+
+
+def test_pine_and_arabidopsis_crops_route_to_known_subjects():
+    """The new CROPS entries attach to the verbatim Pinus / Arabidopsis subject titles."""
+    assert CROPS["pinus"]["task_title"] == PINE_TITLE
+    assert CROPS["arabidopsis"]["task_title"] == ARABIDOPSIS_TITLE
+    assert_crop_entry(CROPS["pinus"])
+    assert_crop_entry(CROPS["arabidopsis"])
 
 
 def test_ingest_sketchfab_routes_maize_to_maize_task():

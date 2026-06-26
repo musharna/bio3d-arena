@@ -1,0 +1,69 @@
+import openalea.plantgl.all as pgl
+from math import pi
+
+# Authored Arabidopsis thaliana (thale cress) L-system for bio3d-arena.
+# Rosette dicot: a flat basal ROSETTE of spatulate leaves at ground level, then a thin erect
+# BOLTING inflorescence bearing small cauline leaves and a terminal cluster of tiny 4-petal
+# flowers + slender siliques. The flat rosette + thin bolt are the Arabidopsis hallmarks.
+
+
+def _spatulate(length, width):
+    """Obovate rosette leaf: narrow base, broadest toward the rounded tip. Midrib +X, blade XY."""
+    n = 12
+    pts = [pgl.Vector3(0.0, 0.0, 0.0)]
+    for i in range(1, n + 1):
+        t = i / n
+        x = length * t
+        w = width * max(0.0, (1.0 - abs(t - 0.70) / 0.95)) ** 0.55
+        pts.append(pgl.Vector3(x, w, 0.0))
+        pts.append(pgl.Vector3(x, -w, 0.0))
+    idx = [pgl.Index3(0, 1, 2)]
+    for i in range(1, n):
+        l0, r0 = 2 * i - 1, 2 * i
+        l1, r1 = 2 * i + 1, 2 * i + 2
+        idx += [pgl.Index3(l0, l1, r1), pgl.Index3(l0, r1, r0)]
+    ts = pgl.TriangleSet(pts, idx)
+    ts.computeNormalList()
+    return ts
+
+
+def flower(scale=1.0):
+    """Tiny 4-petal cruciform Arabidopsis flower."""
+    shapes = []
+    for k in range(4):
+        pet = pgl.Translated(0.35 * scale, 0, 0, pgl.Sphere(0.16 * scale, slices=5, stacks=4))
+        shapes.append(pgl.AxisRotated((1, 0, 0), k * pi / 2, pet))
+    return pgl.Group(shapes)
+
+
+def silique(scale=1.0):
+    """Slender erect seed pod (the inflorescence fruit)."""
+    return pgl.AxisRotated((0, 1, 0), -pi / 2.6, pgl.Cylinder(0.10 * scale, 1.6 * scale, slices=5))
+
+
+module Rosette
+module Bolt(n)
+
+# +H = +Z up. ,(c): 2->leaf, 3->silique, 4->flower, 5->bolt stem (PlantGL turtle range 0-6).
+Axiom: ,(5) Rosette Bolt(7)
+
+derivation length: 8
+production:
+
+Rosette:
+  # ~9 spatulate leaves splayed nearly horizontal in a 137.5 deg spiral at ground level
+  nproduce [
+  for i in range(9):
+    nproduce /(137.5) [ &(80) ,(2) /(90) @g(_spatulate(3.0 + 0.15 * i, 1.4)) ]
+  produce ]
+
+Bolt(n):
+  if n <= 0:
+    produce [ ,(4) @g(flower(1.0)) ] [ &(20) ,(3) @g(silique(1.0)) ]
+  else:
+    nproduce ,(5) _(0.14) F(3.2) /(137.5)
+    if n >= 5:
+      nproduce [ &(55) ,(2) /(90) @g(_spatulate(1.6, 0.6)) ]
+    if n <= 4:
+      nproduce [ +(35) ,(4) @g(flower(0.8)) ] [ -(30) &(25) ,(3) @g(silique(0.9)) ]
+    produce Bolt(n - 1)

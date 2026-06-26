@@ -22,11 +22,13 @@ MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
 # Map a CLI crop key → the subject task that real scans of that crop attach to.
 ROSE_TITLE = "Rosa — single-image → 3D reconstruction"
 SOYBEAN_TITLE = "Glycine max — single-image → 3D reconstruction"
+ARABIDOPSIS_TITLE = "Arabidopsis thaliana — single-image → 3D reconstruction"
 SCAN_TASKS = {
     "tomato": TOMATO_TITLE,
     "maize": MAIZE_TITLE,
     "rose": ROSE_TITLE,
     "soybean": SOYBEAN_TITLE,
+    "arabidopsis": ARABIDOPSIS_TITLE,
 }
 
 

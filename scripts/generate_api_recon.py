@@ -19,6 +19,8 @@ from app.models import Task  # noqa: E402
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
 MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
 ROSE_TITLE = "Rosa — single-image → 3D reconstruction"
+ARABIDOPSIS_TITLE = "Arabidopsis thaliana — single-image → 3D reconstruction"
+PINE_TITLE = "Pinus sylvestris — single-image → 3D reconstruction"
 # Per-crop: subject task + its CC reference photo. The API recon path attaches api:<provider>
 # outputs to the subject by title (no GT/ReconTask needed); key-gated per provider.
 CROPS = {
@@ -29,6 +31,11 @@ CROPS = {
         "task_title": "Glycine max — single-image → 3D reconstruction",
         "image": "data/assets/reference/soybean_ref.jpg",
     },
+    "arabidopsis": {
+        "task_title": ARABIDOPSIS_TITLE,
+        "image": "data/assets/reference/arabidopsis_ref.jpg",
+    },
+    "pinus": {"task_title": PINE_TITLE, "image": "data/assets/reference/pinus_ref.jpg"},
 }
 
 

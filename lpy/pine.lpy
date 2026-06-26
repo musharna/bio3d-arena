@@ -1,0 +1,49 @@
+import openalea.plantgl.all as pgl
+from math import pi
+
+# Authored Pinus sylvestris (Scots pine) L-system for bio3d-arena.
+# Conifer: a straight central woody TRUNK with WHORLS of lateral branches (excurrent/conical),
+# each branch tipped and lined with FASCICLES of paired blue-green needles. Whorled branching +
+# needle fascicles + conical taper (lower whorls longer) are the pine hallmarks.
+
+
+def needle_fascicle(scale=1.0):
+    """A tuft of ~6 thin needles splaying from a point."""
+    shapes = []
+    for k in range(6):
+        a = k * (2 * pi / 6)
+        needle = pgl.Cylinder(0.04 * scale, 2.4 * scale, slices=4)
+        shapes.append(pgl.AxisRotated((0, 0, 1), a, pgl.AxisRotated((0, 1, 0), 0.5, needle)))
+    return pgl.Group(shapes)
+
+
+def branch_with_needles(length, scale=1.0):
+    """A woody lateral branch bearing needle fascicles along its length and a tuft at the tip."""
+    shapes = [pgl.AxisRotated((0, 1, 0), pi / 2, pgl.Cylinder(0.10 * scale, length, slices=5))]
+    m = 4
+    for i in range(1, m + 1):
+        x = length * i / (m + 1)
+        shapes.append(pgl.Translated(x, 0, 0, needle_fascicle(0.8 * scale)))
+    shapes.append(pgl.Translated(length, 0, 0, needle_fascicle(1.0 * scale)))
+    return pgl.Group(shapes)
+
+
+module Trunk(n)
+
+# +H = +Z up the trunk. ,(6)=woody bark, ,(2)=green needle branch (PlantGL turtle range 0-6).
+# A whorl of 5 branches per node; branch length tapers upward (lower whorls longer => conical).
+Axiom: ,(6) _(0.6) Trunk(7)
+
+derivation length: 8
+production:
+
+Trunk(n):
+  if n <= 0:
+    produce [ &(10) ,(2) @g(needle_fascicle(1.1)) ]
+  else:
+    nproduce ,(6) _(0.5 * (0.4 + n / 9.0)) F(5.0)
+    blen = 5.0 + 1.4 * n
+    pitch = 60 + 3 * (7 - n)
+    for k in range(5):
+      nproduce [ /(72.0 * k + 17.0 * n) &(pitch) ,(2) @g(branch_with_needles(blen, 1.0)) ]
+    produce Trunk(n - 1)

@@ -92,6 +92,14 @@ SCAN_DATASETS: dict[str, dict] = {
         "mungbean, cowpea, lima), PlantEye F600 structured-light; Figshare 10.6084/m9.figshare.28270742",
         "url": "https://doi.org/10.6084/m9.figshare.28270742",
     },
+    "romi-arabidopsis": {
+        "name": "ROMI Arabidopsis scan",
+        "license": "CC-BY-4.0",
+        "attribution": "ROMI (Robotics for Microfarms) — real Col-0 Arabidopsis thaliana "
+        "space-carved scan, 'ROMI - Plant phenotyping test data' (Legrand & Besnard), "
+        "Zenodo 10379172",
+        "url": "https://zenodo.org/records/10379172",
+    },
 }
 SCAN_SOURCES = frozenset(SCAN_DATASETS)
 
