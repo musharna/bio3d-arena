@@ -25,6 +25,8 @@ from app.models import Task  # noqa: E402
 TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
 MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
 ROSE_TITLE = "Rosa — single-image → 3D reconstruction"
+ARABIDOPSIS_TITLE = "Arabidopsis thaliana — single-image → 3D reconstruction"
+PINE_TITLE = "Pinus sylvestris — single-image → 3D reconstruction"
 PARTCRAFTER_LICENSE = "PartCrafter MIT (code+weights); generated from the CC reference photo"
 PARTCRAFTER_URL = "https://github.com/wgsxm/PartCrafter"
 
@@ -51,6 +53,16 @@ CROPS = {
         "task_title": "Glycine max — single-image → 3D reconstruction",
         "image": "data/assets/reference/soybean_ref.jpg",
         "tag": "soybean",
+    },
+    "arabidopsis": {
+        "task_title": ARABIDOPSIS_TITLE,
+        "image": "data/assets/reference/arabidopsis_ref.jpg",
+        "tag": "arabidopsis",
+    },
+    "pinus": {
+        "task_title": PINE_TITLE,
+        "image": "data/assets/reference/pinus_ref.jpg",
+        "tag": "pinus",
     },
 }
 
