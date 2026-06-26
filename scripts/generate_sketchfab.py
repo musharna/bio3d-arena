@@ -25,6 +25,8 @@ TOMATO_TITLE = "Solanum lycopersicum — single-image → 3D reconstruction"
 MAIZE_TITLE = "Zea mays — single-image → 3D reconstruction"
 ROSE_TITLE = "Rosa — single-image → 3D reconstruction"
 SOYBEAN_TITLE = "Glycine max — single-image → 3D reconstruction"
+ARABIDOPSIS_TITLE = "Arabidopsis thaliana — single-image → 3D reconstruction"
+PINE_TITLE = "Pinus sylvestris — single-image → 3D reconstruction"
 
 # Verified on the Sketchfab API (license slug + isDownloadable) 2026-06-22. `keep` isolates the
 # fruiting-stage mesh for the multi-stage PolyOne pack (drops the title text + earlier stages).
@@ -186,12 +188,84 @@ SOYBEAN_ASSETS = [
     },
 ]
 
+# Whole pine-plant assets (Pinus / conifer). Verified on the Sketchfab API (license slug 'by' +
+# isDownloadable + not age-restricted) 2026-06-26 — all public-safe CC-BY. The c3posw01 set is
+# explicitly Scots pine (Pinus sylvestris, the subject species); the others are genus-Pinus
+# whole trees (photoscan + game-ready), honest as "pine tree" depictions like the maize set.
+PINE_ASSETS = [
+    {
+        "variant": "sketchfab-pine-scotsset",
+        "uid": "422b961ff3d14e7baa7e9077572b2247",
+        "name": "Scots Pine Trees Set",
+        "author": "c3posw01",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+    {
+        "variant": "sketchfab-pine-polyscan",
+        "uid": "ba7c8f8e1cb549b3a3a30f1221386c8c",
+        "name": "Pine tree 01",
+        "author": "POLYSCAN3D",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+    {
+        "variant": "sketchfab-pine-epicwolf",
+        "uid": "99fb6a37547840e3a295689df032ba28",
+        "name": "Low Poly Pine Tree",
+        "author": "epicwolfstudio",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+    {
+        "variant": "sketchfab-pine-emarshall",
+        "uid": "9dfbe65769c840a0ab366c67d8e6762d",
+        "name": "Pine Tree",
+        "author": "emarshall",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+]
+
+# Whole Arabidopsis-plant assets (Arabidopsis thaliana). Verified on the Sketchfab API (license
+# slug 'by' + isDownloadable + not age-restricted) 2026-06-26 — all public-safe CC-BY. The
+# evolution.biologique pair are the classic ABC-model floral lines (wild-type "sauvage" + the
+# Agamous homeotic mutant), genuinely A. thaliana; lamujer's is a named A. thaliana model.
+ARABIDOPSIS_ASSETS = [
+    {
+        "variant": "sketchfab-arab-lamujer",
+        "uid": "e79922a7f1ea418ab928f2fa8c06cd48",
+        "name": "Arabidopsis thaliana model",
+        "author": "lamujer",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+    {
+        "variant": "sketchfab-arab-sauvage",
+        "uid": "1dc6184c333e44c68efee36eb1922ea0",
+        "name": "Arabidopsis sauvage",
+        "author": "evolution.biologique",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+    {
+        "variant": "sketchfab-arab-agamous",
+        "uid": "3992abef3af94d78a8344315444044ed",
+        "name": "Arabidopsis mutant Agamous",
+        "author": "evolution.biologique",
+        "license": "CC-BY 4.0",
+        "keep": None,
+    },
+]
+
 # Per-crop: subject task + curated asset set. Defaults preserve the original tomato behaviour.
 CROPS = {
     "tomato": {"task_title": TOMATO_TITLE, "assets": TOMATO_ASSETS},
     "maize": {"task_title": MAIZE_TITLE, "assets": MAIZE_ASSETS},
     "rose": {"task_title": ROSE_TITLE, "assets": ROSE_ASSETS},
     "soybean": {"task_title": SOYBEAN_TITLE, "assets": SOYBEAN_ASSETS},
+    "arabidopsis": {"task_title": ARABIDOPSIS_TITLE, "assets": ARABIDOPSIS_ASSETS},
+    "pinus": {"task_title": PINE_TITLE, "assets": PINE_ASSETS},
 }
 
 
