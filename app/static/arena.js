@@ -10,6 +10,9 @@ const qs = () => {
   const p = new URLSearchParams();
   if (cat && cat !== "all") p.set("category", cat);
   if (crit) p.set("criterion", crit);
+  // Thread ?set=calibration (or any other set) from the page URL into every fetch.
+  const urlSet = new URLSearchParams(location.search).get("set");
+  if (urlSet) p.set("set", urlSet);
   const s = p.toString();
   return s ? "?" + s : "";
 };
@@ -54,7 +57,20 @@ async function loadNext() {
   }
 }
 
+// True when the page is in a scoped session mode (e.g. ?set=calibration).
+const inSessionMode = () => new URLSearchParams(location.search).has("set");
+
 function render(data) {
+  // Terminal payload from a scoped mode (e.g. calibration): no card to render.
+  if (data && data.done) {
+    current = null;
+    const p = data.progress || {};
+    const label = data.set
+      ? data.set.charAt(0).toUpperCase() + data.set.slice(1)
+      : "Set";
+    setStatus(`${label} complete — ${p.voted ?? 0}/${p.total ?? 0} voted.`);
+    return;
+  }
   current = data;
   el("task-cat").textContent = data.task.category;
   el("task-title").textContent = data.task.title;
@@ -83,7 +99,13 @@ async function vote(winner) {
       body: JSON.stringify({ comparison_id: current.comparison_id, winner }),
     });
     const data = await res.json();
-    if (data.next) {
+    if (inSessionMode()) {
+      // In a scoped mode the embedded `data.next` shortcut is built by the
+      // regular (unscoped) builder, so ignore it and re-fetch through the
+      // mode-aware path (qs threads ?set). loadNext handles the `done` payload.
+      flash("Vote recorded ✓");
+      await loadNext();
+    } else if (data.next) {
       render(data.next);
       flash("Vote recorded ✓");
     } else {

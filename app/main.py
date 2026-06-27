@@ -7,7 +7,17 @@ import random
 import uuid
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -17,10 +27,12 @@ from sqlalchemy.orm import Session
 from . import config, ingest, integrity, matchmaking, ranking, service, submissions
 from .database import get_db, init_db
 from .models import (
+    CalibrationPair,
     Category,
     Comparison,
     Criterion,
     Generator,
+    JudgeRating,
     ModelOutput,
     Rating,
     Task,
@@ -159,6 +171,45 @@ def _build_comparison(
     return _serialize(comparison, task, crit, out_a, out_b)
 
 
+def _build_calibration_comparison(db: Session, session_id: str) -> dict | None:
+    """Serve the next un-voted CalibrationPair for this session (with progress)."""
+    all_pairs = db.execute(select(CalibrationPair)).scalars().all()
+    total = len(all_pairs)
+    voted = 0
+    target = None
+    for cp in all_pairs:
+        already = integrity.already_voted_pair(
+            db, session_id, cp.output_a_id, cp.output_b_id, cp.criterion_id
+        )
+        if already:
+            voted += 1
+        elif target is None:
+            target = cp
+    progress = {"voted": voted, "total": total}
+    if target is None:
+        return {"set": "calibration", "done": True, "progress": progress}
+
+    crit = db.get(Criterion, target.criterion_id)
+    task = db.get(Task, target.task_id)
+    out_a = db.get(ModelOutput, target.output_a_id)
+    out_b = db.get(ModelOutput, target.output_b_id)
+    if random.random() < 0.5:
+        out_a, out_b = out_b, out_a
+    comparison = Comparison(
+        task_id=task.id,
+        output_a_id=out_a.id,
+        output_b_id=out_b.id,
+        criterion_id=crit.id,
+        session_id=session_id,
+    )
+    db.add(comparison)
+    db.commit()
+    payload = _serialize(comparison, task, crit, out_a, out_b)
+    payload["set"] = "calibration"
+    payload["progress"] = progress
+    return payload
+
+
 def _require_admin(token: str | None) -> None:
     if not token or token != config.ADMIN_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid or missing admin token")
@@ -196,8 +247,12 @@ def api_next(
     db: Session = Depends(get_db),
     criterion: str | None = None,
     category: str | None = None,
+    mode: str | None = Query(default=None, alias="set"),
 ):
-    payload = _build_comparison(db, request.state.session_id, criterion, category)
+    if mode == "calibration":
+        payload = _build_calibration_comparison(db, request.state.session_id)
+    else:
+        payload = _build_comparison(db, request.state.session_id, criterion, category)
     if payload is None:
         return JSONResponse({"error": "no-comparisons-available"}, status_code=404)
     return payload
@@ -298,6 +353,46 @@ def _leaderboard_rows(
     return rows
 
 
+def _judge_leaderboard_rows(
+    db: Session, criterion_slug: str = "overall", view_condition: str = "multi4"
+) -> list[dict]:
+    crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+    if crit is None:
+        return []
+    ratings = (
+        db.execute(
+            select(JudgeRating).where(
+                JudgeRating.criterion_id == crit.id,
+                JudgeRating.view_condition == view_condition,
+                JudgeRating.category_id.is_(None),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    rows = []
+    for r in ratings:
+        gen = db.get(Generator, r.generator_id)
+        if gen is None:
+            continue  # stale rating row (generator deleted); skip rather than crash
+        rows.append(
+            {
+                "generator": gen.name,
+                "kind": gen.kind,
+                "elo": round(r.elo, 1),
+                "bt_score": round(r.bt_score, 1),
+                "bt_lower": round(r.bt_lower, 1),
+                "bt_upper": round(r.bt_upper, 1),
+                "n_games": r.n_games,
+            }
+        )
+    rows.sort(key=lambda x: x["bt_score"], reverse=True)
+    ranks = ranking.rank_by_ci([(r["bt_lower"], r["bt_upper"]) for r in rows])
+    for row, rank in zip(rows, ranks):
+        row["rank"] = rank
+    return rows
+
+
 @app.get("/leaderboard", response_class=HTMLResponse)
 def leaderboard(
     request: Request,
@@ -337,6 +432,7 @@ def leaderboard(
             "bias": service.compute_bias(db),
             "sel_criterion": criterion,
             "sel_category": category,
+            "judge_rows": _judge_leaderboard_rows(db, criterion, "multi4"),
         },
     )
 
@@ -561,6 +657,15 @@ async def admin_upload_output(
 def admin_recompute(token: str = Form(...), db: Session = Depends(get_db)):
     _require_admin(token)
     detail = service.recompute_all(db)
+    return JSONResponse({"status": "recomputed", "detail": detail})
+
+
+@app.post("/admin/recompute_judge")
+def admin_recompute_judge(
+    token: str = Form(...), view_condition: str = Form("multi4"), db: Session = Depends(get_db)
+):
+    _require_admin(token)
+    detail = service.recompute_judge_all(db, view_condition=view_condition)
     return JSONResponse({"status": "recomputed", "detail": detail})
 
 
