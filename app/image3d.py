@@ -585,7 +585,7 @@ def generate_nvs(
     api_key: str,
     model: str,
     n_views: int = 6,
-    grid: tuple[int, int] = (3, 2),
+    grid: tuple[int, int] = (2, 3),
     transport=None,
     timeout_s: int = 300,
     poll_interval_s: int = 5,
@@ -658,7 +658,8 @@ class NvsReplicateTransport:
 
 
 NVS_PROVIDERS: dict[str, tuple] = {
-    # candidate; CONFIRM the exact slug + output format at the key-gated live probe (Step 6)
+    # VERIFIED 2026-06-27 (live e2e): slug valid (version c69c6559a29...); output is a single
+    # 2-wide × 3-tall (640×960) contact sheet of 320px tiles → de-tiled with the default grid=(2,3).
     "zero123plusplus": (
         functools.partial(generate_nvs, model="jd7h/zero123plusplus"),
         "REPLICATE_API_TOKEN",
