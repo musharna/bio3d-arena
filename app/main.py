@@ -24,7 +24,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import config, ingest, integrity, matchmaking, ranking, service, submissions
+from . import config, difficulty, ingest, integrity, matchmaking, ranking, service, submissions
 from .database import get_db, init_db
 from .models import (
     CalibrationPair,
@@ -767,6 +767,12 @@ def export_dataset(db: Session = Depends(get_db)):
             }
         )
     return {"n_votes": len(records), "votes": records}
+
+
+@app.get("/api/difficulty.json")
+def api_difficulty(db: Session = Depends(get_db)):
+    """Per-(difficulty-tier × generator) objective scorecard over existing metrics."""
+    return {"scorecard": difficulty.tier_scorecard(db)}
 
 
 # ----------------------------------------------------------- ingestion API (JSON)
