@@ -75,3 +75,4 @@ def test_calibration_mode_reports_done_after_voting_all():
     nxt = client.get("/api/next?set=calibration").json()
     assert nxt.get("done") is True
     assert nxt["progress"]["voted"] == 1
+    assert nxt["progress"]["total"] == 1

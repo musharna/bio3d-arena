@@ -7,7 +7,17 @@ import random
 import uuid
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -236,9 +246,9 @@ def api_next(
     db: Session = Depends(get_db),
     criterion: str | None = None,
     category: str | None = None,
-    set: str | None = None,
+    mode: str | None = Query(default=None, alias="set"),
 ):
-    if set == "calibration":
+    if mode == "calibration":
         payload = _build_calibration_comparison(db, request.state.session_id)
     else:
         payload = _build_comparison(db, request.state.session_id, criterion, category)
