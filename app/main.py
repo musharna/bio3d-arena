@@ -32,6 +32,7 @@ from .models import (
     Comparison,
     Criterion,
     Generator,
+    JudgeRating,
     ModelOutput,
     Rating,
     Task,
@@ -352,6 +353,46 @@ def _leaderboard_rows(
     return rows
 
 
+def _judge_leaderboard_rows(
+    db: Session, criterion_slug: str = "overall", view_condition: str = "multi4"
+) -> list[dict]:
+    crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+    if crit is None:
+        return []
+    ratings = (
+        db.execute(
+            select(JudgeRating).where(
+                JudgeRating.criterion_id == crit.id,
+                JudgeRating.view_condition == view_condition,
+                JudgeRating.category_id.is_(None),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    rows = []
+    for r in ratings:
+        gen = db.get(Generator, r.generator_id)
+        if gen is None:
+            continue  # stale rating row (generator deleted); skip rather than crash
+        rows.append(
+            {
+                "generator": gen.name,
+                "kind": gen.kind,
+                "elo": round(r.elo, 1),
+                "bt_score": round(r.bt_score, 1),
+                "bt_lower": round(r.bt_lower, 1),
+                "bt_upper": round(r.bt_upper, 1),
+                "n_games": r.n_games,
+            }
+        )
+    rows.sort(key=lambda x: x["bt_score"], reverse=True)
+    ranks = ranking.rank_by_ci([(r["bt_lower"], r["bt_upper"]) for r in rows])
+    for row, rank in zip(rows, ranks):
+        row["rank"] = rank
+    return rows
+
+
 @app.get("/leaderboard", response_class=HTMLResponse)
 def leaderboard(
     request: Request,
@@ -391,6 +432,7 @@ def leaderboard(
             "bias": service.compute_bias(db),
             "sel_criterion": criterion,
             "sel_category": category,
+            "judge_rows": _judge_leaderboard_rows(db, criterion, "multi4"),
         },
     )
 
