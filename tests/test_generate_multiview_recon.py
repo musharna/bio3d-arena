@@ -2,14 +2,23 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import trimesh
 from sqlalchemy import select
 
+from app import config
 from app.database import SessionLocal, init_db
 from app.models import Category, ModelOutput, Task
 
 from scripts.generate_multiview_recon import run_subject
+
+
+def _write_stub_ref(ref_rel: str) -> None:
+    """Write a minimal JPEG stub to config.ASSET_DIR/<ref_rel> so run_subject finds the ref."""
+    p = Path(config.ASSET_DIR) / ref_rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b"\xff\xd8\xff\xd9")
 
 
 def setup_module(_m):
@@ -36,6 +45,7 @@ def _box():
 
 
 def test_run_subject_nvs_then_multiview(tmp_path):
+    _write_stub_ref("reference/arabidopsis_ref.jpg")
     with SessionLocal() as db:
         _seed(db)
         calls = {}
@@ -49,7 +59,7 @@ def test_run_subject_nvs_then_multiview(tmp_path):
             return _box()
 
         mv = {"recon:trellis-mv-mvt": (fake_mv, "FAL_KEY", "TRELLIS mv")}
-        subj = {"ref": "reference/arabidopsis_ref.jpg", "task_title": PINE}  # any existing ref file
+        subj = {"ref": "reference/arabidopsis_ref.jpg", "task_title": PINE}
         res = run_subject(
             db,
             subj,
@@ -71,6 +81,7 @@ def test_run_subject_nvs_then_multiview(tmp_path):
 
 
 def test_run_subject_skips_when_nvs_too_few():
+    _write_stub_ref("reference/arabidopsis_ref.jpg")
     with SessionLocal() as db:
         _seed(db)
 

@@ -40,8 +40,8 @@ def run_subject(db, subject, *, env, nvs_fn, mv_providers, views_dir, score_fn=N
         return {"subject": subject["task_title"], "skipped": "no REPLICATE_API_TOKEN"}
     try:
         views = nvs_fn(ref.read_bytes(), api_key=rep_key)
-    except Exception as e:  # noqa: BLE001 — skip-and-log; provider passes key in header not text
-        return {"subject": subject["task_title"], "skipped": f"nvs error: {type(e).__name__}: {e}"}
+    except Exception as e:  # noqa: BLE001
+        return {"subject": subject["task_title"], "skipped": f"nvs error: {type(e).__name__}"}
     if len(views) < 2:
         return {"subject": subject["task_title"], "skipped": f"nvs returned {len(views)} views"}
     if views_dir is not None:
