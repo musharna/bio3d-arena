@@ -20,6 +20,13 @@ from app.models import Criterion  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def _fmt(value: float | None) -> str:
+    """Round a metric to 3 dp; render a missing value (None) as an em-dash."""
+    if value is None:
+        return "—"
+    return f"{value:.3f}"
+
+
 def build_report(db) -> str:
     lines = ["# VLM ↔ Human Calibration Report", ""]
     for slug in calibration.STUDY_CRITERIA:
@@ -28,15 +35,29 @@ def build_report(db) -> str:
             continue
         lines.append(f"## Criterion: {slug}")
         lines.append("")
-        lines.append("| view | κ (human vs VLM) | n | self-consistency flip-rate | rank ρ |")
-        lines.append("|---|---|---|---|---|")
+        lines.append(
+            "| view | κ (human vs VLM) | n | self-consistency flip-rate | n_groups | rank ρ |"
+        )
+        lines.append("|---|---|---|---|---|---|")
         for cond in CONDITIONS:
             k = calibration.human_vs_judge_kappa(db, crit.id, cond)
             sc = calibration.judge_self_consistency(db, crit.id, cond)
-            rc = calibration.rank_correlation(db, crit.id, cond)
+            # Rank-ρ is comparable to the human full-grid leaderboard only for multi4;
+            # single/turntable JudgeRatings would be non-comparable, so we never compute them.
+            if cond == "multi4":
+                rho_cell = _fmt(calibration.rank_correlation(db, crit.id, cond)["spearman"])
+            else:
+                rho_cell = "N/A (full-grid multi4 only)"
             lines.append(
-                f"| {cond} | {k['kappa']} | {k['n']} | {sc['flip_rate']} | {rc['spearman']} |"
+                f"| {cond} | {_fmt(k['kappa'])} | {k['n']} | {_fmt(sc['flip_rate'])} | "
+                f"{sc['n_groups']} | {rho_cell} |"
             )
+        lines.append("")
+        lines.append(
+            "Rank correlation is computed only for multi4 (the full-grid leaderboard "
+            "condition); single/turntable are evaluated on the calibration subset only, so "
+            "they have no comparable full-grid leaderboard."
+        )
         lines.append("")
     return "\n".join(lines)
 
