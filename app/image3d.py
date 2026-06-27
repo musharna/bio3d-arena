@@ -549,3 +549,119 @@ MULTIVIEW_PROVIDERS: dict[str, tuple] = {
         "Hunyuan3D v2 multi-view (fal)",
     ),
 }
+
+
+def _normalize_views(outs: list[bytes], n_views: int, grid: tuple[int, int]) -> list[bytes]:
+    """NVS output → exactly n_views PNG byte-strings. Accepts either a list of n_views images
+    or a single tiled contact sheet (grid = (cols, rows)) which is de-tiled left-to-right,
+    top-to-bottom."""
+    import io
+
+    from PIL import Image
+
+    if len(outs) >= n_views:
+        return outs[:n_views]
+    if len(outs) == 1:
+        sheet = Image.open(io.BytesIO(outs[0])).convert("RGB")
+        cols, rows = grid
+        w, h = sheet.size
+        tw, th = w // cols, h // rows
+        tiles: list[bytes] = []
+        for r in range(rows):
+            for c in range(cols):
+                crop = sheet.crop((c * tw, r * th, (c + 1) * tw, (r + 1) * th))
+                buf = io.BytesIO()
+                crop.save(buf, "PNG")
+                tiles.append(buf.getvalue())
+        if len(tiles) < n_views:
+            raise Image3DError(f"NVS sheet de-tiled to {len(tiles)} < {n_views}")
+        return tiles[:n_views]
+    raise Image3DError(f"NVS returned {len(outs)} outputs; expected {n_views} images or 1 sheet")
+
+
+def generate_nvs(
+    image_bytes: bytes,
+    *,
+    api_key: str,
+    model: str,
+    n_views: int = 6,
+    grid: tuple[int, int] = (3, 2),
+    transport=None,
+    timeout_s: int = 300,
+    poll_interval_s: int = 5,
+) -> list[bytes]:
+    """Single image → N novel views via a multi-view-diffusion API (e.g. Zero123++).
+    transport.poll(req, api_key) -> (status, outputs|None) where outputs is a list of downloaded
+    image bytes (n_views separate images, or 1 tiled sheet)."""
+    t = transport or NvsReplicateTransport()
+    req = t.submit(image_bytes, model, api_key)
+    start = time.monotonic()
+    while True:
+        status, outs = t.poll(req, api_key)
+        s = (status or "").lower()
+        if s in _SUCCESS:
+            if not outs:
+                raise Image3DError(f"NVS {model}: succeeded but no output images")
+            break
+        if s in _FAILED:
+            raise Image3DError(f"NVS {model}: {status}")
+        if time.monotonic() - start >= timeout_s:
+            raise Image3DError(f"NVS {model}: timed out after {timeout_s}s")
+        time.sleep(poll_interval_s)
+    return _normalize_views(outs, n_views, grid)
+
+
+class NvsReplicateTransport:
+    """Replicate NVS transport (LIVE BINDING — verify against replicate.com/docs at the key-gated
+    run). submit creates a version-pinned prediction with the image input; poll returns
+    (status, [downloaded image bytes]) when succeeded. Auth: Bearer."""
+
+    BASE = "https://api.replicate.com/v1"
+
+    def __init__(self, client: httpx.Client | None = None):
+        self._client = client or httpx.Client(timeout=60)
+
+    def _hdr(self, api_key: str) -> dict:
+        return {"Authorization": f"Bearer {api_key}"}
+
+    def submit(self, image_bytes: bytes, model: str, api_key: str) -> dict:
+        m = _send_with_retry(
+            lambda: self._client.get(f"{self.BASE}/models/{model}", headers=self._hdr(api_key))
+        )
+        m.raise_for_status()
+        version = (m.json().get("latest_version") or {}).get("id")
+        if not version:
+            raise Image3DError(f"NVS {model}: no latest_version to pin")
+        r = _send_with_retry(
+            lambda: self._client.post(
+                f"{self.BASE}/predictions",
+                headers=self._hdr(api_key),
+                json={"version": version, "input": {"image": _image_data_uri(image_bytes)}},
+            )
+        )
+        r.raise_for_status()
+        return {"get_url": (r.json().get("urls") or {}).get("get")}
+
+    def poll(self, req: dict, api_key: str) -> tuple[str, list[bytes] | None]:
+        if not req.get("get_url"):
+            raise Image3DError("NVS: no prediction poll url in submit response")
+        r = _send_with_retry(lambda: self._client.get(req["get_url"], headers=self._hdr(api_key)))
+        r.raise_for_status()
+        d = r.json()
+        status = d.get("status", "")
+        if status.lower() not in _SUCCESS:
+            return status, None
+        out = d.get("output")
+        urls = [out] if isinstance(out, str) else (out if isinstance(out, list) else [])
+        imgs = [_send_with_retry(lambda u=u: self._client.get(u)).content for u in urls if u]
+        return status, imgs
+
+
+NVS_PROVIDERS: dict[str, tuple] = {
+    # candidate; CONFIRM the exact slug + output format at the key-gated live probe (Step 6)
+    "zero123plusplus": (
+        functools.partial(generate_nvs, model="jd7h/zero123plusplus"),
+        "REPLICATE_API_TOKEN",
+        "Zero123++ (Replicate)",
+    ),
+}
