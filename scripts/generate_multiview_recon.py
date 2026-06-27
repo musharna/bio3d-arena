@@ -30,30 +30,57 @@ SUBJECTS: dict[str, dict] = {
 }
 
 
-def run_subject(db, subject, *, env, nvs_fn, mv_providers, views_dir, score_fn=None) -> dict:
-    """nvs_fn(image_bytes, api_key=...) -> list[bytes]; mv_providers like MULTIVIEW_PROVIDERS."""
+def _load_cached_views(views_dir) -> list[bytes]:
+    """Return cached view bytes (view_<i>.png) in numeric index order, or [] if none on disk."""
+    if views_dir is None:
+        return []
+    files = sorted(
+        Path(views_dir).glob("view_*.png"),
+        key=lambda p: int(p.stem.split("_", 1)[1]),
+    )
+    return [p.read_bytes() for p in files]
+
+
+def run_subject(
+    db, subject, *, env, nvs_fn, mv_providers, views_dir, score_fn=None, refresh=False
+) -> dict:
+    """nvs_fn(image_bytes, api_key=...) -> list[bytes]; mv_providers like MULTIVIEW_PROVIDERS.
+
+    Idempotent: if ≥2 cached views_dir/view_*.png exist and not refresh, reuse them (no NVS call,
+    no REPLICATE_API_TOKEN needed); otherwise generate via NVS and (re)write the cache.
+    """
     ref = Path(config.ASSET_DIR) / subject["ref"]
     if not ref.exists():
         return {"subject": subject["task_title"], "skipped": f"missing ref {ref}"}
-    rep_key = env.get("REPLICATE_API_TOKEN")
-    if not rep_key:
-        return {"subject": subject["task_title"], "skipped": "no REPLICATE_API_TOKEN"}
-    try:
-        views = nvs_fn(ref.read_bytes(), api_key=rep_key)
-    except Exception as e:  # noqa: BLE001
-        return {"subject": subject["task_title"], "skipped": f"nvs error: {type(e).__name__}"}
-    if len(views) < 2:
-        return {"subject": subject["task_title"], "skipped": f"nvs returned {len(views)} views"}
-    if views_dir is not None:
-        views_dir = Path(views_dir)
-        views_dir.mkdir(parents=True, exist_ok=True)
-        for i, v in enumerate(views):
-            (views_dir / f"view_{i}.png").write_bytes(v)
+    cached = [] if refresh else _load_cached_views(views_dir)
+    if len(cached) >= 2:
+        views, from_cache = cached, True
+    else:
+        rep_key = env.get("REPLICATE_API_TOKEN")
+        if not rep_key:
+            return {"subject": subject["task_title"], "skipped": "no REPLICATE_API_TOKEN"}
+        try:
+            views = nvs_fn(ref.read_bytes(), api_key=rep_key)
+        except Exception as e:  # noqa: BLE001
+            return {"subject": subject["task_title"], "skipped": f"nvs error: {type(e).__name__}"}
+        if len(views) < 2:
+            return {"subject": subject["task_title"], "skipped": f"nvs returned {len(views)} views"}
+        from_cache = False
+        if views_dir is not None:
+            views_dir = Path(views_dir)
+            views_dir.mkdir(parents=True, exist_ok=True)
+            for i, v in enumerate(views):
+                (views_dir / f"view_{i}.png").write_bytes(v)
     active = {s: v for s, v in mv_providers.items() if env.get(v[1])}
     report = generate_api_multiview(
         db, views, providers=active, env=env, score_fn=score_fn, task_title=subject["task_title"]
     )
-    return {"subject": subject["task_title"], "n_views": len(views), "recon": report}
+    return {
+        "subject": subject["task_title"],
+        "n_views": len(views),
+        "cached": from_cache,
+        "recon": report,
+    }
 
 
 def main() -> int:
@@ -68,7 +95,7 @@ def main() -> int:
     ap.add_argument(
         "--refresh",
         action="store_true",
-        help="ignore cached views (currently always regenerates)",
+        help="ignore cached views and regenerate via NVS",
     )
     args = ap.parse_args()
     subjects = [args.subject] if args.subject else list(SUBJECTS)
@@ -84,6 +111,7 @@ def main() -> int:
                 mv_providers=MULTIVIEW_PROVIDERS,
                 views_dir=vdir,
                 score_fn=recon_service.score_and_store,
+                refresh=args.refresh,
             )
             print(res)
     return 0
