@@ -62,5 +62,5 @@ def test_render_contact_sheets_writes_file_and_is_idempotent(tmp_path, monkeypat
         res2 = judge_render.render_contact_sheets(
             db, [out.id], "multi4", capture_multi=fake_capture
         )
-        assert res2["rendered"] == 0
+        assert res2 == {"rendered": 0, "errors": 0}
         assert calls["n"] == 1

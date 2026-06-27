@@ -56,11 +56,11 @@ def render_contact_sheets(db, output_ids: list[int], condition: str, *, capture_
         abs_path = Path(config.ASSET_DIR) / rel
         if abs_path.exists() and abs_path.stat().st_size > 0:
             continue  # idempotent
-        out = db.get(ModelOutput, oid)
-        if out is None:
-            errors += 1
-            continue
         try:
+            out = db.get(ModelOutput, oid)
+            if out is None:
+                errors += 1
+                continue
             glb_abs = str(Path(config.ASSET_DIR) / out.asset_path)
             tiles = capture_multi(glb_abs, spec["azimuths"], spec["elev"])
             sheet = tile_contact_sheet(tiles, spec["cols"], spec["rows"])
