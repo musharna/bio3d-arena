@@ -13,7 +13,8 @@ scikit-image>=0.24
 scipy>=1.13
 nibabel>=5.2
 tifffile>=2024.1.30
+# VLM-as-judge (runtime)
+anthropic>=0.40  # Claude vision judge caller; ANTHROPIC_API_KEY from env
 # dev/test
 pytest==9.1.1
 httpx==0.28.1
-anthropic>=0.40  # VLM-as-judge (Claude vision); ANTHROPIC_API_KEY from env

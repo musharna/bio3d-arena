@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import uuid
 
+import pytest
+from sqlalchemy.exc import IntegrityError
+
 from app.database import SessionLocal, init_db
 from app.models import (
     CalibrationPair,
@@ -61,12 +64,30 @@ def test_judge_vote_persists():
 
 def test_judge_rating_scope_is_unique_per_view_condition():
     with SessionLocal() as db:
-        _cat, crit, gen, _task, _oa, _ob = _scaffold(db)
+        cat, crit, gen, _task, _oa, _ob = _scaffold(db)
         r1 = JudgeRating(generator_id=gen.id, criterion_id=crit.id, view_condition="multi4")
         r2 = JudgeRating(generator_id=gen.id, criterion_id=crit.id, view_condition="single")
         db.add_all([r1, r2])
         db.commit()  # same gen/crit, different view_condition → allowed
         assert r1.id != r2.id
+
+        # NOTE: uq_judge_rating_scope includes the nullable category_id; SQL treats
+        # NULLs as distinct, so duplicate-rejection is only enforced (and testable)
+        # when category_id is NOT NULL. Insert a scoped row, then a duplicate of it.
+        r3 = JudgeRating(
+            generator_id=gen.id, category_id=cat.id, criterion_id=crit.id, view_condition="multi4"
+        )
+        db.add(r3)
+        db.commit()  # distinct from r1 (category_id NULL vs cat.id) → allowed
+
+        # same (generator_id, category_id, criterion_id, view_condition) → rejected
+        dup = JudgeRating(
+            generator_id=gen.id, category_id=cat.id, criterion_id=crit.id, view_condition="multi4"
+        )
+        db.add(dup)
+        with pytest.raises(IntegrityError):
+            db.commit()
+        db.rollback()
 
 
 def test_calibration_pair_persists():
@@ -78,3 +99,22 @@ def test_calibration_pair_persists():
         db.add(cp)
         db.commit()
         assert db.get(CalibrationPair, cp.id) is not None
+
+
+def test_calibration_pair_unique_constraint_rejects_duplicate():
+    with SessionLocal() as db:
+        _cat, crit, _gen, task, oa, ob = _scaffold(db)
+        cp = CalibrationPair(
+            task_id=task.id, output_a_id=oa.id, output_b_id=ob.id, criterion_id=crit.id
+        )
+        db.add(cp)
+        db.commit()
+
+        # same (task_id, output_a_id, output_b_id, criterion_id) → rejected
+        dup = CalibrationPair(
+            task_id=task.id, output_a_id=oa.id, output_b_id=ob.id, criterion_id=crit.id
+        )
+        db.add(dup)
+        with pytest.raises(IntegrityError):
+            db.commit()
+        db.rollback()
