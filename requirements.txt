@@ -16,3 +16,4 @@ tifffile>=2024.1.30
 # dev/test
 pytest==9.1.1
 httpx==0.28.1
+anthropic>=0.40  # VLM-as-judge (Claude vision); ANTHROPIC_API_KEY from env

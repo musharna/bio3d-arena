@@ -344,3 +344,81 @@ class ReconTask(Base):
     task_id: Mapped[int] = mapped_column(ForeignKey("task.id"), unique=True, index=True)
     species_slug: Mapped[str] = mapped_column(String(64), index=True)
     species_name: Mapped[str] = mapped_column(String(128), default="")
+
+
+class JudgeVote(Base):
+    """One VLM-judge judgment for a pair under a perception condition. winner ∈
+    {a,b,tie,bad}; output_a_id/output_b_id are the PRESENTED slots, so winner maps
+    back to a real output through them. swap_group links the A/B and B/A orders of
+    the same logical comparison (judge self-consistency / position bias). Separate
+    from human `vote` — the human integrity path never touches this table."""
+
+    __tablename__ = "judge_vote"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("task.id"), index=True)
+    output_a_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"), index=True)
+    output_b_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"), index=True)
+    criterion_id: Mapped[int] = mapped_column(ForeignKey("criterion.id"), index=True)
+    winner: Mapped[str] = mapped_column(String(8))  # 'a' | 'b' | 'tie' | 'bad'
+    view_condition: Mapped[str] = mapped_column(String(16), index=True)  # single|multi4|turntable
+    judge_model: Mapped[str] = mapped_column(String(48))
+    swap_group: Mapped[str] = mapped_column(String(64), index=True)
+    rationale: Mapped[str] = mapped_column(Text, default="")
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class JudgeRating(Base):
+    """VLM-side cached ranking — mirrors `Rating` plus a `view_condition` key so each
+    perception condition has its own leaderboard. Kept separate from `Rating` so the
+    human leaderboard is never polluted by judge votes."""
+
+    __tablename__ = "judge_rating"
+    __table_args__ = (
+        UniqueConstraint(
+            "generator_id",
+            "category_id",
+            "criterion_id",
+            "view_condition",
+            name="uq_judge_rating_scope",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    generator_id: Mapped[int] = mapped_column(ForeignKey("generator.id"), index=True)
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("category.id"), nullable=True, index=True
+    )
+    criterion_id: Mapped[int] = mapped_column(ForeignKey("criterion.id"), index=True)
+    view_condition: Mapped[str] = mapped_column(String(16), index=True)
+    elo: Mapped[float] = mapped_column(Float, default=1000.0)
+    bt_score: Mapped[float] = mapped_column(Float, default=1000.0)
+    bt_lower: Mapped[float] = mapped_column(Float, default=1000.0)
+    bt_upper: Mapped[float] = mapped_column(Float, default=1000.0)
+    n_games: Mapped[int] = mapped_column(Integer, default=0)
+    judge_model: Mapped[str] = mapped_column(String(48), default="")
+    updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class CalibrationPair(Base):
+    """A pair in the shared calibration subset — voted by BOTH the human (via
+    /api/next?set=calibration) and the VLM judge, so agreement (κ) is measured on the
+    same pairings. Distinct from GoldPair (which has a known-correct answer)."""
+
+    __tablename__ = "calibration_pair"
+    __table_args__ = (
+        UniqueConstraint(
+            "task_id",
+            "output_a_id",
+            "output_b_id",
+            "criterion_id",
+            name="uq_calibration_pair",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("task.id"), index=True)
+    output_a_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"))
+    output_b_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"))
+    criterion_id: Mapped[int] = mapped_column(ForeignKey("criterion.id"), index=True)
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
