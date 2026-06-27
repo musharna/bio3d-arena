@@ -323,6 +323,8 @@ def _leaderboard_rows(
     rows = []
     for r in ratings:
         gen = db.get(Generator, r.generator_id)
+        if gen is None:
+            continue  # stale rating row (generator deleted); skip rather than crash
         rows.append(
             {
                 "generator": gen.name,

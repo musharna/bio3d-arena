@@ -222,5 +222,12 @@ def rank_correlation(db, criterion_id: int, view_condition: str) -> dict:
     shared = sorted(set(human) & set(vlm))
     if len(shared) < 3:
         return {"spearman": None, "n": len(shared)}
-    rho, _p = spearmanr([human[g] for g in shared], [vlm[g] for g in shared])
+    hvals = [human[g] for g in shared]
+    vvals = [vlm[g] for g in shared]
+    # Spearman is undefined when either side is constant (e.g. a too-sparse board
+    # where every generator is tied) — scipy returns nan + a ConstantInputWarning.
+    # Report it as missing ("—") rather than a bogus nan.
+    if len(set(hvals)) < 2 or len(set(vvals)) < 2:
+        return {"spearman": None, "n": len(shared)}
+    rho, _p = spearmanr(hvals, vvals)
     return {"spearman": float(rho), "n": len(shared)}

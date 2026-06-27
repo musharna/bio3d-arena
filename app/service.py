@@ -216,11 +216,32 @@ def _get_or_create_judge_rating(
     return r
 
 
+def _judge_model_for_scope(db: Session, criterion_id: int, view_condition: str) -> str:
+    """The judge model that produced this scope's votes (modal value if mixed).
+
+    Falls back to the configured default only when the scope has no votes yet, so the
+    cached JudgeRating reflects what actually ran rather than a hardcoded constant."""
+    counts: dict[str, int] = {}
+    for model in db.execute(
+        select(JudgeVote.judge_model).where(
+            JudgeVote.criterion_id == criterion_id,
+            JudgeVote.view_condition == view_condition,
+        )
+    ).scalars():
+        counts[model] = counts.get(model, 0) + 1
+    if not counts:
+        from . import judge
+
+        return judge.JUDGE_MODEL
+    return max(counts, key=lambda m: counts[m])
+
+
 def recompute_judge_scope(
     db: Session, criterion: Criterion, view_condition: str, commit: bool = True
 ) -> dict:
     """Refit Bradley-Terry over JudgeVote for (criterion, condition); cache JudgeRating."""
     matches = _judge_matches_for_scope(db, criterion.id, view_condition)
+    judge_model = _judge_model_for_scope(db, criterion.id, view_condition)
     players = sorted(set(_players_for_scope(db, None)) | {p for m in matches for p in m})
     result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP)
     for gid in players:
@@ -229,7 +250,7 @@ def recompute_judge_scope(
         r.bt_lower = result.lower.get(gid, ranking.BT_BASE)
         r.bt_upper = result.upper.get(gid, ranking.BT_BASE)
         r.n_games = int(result.n_games.get(gid, 0))
-        r.judge_model = "claude-sonnet-4-6"
+        r.judge_model = judge_model
     if commit:
         db.commit()
     return {"matches": len(matches), "players": len(players)}
