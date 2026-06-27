@@ -109,7 +109,7 @@ def canonical_label(winner: str, out_a_id: int, out_b_id: int) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _human_label_for_pair(db, _session_filter, cp) -> str | None:
+def _human_label_for_pair(db, cp) -> str | None:
     """Latest human canonical label for a CalibrationPair (any session), or None."""
     from .models import Comparison, Vote  # local import avoids cycle
 
@@ -120,6 +120,7 @@ def _human_label_for_pair(db, _session_filter, cp) -> str | None:
             Comparison.criterion_id == cp.criterion_id,
             Comparison.is_gold.is_(False),
         )
+        .order_by(Vote.id.desc())
     ).all()
     cp_set = {cp.output_a_id, cp.output_b_id}
     for vote, comp in rows:
@@ -140,7 +141,7 @@ def human_vs_judge_kappa(db, criterion_id: int, view_condition: str) -> dict:
     h_labels: list[str] = []
     j_labels: list[str] = []
     for cp in pairs:
-        h = _human_label_for_pair(db, None, cp)
+        h = _human_label_for_pair(db, cp)
         lo, hi = sorted((cp.output_a_id, cp.output_b_id))
         jv = (
             db.execute(
@@ -187,7 +188,7 @@ def judge_self_consistency(db, criterion_id: int, view_condition: str) -> dict:
             continue
         groups += 1
         labels = {canonical_label(v.winner, v.output_a_id, v.output_b_id) for v in grp}
-        # A flip = the two orders disagree on the real winner (ignoring tie/bad equivalence).
+        # A flip = the two canonical labels differ.
         if len(labels) > 1:
             flips += 1
     return {"flip_rate": (flips / groups if groups else None), "n_groups": groups}
