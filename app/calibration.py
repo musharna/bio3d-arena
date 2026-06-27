@@ -1,7 +1,7 @@
-"""Calibration subset sampling + agreement stats for the VLM↔human study.
+"""Calibration subset sampling for the VLM↔human study.
 
 The sampler picks a stratified set of distinct non-gold pairs (per criterion) that
-BOTH the human and the VLM judge vote, so κ is measured on identical pairings."""
+BOTH the human and the VLM judge vote on the same pairings."""
 
 from __future__ import annotations
 
@@ -35,7 +35,8 @@ def build_calibration_set(
     replace: bool = True,
 ) -> dict:
     """Insert a stratified CalibrationPair sample. Deterministic for a given seed."""
-    criteria_slugs = criteria_slugs or STUDY_CRITERIA
+    if criteria_slugs is None:  # [] means "select nothing"; only None means defaults
+        criteria_slugs = STUDY_CRITERIA
     if replace:
         db.query(CalibrationPair).delete()
         db.flush()
@@ -51,6 +52,8 @@ def build_calibration_set(
         if crit is None:
             per[slug] = 0
             continue
+        # By design every criterion draws the SAME pair slice (differentiated only by
+        # criterion_id) — a calibration study judges identical pairs under each criterion.
         chosen = universe[:n_per_criterion]
         for task_id, a, b in chosen:
             db.add(
