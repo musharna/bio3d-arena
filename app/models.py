@@ -422,3 +422,18 @@ class CalibrationPair(Base):
     output_b_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"))
     criterion_id: Mapped[int] = mapped_column(ForeignKey("criterion.id"), index=True)
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class TaskDifficulty(Base):
+    """Manually-curated difficulty tier for a benchmark Task. Separate table (not a
+    Task column) to honor the create_all-only schema — mirrors ReconTask/OrganMetric.
+    tier ∈ difficulty.TIERS; rationale is free text (why this tier)."""
+
+    __tablename__ = "task_difficulty"
+    __table_args__ = (UniqueConstraint("task_id", name="uq_task_difficulty_task"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("task.id"), unique=True, index=True)
+    tier: Mapped[str] = mapped_column(String(16))
+    rationale: Mapped[str] = mapped_column(Text, default="")
+    updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
