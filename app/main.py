@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from . import config, ingest, integrity, matchmaking, ranking, service, submissions
 from .database import get_db, init_db
 from .models import (
+    CalibrationPair,
     Category,
     Comparison,
     Criterion,
@@ -159,6 +160,45 @@ def _build_comparison(
     return _serialize(comparison, task, crit, out_a, out_b)
 
 
+def _build_calibration_comparison(db: Session, session_id: str) -> dict | None:
+    """Serve the next un-voted CalibrationPair for this session (with progress)."""
+    all_pairs = db.execute(select(CalibrationPair)).scalars().all()
+    total = len(all_pairs)
+    voted = 0
+    target = None
+    for cp in all_pairs:
+        already = integrity.already_voted_pair(
+            db, session_id, cp.output_a_id, cp.output_b_id, cp.criterion_id
+        )
+        if already:
+            voted += 1
+        elif target is None:
+            target = cp
+    progress = {"voted": voted, "total": total}
+    if target is None:
+        return {"set": "calibration", "done": True, "progress": progress}
+
+    crit = db.get(Criterion, target.criterion_id)
+    task = db.get(Task, target.task_id)
+    out_a = db.get(ModelOutput, target.output_a_id)
+    out_b = db.get(ModelOutput, target.output_b_id)
+    if random.random() < 0.5:
+        out_a, out_b = out_b, out_a
+    comparison = Comparison(
+        task_id=task.id,
+        output_a_id=out_a.id,
+        output_b_id=out_b.id,
+        criterion_id=crit.id,
+        session_id=session_id,
+    )
+    db.add(comparison)
+    db.commit()
+    payload = _serialize(comparison, task, crit, out_a, out_b)
+    payload["set"] = "calibration"
+    payload["progress"] = progress
+    return payload
+
+
 def _require_admin(token: str | None) -> None:
     if not token or token != config.ADMIN_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid or missing admin token")
@@ -196,8 +236,12 @@ def api_next(
     db: Session = Depends(get_db),
     criterion: str | None = None,
     category: str | None = None,
+    set: str | None = None,
 ):
-    payload = _build_comparison(db, request.state.session_id, criterion, category)
+    if set == "calibration":
+        payload = _build_calibration_comparison(db, request.state.session_id)
+    else:
+        payload = _build_comparison(db, request.state.session_id, criterion, category)
     if payload is None:
         return JSONResponse({"error": "no-comparisons-available"}, status_code=404)
     return payload

@@ -10,6 +10,9 @@ const qs = () => {
   const p = new URLSearchParams();
   if (cat && cat !== "all") p.set("category", cat);
   if (crit) p.set("criterion", crit);
+  // Thread ?set=calibration (or any other set) from the page URL into every fetch.
+  const urlSet = new URLSearchParams(location.search).get("set");
+  if (urlSet) p.set("set", urlSet);
   const s = p.toString();
   return s ? "?" + s : "";
 };
