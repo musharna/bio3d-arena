@@ -18,6 +18,8 @@ from .models import (
     Comparison,
     Criterion,
     Generator,
+    JudgeRating,
+    JudgeVote,
     ModelOutput,
     Rating,
     Task,
@@ -165,6 +167,81 @@ def recompute_all(db: Session) -> dict:
         "criteria": len(criteria),
         "categories": len(categories),
     }
+
+
+def _judge_matches_for_scope(
+    db: Session, criterion_id: int, view_condition: str, include_ties: bool = True
+) -> list[tuple[int, int]]:
+    """Decisive (winner_gen, loser_gen) pairs from JudgeVote for one (criterion, condition).
+    Tie → split both directions; bad excluded. Mirrors _matches_for_scope (human)."""
+    stmt = select(JudgeVote).where(
+        JudgeVote.criterion_id == criterion_id,
+        JudgeVote.view_condition == view_condition,
+    )
+    matches: list[tuple[int, int]] = []
+    for jv in db.execute(stmt).scalars():
+        if jv.winner == "bad":
+            continue
+        gen_a = db.get(ModelOutput, jv.output_a_id).generator_id
+        gen_b = db.get(ModelOutput, jv.output_b_id).generator_id
+        if jv.winner == "a":
+            matches.append((gen_a, gen_b))
+        elif jv.winner == "b":
+            matches.append((gen_b, gen_a))
+        elif jv.winner == "tie" and include_ties:
+            matches.append((gen_a, gen_b))
+            matches.append((gen_b, gen_a))
+    return matches
+
+
+def _get_or_create_judge_rating(
+    db: Session, generator_id: int, criterion_id: int, view_condition: str
+) -> JudgeRating:
+    stmt = select(JudgeRating).where(
+        JudgeRating.generator_id == generator_id,
+        JudgeRating.criterion_id == criterion_id,
+        JudgeRating.view_condition == view_condition,
+        JudgeRating.category_id.is_(None),
+    )
+    r = db.execute(stmt).scalars().first()
+    if r is None:
+        r = JudgeRating(
+            generator_id=generator_id,
+            criterion_id=criterion_id,
+            view_condition=view_condition,
+            category_id=None,
+        )
+        db.add(r)
+        db.flush()
+    return r
+
+
+def recompute_judge_scope(
+    db: Session, criterion: Criterion, view_condition: str, commit: bool = True
+) -> dict:
+    """Refit Bradley-Terry over JudgeVote for (criterion, condition); cache JudgeRating."""
+    matches = _judge_matches_for_scope(db, criterion.id, view_condition)
+    players = sorted(set(_players_for_scope(db, None)) | {p for m in matches for p in m})
+    result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP)
+    for gid in players:
+        r = _get_or_create_judge_rating(db, gid, criterion.id, view_condition)
+        r.bt_score = result.scores.get(gid, ranking.BT_BASE)
+        r.bt_lower = result.lower.get(gid, ranking.BT_BASE)
+        r.bt_upper = result.upper.get(gid, ranking.BT_BASE)
+        r.n_games = int(result.n_games.get(gid, 0))
+        r.judge_model = "claude-sonnet-4-6"
+    if commit:
+        db.commit()
+    return {"matches": len(matches), "players": len(players)}
+
+
+def recompute_judge_all(db: Session, view_condition: str = "multi4") -> dict:
+    """Recompute the VLM leaderboard for every criterion under one view condition."""
+    criteria = db.execute(select(Criterion)).scalars().all()
+    for criterion in criteria:
+        recompute_judge_scope(db, criterion, view_condition, commit=False)
+    db.commit()
+    return {"status": "ok", "view_condition": view_condition, "criteria": len(criteria)}
 
 
 def compute_significance(

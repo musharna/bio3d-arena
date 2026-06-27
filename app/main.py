@@ -564,6 +564,15 @@ def admin_recompute(token: str = Form(...), db: Session = Depends(get_db)):
     return JSONResponse({"status": "recomputed", "detail": detail})
 
 
+@app.post("/admin/recompute_judge")
+def admin_recompute_judge(
+    token: str = Form(...), view_condition: str = Form("multi4"), db: Session = Depends(get_db)
+):
+    _require_admin(token)
+    detail = service.recompute_judge_all(db, view_condition=view_condition)
+    return JSONResponse({"status": "recomputed", "detail": detail})
+
+
 @app.post("/admin/rescore")
 def admin_rescore(token: str = Form(...), db: Session = Depends(get_db)):
     _require_admin(token)
