@@ -48,8 +48,8 @@ def test_build_messages_has_rubric_and_two_images():
         "Generate a tomato plant",
         "Visual quality",
         "Mesh cleanliness",
-        "QQ==",
-        "QQ==",
+        "QUFB",
+        "QkJC",
     )
     assert len(msgs) == 1 and msgs[0]["role"] == "user"
     parts = msgs[0]["content"]
@@ -58,6 +58,9 @@ def test_build_messages_has_rubric_and_two_images():
     assert "Tomato" in text
     images = [p for p in parts if p["type"] == "image"]
     assert len(images) == 2
+    # Distinct b64 for A vs B catches an accidental A/B image swap.
+    assert images[0]["source"]["data"] == "QUFB"
+    assert images[1]["source"]["data"] == "QkJC"
 
 
 def test_parse_verdict_accepts_valid_winner():
@@ -68,6 +71,14 @@ def test_parse_verdict_accepts_valid_winner():
 def test_parse_verdict_rejects_garbage():
     with pytest.raises(ValueError):
         judge.parse_verdict(_Resp("left"))
+
+
+def test_parse_verdict_raises_on_missing_tool_block():
+    class _EmptyResp:
+        content = []
+
+    with pytest.raises(ValueError, match="no record_verdict"):
+        judge.parse_verdict(_EmptyResp())
 
 
 def test_judge_pair_forces_tool_and_returns_winner():
