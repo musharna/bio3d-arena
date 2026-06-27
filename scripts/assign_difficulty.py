@@ -19,14 +19,13 @@ from app.database import SessionLocal  # noqa: E402
 from app.difficulty import set_task_difficulty  # noqa: E402
 from app.models import ReconTask  # noqa: E402
 
-# Editable starting curation. Tiers reflect reconstruction difficulty of the subject.
+# Editable starting curation, keyed by the live ReconTask.species_slug values.
+# Tiers reflect reconstruction difficulty of the subject's geometry.
 DIFFICULTY_MAP: dict[str, tuple[str, str]] = {
-    "tomato": ("easy", "compact bushy form, large leaves/fruit — forgiving geometry"),
-    "soybean": ("moderate", "trifoliate leaves, moderate self-occlusion"),
-    "rose": ("moderate", "layered petals; bloom interior is the hard sub-region"),
-    "maize": ("moderate", "tall blade leaves, thin tassel/silk detail"),
-    "arabidopsis": ("hard", "fine rosette + bolting inflorescence, thin stems"),
-    "pine": ("hard", "dense fine needles + branch self-occlusion"),
+    "solanum_lycopersicum": ("easy", "compact bushy form, large leaves/fruit — forgiving geometry"),
+    "zea_mays": ("moderate", "tall blade leaves, thin tassel/silk detail"),
+    "arabidopsis_thaliana": ("hard", "fine rosette + bolting inflorescence, thin stems"),
+    "pinus_sylvestris": ("hard", "dense fine needles + branch self-occlusion"),
 }
 
 
