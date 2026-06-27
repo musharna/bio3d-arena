@@ -27,8 +27,19 @@ from app.models import (  # noqa: E402
 GRID_CONDITION = "multi4"
 
 
-def enumerate_work(db, grid_condition: str = GRID_CONDITION, criteria_slugs=None) -> list[dict]:
-    """Ordered work rows (two per logical comparison, sharing a swap_group)."""
+def enumerate_work(
+    db,
+    grid_condition: str = GRID_CONDITION,
+    criteria_slugs=None,
+    *,
+    calibration_only: bool = False,
+) -> list[dict]:
+    """Ordered work rows (two per logical comparison, sharing a swap_group).
+
+    calibration_only=True skips the full grid and emits only the calibration ladder
+    (each CalibrationPair × all conditions). The grid is the multi4-only block that
+    would otherwise duplicate each calibration pair's multi4 row, so skipping it both
+    bounds the run and leaves the calibration rows un-duplicated."""
     criteria_slugs = criteria_slugs or STUDY_CRITERIA
     crit_by_slug = {
         c.slug: c
@@ -52,13 +63,14 @@ def enumerate_work(db, grid_condition: str = GRID_CONDITION, criteria_slugs=None
             )
 
     # Grid: every task pair × criteria, under the single grid condition.
-    for task in db.execute(select(Task).where(Task.active.is_(True))).scalars():
-        outs = sorted(o.id for o in _real_outputs(task))
-        for i in range(len(outs)):
-            for j in range(i + 1, len(outs)):
-                for slug in criteria_slugs:
-                    if slug in crit_by_slug:
-                        add(task.id, outs[i], outs[j], crit_by_slug[slug], grid_condition)
+    if not calibration_only:
+        for task in db.execute(select(Task).where(Task.active.is_(True))).scalars():
+            outs = sorted(o.id for o in _real_outputs(task))
+            for i in range(len(outs)):
+                for j in range(i + 1, len(outs)):
+                    for slug in criteria_slugs:
+                        if slug in crit_by_slug:
+                            add(task.id, outs[i], outs[j], crit_by_slug[slug], grid_condition)
 
     # Calibration subset: each pair × ALL conditions (the perception ladder).
     for cp in db.execute(select(CalibrationPair)).scalars():
@@ -86,10 +98,11 @@ def run_batch(
     grid_condition: str = GRID_CONDITION,
     criteria_slugs=None,
     max_votes: int | None = None,
+    calibration_only: bool = False,
 ) -> dict:
     """judge_fn(species, prompt, criterion_name, criterion_desc, a_b64, b_b64)->(winner,rationale).
     sheet_b64(output_id, condition)->base64 PNG string."""
-    work = enumerate_work(db, grid_condition, criteria_slugs)
+    work = enumerate_work(db, grid_condition, criteria_slugs, calibration_only=calibration_only)
     seen = existing_swap_orders(db)
     written = skipped = errors = 0
     for item in work:
@@ -158,6 +171,11 @@ def main() -> int:
 
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--max", type=int, default=None, help="cap votes written this run")
+    ap.add_argument(
+        "--calibration-only",
+        action="store_true",
+        help="judge only the calibration ladder (skip the full pairwise grid)",
+    )
     args = ap.parse_args()
 
     client = anthropic.Anthropic()
@@ -176,7 +194,13 @@ def main() -> int:
     with SessionLocal() as db:
         capture_multi = browser_capture_multi_factory()
         sheet_b64 = _real_sheet_b64_factory(db, capture_multi)
-        res = run_batch(db, judge_fn=judge_fn, sheet_b64=sheet_b64, max_votes=args.max)
+        res = run_batch(
+            db,
+            judge_fn=judge_fn,
+            sheet_b64=sheet_b64,
+            max_votes=args.max,
+            calibration_only=args.calibration_only,
+        )
     print(res)
     return 0
 
