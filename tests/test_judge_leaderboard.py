@@ -12,8 +12,16 @@ def setup_module(_m):
 
 def test_judge_leaderboard_rows_ranked():
     with SessionLocal() as db:
+        # Clean previous run's jl-prefixed rows, children before parents (Category +
+        # Generator slugs are unique, so a re-run would otherwise hit a UNIQUE collision).
         db.query(JudgeVote).delete()
         db.query(JudgeRating).delete()
+        db.query(ModelOutput).filter(ModelOutput.asset_path.like("seed/%.glb")).delete(
+            synchronize_session=False
+        )
+        db.query(Task).filter(Task.title == "jl-task").delete(synchronize_session=False)
+        db.query(Generator).filter(Generator.slug.like("jl-%")).delete(synchronize_session=False)
+        db.query(Category).filter_by(slug="jl-cat").delete(synchronize_session=False)
         db.commit()
         cat = Category(slug="jl-cat", name="C")
         db.add(cat)
