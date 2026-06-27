@@ -437,3 +437,18 @@ class TaskDifficulty(Base):
     tier: Mapped[str] = mapped_column(String(16))
     rationale: Mapped[str] = mapped_column(Text, default="")
     updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class PlantMorphology(Base):
+    """Hand-curated growth-form classification per recon subject. Separate table (not a
+    Task/ReconTask column) to honor the create_all-only schema — mirrors TaskDifficulty.
+    subject_slug is the CROPS short slug; the per-form recipe lives in morphology.STRATEGY."""
+
+    __tablename__ = "plant_morphology"
+    __table_args__ = (UniqueConstraint("subject_slug", name="uq_plant_morphology_subject"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    subject_slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    growth_form: Mapped[str] = mapped_column(String(32))
+    notes: Mapped[str] = mapped_column(Text, default="")
+    updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
