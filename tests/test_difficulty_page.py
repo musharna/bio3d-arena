@@ -56,8 +56,70 @@ def test_difficulty_page_renders_tiers_and_gradient():
     assert "GradGen" in t  # appears in gradient + tier tables
     assert "Easy tier" in t and "Hard tier" in t
     assert "degrades" in t  # the gradient trend label for a worsening method
+    assert "Perceptual ranking by tier" in t  # the judge-BT-per-tier section header
 
 
 def test_difficulty_in_nav():
     page = TestClient(app).get("/")
     assert '/difficulty"' in page.text  # nav link present
+
+
+def test_tier_perceptual_ranking_ranks_judge_votes():
+    """Per-tier VLM-judge BT: the method that wins all judge votes tops its tier."""
+    from sqlalchemy import select
+
+    from app import service
+    from app.models import Criterion, JudgeVote
+
+    db = SessionLocal()
+    try:
+        db.query(TaskDifficulty).delete()
+        db.commit()
+        r = random.randint(0, 10**6)
+        cat = Category(slug=f"c-tpr-{r}", name="Plants")
+        db.add(cat)
+        db.flush()
+        task = Task(category_id=cat.id, title=f"TPR {r}", prompt="p")
+        db.add(task)
+        db.flush()
+        crit = db.execute(select(Criterion).where(Criterion.slug == "overall")).scalars().first()
+        if crit is None:
+            crit = Criterion(slug="overall", name="Overall")
+            db.add(crit)
+            db.flush()
+        win = Generator(slug=f"win-{r}", name="Winner")
+        lose = Generator(slug=f"lose-{r}", name="Loser")
+        db.add_all([win, lose])
+        db.flush()
+
+        def out(g):
+            o = ModelOutput(
+                task_id=task.id, generator_id=g.id, asset_path="seed/x.glb", asset_format="glb"
+            )
+            db.add(o)
+            db.flush()
+            return o
+
+        ow, ol = out(win), out(lose)
+        set_task_difficulty(db, task.id, "easy", "", commit=False)
+        for _ in range(4):
+            db.add(
+                JudgeVote(
+                    criterion_id=crit.id,
+                    view_condition="multi4",
+                    task_id=task.id,
+                    output_a_id=ow.id,
+                    output_b_id=ol.id,
+                    winner="a",
+                    judge_model="m",
+                    swap_group=f"sg-{r}",
+                )
+            )
+        db.commit()
+
+        ranking = service.tier_perceptual_ranking(db)
+        easy = next(b for b in ranking if b["tier"] == "easy")
+        assert easy["n_matches"] == 4
+        assert easy["rows"][0]["generator"] == "Winner"  # won all → top BT
+    finally:
+        db.close()

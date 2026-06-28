@@ -673,6 +673,25 @@ main {
   font-size: 0.7rem;
   margin-top: 0.25rem;
 }
+.perceptual-tiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+.perceptual-tier {
+  flex: 1 1 240px;
+  min-width: 220px;
+}
+.perceptual-tier h4 {
+  margin: 0 0 0.4rem;
+}
+.ranktable.compact th,
+.ranktable.compact td {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.85rem;
+}
 .spotlight-toolbar {
   display: flex;
   flex-wrap: wrap;

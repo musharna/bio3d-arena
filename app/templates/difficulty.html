@@ -39,6 +39,33 @@
   <p class="subtle">A "degrades ↑" trend (chamfer rises with tier) is the expected, validating pattern.</p>
   {% endif %}
 
+  {% if perceptual %}
+  <h3>Perceptual ranking by tier <span class="subtle">— VLM-judge Bradley-Terry, top methods per tier</span></h3>
+  <p class="subtle">
+    Does the <i>perceptual</i> winner shift with difficulty? Judge votes are used (human votes
+    are too sparse on the hard tier to rank). Compare against the objective tables below — a method
+    can top one and not the other.
+  </p>
+  <div class="perceptual-tiers">
+    {% for block in perceptual %}
+    <div class="perceptual-tier">
+      <h4>{{ block.tier | capitalize }} <span class="subtle">({{ block.n_matches }} judge matches)</span></h4>
+      {% if block.rows %}
+      <table class="ranktable compact">
+        <thead><tr><th>#</th><th>Method</th><th>BT</th><th>n</th></tr></thead>
+        <tbody>
+          {% for r in block.rows[:6] %}
+          <tr><td>{{ loop.index }}</td><td class="gen">{{ r.generator }}</td>
+            <td class="num">{{ r.bt_score }}</td><td class="num">{{ r.n_games }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="subtle">Too few votes to rank.</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% for block in scorecard %}
   {% if block.tier in tiers and block.rows %}
   <h3>{{ block.tier | capitalize }} tier
