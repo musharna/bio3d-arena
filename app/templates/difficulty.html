@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Difficulty · Bio 3D Arena{% endblock %}
+{% block content %}
+<section class="board">
+  <h2>Difficulty tiers <span class="subtle">— does reconstruction get harder by species?</span></h2>
+  <p class="subtle">
+    Each reconstruction task is tiered <b>easy / moderate / hard</b> by morphological complexity.
+    The scorecard below aggregates the existing objective metrics (vs held-out real-plant GT) per
+    tier — lower <b>chamfer</b> and higher <b>F-score</b> / <b>structural</b> are better. The
+    headline: a well-behaved method should degrade monotonically easy → moderate → hard.
+  </p>
+
+  {% if gradient %}
+  <h3>Cross-tier gradient <span class="subtle">— mean chamfer ↓ per tier (methods scored in ≥2 tiers)</span></h3>
+  <table class="ranktable">
+    <thead>
+      <tr>
+        <th>Method</th>
+        {% for t in tiers %}<th>{{ t }}</th>{% endfor %}
+        <th>trend</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for g in gradient %}
+      <tr>
+        <td class="gen">{{ g.generator }}</td>
+        {% for t in tiers %}
+        <td class="num">{{ '%.4f'|format(g.chamfer[t]) if g.chamfer[t] is not none else '—' }}</td>
+        {% endfor %}
+        {% set vals = [] %}
+        {% for t in tiers %}{% if g.chamfer[t] is not none %}{% set _ = vals.append(g.chamfer[t]) %}{% endif %}{% endfor %}
+        <td>{% if vals|length >= 2 and vals[-1] > vals[0] %}<span class="flag flag-shape">degrades ↑</span>
+            {% elif vals|length >= 2 and vals[-1] < vals[0] %}<span class="flag flag-ok">improves ↓</span>
+            {% else %}<span class="subtle">flat</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="subtle">A "degrades ↑" trend (chamfer rises with tier) is the expected, validating pattern.</p>
+  {% endif %}
+
+  {% for block in scorecard %}
+  {% if block.tier in tiers and block.rows %}
+  <h3>{{ block.tier | capitalize }} tier
+    {% if tier_species.get(block.tier) %}<span class="subtle">— {{ tier_species[block.tier] | join(', ') }}</span>{% endif %}
+  </h3>
+  <table class="ranktable">
+    <thead>
+      <tr>
+        <th>Method</th><th>n</th><th>scored</th><th>Chamfer ↓</th>
+        <th>F-score ↑</th><th>Structural ↑</th><th>Species pass-rate</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in block.rows %}
+      <tr>
+        <td class="gen">{{ r.generator }}</td>
+        <td class="num">{{ r.n_outputs }}</td>
+        <td class="num">{{ r.n_scored }}</td>
+        <td class="num strong">{{ '%.4f'|format(r.mean_chamfer) if r.mean_chamfer is not none else '—' }}</td>
+        <td class="num">{{ '%.3f'|format(r.mean_fscore) if r.mean_fscore is not none else '—' }}</td>
+        <td class="num">{{ '%.2f'|format(r.mean_structural) if r.mean_structural is not none else '—' }}</td>
+        <td class="num">{{ '%.0f%%'|format(r.species_pass_rate * 100) if r.species_pass_rate is not none else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  {% endfor %}
+
+  <p class="subtle pilot-note">
+    Read-only aggregate of cached metrics — no Bradley-Terry recompute, no effect on the perceptual
+    arena. "—" is honest N/A (unscored output, or a method with no declared structure). Tiers are
+    curated per task; reference scans and untiered subjects are omitted here.
+  </p>
+</section>
+{% endblock %}

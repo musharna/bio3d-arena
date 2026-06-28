@@ -51,10 +51,13 @@ def tier_scorecard(db) -> list[dict]:
     """
     from sqlalchemy import select
 
-    from .models import Generator, Metric, ModelOutput, OrganMetric
+    from .models import Metric, ModelOutput, OrganMetric
+    from .service import generator_display_names
 
     tier_by_task = {td.task_id: td.tier for td in db.execute(select(TaskDifficulty)).scalars()}
-    gen_name = {g.id: g.name for g in db.execute(select(Generator)).scalars()}
+    # Disambiguated display names (shared with the Mode-A boards) so the 8 same-named
+    # XfrogPlants variants etc. are distinguishable here too.
+    gen_name = generator_display_names(db)
     chamfer_by_out = {}
     fscore_by_out = {}
     verdict_by_out = {}
