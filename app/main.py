@@ -151,15 +151,18 @@ def _build_comparison(
         if gold is not None:
             return gold
 
-    from .sourcing import is_reference_scan
+    from .sourcing import is_reference_scan, is_untextured_output
 
     category_id = _resolve_category_id(db, category_slug)
     task = matchmaking.pick_task(db, category_id=category_id)
     if task is None:
         return None
-    # Exclude raw-scan reference outputs from the perceptual vote pool — they render as
-    # ugly unprocessed point clouds and confound the metric↔vote agreement analysis.
-    pair = matchmaking.pick_pair(db, task, exclude_fn=lambda o: is_reference_scan(o.source))
+    # Exclude from the perceptual vote pool: raw-scan reference outputs (render as ugly
+    # point clouds, confound metric↔vote agreement) AND geometry-only outputs (flat grey
+    # blobs that lose votes for lack of texture, not shape). Both stay in the Mode-B board.
+    pair = matchmaking.pick_pair(
+        db, task, exclude_fn=lambda o: is_reference_scan(o.source) or is_untextured_output(o)
+    )
     if pair is None:
         return None
     out_a, out_b = pair
@@ -324,7 +327,7 @@ def _leaderboard_rows(
     ratings = (
         db.execute(select(Rating).where(Rating.criterion_id == crit.id, scope)).scalars().all()
     )
-    ref_gens = service.reference_scan_generator_ids(db)
+    ref_gens = service.mode_a_excluded_generator_ids(db)
     names = service.generator_display_names(db)
     rows = []
     for r in ratings:
@@ -380,7 +383,7 @@ def _judge_leaderboard_rows(
         .scalars()
         .all()
     )
-    ref_gens = service.reference_scan_generator_ids(db)
+    ref_gens = service.mode_a_excluded_generator_ids(db)
     names = service.generator_display_names(db)
     rows = []
     for r in ratings:
