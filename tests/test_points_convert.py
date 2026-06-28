@@ -6,7 +6,13 @@ import numpy as np
 import pytest
 import trimesh
 
-from app.points_convert import PointsConvertError, points_to_glb
+from app.points_convert import (
+    PointsConvertError,
+    array_to_glb,
+    npy_to_glb,
+    points_to_glb,
+    stand_up_z,
+)
 
 
 def _primitive_modes(glb: bytes) -> list[int]:
@@ -84,3 +90,38 @@ def test_points_to_glb_raises_on_empty(tmp_path):
     )
     with pytest.raises(PointsConvertError):
         points_to_glb(str(empty))
+
+
+def test_stand_up_z_makes_y_tallest_and_recentres():
+    pts = np.random.RandomState(7).rand(400, 3) * np.array([0.3, 0.3, 2.0])
+    out = stand_up_z(pts)
+    ex = out.max(axis=0) - out.min(axis=0)
+    assert ex[1] == max(ex)  # Z height became Y height
+    assert np.allclose((out.max(axis=0) + out.min(axis=0)) / 2.0, 0, atol=1e-9)  # recentred
+
+
+def test_npy_to_glb_up_axis_z_stands_cloud_upright(tmp_path):
+    """A +Z-up GT .npy (tall in Z, offset from origin like the real bundle) → +Y-up GLB."""
+    pts = np.random.RandomState(8).rand(500, 3) * np.array([0.3, 0.3, 2.0]) + np.array([5, 6, 1])
+    npy = tmp_path / "gt.npy"
+    np.save(npy, pts)
+    rt = trimesh.load(
+        trimesh.util.wrap_as_stream(npy_to_glb(str(npy), up_axis="z")), file_type="glb"
+    )
+    geom = rt if hasattr(rt, "vertices") else rt.geometry[next(iter(rt.geometry))]
+    ex = geom.extents
+    assert ex[1] == max(ex)  # tallest axis is now Y
+    assert np.allclose(geom.bounds.mean(axis=0), 0, atol=1e-6)  # recentred to origin
+
+
+def test_npy_to_glb_rejects_non_n3_array(tmp_path):
+    bad = tmp_path / "bad.npy"
+    np.save(bad, np.zeros((10, 4)))
+    with pytest.raises(PointsConvertError):
+        npy_to_glb(str(bad))
+
+
+def test_array_to_glb_exports_points_primitive():
+    glb = array_to_glb(np.random.RandomState(9).rand(200, 3))
+    assert glb[:4] == b"glTF"
+    assert _primitive_modes(glb) == [0]  # POINTS

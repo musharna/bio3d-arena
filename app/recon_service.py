@@ -174,17 +174,32 @@ def recon_outputs_for_task(db: Session, task_id: int) -> list[dict]:
 
 
 def reference_for_task(db: Session, task_id: int) -> dict | None:
-    """A PUBLIC reference exemplar for side-by-side (Task.reference_asset_id), if set.
+    """The reference to show beside a reconstruction, in priority order:
 
-    NOT the held-out scoring GT — that stays private per D2 and is never served here.
+    1. An explicit exemplar (Task.reference_asset_id), if set.
+    2. The held-out GT scan for the task's species, baked to a GLB by scripts/render_gt.py
+       (internal build — the real-plant scan the Mode-B scorer grades against).
+
+    Returns a dict with `is_gt` True for case 2 so the panel can label it accordingly.
     """
-    from .models import Task
+    from .gt_render import find_gt_glb
+    from .models import ReconTask, Task
 
     task = db.get(Task, task_id)
     if task and task.reference_asset_id:
         ref = db.get(ModelOutput, task.reference_asset_id)
         if ref:
-            return {"url": get_storage().url_for(ref.asset_path), "format": ref.asset_format}
+            return {
+                "url": get_storage().url_for(ref.asset_path),
+                "format": ref.asset_format,
+                "is_gt": False,
+            }
+
+    rt = db.execute(select(ReconTask).where(ReconTask.task_id == task_id)).scalars().first()
+    if rt and rt.species_slug:
+        rel = find_gt_glb(rt.species_slug)
+        if rel:
+            return {"url": get_storage().url_for(rel), "format": "glb", "is_gt": True}
     return None
 
 

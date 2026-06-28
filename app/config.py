@@ -52,6 +52,15 @@ REDIS_URL = os.environ.get("BIO3D_REDIS_URL", "")
 # bytes here for objective chamfer/F-score grading vs held-out GT (never imports agrigen).
 RECON_SCORER_URL = os.environ.get("BIO3D_RECON_SCORER_URL", "http://127.0.0.1:8800")
 
+# Held-out GT scan bundle (the scorer's gt_bundle_prod). Read ONCE at build time by
+# scripts/render_gt.py to bake per-species reference GLBs into bio3d's own asset store;
+# the running server never touches this path (stays decoupled from the scorer's FS).
+GT_BUNDLE_DIR = Path(
+    os.environ.get("BIO3D_GT_BUNDLE_DIR", "/home/mjarnold/agrigen/backend/data/gt_bundle_prod")
+)
+# Storage subdir (relative to ASSET_DIR / S3 prefix) for baked GT reference GLBs.
+GT_ASSET_SUBDIR = "gt"
+
 
 def ensure_dirs() -> None:
     """Create data + asset directories if missing (idempotent)."""

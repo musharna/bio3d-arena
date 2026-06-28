@@ -149,6 +149,29 @@ def is_reference_scan(source: str | None) -> bool:
     return any(s == p or s.startswith(p) for p in _REFERENCE_SCAN_PREFIXES)
 
 
+# Scan sources VERIFIED to use a +Z-up coordinate convention (base at z≈0, height in z) by
+# inspecting their clouds / GT bundles. Only these may be auto-reoriented z→y; up-axis is a
+# per-dataset fact, so an unlisted source (e.g. icrisat-legume, which is X-up — z is its
+# shortest extent) is NOT rotated even if it looks un-recentred. Add a source here only after
+# confirming its native up-axis is z.
+_Z_UP_SCAN_SOURCES: tuple[str, ...] = (
+    "rose-x",
+    "ct:rose-x",
+    "romi-arabidopsis",
+    "mri:ipk-barley-mri",
+    "crops3d",
+    "plant3d",
+)
+
+
+def is_z_up_scan(source: str | None) -> bool:
+    """True for scan sources confirmed +Z-up (safe to reorient z→y). See _Z_UP_SCAN_SOURCES."""
+    if not source:
+        return False
+    s = source.lower()
+    return any(s == p or s.startswith(p) for p in _Z_UP_SCAN_SOURCES)
+
+
 def source_class(source: str | None) -> str:
     """Group key for the spotlight: 'ai' (our recon — local or via an image-to-3D API),
     'procedural' (rule-based generators: Infinigen, Helios, AgriGen, L-Py, ...), 'scan'

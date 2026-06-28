@@ -44,6 +44,9 @@ class StorageBackend(abc.ABC):
     @abc.abstractmethod
     def read(self, rel_path: str) -> bytes: ...
 
+    @abc.abstractmethod
+    def exists(self, rel_path: str) -> bool: ...
+
 
 class LocalStorageBackend(StorageBackend):
     """Filesystem storage under ASSET_DIR, served at `url_prefix` by StaticFiles."""
@@ -64,6 +67,9 @@ class LocalStorageBackend(StorageBackend):
 
     def read(self, rel_path: str) -> bytes:
         return (self.root / rel_path).read_bytes()
+
+    def exists(self, rel_path: str) -> bool:
+        return (self.root / rel_path).is_file()
 
 
 class S3StorageBackend(StorageBackend):
@@ -114,6 +120,15 @@ class S3StorageBackend(StorageBackend):
 
     def read(self, rel_path: str) -> bytes:
         return self._s3.get_object(Bucket=self.bucket, Key=self._key(rel_path))["Body"].read()
+
+    def exists(self, rel_path: str) -> bool:
+        import botocore.exceptions
+
+        try:
+            self._s3.head_object(Bucket=self.bucket, Key=self._key(rel_path))
+            return True
+        except botocore.exceptions.ClientError:
+            return False
 
 
 def _make_backend() -> StorageBackend:
