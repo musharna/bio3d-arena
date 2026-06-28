@@ -115,6 +115,20 @@ def test_players_exclude_scan_generator():
         db.close()
 
 
+def test_gen_name_honors_passed_names_dict():
+    """Perf contract: _gen_name uses a passed names dict (no per-row full-table scan)."""
+    from app.recon_service import _gen_name
+
+    init_db()
+    db = SessionLocal()
+    try:
+        # A gid with no Generator row resolves purely from the passed dict — proving the
+        # loop-hoisted names map is honored and no fallback query is needed.
+        assert _gen_name(db, 10**9, {10**9: "Provided Name"}) == "Provided Name"
+    finally:
+        db.close()
+
+
 def test_generator_display_names_disambiguates_shared_names():
     init_db()
     db = SessionLocal()
@@ -168,12 +182,20 @@ def test_is_untextured_output_reads_meta_flag():
         db.add_all([task, g])
         db.flush()
         flagged = ModelOutput(
-            task_id=task.id, generator_id=g.id, asset_path="seed/x.glb", asset_format="glb",
-            source="bio3d-arena", meta_json='{"untextured": true}',
+            task_id=task.id,
+            generator_id=g.id,
+            asset_path="seed/x.glb",
+            asset_format="glb",
+            source="bio3d-arena",
+            meta_json='{"untextured": true}',
         )
         plain = ModelOutput(
-            task_id=task.id, generator_id=g.id, asset_path="seed/x.glb", asset_format="glb",
-            source="bio3d-arena", meta_json="{}",
+            task_id=task.id,
+            generator_id=g.id,
+            asset_path="seed/x.glb",
+            asset_format="glb",
+            source="bio3d-arena",
+            meta_json="{}",
         )
         db.add_all([flagged, plain])
         db.flush()
@@ -199,8 +221,12 @@ def test_untextured_generator_ids_requires_all_outputs_flagged():
 
         def out(g, meta):
             o = ModelOutput(
-                task_id=task.id, generator_id=g.id, asset_path="seed/x.glb",
-                asset_format="glb", source="bio3d-arena", meta_json=meta,
+                task_id=task.id,
+                generator_id=g.id,
+                asset_path="seed/x.glb",
+                asset_format="glb",
+                source="bio3d-arena",
+                meta_json=meta,
             )
             db.add(o)
             return o
