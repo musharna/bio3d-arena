@@ -329,6 +329,75 @@ def recompute_judge_all(db: Session, view_condition: str = "multi4") -> dict:
     return {"status": "ok", "view_condition": view_condition, "criteria": len(criteria)}
 
 
+def tier_perceptual_ranking(
+    db: Session, criterion_slug: str = "overall", view_condition: str = "multi4"
+) -> list[dict]:
+    """Per-difficulty-tier VLM-judge Bradley-Terry ranking — does the perceptual winner shift
+    by difficulty? Read-only (no Rating writes). Uses JUDGE votes because human votes are too
+    sparse on the hard tier to rank. Returns one block per tier (canonical order) with ranked
+    rows; a tier with too few votes comes back with an empty `rows` and its `n_matches` count.
+    """
+    from collections import defaultdict
+
+    from .difficulty import TIERS
+    from .models import Criterion, JudgeVote, TaskDifficulty
+
+    empty = [{"tier": t, "rows": [], "n_matches": 0} for t in TIERS]
+    crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+    if crit is None:
+        return empty
+
+    tier_by_task = {td.task_id: td.tier for td in db.execute(select(TaskDifficulty)).scalars()}
+    excluded = mode_a_excluded_generator_ids(db)
+    names = generator_display_names(db)
+
+    matches_by_tier: dict[str, list[tuple[int, int]]] = defaultdict(list)
+    jvs = db.execute(
+        select(JudgeVote).where(
+            JudgeVote.criterion_id == crit.id, JudgeVote.view_condition == view_condition
+        )
+    ).scalars()
+    for jv in jvs:
+        if jv.winner == "bad":
+            continue
+        tier = tier_by_task.get(jv.task_id)
+        if tier is None:
+            continue
+        gen_a = db.get(ModelOutput, jv.output_a_id).generator_id
+        gen_b = db.get(ModelOutput, jv.output_b_id).generator_id
+        if gen_a in excluded or gen_b in excluded:
+            continue
+        if jv.winner == "a":
+            matches_by_tier[tier].append((gen_a, gen_b))
+        elif jv.winner == "b":
+            matches_by_tier[tier].append((gen_b, gen_a))
+        elif jv.winner == "tie":
+            matches_by_tier[tier].append((gen_a, gen_b))
+            matches_by_tier[tier].append((gen_b, gen_a))
+
+    out = []
+    for tier in TIERS:
+        matches = matches_by_tier.get(tier, [])
+        players = sorted({p for m in matches for p in m})
+        rows = []
+        if players:
+            result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP)
+            rows = sorted(
+                (
+                    {
+                        "generator": names.get(p, str(p)),
+                        "bt_score": round(result.scores.get(p, ranking.BT_BASE), 1),
+                        "n_games": int(result.n_games.get(p, 0)),
+                    }
+                    for p in players
+                ),
+                key=lambda r: r["bt_score"],
+                reverse=True,
+            )
+        out.append({"tier": tier, "rows": rows, "n_matches": len(matches)})
+    return out
+
+
 def compute_significance(
     db: Session, criterion_slug: str = "overall", category_id: int | None = None
 ) -> dict:

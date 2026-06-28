@@ -849,6 +849,8 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
     ]
     gradient.sort(key=lambda g: g["generator"].lower())
 
+    perceptual = service.tier_perceptual_ranking(db)
+
     return templates.TemplateResponse(
         request,
         "difficulty.html",
@@ -857,6 +859,7 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
             "tier_species": tier_species,
             "tiers": tiers,
             "gradient": gradient,
+            "perceptual": perceptual,
         },
     )
 
