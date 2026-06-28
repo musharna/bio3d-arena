@@ -6,8 +6,12 @@ branch is skipped when heuristics_only=True or no client is supplied."""
 
 from __future__ import annotations
 
+import base64
 import io
 from dataclasses import dataclass, field
+
+from app.judge import JUDGE_MODEL
+from app.morphology import GROWTH_FORMS
 
 _BG_VARIANCE_THRESHOLD = 0.12  # mean per-channel corner std / 255; below = plain background
 
@@ -23,6 +27,91 @@ class GradeResult:
     growth_form_match: bool | None  # None when no VLM result
     verdict: str  # good | marginal | reject
     reasons: list[str] = field(default_factory=list)
+
+
+GRADE_TOOL = {
+    "name": "record_input_grade",
+    "description": "Grade a single photo as an input for image-to-3D reconstruction of a plant.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "growth_form": {"type": "string", "enum": sorted(GROWTH_FORMS)},
+            "background_ok": {
+                "type": "boolean",
+                "description": "Plain/neutral, separable background.",
+            },
+            "view_matches_recipe": {
+                "type": "boolean",
+                "description": "View matches the recipe for this form.",
+            },
+            "fill_ok": {
+                "type": "boolean",
+                "description": "Subject centered and fills >50% of frame.",
+            },
+            "verdict": {"type": "string", "enum": ["good", "marginal", "reject"]},
+            "reasons": {"type": "string", "description": "One sentence justification."},
+        },
+        "required": ["growth_form", "background_ok", "view_matches_recipe", "fill_ok", "verdict"],
+    },
+}
+
+
+def _grade_img_block(b64: str) -> dict:
+    return {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}}
+
+
+def _build_grade_messages(image_b64: str, growth_form: str, strategy_entry) -> list[dict]:
+    recipe = (
+        f"Expected growth form: {growth_form}. Recommended capture for this form — view: "
+        f"{strategy_entry.capture_view}; {strategy_entry.background}; {strategy_entry.framing}; "
+        f">={strategy_entry.min_px}px."
+    )
+    text = (
+        "You are grading ONE photo as the input for single-image to 3D reconstruction of a plant.\n"
+        f"{recipe}\n\n"
+        "First classify the plant's growth form. Then judge the photo AGAINST THE RECIPE FOR THE "
+        "GROWTH FORM YOU OBSERVE: is the background plain/separable, does the view match that "
+        "recipe, does the subject fill the frame? Do NOT penalize a top-down view for a rosette — "
+        "that is correct for a radially-flat plant. Then call record_input_grade."
+    )
+    return [
+        {"role": "user", "content": [{"type": "text", "text": text}, _grade_img_block(image_b64)]}
+    ]
+
+
+def _parse_grade(response) -> dict:
+    for block in getattr(response, "content", []):
+        if (
+            getattr(block, "type", None) == "tool_use"
+            and getattr(block, "name", "") == "record_input_grade"
+        ):
+            d = block.input or {}
+            if d.get("growth_form") not in GROWTH_FORMS:
+                raise ValueError(f"invalid growth_form: {d.get('growth_form')!r}")
+            if d.get("verdict") not in {"good", "marginal", "reject"}:
+                raise ValueError(f"invalid verdict: {d.get('verdict')!r}")
+            return {
+                "growth_form": d["growth_form"],
+                "background_ok": bool(d["background_ok"]),
+                "view_matches_recipe": bool(d["view_matches_recipe"]),
+                "fill_ok": bool(d["fill_ok"]),
+                "verdict": d["verdict"],
+                "reasons": d.get("reasons", ""),
+            }
+    raise ValueError("no record_input_grade tool_use block in response")
+
+
+def grade_with_vlm(client, image_bytes: bytes, *, growth_form: str, strategy_entry) -> dict:
+    """One forced-tool VLM call grading the photo against the recipe. Mirrors app.judge.judge_pair."""
+    b64 = base64.b64encode(image_bytes).decode()
+    resp = client.messages.create(
+        model=JUDGE_MODEL,
+        max_tokens=400,
+        tools=[GRADE_TOOL],
+        tool_choice={"type": "tool", "name": "record_input_grade"},
+        messages=_build_grade_messages(b64, growth_form, strategy_entry),
+    )
+    return _parse_grade(resp)
 
 
 def _heuristics(image_bytes: bytes, *, min_px: int) -> tuple[int, int, bool, float, bool]:
@@ -80,7 +169,19 @@ def grade_input(
 
     vlm: dict | None = None
     gf_match: bool | None = None
-    # VLM branch is wired in Task 3.
+    if not heuristics_only and client is not None:
+        try:
+            vlm = grade_with_vlm(
+                client, image_bytes, growth_form=growth_form, strategy_entry=strategy_entry
+            )
+            gf_match = vlm["growth_form"] == growth_form
+            if not gf_match:
+                reasons.append(f"VLM sees {vlm['growth_form']}, seed says {growth_form}")
+            for key in ("background_ok", "view_matches_recipe", "fill_ok"):
+                if not vlm[key]:
+                    reasons.append(f"VLM: {key} is false")
+        except Exception as e:  # noqa: BLE001 — degrade to heuristics; key-safe message
+            reasons.append(f"vlm_error: {type(e).__name__}")
 
     return GradeResult(
         width=w,
