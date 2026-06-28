@@ -814,6 +814,53 @@ def export_dataset(db: Session = Depends(get_db)):
     return {"n_votes": len(records), "votes": records}
 
 
+@app.get("/difficulty", response_class=HTMLResponse)
+def difficulty_page(request: Request, db: Session = Depends(get_db)):
+    """Render the per-tier objective scorecard + the cross-tier degradation gradient."""
+    from .models import ReconTask, Task, TaskDifficulty
+
+    scorecard = difficulty.tier_scorecard(db)
+    tiers = list(difficulty.TIERS)
+
+    # Species sitting in each tier (for the per-tier header line).
+    tier_species: dict[str, list[str]] = {}
+    rows = db.execute(
+        select(TaskDifficulty, Task, ReconTask)
+        .join(Task, Task.id == TaskDifficulty.task_id)
+        .join(ReconTask, ReconTask.task_id == TaskDifficulty.task_id, isouter=True)
+    ).all()
+    for td, task, rt in rows:
+        name = (rt.species_name if rt else None) or task.title
+        tier_species.setdefault(td.tier, []).append(name)
+
+    # Cross-tier gradient: generators scored in >=2 tiers, mean chamfer per tier — this is the
+    # headline (does a method degrade easy→moderate→hard?).
+    by_gen: dict[str, dict[str, float | None]] = {}
+    for block in scorecard:
+        if block["tier"] not in tiers:
+            continue
+        for r in block["rows"]:
+            if r["mean_chamfer"] is not None:
+                by_gen.setdefault(r["generator"], {})[block["tier"]] = r["mean_chamfer"]
+    gradient = [
+        {"generator": gen, "chamfer": {t: ch.get(t) for t in tiers}}
+        for gen, ch in by_gen.items()
+        if sum(1 for t in tiers if ch.get(t) is not None) >= 2
+    ]
+    gradient.sort(key=lambda g: g["generator"].lower())
+
+    return templates.TemplateResponse(
+        request,
+        "difficulty.html",
+        {
+            "scorecard": scorecard,
+            "tier_species": tier_species,
+            "tiers": tiers,
+            "gradient": gradient,
+        },
+    )
+
+
 @app.get("/api/difficulty.json")
 def api_difficulty(db: Session = Depends(get_db)):
     """Per-(difficulty-tier × generator) objective scorecard over existing metrics."""
