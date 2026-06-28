@@ -33,25 +33,34 @@
 
 | generator | n | scored | mean chamfer↓ | mean F-score↑ | mean structural↑ | species PASS-rate↑ |
 |---|---|---|---|---|---|---|
-| AgriGen | 1 | 1 | 0.045 | 0.688 | 0.500 | 1.000 |
+| AgriGen | 2 | 2 | 0.059 | 0.569 | 0.500 | 1.000 |
 | Crops3D | 12 | 12 | — | — | — | — |
-| Demeter | 1 | 1 | 0.052 | 0.551 | 0.500 | 1.000 |
+| Demeter | 4 | 4 | 0.069 | 0.420 | 0.500 | 1.000 |
 | Hunyuan3D | 5 | 5 | 0.074 | 0.317 | — | 0.000 |
-| Hunyuan3D 3.1 (Replicate) | 1 | 1 | 0.057 | 0.541 | — | 1.000 |
-| Hunyuan3D v2 (fal) | 1 | 1 | 0.105 | 0.179 | — | 0.000 |
-| Hunyuan3D v3 (fal) | 1 | 1 | 0.054 | 0.580 | — | 1.000 |
+| Hunyuan3D 3.1 (Replicate) | 2 | 2 | 0.057 | 0.556 | — | 1.000 |
+| Hunyuan3D v2 (fal) | 2 | 2 | 0.079 | 0.382 | — | 0.500 |
+| Hunyuan3D v3 (fal) | 2 | 2 | 0.061 | 0.529 | — | 1.000 |
+| Infinigen | 1 | 1 | 0.129 | 0.132 | — | 0.000 |
 | InstantMesh | 5 | 5 | 0.129 | 0.190 | — | 0.000 |
 | L-Py | 1 | 1 | 0.055 | 0.589 | 0.500 | 1.000 |
-| PartCrafter (part-based) | 1 | 1 | 0.091 | 0.304 | — | 0.000 |
-| Rodin/Hyper3D (fal) | 1 | 1 | 0.061 | 0.515 | — | 1.000 |
+| PartCrafter (part-based) | 2 | 2 | 0.110 | 0.197 | — | 0.000 |
+| ROSE-X (Rosa rugosa X-ray CT) | 2 | 2 | 0.054 | 0.563 | — | 1.000 |
+| ROSE-X (Rosa rugosa) | 6 | 6 | — | — | — | — |
+| Rodin/Hyper3D (fal) | 2 | 2 | 0.072 | 0.392 | — | 1.000 |
+| Sketchfab — OVERHEAD | 1 | 1 | 0.079 | 0.419 | — | 1.000 |
+| Sketchfab — RosticOstafi | 1 | 1 | 0.073 | 0.419 | — | 1.000 |
 | Sketchfab — arigura | 1 | 1 | 0.049 | 0.627 | — | 1.000 |
 | Sketchfab — boyceojinta | 1 | 1 | 0.039 | 0.718 | — | 1.000 |
+| Sketchfab — ffishAsia-and-floraZia | 1 | 1 | 0.069 | 0.436 | — | 1.000 |
+| Sketchfab — ffishAsia-and-floraZia | 1 | 1 | 0.081 | 0.334 | — | 1.000 |
+| Sketchfab — giantbooley | 1 | 1 | 0.071 | 0.306 | — | 1.000 |
 | Sketchfab — gilles.schaeck | 1 | 1 | 0.046 | 0.658 | — | 1.000 |
 | Sketchfab — merpcutemr | 1 | 1 | 0.048 | 0.610 | — | 1.000 |
+| Sketchfab — ramakarl | 1 | 1 | 0.069 | 0.378 | — | 1.000 |
 | TRELLIS | 5 | 5 | 0.084 | 0.333 | — | 0.200 |
-| TRELLIS (Replicate) | 1 | 1 | 0.076 | 0.351 | — | 0.000 |
-| TRELLIS (fal) | 1 | 1 | 0.058 | 0.482 | — | 1.000 |
-| TripoSR (fal) | 1 | 1 | 0.122 | 0.242 | — | 0.000 |
+| TRELLIS (Replicate) | 2 | 2 | 0.068 | 0.444 | — | 0.500 |
+| TRELLIS (fal) | 2 | 2 | 0.053 | 0.559 | — | 1.000 |
+| TripoSR (fal) | 2 | 2 | 0.083 | 0.460 | — | 0.500 |
 | XfrogPlants (botanical) | 1 | 1 | 0.048 | 0.652 | — | 1.000 |
 | XfrogPlants (botanical) | 1 | 1 | 0.046 | 0.662 | — | 1.000 |
 | XfrogPlants (botanical) | 1 | 1 | 0.052 | 0.547 | — | 1.000 |
@@ -88,34 +97,24 @@
 
 | generator | n | scored | mean chamfer↓ | mean F-score↑ | mean structural↑ | species PASS-rate↑ |
 |---|---|---|---|---|---|---|
-| AgriGen | 1 | 0 | — | — | — | — |
 | Baseline (blob) | 3 | 0 | — | — | — | — |
-| Demeter | 6 | 0 | — | — | — | — |
+| Demeter | 3 | 0 | — | — | — | — |
 | Generator Alpha | 3 | 0 | — | — | — | — |
 | Generator Beta | 3 | 0 | — | — | — | — |
 | Generator Delta | 3 | 0 | — | — | — | — |
 | Generator Gamma | 3 | 0 | — | — | — | — |
 | Hunyuan3D | 4 | 0 | — | — | — | — |
-| Hunyuan3D 3.1 (Replicate) | 2 | 2 | — | — | — | — |
-| Hunyuan3D v2 (fal) | 2 | 2 | — | — | — | — |
-| Hunyuan3D v3 (fal) | 2 | 2 | — | — | — | — |
+| Hunyuan3D 3.1 (Replicate) | 1 | 1 | — | — | — | — |
+| Hunyuan3D v2 (fal) | 1 | 1 | — | — | — | — |
+| Hunyuan3D v3 (fal) | 1 | 1 | — | — | — | — |
 | ICRISAT broad-leaf legumes | 6 | 0 | — | — | — | — |
 | IPK barley root MRI | 1 | 0 | — | — | — | — |
-| Infinigen | 1 | 0 | — | — | — | — |
 | L-Py | 1 | 0 | — | — | — | — |
-| PartCrafter (part-based) | 2 | 2 | — | — | — | — |
-| ROSE-X (Rosa rugosa X-ray CT) | 2 | 0 | — | — | — | — |
-| ROSE-X (Rosa rugosa) | 6 | 0 | — | — | — | — |
-| Rodin/Hyper3D (fal) | 2 | 2 | — | — | — | — |
-| Sketchfab — OVERHEAD | 1 | 0 | — | — | — | — |
-| Sketchfab — RosticOstafi | 1 | 0 | — | — | — | — |
-| Sketchfab — ffishAsia-and-floraZia | 1 | 0 | — | — | — | — |
-| Sketchfab — ffishAsia-and-floraZia | 1 | 0 | — | — | — | — |
-| Sketchfab — giantbooley | 1 | 0 | — | — | — | — |
+| PartCrafter (part-based) | 1 | 1 | — | — | — | — |
+| Rodin/Hyper3D (fal) | 1 | 1 | — | — | — | — |
 | Sketchfab — marcosramone25 | 1 | 0 | — | — | — | — |
 | Sketchfab — mrSpeedle | 1 | 0 | — | — | — | — |
-| Sketchfab — ramakarl | 1 | 0 | — | — | — | — |
 | TRELLIS | 4 | 0 | — | — | — | — |
-| TRELLIS (Replicate) | 2 | 2 | — | — | — | — |
-| TRELLIS (fal) | 2 | 2 | — | — | — | — |
-| TripoSR (fal) | 2 | 2 | — | — | — | — |
+| TRELLIS (Replicate) | 1 | 1 | — | — | — | — |
+| TRELLIS (fal) | 1 | 1 | — | — | — | — |
+| TripoSR (fal) | 1 | 1 | — | — | — | — |
