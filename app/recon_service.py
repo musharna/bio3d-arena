@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from . import config
 from .models import Metric, ModelOutput, OrganMetric
 from .recon_client import score_output
+from .service import generator_display_names
 from .storage import get_storage
 
 MESH_FORMATS = {"glb", "gltf"}
@@ -134,12 +135,18 @@ def rescore_all(db: Session, *, scorer=_default_scorer) -> dict:
 # --- Mode-B aggregations for the /benchmark page ----------------------------
 
 
-def _gen_name(db: Session, gid: int) -> str:
-    from .models import Generator
-    from .service import generator_display_names
+def _gen_name(db: Session, gid: int, names: dict[int, str] | None = None) -> str:
+    """Disambiguated display name for a generator (the 8 XfrogPlants variants etc.).
 
-    # Disambiguate generators that share a display name (e.g. the 8 XfrogPlants variants).
-    name = generator_display_names(db).get(gid)
+    Pass `names` (from service.generator_display_names) when calling in a loop — it is a
+    full-table scan, so building it once per request and threading it through avoids an
+    O(N²) scan-per-row. When omitted it is computed (fine for one-off calls).
+    """
+    from .models import Generator
+
+    if names is None:
+        names = generator_display_names(db)
+    name = names.get(gid)
     if name is not None:
         return name
     g = db.get(Generator, gid)
@@ -159,6 +166,7 @@ def recon_outputs_for_task(db: Session, task_id: int) -> list[dict]:
         .all()
     )
     storage = get_storage()
+    names = generator_display_names(db)
     rows = []
     for o in outs:
         if (o.asset_format or "").lower() not in MESH_FORMATS:
@@ -166,7 +174,7 @@ def recon_outputs_for_task(db: Session, task_id: int) -> list[dict]:
         m = db.execute(select(Metric).where(Metric.output_id == o.id)).scalars().first()
         rows.append(
             {
-                "generator": _gen_name(db, o.generator_id),
+                "generator": _gen_name(db, o.generator_id, names),
                 "url": storage.url_for(o.asset_path),
                 "format": o.asset_format,
                 "chamfer": m.chamfer if (m and m.status == "ok") else None,
@@ -219,6 +227,7 @@ def recon_leaderboard(db: Session, task_id: int) -> list[dict]:
         .scalars()
         .all()
     )
+    names = generator_display_names(db)
     rows = []
     for o in outs:
         m = db.execute(select(Metric).where(Metric.output_id == o.id)).scalars().first()
@@ -226,7 +235,7 @@ def recon_leaderboard(db: Session, task_id: int) -> list[dict]:
             continue
         rows.append(
             {
-                "generator": _gen_name(db, o.generator_id),
+                "generator": _gen_name(db, o.generator_id, names),
                 "chamfer": m.chamfer,
                 "fscore": m.fscore,
                 "coverage": m.coverage,
@@ -267,6 +276,7 @@ def recon_method_leaderboard(db: Session, task_id: int) -> list[dict]:
         if om is not None:
             organ_by_gen[o.generator_id].append(om)
 
+    names = generator_display_names(db)
     rows = []
     for gid, ms in by_gen.items():
         chamfers = [m.chamfer for m in ms]
@@ -282,7 +292,7 @@ def recon_method_leaderboard(db: Session, task_id: int) -> list[dict]:
         if band_hi is not None:
             verdict = "PASS" if chamfer_mean <= band_hi else "FAIL"
         row = {
-            "generator": _gen_name(db, gid),
+            "generator": _gen_name(db, gid, names),
             "n": len(chamfers),
             "chamfer_mean": round(chamfer_mean, 4),
             "chamfer_std": round(statistics.pstdev(chamfers), 4) if len(chamfers) >= 2 else None,
@@ -400,6 +410,7 @@ def agreement(db: Session, task_id: int) -> dict:
     # double-counted in the rank lists, distorting the Spearman. Keep the best (lowest)
     # chamfer per generator, consistent with "this method's best recon".
     best: dict[int, dict] = {}
+    names = generator_display_names(db)
     for o in outs:
         m = db.execute(select(Metric).where(Metric.output_id == o.id)).scalars().first()
         if m is None or m.status != "ok" or m.chamfer is None:
@@ -425,7 +436,7 @@ def agreement(db: Session, task_id: int) -> dict:
             voted = rating is not None and rating.n_games > 0
             best[gid] = {
                 "generator_id": gid,
-                "generator": _gen_name(db, gid),
+                "generator": _gen_name(db, gid, names),
                 "chamfer": m.chamfer,
                 "bt": rating.bt_score if voted else None,
             }

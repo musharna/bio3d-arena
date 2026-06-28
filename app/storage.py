@@ -127,8 +127,13 @@ class S3StorageBackend(StorageBackend):
         try:
             self._s3.head_object(Bucket=self.bucket, Key=self._key(rel_path))
             return True
-        except botocore.exceptions.ClientError:
-            return False
+        except botocore.exceptions.ClientError as e:
+            # Only a genuine "not found" means False; re-raise 403/5xx/network so a
+            # transient/permission error can't masquerade as a missing object.
+            code = str(e.response.get("Error", {}).get("Code", ""))
+            if code in ("404", "NoSuchKey", "NotFound"):
+                return False
+            raise
 
 
 def _make_backend() -> StorageBackend:
