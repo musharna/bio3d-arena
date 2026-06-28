@@ -81,6 +81,7 @@
 | TRELLIS (Replicate) | 2 | 2 | 0.098 | 0.266 | — | 0.500 |
 | TRELLIS (fal) | 2 | 2 | 0.096 | 0.335 | — | 0.500 |
 | TRELLIS 2 (Replicate) | 1 | 1 | 0.095 | 0.353 | — | 1.000 |
+| TRELLIS multi-view (fal) | 2 | 2 | 0.098 | 0.279 | — | 0.500 |
 | TripoSR (fal) | 2 | 2 | 0.220 | 0.172 | — | 0.500 |
 
 ## Tier: untiered
