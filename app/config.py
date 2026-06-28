@@ -62,6 +62,20 @@ GT_BUNDLE_DIR = Path(
 GT_ASSET_SUBDIR = "gt"
 
 
+def is_safe_test_db_target(value: str | None) -> bool:
+    """True if a DB URL/path is a throwaway that's safe for the test suite to drop/recreate.
+
+    The suite wipes tables; pointing it at a real DB destroys data (incident 2026-06-28:
+    pytest with BIO3D_DATABASE_URL=study wiped the study DB). Unset (None) is safe — the
+    conftest isolates into a temp dir. An explicit value is safe only if it's in-memory or
+    clearly under a temp/test path; anything else (study, prod, a working DB) is rejected.
+    """
+    if not value:
+        return True
+    low = value.lower()
+    return any(marker in low for marker in (":memory:", "/tmp/", "bio3d_test_", "test"))
+
+
 def ensure_dirs() -> None:
     """Create data + asset directories if missing (idempotent)."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
