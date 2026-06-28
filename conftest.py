@@ -1,9 +1,34 @@
 """Pytest bootstrap: isolate the test DB + assets into a temp dir before app import."""
 
 import os
+import sys
 import shutil
 import tempfile
 from pathlib import Path
+
+
+# SAFETY GUARD: refuse to run if the DB has been pointed at a non-throwaway target. The suite
+# drops/recreates tables and would WIPE it — this exact mistake destroyed the study DB on
+# 2026-06-28 (pytest run with BIO3D_DATABASE_URL=…/arena-study.db). Tests isolate into a temp
+# dir below, so these vars should never be set for a test run. NOTE: inlined (not imported from
+# app.config) on purpose — importing app here, before the setdefaults below, would freeze config
+# at the wrong env values. The same logic is unit-tested via app.config.is_safe_test_db_target.
+def _is_safe_test_db_target(value: str | None) -> bool:
+    if not value:
+        return True
+    low = value.lower()
+    return any(m in low for m in (":memory:", "/tmp/", "bio3d_test_", "test"))
+
+
+for _var in ("BIO3D_DATABASE_URL", "BIO3D_DB_PATH"):
+    _val = os.environ.get(_var)
+    if not _is_safe_test_db_target(_val):
+        sys.stderr.write(
+            f"\n*** REFUSING TO RUN TESTS: {_var}={_val!r} is a non-throwaway DB.\n"
+            "    The suite drops/recreates tables and would WIPE it. Unset it (the suite\n"
+            "    isolates into a temp DB automatically) or use a :memory:/tmp/test DB.\n\n"
+        )
+        raise SystemExit(2)
 
 _tmp = Path(tempfile.mkdtemp(prefix="bio3d_test_"))
 os.environ.setdefault("BIO3D_DATA_DIR", str(_tmp))
