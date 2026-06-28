@@ -38,9 +38,15 @@ def pick_gold_pair(db: Session) -> GoldPair | None:
     return random.choice(golds) if golds else None
 
 
-def pick_pair(db: Session, task: Task) -> tuple[ModelOutput, ModelOutput] | None:
-    """Pick two distinct (non-gold) outputs for the task, biased toward least-compared."""
+def pick_pair(db: Session, task: Task, exclude_fn=None) -> tuple[ModelOutput, ModelOutput] | None:
+    """Pick two distinct (non-gold) outputs for the task, biased toward least-compared.
+
+    `exclude_fn(output) -> bool` may optionally be passed to filter out specific
+    outputs (e.g. reference-scan sources) before pair selection.
+    """
     outputs = _real_outputs(task)
+    if exclude_fn is not None:
+        outputs = [o for o in outputs if not exclude_fn(o)]
     if len(outputs) < 2:
         return None
     # Least-sampled first; random tiebreak so equal-count outputs rotate fairly.

@@ -151,11 +151,15 @@ def _build_comparison(
         if gold is not None:
             return gold
 
+    from .sourcing import is_reference_scan
+
     category_id = _resolve_category_id(db, category_slug)
     task = matchmaking.pick_task(db, category_id=category_id)
     if task is None:
         return None
-    pair = matchmaking.pick_pair(db, task)
+    # Exclude raw-scan reference outputs from the perceptual vote pool — they render as
+    # ugly unprocessed point clouds and confound the metric↔vote agreement analysis.
+    pair = matchmaking.pick_pair(db, task, exclude_fn=lambda o: is_reference_scan(o.source))
     if pair is None:
         return None
     out_a, out_b = pair
@@ -682,6 +686,34 @@ def admin_rescore(token: str = Form(...), db: Session = Depends(get_db)):
     return JSONResponse({"status": "rescored", "detail": detail, "organ": organ_detail})
 
 
+def _default_benchmark_task_id(db: Session) -> int | None:
+    """Return the first task_id that has a ReconTask row AND at least one ok Metric.
+
+    Falls back to tasks[0].id if no scored task exists yet. Returns None if no tasks.
+    Used by benchmark_page to avoid defaulting to an unscored task (P1-3 fix).
+    """
+    from .models import Metric, ReconTask, Task
+
+    tasks = db.execute(select(Task)).scalars().all()
+    if not tasks:
+        return None
+    for t in tasks:
+        rt = db.execute(select(ReconTask).where(ReconTask.task_id == t.id)).scalars().first()
+        if rt is None:
+            continue
+        out_ids = [o.id for o in t.outputs if not o.is_gold]
+        if not out_ids:
+            continue
+        has_score = (
+            db.execute(select(Metric).where(Metric.output_id.in_(out_ids), Metric.status == "ok"))
+            .scalars()
+            .first()
+        )
+        if has_score:
+            return t.id
+    return tasks[0].id
+
+
 @app.get("/benchmark", response_class=HTMLResponse)
 def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int | None = None):
     from . import recon_service
@@ -689,7 +721,7 @@ def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int
 
     tasks = db.execute(select(Task)).scalars().all()
     if task_id is None and tasks:
-        task_id = tasks[0].id
+        task_id = _default_benchmark_task_id(db)
     board = recon_service.recon_method_leaderboard(db, task_id) if task_id else []
     confounds = recon_service.recon_confounds(db, task_id) if task_id else None
     agree = (
@@ -701,6 +733,7 @@ def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int
     reference = recon_service.reference_for_task(db, task_id) if task_id else None
     current = db.get(Task, task_id) if task_id else None
     vote_category = current.category.slug if current and current.category else None
+    cross_species = recon_service.cross_species_summary(db)
     return templates.TemplateResponse(
         request,
         "benchmark.html",
@@ -713,6 +746,7 @@ def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int
             "viewer_outputs": viewer_outputs,
             "reference": reference,
             "vote_category": vote_category,
+            "cross_species": cross_species,
         },
     )
 

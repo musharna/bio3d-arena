@@ -704,8 +704,15 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Intentional "no preview" state — distinct from a blank/broken image.
+     background overrides the parent .thumb white so the card reads as "click to load",
+     not as a missing/failed render. */
+  background: #1e1e2a;
+  border: 1px dashed #444;
+  border-radius: 8px;
   color: var(--muted);
   font-size: 0.85rem;
+  text-align: center;
 }
 .card-gen {
   font-weight: 700;

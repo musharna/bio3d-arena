@@ -8,6 +8,29 @@
     (chamfer / F-score / coverage). Distinct from the Mode-A perceptual vote; the
     <b>agreement</b> table shows where the metric and the votes disagree.
   </p>
+  {% if cross_species %}
+  <h3>Cross-species agreement <span class="subtle">— metric rank vs perceptual vote rank</span></h3>
+  <p class="subtle">Negative Spearman = perception inverts geometric fidelity (voters prefer the geometrically worse model).</p>
+  <table class="ranktable">
+    <thead>
+      <tr><th>Species / task</th><th>Spearman</th><th>Methods common</th><th>Methods scored</th></tr>
+    </thead>
+    <tbody>
+      {% for r in cross_species %}
+      <tr {% if r.spearman is not none and r.spearman < 0 %}class="row-disagree"{% endif %}>
+        <td><a href="/benchmark?task_id={{ r.task_id }}">{{ r.species }}</a></td>
+        <td class="num">
+          {% if r.spearman is not none %}{{ '%.2f'|format(r.spearman) }}{% else %}
+          <span class="subtle">{{ r.status }}</span>{% endif %}
+        </td>
+        <td class="num">{{ r.n_common if r.n_common else '—' }}</td>
+        <td class="num">{{ r.n_methods if r.n_methods else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
   <form class="filter-row" method="get" action="/benchmark">
     <label>Task
       <select name="task_id" onchange="this.form.submit()">

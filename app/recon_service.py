@@ -455,3 +455,32 @@ def agreement(db: Session, task_id: int) -> dict:
         "n_methods": len(entries),
         "rows": rows,
     }
+
+
+def cross_species_summary(db: Session) -> list[dict]:
+    """One-row-per-ReconTask summary for the /benchmark cross-species agreement table.
+
+    Each row: task_id, species (task title), spearman, n_common (methods both voted &
+    scored), n_methods, status. Negative spearman = perception inverts geometric fidelity.
+    Pure read; never modifies state.
+    """
+    from .models import ReconTask, Task
+
+    recon_tasks = db.execute(select(ReconTask)).scalars().all()
+    rows = []
+    for rt in recon_tasks:
+        task = db.get(Task, rt.task_id)
+        if task is None:
+            continue
+        agr = agreement(db, rt.task_id)
+        rows.append(
+            {
+                "task_id": rt.task_id,
+                "species": task.title,
+                "spearman": agr.get("spearman"),
+                "n_common": agr.get("n"),
+                "n_methods": agr.get("n_methods"),
+                "status": agr.get("status"),
+            }
+        )
+    return rows

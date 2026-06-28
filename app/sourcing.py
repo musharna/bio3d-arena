@@ -125,6 +125,30 @@ VOLUMETRIC_DATASETS: dict[str, dict] = {
 }
 
 
+# Raw-scan/volumetric reference sources excluded from the perceptual vote pool.
+# These render as ugly unprocessed point clouds and confound metric↔vote analysis.
+# Tunable: add/remove prefixes here to adjust which sources are treated as references.
+_REFERENCE_SCAN_PREFIXES: tuple[str, ...] = (
+    "rose-x",
+    "ct:rose-x",
+    "romi-arabidopsis",
+    "mri:ipk-barley-mri",
+    "crops3d",
+    "plant3d",
+    "icrisat-legume",
+)
+
+
+def is_reference_scan(source: str | None) -> bool:
+    """True for raw-scan/volumetric reference outputs that must be excluded from the
+    perceptual vote pool (they remain in the Mode-B recon leaderboard as GT anchors).
+    Matches on exact slug OR slug as a prefix of a longer source string (case-insensitive)."""
+    if not source:
+        return False
+    s = source.lower()
+    return any(s == p or s.startswith(p) for p in _REFERENCE_SCAN_PREFIXES)
+
+
 def source_class(source: str | None) -> str:
     """Group key for the spotlight: 'ai' (our recon — local or via an image-to-3D API),
     'procedural' (rule-based generators: Infinigen, Helios, AgriGen, L-Py, ...), 'scan'
