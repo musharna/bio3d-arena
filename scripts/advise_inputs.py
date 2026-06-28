@@ -88,7 +88,7 @@ def main() -> int:
     import json
     import os
 
-    from app.database import SessionLocal
+    from app.database import SessionLocal, init_db
 
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--subject", choices=sorted(morphology.SEED), default=None)
@@ -110,6 +110,7 @@ def main() -> int:
             heuristics_only = True
             note = "ANTHROPIC_API_KEY not set — heuristics-only run."
 
+    init_db()
     with SessionLocal() as db:
         results = advise(
             db,

@@ -115,3 +115,29 @@ def test_grade_input_flags_growth_form_mismatch():
     )
     assert r.vlm is not None and r.growth_form_match is False
     assert any("seed says" in s for s in r.reasons)
+
+
+class _ErrorClient:
+    """Fake client whose messages.create always raises — exercises the key-safety except branch."""
+
+    class _Messages:
+        def create(self, **_kw):
+            raise RuntimeError("boom")
+
+    @property
+    def messages(self):
+        return _ErrorClient._Messages()
+
+
+def test_vlm_error_degrades_to_heuristics():
+    """VLM error must be recorded as type-name only and verdict falls back to heuristics."""
+    r = grade_input(
+        _img_bytes(1200, 1200),
+        growth_form=morphology.ROSETTE,
+        strategy_entry=ENTRY,
+        client=_ErrorClient(),
+    )
+    assert r.vlm is None
+    assert r.growth_form_match is None
+    assert any("vlm_error: RuntimeError" in s for s in r.reasons)
+    assert r.verdict == "good"  # 1200x1200 plain white passes heuristics
