@@ -56,11 +56,28 @@ GRADE_TOOL = {
 }
 
 
-def _grade_img_block(b64: str) -> dict:
-    return {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}}
+def _media_type(image_bytes: bytes) -> str:
+    """Sniff the image MIME type from magic bytes so the API content block declares the real
+    format (Anthropic supports jpeg/png/gif/webp). Reference photos are JPEG, not PNG — declaring
+    the wrong type is a BadRequest. Defaults to image/jpeg for unrecognized headers."""
+    if image_bytes[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if image_bytes[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if image_bytes[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if image_bytes[:4] == b"RIFF" and image_bytes[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/jpeg"
 
 
-def _build_grade_messages(image_b64: str, growth_form: str, strategy_entry) -> list[dict]:
+def _grade_img_block(b64: str, media_type: str) -> dict:
+    return {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}}
+
+
+def _build_grade_messages(
+    image_b64: str, growth_form: str, strategy_entry, media_type: str
+) -> list[dict]:
     recipe = (
         f"Expected growth form: {growth_form}. Recommended capture for this form — view: "
         f"{strategy_entry.capture_view}; {strategy_entry.background}; {strategy_entry.framing}; "
@@ -75,7 +92,10 @@ def _build_grade_messages(image_b64: str, growth_form: str, strategy_entry) -> l
         "that is correct for a radially-flat plant. Then call record_input_grade."
     )
     return [
-        {"role": "user", "content": [{"type": "text", "text": text}, _grade_img_block(image_b64)]}
+        {
+            "role": "user",
+            "content": [{"type": "text", "text": text}, _grade_img_block(image_b64, media_type)],
+        }
     ]
 
 
@@ -104,12 +124,13 @@ def _parse_grade(response) -> dict:
 def grade_with_vlm(client, image_bytes: bytes, *, growth_form: str, strategy_entry) -> dict:
     """One forced-tool VLM call grading the photo against the recipe. Mirrors app.judge.judge_pair."""
     b64 = base64.b64encode(image_bytes).decode()
+    media_type = _media_type(image_bytes)
     resp = client.messages.create(
         model=JUDGE_MODEL,
         max_tokens=400,
         tools=[GRADE_TOOL],
         tool_choice={"type": "tool", "name": "record_input_grade"},
-        messages=_build_grade_messages(b64, growth_form, strategy_entry),
+        messages=_build_grade_messages(b64, growth_form, strategy_entry, media_type),
     )
     return _parse_grade(resp)
 

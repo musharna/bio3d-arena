@@ -141,3 +141,48 @@ def test_vlm_error_degrades_to_heuristics():
     assert r.growth_form_match is None
     assert any("vlm_error: RuntimeError" in s for s in r.reasons)
     assert r.verdict == "good"  # 1200x1200 plain white passes heuristics
+
+
+def _jpeg_bytes(w=1200, h=1200):
+    b = io.BytesIO()
+    Image.new("RGB", (w, h), (255, 255, 255)).save(b, "JPEG")
+    return b.getvalue()
+
+
+def test_media_type_sniffed_from_bytes():
+    from app.input_grade import _media_type
+
+    assert _media_type(_jpeg_bytes(8, 8)) == "image/jpeg"
+    assert _media_type(_img_bytes(8, 8)) == "image/png"  # _img_bytes saves PNG
+
+
+class _CapturingClient:
+    """Records the messages sent so the image block's media_type can be asserted."""
+
+    def __init__(self, payload):
+        self._payload = payload
+        self.sent = {}
+
+    class _Messages:
+        def __init__(self, outer):
+            self._outer = outer
+
+        def create(self, **kw):
+            self._outer.sent = kw
+            return _FakeResp(self._outer._payload)
+
+    @property
+    def messages(self):
+        return _CapturingClient._Messages(self)
+
+
+def test_grade_with_vlm_declares_media_type_matching_input():
+    """Regression: a JPEG reference photo must be sent as image/jpeg, not hardcoded image/png
+    (the mismatch caused a live BadRequestError)."""
+    from app.input_grade import grade_with_vlm
+
+    client = _CapturingClient(_GOOD_VLM)
+    grade_with_vlm(client, _jpeg_bytes(), growth_form=morphology.ROSETTE, strategy_entry=ENTRY)
+    blocks = client.sent["messages"][0]["content"]
+    img = next(b for b in blocks if b.get("type") == "image")
+    assert img["source"]["media_type"] == "image/jpeg"
