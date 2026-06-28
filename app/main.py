@@ -324,14 +324,18 @@ def _leaderboard_rows(
     ratings = (
         db.execute(select(Rating).where(Rating.criterion_id == crit.id, scope)).scalars().all()
     )
+    ref_gens = service.reference_scan_generator_ids(db)
+    names = service.generator_display_names(db)
     rows = []
     for r in ratings:
+        if r.generator_id in ref_gens:
+            continue  # GT/reference scans don't compete in the Mode-A perceptual board
         gen = db.get(Generator, r.generator_id)
         if gen is None:
             continue  # stale rating row (generator deleted); skip rather than crash
         rows.append(
             {
-                "generator": gen.name,
+                "generator": names.get(r.generator_id, gen.name),
                 "kind": gen.kind,
                 "elo": round(r.elo, 1),
                 "bt_score": round(r.bt_score, 1),
@@ -376,14 +380,18 @@ def _judge_leaderboard_rows(
         .scalars()
         .all()
     )
+    ref_gens = service.reference_scan_generator_ids(db)
+    names = service.generator_display_names(db)
     rows = []
     for r in ratings:
+        if r.generator_id in ref_gens:
+            continue  # GT/reference scans don't compete in the Mode-A perceptual board
         gen = db.get(Generator, r.generator_id)
         if gen is None:
             continue  # stale rating row (generator deleted); skip rather than crash
         rows.append(
             {
-                "generator": gen.name,
+                "generator": names.get(r.generator_id, gen.name),
                 "kind": gen.kind,
                 "elo": round(r.elo, 1),
                 "bt_score": round(r.bt_score, 1),

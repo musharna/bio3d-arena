@@ -136,7 +136,12 @@ def rescore_all(db: Session, *, scorer=_default_scorer) -> dict:
 
 def _gen_name(db: Session, gid: int) -> str:
     from .models import Generator
+    from .service import generator_display_names
 
+    # Disambiguate generators that share a display name (e.g. the 8 XfrogPlants variants).
+    name = generator_display_names(db).get(gid)
+    if name is not None:
+        return name
     g = db.get(Generator, gid)
     return g.name if g else str(gid)
 

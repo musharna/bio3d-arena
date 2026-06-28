@@ -149,11 +149,12 @@ def is_reference_scan(source: str | None) -> bool:
     return any(s == p or s.startswith(p) for p in _REFERENCE_SCAN_PREFIXES)
 
 
-# Scan sources VERIFIED to use a +Z-up coordinate convention (base at z≈0, height in z) by
-# inspecting their clouds / GT bundles. Only these may be auto-reoriented z→y; up-axis is a
-# per-dataset fact, so an unlisted source (e.g. icrisat-legume, which is X-up — z is its
-# shortest extent) is NOT rotated even if it looks un-recentred. Add a source here only after
-# confirming its native up-axis is z.
+# Scan sources VERIFIED +Z-up (vertical axis is z) by inspecting their clouds / GT bundles.
+# Only these may be auto-reoriented z→y; up-axis is a per-dataset fact, so an unlisted source is
+# NOT rotated even if it looks un-recentred. Add a source here only after confirming up-axis = z.
+# NOTE: icrisat-legume IS +Z-up — a flat broad-leaf canopy (thin in z, wide in x-y), confirmed by
+# a top-down (x-y) scatter showing leaves radiating from a centre. z being its SHORTEST extent is
+# the canopy height, not evidence of X-up.
 _Z_UP_SCAN_SOURCES: tuple[str, ...] = (
     "rose-x",
     "ct:rose-x",
@@ -161,6 +162,7 @@ _Z_UP_SCAN_SOURCES: tuple[str, ...] = (
     "mri:ipk-barley-mri",
     "crops3d",
     "plant3d",
+    "icrisat-legume",
 )
 
 

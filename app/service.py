@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import config, ranking
+from .sourcing import is_reference_scan
 from .models import (
     Category,
     Comparison,
@@ -70,6 +71,41 @@ def apply_vote(db: Session, vote: Vote) -> None:
     rb.n_games += 1
 
 
+def reference_scan_generator_ids(db: Session) -> set[int]:
+    """Generator ids whose outputs are raw-scan/volumetric GT references.
+
+    These are excluded from the Mode-A perceptual ranking (leaderboard / significance /
+    BT) — they are ground-truth anchors, not generative methods, so ranking them
+    perceptually makes "a raw scan beats every generator" the marquee result. They remain
+    in the Mode-B benchmark board and the GT reference panel.
+    """
+    rows = db.execute(select(ModelOutput.generator_id, ModelOutput.source)).all()
+    return {gid for gid, src in rows if is_reference_scan(src)}
+
+
+def generator_display_names(db: Session) -> dict[int, str]:
+    """Map generator_id → a UNIQUE display label.
+
+    Several generators share a `name` (e.g. 8 distinct XfrogPlants variants all named
+    "XfrogPlants (botanical)"), which makes board rows indistinguishable. When a name is
+    shared, append a disambiguator derived from the (unique) slug; otherwise use the name.
+    """
+    gens = db.execute(select(Generator)).scalars().all()
+    by_name: dict[str, list[Generator]] = {}
+    for g in gens:
+        by_name.setdefault(g.name, []).append(g)
+    out: dict[int, str] = {}
+    for name, group in by_name.items():
+        if len(group) == 1:
+            out[group[0].id] = name
+            continue
+        for g in group:
+            # slug like "xfrog-AG15-s2" → suffix "AG15-s2"; "sketchfab-rose-rugosa" → "rose-rugosa".
+            suffix = g.slug.split("-", 1)[-1] if "-" in g.slug else g.slug
+            out[g.id] = f"{name} · {suffix}"
+    return out
+
+
 def _matches_for_scope(
     db: Session, criterion_id: int, category_id: int | None, include_ties: bool = True
 ) -> list[tuple[int, int]]:
@@ -94,12 +130,15 @@ def _matches_for_scope(
     if category_id is not None:
         stmt = stmt.join(Task, Comparison.task_id == Task.id).where(Task.category_id == category_id)
 
+    ref_gens = reference_scan_generator_ids(db)
     matches: list[tuple[int, int]] = []
     for vote, comparison in db.execute(stmt).all():
         if vote.winner == "bad":
             continue
         gen_a = db.get(ModelOutput, comparison.output_a_id).generator_id
         gen_b = db.get(ModelOutput, comparison.output_b_id).generator_id
+        if gen_a in ref_gens or gen_b in ref_gens:
+            continue  # GT/reference scans are not perceptual competitors (Mode-A exclusion)
         if vote.winner == "a":
             matches.append((gen_a, gen_b))
         elif vote.winner == "b":
@@ -117,7 +156,8 @@ def _players_for_scope(db: Session, category_id: int | None) -> list[int]:
         stmt = stmt.join(Task, ModelOutput.task_id == Task.id).where(
             Task.category_id == category_id
         )
-    return sorted({gid for gid in db.execute(stmt).scalars().all()})
+    ref_gens = reference_scan_generator_ids(db)
+    return sorted({gid for gid in db.execute(stmt).scalars().all() if gid not in ref_gens})
 
 
 def recompute_scope(
@@ -178,12 +218,15 @@ def _judge_matches_for_scope(
         JudgeVote.criterion_id == criterion_id,
         JudgeVote.view_condition == view_condition,
     )
+    ref_gens = reference_scan_generator_ids(db)
     matches: list[tuple[int, int]] = []
     for jv in db.execute(stmt).scalars():
         if jv.winner == "bad":
             continue
         gen_a = db.get(ModelOutput, jv.output_a_id).generator_id
         gen_b = db.get(ModelOutput, jv.output_b_id).generator_id
+        if gen_a in ref_gens or gen_b in ref_gens:
+            continue  # GT/reference scans are not perceptual competitors (Mode-A exclusion)
         if jv.winner == "a":
             matches.append((gen_a, gen_b))
         elif jv.winner == "b":
@@ -277,7 +320,7 @@ def compute_significance(
     matches = _matches_for_scope(db, criterion.id, category_id)
     players = sorted(set(_players_for_scope(db, category_id)) | {p for m in matches for p in m})
     result = ranking.significance_matrix(players, matches, bootstrap=config.BT_BOOTSTRAP)
-    names = {g.id: g.name for g in db.execute(select(Generator)).scalars().all()}
+    names = generator_display_names(db)
 
     ranked = []
     for pid in result.order:
