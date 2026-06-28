@@ -8,6 +8,7 @@ pre-public cleanup.
 
 from __future__ import annotations
 
+import json
 import re
 
 _CC_MARKERS = ("cc0", "cc-by", "cc by", "creativecommons", "creative commons", "public domain")
@@ -164,6 +165,21 @@ _Z_UP_SCAN_SOURCES: tuple[str, ...] = (
     "plant3d",
     "icrisat-legume",
 )
+
+
+def is_untextured_output(output) -> bool:
+    """True if an output was flagged geometry-only (renders as a flat grey blob).
+
+    Set by scripts/flag_untextured.py into model_output.meta_json (see app/texture_audit.py).
+    Reads the stored flag — never inspects the GLB at runtime — so it is cheap in matchmaking.
+    """
+    raw = getattr(output, "meta_json", None)
+    if not raw:
+        return False
+    try:
+        return bool(json.loads(raw).get("untextured"))
+    except (ValueError, TypeError):
+        return False
 
 
 def is_z_up_scan(source: str | None) -> bool:

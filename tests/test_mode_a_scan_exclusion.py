@@ -148,3 +148,72 @@ def test_leaderboard_rows_omit_scan_generator():
         assert "M-scan" not in names
     finally:
         db.close()
+
+
+# ── P1-2: untextured (geometry-only) outputs excluded from Mode-A ────────────────
+
+
+def test_is_untextured_output_reads_meta_flag():
+    from app.sourcing import is_untextured_output
+
+    init_db()
+    db = SessionLocal()
+    try:
+        r = random.randint(0, 10**6)
+        cat = Category(slug=f"c-ut-{r}", name="Plants")
+        db.add(cat)
+        db.flush()
+        task = Task(category_id=cat.id, title="t-ut", prompt="p")
+        g = Generator(slug=f"g-ut-{r}", name="M-ut")
+        db.add_all([task, g])
+        db.flush()
+        flagged = ModelOutput(
+            task_id=task.id, generator_id=g.id, asset_path="seed/x.glb", asset_format="glb",
+            source="bio3d-arena", meta_json='{"untextured": true}',
+        )
+        plain = ModelOutput(
+            task_id=task.id, generator_id=g.id, asset_path="seed/x.glb", asset_format="glb",
+            source="bio3d-arena", meta_json="{}",
+        )
+        db.add_all([flagged, plain])
+        db.flush()
+        assert is_untextured_output(flagged) is True
+        assert is_untextured_output(plain) is False
+    finally:
+        db.close()
+
+
+def test_untextured_generator_ids_requires_all_outputs_flagged():
+    init_db()
+    db = SessionLocal()
+    try:
+        r = random.randint(0, 10**6)
+        cat = Category(slug=f"c-utg-{r}", name="Plants")
+        db.add(cat)
+        db.flush()
+        task = Task(category_id=cat.id, title="t-utg", prompt="p")
+        pure = Generator(slug=f"g-pure-{r}", name="M-pure")  # all outputs untextured
+        mixed = Generator(slug=f"g-mixed-{r}", name="M-mixed")  # one textured → keep
+        db.add_all([task, pure, mixed])
+        db.flush()
+
+        def out(g, meta):
+            o = ModelOutput(
+                task_id=task.id, generator_id=g.id, asset_path="seed/x.glb",
+                asset_format="glb", source="bio3d-arena", meta_json=meta,
+            )
+            db.add(o)
+            return o
+
+        out(pure, '{"untextured": true}')
+        out(pure, '{"untextured": true}')
+        out(mixed, '{"untextured": true}')
+        out(mixed, "{}")  # a real textured output
+        db.commit()
+
+        ut = service.untextured_generator_ids(db)
+        assert pure.id in ut
+        assert mixed.id not in ut  # has a textured output → not fully untextured
+        assert pure.id in service.mode_a_excluded_generator_ids(db)
+    finally:
+        db.close()

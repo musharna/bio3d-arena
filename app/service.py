@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import config, ranking
-from .sourcing import is_reference_scan
+from .sourcing import is_reference_scan, is_untextured_output
 from .models import (
     Category,
     Comparison,
@@ -83,6 +83,27 @@ def reference_scan_generator_ids(db: Session) -> set[int]:
     return {gid for gid, src in rows if is_reference_scan(src)}
 
 
+def untextured_generator_ids(db: Session) -> set[int]:
+    """Generators ALL of whose votable outputs are flagged geometry-only (flat grey blobs).
+
+    Excluded from the Mode-A perceptual ranking + vote pool: an untextured render loses votes
+    for reasons unrelated to shape quality (texture confound). Per-generator (only when every
+    votable output is flagged) so a generator with any real textured output is never dropped.
+    """
+    outs = db.execute(select(ModelOutput).where(ModelOutput.is_gold.is_(False))).scalars().all()
+    flagged: dict[int, tuple[int, int]] = {}
+    for o in outs:
+        u, t = flagged.get(o.generator_id, (0, 0))
+        flagged[o.generator_id] = (u + int(is_untextured_output(o)), t + 1)
+    return {gid for gid, (u, t) in flagged.items() if t > 0 and u == t}
+
+
+def mode_a_excluded_generator_ids(db: Session) -> set[int]:
+    """Generators excluded from the Mode-A perceptual ranking: GT reference scans (not generative
+    methods) ∪ fully-untextured generators (flat-grey-blob renders confound perceptual votes)."""
+    return reference_scan_generator_ids(db) | untextured_generator_ids(db)
+
+
 def generator_display_names(db: Session) -> dict[int, str]:
     """Map generator_id → a UNIQUE display label.
 
@@ -130,7 +151,7 @@ def _matches_for_scope(
     if category_id is not None:
         stmt = stmt.join(Task, Comparison.task_id == Task.id).where(Task.category_id == category_id)
 
-    ref_gens = reference_scan_generator_ids(db)
+    ref_gens = mode_a_excluded_generator_ids(db)
     matches: list[tuple[int, int]] = []
     for vote, comparison in db.execute(stmt).all():
         if vote.winner == "bad":
@@ -156,7 +177,7 @@ def _players_for_scope(db: Session, category_id: int | None) -> list[int]:
         stmt = stmt.join(Task, ModelOutput.task_id == Task.id).where(
             Task.category_id == category_id
         )
-    ref_gens = reference_scan_generator_ids(db)
+    ref_gens = mode_a_excluded_generator_ids(db)
     return sorted({gid for gid in db.execute(stmt).scalars().all() if gid not in ref_gens})
 
 
@@ -218,7 +239,7 @@ def _judge_matches_for_scope(
         JudgeVote.criterion_id == criterion_id,
         JudgeVote.view_condition == view_condition,
     )
-    ref_gens = reference_scan_generator_ids(db)
+    ref_gens = mode_a_excluded_generator_ids(db)
     matches: list[tuple[int, int]] = []
     for jv in db.execute(stmt).scalars():
         if jv.winner == "bad":
