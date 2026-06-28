@@ -56,8 +56,9 @@
     </div>
     <div class="recon-pane">
       <div class="model-label">
-        Reference
-        {% if not reference %}<span class="gt-note">held-out GT is private (scoring only)</span>{% endif %}
+        {% if reference and reference.is_gt %}Held-out GT scan <span class="fmt-chip">real plant</span>
+        {% else %}Reference{% endif %}
+        {% if not reference %}<span class="gt-note">no reference / GT scan for this task</span>{% endif %}
       </div>
       <div class="viewer-slot" id="ref-slot"></div>
     </div>
@@ -85,7 +86,7 @@
         window.Bio3DViewer.mount(refSlot, { url: ref.url, format: ref.format });
       } else {
         refSlot.innerHTML =
-          '<div class="viewer-error" style="color:var(--muted)">ⓘ <span>Ground-truth scans are held private and used only for scoring (no public overlay).</span></div>';
+          '<div class="viewer-error" style="color:var(--muted)">ⓘ <span>No reference exemplar set for this task. GT scans live in the scorer bundle (point clouds), used for objective scoring.</span></div>';
       }
     })();
   </script>
@@ -135,7 +136,6 @@
   <p class="subtle confound-note">
     Scored with: n_points {{ confounds.point_count or '—' }} · τ {{ confounds.tau or '—' }} ·
     metric {{ confounds.scorer_version or '—' }} · GT {{ (confounds.gt_version_hash or '')[:12] }}…
-    <span title="held-out GT clouds are private; only inputs + this board are published">(GT held private)</span>
   </p>
   {% endif %}
 
