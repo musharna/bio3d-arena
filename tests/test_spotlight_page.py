@@ -199,6 +199,41 @@ def test_spotlight_route_renders(monkeypatch):
     assert client.get("/spotlight/does-not-exist").status_code == 404
 
 
+def test_spotlight_filter_toolbar_renders(monkeypatch):
+    """The overhaul: a class/scored/search filter toolbar + per-card filter data-attrs."""
+    db = SessionLocal()
+    try:
+        _seed_subject(db)
+    finally:
+        db.close()
+    monkeypatch.setattr(
+        spotlight,
+        "SPOTLIGHTS",
+        [
+            {
+                "slug": "test",
+                "task_title": "Spotlight Test Subject",
+                "featured": True,
+                "order": 0,
+                "blurb": "b",
+                "reference_image": None,
+            },
+        ],
+    )
+    page = TestClient(app).get("/spotlight/test")
+    assert page.status_code == 200
+    t = page.text
+    # toolbar + controls
+    assert 'id="spotlight-toolbar"' in t
+    assert 'data-filter-cls="all"' in t
+    assert 'id="scored-only"' in t
+    assert 'id="spotlight-search"' in t
+    # per-card filter attributes (the two seeded ai outputs are scored)
+    assert 'data-cls="ai"' in t
+    assert 'data-scored="1"' in t
+    assert "data-label=" in t and "data-chamfer=" in t
+
+
 def test_reference_image_resolved_to_served_url(monkeypatch):
     from app.main import app
     from app.storage import get_storage

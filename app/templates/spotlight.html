@@ -29,6 +29,18 @@
     ('Found — other', found | selectattr('depiction', 'equalto', 'other') | list),
   ] %}
   {% set open_groups = ['AI reconstruction', 'Procedural', 'Real scan — whole plant', 'Found — whole plant'] %}
+  <div class="spotlight-toolbar" id="spotlight-toolbar" data-cap="8">
+    <div class="filter-chips" role="group" aria-label="Filter by class">
+      <button type="button" class="chip active" data-filter-cls="all">All <span class="subtle">({{ s.models | length }})</span></button>
+      {% if ai %}<button type="button" class="chip" data-filter-cls="ai">AI <span class="subtle">({{ ai | length }})</span></button>{% endif %}
+      {% if procedural %}<button type="button" class="chip" data-filter-cls="procedural">Procedural <span class="subtle">({{ procedural | length }})</span></button>{% endif %}
+      {% if scan %}<button type="button" class="chip" data-filter-cls="scan">Scan <span class="subtle">({{ scan | length }})</span></button>{% endif %}
+      {% if found %}<button type="button" class="chip" data-filter-cls="found">Found <span class="subtle">({{ found | length }})</span></button>{% endif %}
+    </div>
+    <label class="scored-toggle"><input type="checkbox" id="scored-only" /> Scored only</label>
+    <input type="search" id="spotlight-search" class="spotlight-search" placeholder="filter by method…" aria-label="Filter by method name" />
+    <span class="result-count" id="result-count"></span>
+  </div>
   <div class="spotlight-layout">
   <div class="spotlight-main">
   {% for gname, gmodels in groups %}
@@ -48,7 +60,13 @@
   {% endif %}
   <div class="spotlight-grid">
     {% for m in gmodels %}
-    <div class="spotlight-card">
+    <div
+      class="spotlight-card"
+      data-cls="{{ m.cls }}"
+      data-scored="{{ '1' if m.metrics.chamfer is not none else '0' }}"
+      data-label="{{ m.label | lower }} {{ m.generator_name | lower }}"
+      data-chamfer="{{ m.metrics.chamfer if m.metrics.chamfer is not none else '' }}"
+    >
       <div
         class="thumb"
         data-asset="{{ m.asset_url }}"
