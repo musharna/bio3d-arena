@@ -227,8 +227,10 @@ def test_board_surfaces_organ_fidelity_beside_chamfer():
         db.add(cat)
         db.flush()
         task = Task(category_id=cat.id, title="t-board", prompt="p")
-        proc = Generator(slug="g-proc", name="AgriGen")
-        recon = Generator(slug="g-recon", name="TRELLIS")
+        # Unique names so the DB-wide display-name disambiguation (shared names get a slug
+        # suffix) never fires for this isolated board test.
+        proc = Generator(slug="g-proc-board", name="AgriGen-board")
+        recon = Generator(slug="g-recon-board", name="TRELLIS-board")
         db.add_all([task, proc, recon])
         db.flush()
         db.add(ReconTask(task_id=task.id, species_slug="zea_mays", species_name="zea_mays"))
@@ -275,7 +277,7 @@ def test_board_surfaces_organ_fidelity_beside_chamfer():
 
         board = recon_service.recon_method_leaderboard(db, task.id)
         by_name = {r["generator"]: r for r in board}
-        assert by_name["AgriGen"]["organ_fidelity"] == 1.0
-        assert by_name["TRELLIS"]["organ_fidelity"] is None  # recon → N/A on organ axis
+        assert by_name["AgriGen-board"]["organ_fidelity"] == 1.0
+        assert by_name["TRELLIS-board"]["organ_fidelity"] is None  # recon → N/A on organ axis
     finally:
         db.close()

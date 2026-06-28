@@ -74,7 +74,7 @@ def test_is_z_up_scan_allowlist():
     assert is_z_up_scan("mri:ipk-barley-mri")
     assert is_z_up_scan("crops3d")
     assert is_z_up_scan("plant3d")
-    # icrisat-legume is X-up (z is its shortest extent) — must NOT be auto-reoriented.
-    assert not is_z_up_scan("icrisat-legume")
+    # icrisat-legume is +Z-up too (flat broad-leaf canopy: thin in z, wide in x-y).
+    assert is_z_up_scan("icrisat-legume")
     assert not is_z_up_scan(None)
     assert not is_z_up_scan("api:fal:trellis")
