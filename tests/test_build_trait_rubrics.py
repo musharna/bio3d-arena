@@ -253,6 +253,36 @@ def test_ghostcite_verify_unparseable_output_fails_loud_and_closed(capsys, monke
     assert capsys.readouterr().err  # the failure is surfaced, not silent
 
 
+def test_live_wikidata_degrades_on_outage_but_raises_on_bad_query(capsys, monkeypatch):
+    """WDQS 429/5xx → db tier empty (None) + loud stderr, not an abort; a 4xx like 400 → raise."""
+    import urllib.error
+
+    import scripts.build_trait_rubrics as b
+
+    def raise_http(code):
+        def _f(_url, timeout=40):
+            raise urllib.error.HTTPError("http://wdqs", code, "msg", {}, None)
+
+        return _f
+
+    # 429 (active outage) → None, with a visible stderr note.
+    monkeypatch.setattr(b, "_http_json", raise_http(429))
+    assert b._live_wikidata_sparql("Solanum lycopersicum") is None
+    assert "Wikidata unavailable" in capsys.readouterr().err
+
+    # 503 (service unavailable) → None too.
+    monkeypatch.setattr(b, "_http_json", raise_http(503))
+    assert b._live_wikidata_sparql("Zea mays") is None
+
+    # 400 (malformed query) is a real bug → fail loud (re-raise).
+    monkeypatch.setattr(b, "_http_json", raise_http(400))
+    try:
+        b._live_wikidata_sparql("Rosa")
+        assert False, "expected HTTPError to propagate on 400"
+    except urllib.error.HTTPError:
+        pass
+
+
 def test_dry_run_reports_counts_without_spend(capsys, monkeypatch):
     import scripts.build_trait_rubrics as b
 

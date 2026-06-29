@@ -59,6 +59,7 @@ def upsert_rubric(db, taxon, task_id, traits):
 
 import json as _json
 import subprocess as _subprocess
+import urllib.error as _urlerror
 import urllib.parse as _urlparse
 import urllib.request as _urlrequest
 
@@ -83,7 +84,28 @@ def _live_wikidata_sparql(taxon: str) -> dict | None:
         "} LIMIT 50" % (taxon, pids)
     )
     url = "https://query.wikidata.org/sparql?format=json&query=" + _urlparse.quote(q)
-    data = _http_json(url)
+    try:
+        data = _http_json(url)
+    except _urlerror.HTTPError as e:
+        # WDQS is frequently rate-limited / in outage. The db tier is a thin, optional backbone,
+        # so a transient unavailability (429 / 5xx) degrades to an empty db tier (loud) rather
+        # than aborting the whole authoring run — the literature tier still carries the taxon.
+        # A 4xx other than 429 (e.g. a malformed query) is a real bug → fail loud (re-raise).
+        if e.code == 429 or e.code >= 500:
+            print(
+                f"Wikidata unavailable (HTTP {e.code}) for {taxon!r}; db tier empty for this "
+                "taxon, proceeding on the literature tier.",
+                file=sys.stderr,
+            )
+            return None
+        raise
+    except _urlerror.URLError as e:
+        print(
+            f"Wikidata unreachable for {taxon!r} ({e.reason}); db tier empty for this taxon, "
+            "proceeding on the literature tier.",
+            file=sys.stderr,
+        )
+        return None
     rows = data["results"]["bindings"]
     if not rows:
         return None
