@@ -96,6 +96,59 @@ def test_build_rubric_traits_does_not_mutate_source_dicts():
     assert out[0]["source_tier"] == "db"  # the copy got stamped
 
 
+def test_build_rubric_traits_merges_dedups_and_verifies():
+    import scripts.build_trait_rubrics as b
+
+    def fetch_db(_t):
+        return [
+            {
+                "key": "wd_flower_color",
+                "trait_class": "color",
+                "type": "categorical",
+                "expected": "red",
+                "visual": True,
+                "citation": "https://www.wikidata.org/wiki/Q1",
+                "source_detail": "Q1",
+                "quote": "P2827=red",
+            }
+        ]
+
+    def draft_llm(_t):
+        return [
+            # same (color, red) as db → deduped out (db preferred)
+            {
+                "key": "petal_red",
+                "trait_class": "color",
+                "type": "categorical",
+                "expected": "red",
+                "visual": True,
+                "citation": "10.1/a",
+                "source_detail": "10.1/a",
+                "quote": "red corolla",
+            },
+            # distinct trait → kept
+            {
+                "key": "leaf_shape",
+                "trait_class": "organ_shape",
+                "type": "categorical",
+                "expected": "compound",
+                "visual": True,
+                "citation": "10.1/b",
+                "source_detail": "10.1/b",
+                "quote": "compound leaves",
+            },
+        ]
+
+    # verify_fn drops the leaf citation 10.1/b → only the db color trait survives
+    def verify_fn(traits):
+        return [t for t in traits if t["citation"] != "10.1/b"]
+
+    out = b.build_rubric_traits("X", fetch_db=fetch_db, draft_llm=draft_llm, verify_fn=verify_fn)
+    keys = {t["key"] for t in out}
+    assert keys == {"wd_flower_color"}  # llm color deduped, llm leaf verify-dropped
+    assert out[0]["source_tier"] == "db"
+
+
 def test_upsert_rubric_persists_validated_traits():
     import scripts.build_trait_rubrics as b
 

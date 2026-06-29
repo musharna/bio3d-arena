@@ -76,16 +76,39 @@ def draft_llm_traits(taxon: str) -> list[dict]:
     )
 
 
+def _merge_dedup(traits: list[dict]) -> list[dict]:
+    """Drop duplicate (trait_class, expected) across tiers, preferring db; enforce unique key."""
+    ordered = sorted(traits, key=lambda t: 0 if t.get("source_tier") == "db" else 1)
+    seen_sig: set[tuple[str, str]] = set()
+    used_keys: set[str] = set()
+    kept: list[dict] = []
+    for t in ordered:
+        sig = (t["trait_class"], (t.get("expected") or "").strip().lower())
+        if sig in seen_sig:
+            continue
+        seen_sig.add(sig)
+        key = t["key"]
+        i = 2
+        while key in used_keys:
+            key = f"{t['key']}_{i}"
+            i += 1
+        t["key"] = key
+        used_keys.add(key)
+        kept.append(t)
+    return kept
+
+
 def build_rubric_traits(
     taxon: str,
     *,
     fetch_db=fetch_db_traits,
     draft_llm=draft_llm_traits,
+    verify_fn=None,
 ) -> list[dict]:
     """Assemble + validate one taxon's traits from the injected db backbone + llm enrichment.
 
-    Each source must stamp source_tier + citation on its traits; we re-validate here so a buggy
-    source can't smuggle an uncited trait through."""
+    Each source stamps source_tier; we merge/dedup (db preferred), verify every citation
+    (verify_fn; identity when None), then re-validate so no uncited/invalid trait gets through."""
     traits: list[dict] = []
     for t in fetch_db(taxon):
         t = dict(t)  # copy: a real fetcher may return shared/cached dicts
@@ -95,6 +118,9 @@ def build_rubric_traits(
         t = dict(t)
         t.setdefault("source_tier", "llm")
         traits.append(t)
+    traits = _merge_dedup(traits)
+    if verify_fn is not None:
+        traits = verify_fn(traits)
     for t in traits:
         validate_trait(t)
     return traits
