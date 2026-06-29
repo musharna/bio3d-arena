@@ -198,3 +198,27 @@ def test_upsert_rubric_persists_validated_traits():
         ]
         r = b.upsert_rubric(db, "Test taxon", None, traits)
         assert json.loads(db.get(TraitRubric, r.id).traits_json)[0]["key"] == "habit"
+
+
+def test_dry_run_reports_counts_without_spend(capsys, monkeypatch):
+    import scripts.build_trait_rubrics as b
+
+    # Stub the network helpers so dry-run does zero real I/O and zero spend.
+    monkeypatch.setattr(
+        b, "_live_wikidata_sparql", lambda taxon: {"qid": "Q1", "props": {"P2827": "red"}}
+    )
+    monkeypatch.setattr(
+        b,
+        "_live_lit_search",
+        lambda taxon: [{"doi": "10.1/a", "abstractText": "x"}, {"doi": "10.1/b"}],
+    )
+    monkeypatch.setattr(b, "_live_lit_resolve", lambda pub: pub.get("abstractText"))
+
+    rc = b.dry_run_report(["Solanum lycopersicum"])
+    captured = capsys.readouterr().out
+    assert rc == 0
+    assert "Solanum lycopersicum" in captured
+    assert "db traits=1" in captured  # P2827 mapped
+    assert "candidate pubs=2" in captured
+    assert "OA-resolvable=1" in captured  # only 10.1/a has text
+    assert "est. LLM calls=1" in captured

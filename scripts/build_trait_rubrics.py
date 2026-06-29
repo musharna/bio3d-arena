@@ -55,25 +55,139 @@ def upsert_rubric(db, taxon, task_id, traits):
     return row
 
 
-# --- Pluggable trait sources (stubs by default; real impls wired behind --live) ----------------
+# --- Live HTTP / subprocess helpers (module-level so monkeypatch can replace them) -------------
+
+import json as _json
+import subprocess as _subprocess
+import urllib.parse as _urlparse
+import urllib.request as _urlrequest
+
+_UA = "bio3d-arena-rubrics/0.1 (research; contact: operator)"
+
+
+def _http_json(url: str, timeout: int = 40) -> dict:
+    req = _urlrequest.Request(url, headers={"User-Agent": _UA, "Accept": "application/json"})
+    with _urlrequest.urlopen(req, timeout=timeout) as r:  # noqa: S310 — fixed https hosts
+        return _json.loads(r.read().decode())
+
+
+def _live_wikidata_sparql(taxon: str) -> dict | None:
+    """Resolve the taxon's Q-item via P225 and fetch the mapped morphology properties."""
+    from app.trait_sources import WIKIDATA_PROPERTY_MAP
+
+    pids = " ".join(f"wdt:{p}" for p in WIKIDATA_PROPERTY_MAP)
+    q = (
+        "SELECT ?taxon ?p ?vLabel WHERE { ?taxon wdt:P225 %r@en . "
+        "VALUES ?p { %s } ?taxon ?p ?v . "
+        'SERVICE wikibase:label { bd:serviceParam wikibase:language "en". ?v rdfs:label ?vLabel. } '
+        "} LIMIT 50" % (taxon, pids)
+    )
+    url = "https://query.wikidata.org/sparql?format=json&query=" + _urlparse.quote(q)
+    data = _http_json(url)
+    rows = data["results"]["bindings"]
+    if not rows:
+        return None
+    qid = rows[0]["taxon"]["value"].rsplit("/", 1)[-1]
+    props: dict[str, str] = {}
+    for b in rows:
+        pid = b["p"]["value"].rsplit("/", 1)[-1]  # e.g. .../prop/direct/P2827 → P2827
+        val = b.get("vLabel", {}).get("value")
+        if pid and val:
+            props.setdefault(pid, val)
+    return {"qid": qid, "props": props}
+
+
+def _live_lit_search(taxon: str, page_size: int = 8) -> list[dict]:
+    """Europe PMC core search; returns result dicts incl abstractText/doi/pmid/title."""
+    base = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
+    query = _urlparse.quote(f'"{taxon}" AND (morphology OR description OR floral)')
+    url = f"{base}?query={query}&format=json&resultType=core&pageSize={page_size}"
+    data = _http_json(url)
+    return data.get("resultList", {}).get("result", [])
+
+
+def _live_lit_resolve(pub: dict) -> str | None:
+    """Retrieved source text = the abstract (always honest retrieved text; no extra call)."""
+    txt = pub.get("abstractText")
+    return txt if txt and txt.strip() else None
+
+
+def _ghostcite_verify(citation: str) -> dict:
+    """Run ghostcite on one DOI; return {'verified': bool, 'retracted': bool}."""
+    try:
+        proc = _subprocess.run(
+            ["ghostcite", "--format", "doi", "--json", "-"],
+            input=citation,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        data = _json.loads(proc.stdout or "{}")
+    except Exception as e:  # noqa: BLE001 — fail closed: unverifiable → not verified
+        print(f"ghostcite error on {citation!r}: {e}", file=sys.stderr)
+        return {"verified": False, "retracted": False}
+    # ghostcite --json reports per-entry results; treat a clean, non-retracted match as verified.
+    entries = data.get("results") or data.get("entries") or []
+    if not entries:
+        return {"verified": False, "retracted": False}
+    e0 = entries[0]
+    status = (e0.get("status") or "").lower()
+    retracted = bool(e0.get("retracted")) or status == "retracted"
+    verified = status in ("ok", "verified", "match") and not retracted
+    return {"verified": verified, "retracted": retracted}
+
+
+def _resolve_url(url: str, timeout: int = 20) -> bool:
+    try:
+        req = _urlrequest.Request(url, method="HEAD", headers={"User-Agent": _UA})
+        with _urlrequest.urlopen(req, timeout=timeout) as r:  # noqa: S310
+            return 200 <= r.status < 400
+    except Exception:  # noqa: BLE001
+        return False
+
+
+# --- Pluggable trait sources (real impls wired behind --live) ---------------------------------
 
 
 def fetch_db_traits(taxon: str) -> list[dict]:
-    """Structured-DB backbone (POWO / Wikidata / TRY). Network-bound — only reachable via --live.
+    """db tier: Wikidata. Network-bound — only reachable via --live."""
+    from app.trait_sources import wikidata_traits
 
-    Kept isolated so the rest of the module is testable without network. The real endpoints are
-    an implementation-time decision; until wired, fail loud rather than silently returning [].."""
-    raise NotImplementedError(
-        "fetch_db_traits requires the structured-DB integration (POWO/Wikidata/TRY); "
-        "run with --live once endpoints are wired."
-    )
+    return wikidata_traits(taxon, sparql_fn=_live_wikidata_sparql)
 
 
 def draft_llm_traits(taxon: str) -> list[dict]:
-    """LLM enrichment pass. Network-bound (Anthropic client) — only reachable via --live."""
-    raise NotImplementedError(
-        "draft_llm_traits requires the Anthropic client; run with --live once enabled."
+    """llm tier: Europe PMC retrieval + Anthropic extraction. Network + API spend; --live only."""
+    import anthropic
+
+    from app.trait_sources import literature_grounded_traits
+
+    client = anthropic.Anthropic()
+    return literature_grounded_traits(
+        taxon, search_fn=_live_lit_search, resolve_fn=_live_lit_resolve, llm_client=client
     )
+
+
+def _live_verify_fn(traits: list[dict]) -> list[dict]:
+    from app.trait_sources import verify_citations
+
+    return verify_citations(traits, ghostcite_fn=_ghostcite_verify, resolve_fn=_resolve_url)
+
+
+def dry_run_report(taxa: list[str]) -> int:
+    """Search-only: per taxon report db-trait / pub / OA-resolvable / est-LLM-call counts.
+    No LLM, no ghostcite, no DB writes, no spend."""
+    from app.trait_sources import wikidata_traits
+
+    for taxon in taxa:
+        db_traits = wikidata_traits(taxon, sparql_fn=_live_wikidata_sparql)
+        pubs = _live_lit_search(taxon)
+        resolvable = [p for p in pubs if _live_lit_resolve(p)]
+        print(
+            f"[dry-run] {taxon}: db traits={len(db_traits)} candidate pubs={len(pubs)} "
+            f"OA-resolvable={len(resolvable)} est. LLM calls={min(len(resolvable), 5)}"
+        )
+    return 0
 
 
 def _merge_dedup(traits: list[dict]) -> list[dict]:
@@ -164,13 +278,16 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    if not args.live:
+    if not args.live and not args.dry_run:
         print(
             "refusing to build real rubrics without --live "
             "(fetch_db_traits/draft_llm_traits are network-bound stubs).",
             file=sys.stderr,
         )
         return 2
+
+    if args.dry_run:
+        return dry_run_report([t.strip() for t in args.taxa.split(",") if t.strip()])
 
     from app.database import SessionLocal
 
@@ -179,14 +296,16 @@ def main() -> int:
         taxa = _resolve_task_ids(db, taxa)
         written = 0
         for taxon, task_id in taxa.items():
-            traits = build_rubric_traits(taxon)
-            if args.dry_run:
-                print(f"[dry-run] {taxon} (task={task_id}): {len(traits)} traits")
-                continue
+            traits = build_rubric_traits(taxon, verify_fn=_live_verify_fn)
+            if not traits:
+                raise RuntimeError(
+                    f"no usable traits for {taxon!r} after sourcing+verification; "
+                    "refusing to write an empty rubric (would skip judging)."
+                )
             upsert_rubric(db, taxon, task_id, traits)
             written += 1
             print(f"wrote rubric for {taxon} (task={task_id}): {len(traits)} traits")
-    print({"rubrics": written, "dry_run": args.dry_run})
+    print({"rubrics": written})
     return 0
 
 
