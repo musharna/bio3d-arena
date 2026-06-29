@@ -19,3 +19,70 @@ def test_wikidata_traits_maps_known_props_and_ignores_unmapped():
 
 def test_wikidata_traits_empty_when_no_item():
     assert trait_sources.wikidata_traits("Nonexistus", sparql_fn=lambda _t: None) == []
+
+
+class _ExtractClient:
+    """Anthropic-like stub returning a forced record_extracted_traits tool_use."""
+
+    class _Block:
+        type = "tool_use"
+        name = "record_extracted_traits"
+
+        def __init__(self, data):
+            self.input = data
+
+    class _Resp:
+        def __init__(self, data):
+            self.content = [_ExtractClient._Block(data)]
+
+    def __init__(self, payload):
+        self._payload = payload
+        self.messages = self
+
+    def create(self, **_kw):
+        return _ExtractClient._Resp({"traits": self._payload})
+
+
+def test_literature_grounded_keeps_quoted_drops_unquoted_and_bad_class():
+    text = "The corolla is bright red. Leaves are compound."
+    payload = [
+        {
+            "key": "petal_color",
+            "trait_class": "color",
+            "expected": "red",
+            "quote": "The corolla is bright red",
+        },  # quote ⊂ text → kept
+        {
+            "key": "leaf_shape",
+            "trait_class": "organ_shape",
+            "expected": "compound",
+            "quote": "Leaves are palmate",
+        },  # quote NOT in text → dropped
+        {
+            "key": "height",
+            "trait_class": "height",
+            "expected": "2m",
+            "quote": "Leaves are compound",
+        },  # bad class → dropped
+    ]
+    out = trait_sources.literature_grounded_traits(
+        "Testus planta",
+        search_fn=lambda _t: [{"doi": "10.1/x", "title": "T"}],
+        resolve_fn=lambda _p: text,
+        llm_client=_ExtractClient(payload),
+    )
+    assert len(out) == 1
+    t = out[0]
+    assert t["key"] == "petal_color" and t["trait_class"] == "color"
+    assert "source_tier" not in t  # source_tier is stamped later by build_rubric_traits
+    assert t["citation"] == "10.1/x" and t["quote"] == "The corolla is bright red"
+
+
+def test_literature_grounded_skips_pubs_with_no_text():
+    out = trait_sources.literature_grounded_traits(
+        "Testus",
+        search_fn=lambda _t: [{"doi": "10.1/x"}],
+        resolve_fn=lambda _p: None,  # unresolvable → skipped, no LLM call
+        llm_client=_ExtractClient([]),
+    )
+    assert out == []

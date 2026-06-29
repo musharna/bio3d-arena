@@ -7,6 +7,7 @@ claim or citation comes from model recall."""
 
 from __future__ import annotations
 
+from .judge import JUDGE_MODEL
 from .traits import SCORED_CLASSES
 
 # Verified Wikidata morphology properties (probed live 2026-06-29) → (trait_class, key).
@@ -49,3 +50,109 @@ def wikidata_traits(taxon: str, *, sparql_fn) -> list[dict]:
             }
         )
     return out
+
+
+# ---------------------------------------------------------------------------
+# llm tier: retrieval-grounded extraction
+# ---------------------------------------------------------------------------
+
+EXTRACT_TOOL = {
+    "name": "record_extracted_traits",
+    "description": "Record botanical traits EXPLICITLY STATED in the provided source text.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "traits": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "key": {"type": "string", "description": "short snake_case id"},
+                        "trait_class": {"type": "string", "enum": sorted(SCORED_CLASSES)},
+                        "expected": {
+                            "type": "string",
+                            "description": "the expected visible value, e.g. 'red', 'compound'",
+                        },
+                        "quote": {
+                            "type": "string",
+                            "description": "VERBATIM span from the source text stating this trait",
+                        },
+                    },
+                    "required": ["key", "trait_class", "expected", "quote"],
+                },
+            }
+        },
+        "required": ["traits"],
+    },
+}
+
+
+def build_extract_messages(taxon: str, source_text: str) -> list[dict]:
+    text = (
+        f"Below is source text about the plant {taxon}. Extract only VISUALLY-OBSERVABLE "
+        "morphological traits the text EXPLICITLY states (color, organ shape, leaf arrangement, "
+        "inflorescence, presence of structures, relative proportions). For each trait give a "
+        "short key, a trait_class, the expected visible value, and a VERBATIM quote from the "
+        "text. Do not infer traits the text does not state. Call record_extracted_traits.\n\n"
+        f"Source text:\n{source_text}"
+    )
+    return [{"role": "user", "content": [{"type": "text", "text": text}]}]
+
+
+def parse_extracted(resp, source_text: str, *, citation: str, source_detail: str) -> list[dict]:
+    for block in getattr(resp, "content", []):
+        if (
+            getattr(block, "type", None) == "tool_use"
+            and getattr(block, "name", "") == "record_extracted_traits"
+        ):
+            out: list[dict] = []
+            for r in (block.input or {}).get("traits", []):
+                tc = r.get("trait_class")
+                quote = r.get("quote", "")
+                if tc not in SCORED_CLASSES:
+                    continue
+                if not quote or quote not in source_text:  # anti-hallucination: must be verbatim
+                    continue
+                out.append(
+                    {
+                        "key": r["key"],
+                        "trait_class": tc,
+                        "type": "categorical",
+                        "expected": r.get("expected", ""),
+                        "visual": True,
+                        "citation": citation,
+                        "source_detail": source_detail,
+                        "quote": quote,
+                    }
+                )
+            return out
+    return []
+
+
+def literature_grounded_traits(
+    taxon: str, *, search_fn, resolve_fn, llm_client, max_pubs: int = 5
+) -> list[dict]:
+    """llm-tier traits: for each of up to max_pubs publications, resolve its source text and
+    have the LLM extract only traits it can quote from that text. Citation = the publication."""
+    traits: list[dict] = []
+    seen_keys: set[str] = set()
+    for pub in (search_fn(taxon) or [])[:max_pubs]:
+        text = resolve_fn(pub)
+        if not text:
+            continue
+        citation = pub.get("doi") or pub.get("pmid") or pub.get("title")
+        if not citation:
+            continue
+        resp = llm_client.messages.create(
+            model=JUDGE_MODEL,
+            max_tokens=1500,
+            tools=[EXTRACT_TOOL],
+            tool_choice={"type": "tool", "name": "record_extracted_traits"},
+            messages=build_extract_messages(taxon, text),
+        )
+        for t in parse_extracted(resp, text, citation=str(citation), source_detail=str(citation)):
+            if t["key"] in seen_keys:
+                continue
+            seen_keys.add(t["key"])
+            traits.append(t)
+    return traits
