@@ -452,3 +452,65 @@ class PlantMorphology(Base):
     growth_form: Mapped[str] = mapped_column(String(32))
     notes: Mapped[str] = mapped_column(Text, default="")
     updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class TraitRubric(Base):
+    """Literature-sourced botanical-trait rubric for one taxon. traits_json is a list of
+    {key, trait_class, type, expected, visual, source_tier, citation} (see the Mode-C spec)."""
+
+    __tablename__ = "trait_rubric"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    taxon: Mapped[str] = mapped_column(String(128), index=True)
+    task_id: Mapped[int | None] = mapped_column(ForeignKey("task.id"), nullable=True, index=True)
+    traits_json: Mapped[str] = mapped_column(Text, default="[]")
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+    updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class TraitVerdict(Base):
+    """One VLM verdict for one (output, trait). JudgeVote analog."""
+
+    __tablename__ = "trait_verdict"
+    __table_args__ = (
+        UniqueConstraint("output_id", "trait_key", "judge_model", name="uq_trait_verdict"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"), index=True)
+    rubric_id: Mapped[int] = mapped_column(ForeignKey("trait_rubric.id"), index=True)
+    trait_key: Mapped[str] = mapped_column(String(64))
+    trait_class: Mapped[str] = mapped_column(String(32), index=True)
+    verdict: Mapped[str] = mapped_column(
+        String(20)
+    )  # present_correct|present_wrong|absent|not_assessable
+    rationale: Mapped[str] = mapped_column(Text, default="")
+    judge_model: Mapped[str] = mapped_column(String(64), default="")
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class TraitScore(Base):
+    """Per-output botanical-accuracy score (calibrated classes only). Metric analog."""
+
+    __tablename__ = "trait_score"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"), unique=True, index=True)
+    botanical_accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
+    n_scored: Mapped[int] = mapped_column(Integer, default=0)
+    n_total: Mapped[int] = mapped_column(Integer, default=0)
+    judge_model: Mapped[str] = mapped_column(String(64), default="")
+    updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class TraitCalibration(Base):
+    """Per-trait-class human↔VLM agreement gate. accepted classes count toward scores."""
+
+    __tablename__ = "trait_calibration"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trait_class: Mapped[str] = mapped_column(String(32), unique=True)
+    kappa: Mapped[float | None] = mapped_column(Float, nullable=True)
+    n: Mapped[int] = mapped_column(Integer, default=0)
+    accepted: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
