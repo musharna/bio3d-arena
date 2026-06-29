@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import config, ranking
+from .calibration import cohens_kappa
 from .sourcing import is_reference_scan, is_untextured_output
 from .models import (
     Category,
@@ -26,6 +27,9 @@ from .models import (
     Rating,
     Task,
     TaskDifficulty,
+    TraitCalibration,
+    TraitScore,
+    TraitVerdict,
     Vote,
     VoterSession,
 )
@@ -573,3 +577,99 @@ def coverage_summary(db: Session) -> dict:
     task_rows.sort(key=lambda r: (-r["outputs"], r["task"]))
 
     return {"generators": gen_rows, "tasks": task_rows}
+
+
+MODE_C_KAPPA_BAR = 0.6
+MODE_C_MIN_N = 20
+
+
+def accepted_trait_classes(db: Session) -> set[str]:
+    return {
+        c.trait_class
+        for c in db.execute(
+            select(TraitCalibration).where(TraitCalibration.accepted.is_(True))
+        ).scalars()
+    }
+
+
+def recompute_trait_calibration(db: Session, human_labels) -> dict:
+    """human_labels: iterable of (output_id, trait_key, trait_class, human_verdict). Pairs with
+    stored TraitVerdicts on (output_id, trait_key); per class, Cohen's kappa of human vs VLM."""
+    stored = {
+        (v.output_id, v.trait_key): v.verdict for v in db.execute(select(TraitVerdict)).scalars()
+    }
+    by_class: dict[str, tuple[list, list]] = {}
+    for oid, key, cls, human in human_labels:
+        vlm = stored.get((oid, key))
+        if vlm is None:
+            continue
+        h, m = by_class.setdefault(cls, ([], []))
+        h.append(human)
+        m.append(vlm)
+    written = 0
+    for cls, (h, m) in by_class.items():
+        k = cohens_kappa(h, m)
+        n = len(h)
+        accepted = k is not None and k >= MODE_C_KAPPA_BAR and n >= MODE_C_MIN_N
+        row = (
+            db.execute(select(TraitCalibration).where(TraitCalibration.trait_class == cls))
+            .scalars()
+            .first()
+        )
+        if row is None:
+            row = TraitCalibration(trait_class=cls)
+            db.add(row)
+        row.kappa, row.n, row.accepted = k, n, accepted
+        written += 1
+    db.commit()
+    return {"classes": written}
+
+
+def recompute_trait_scores(db: Session) -> dict:
+    accepted = accepted_trait_classes(db)
+    by_output: dict[int, list] = {}
+    for v in db.execute(select(TraitVerdict)).scalars():
+        by_output.setdefault(v.output_id, []).append(v)
+    n_out = 0
+    for oid, verdicts in by_output.items():
+        scored = [
+            v for v in verdicts if v.trait_class in accepted and v.verdict != "not_assessable"
+        ]
+        n_scored = len(scored)
+        correct = sum(1 for v in scored if v.verdict == "present_correct")
+        acc = (correct / n_scored) if n_scored else None
+        row = db.execute(select(TraitScore).where(TraitScore.output_id == oid)).scalars().first()
+        if row is None:
+            row = TraitScore(output_id=oid)
+            db.add(row)
+        row.botanical_accuracy = acc
+        row.n_scored = n_scored
+        row.n_total = len(verdicts)
+        row.judge_model = verdicts[0].judge_model if verdicts else ""
+        n_out += 1
+    db.commit()
+    return {"outputs": n_out}
+
+
+def trait_leaderboard(db: Session) -> list[dict]:
+    """Generator-level mean botanical-accuracy over scored outputs (calibrated classes only)."""
+    names = generator_display_names(db)
+    excluded = mode_a_excluded_generator_ids(db)
+    agg: dict[int, list] = {}
+    for ts in db.execute(select(TraitScore)).scalars():
+        if ts.botanical_accuracy is None:
+            continue
+        out = db.get(ModelOutput, ts.output_id)
+        if out is None or out.generator_id in excluded or out.is_gold:
+            continue
+        agg.setdefault(out.generator_id, []).append(ts.botanical_accuracy)
+    rows = [
+        {
+            "generator": names.get(gid, str(gid)),
+            "botanical_accuracy": round(sum(v) / len(v), 3),
+            "n_outputs": len(v),
+        }
+        for gid, v in agg.items()
+    ]
+    rows.sort(key=lambda r: r["botanical_accuracy"], reverse=True)
+    return rows
