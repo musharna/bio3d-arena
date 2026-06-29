@@ -156,3 +156,28 @@ def literature_grounded_traits(
             seen_keys.add(t["key"])
             traits.append(t)
     return traits
+
+
+# ---------------------------------------------------------------------------
+# citation verification gate
+# ---------------------------------------------------------------------------
+
+
+def _is_wikidata(citation: str) -> bool:
+    return "wikidata.org" in (citation or "")
+
+
+def verify_citations(traits, *, ghostcite_fn, resolve_fn) -> list[dict]:
+    """Drop any trait whose citation can't be verified. Wikidata URLs must resolve;
+    paper citations must be ghostcite-verified AND not retracted."""
+    kept: list[dict] = []
+    for t in traits:
+        cite = t.get("citation") or ""
+        if _is_wikidata(cite):
+            if resolve_fn(cite):
+                kept.append(t)
+            continue
+        res = ghostcite_fn(cite) or {}
+        if res.get("verified") and not res.get("retracted"):
+            kept.append(t)
+    return kept

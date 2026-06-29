@@ -86,3 +86,38 @@ def test_literature_grounded_skips_pubs_with_no_text():
         llm_client=_ExtractClient([]),
     )
     assert out == []
+
+
+def _trait(citation):
+    return {
+        "key": "k",
+        "trait_class": "color",
+        "type": "categorical",
+        "expected": "red",
+        "visual": True,
+        "citation": citation,
+        "source_detail": citation,
+        "quote": "q",
+    }
+
+
+def test_verify_citations_gates_papers_and_wikidata():
+    traits = [
+        _trait("10.1/real"),  # paper, verified → kept
+        _trait("10.1/fake"),  # paper, unverified → dropped
+        _trait("10.1/retracted"),  # paper, retracted → dropped
+        _trait("https://www.wikidata.org/wiki/Q23501"),  # wikidata, resolvable → kept
+        _trait("https://www.wikidata.org/wiki/Q0"),  # wikidata, unresolvable → dropped
+    ]
+    gc = {
+        "10.1/real": {"verified": True, "retracted": False},
+        "10.1/fake": {"verified": False, "retracted": False},
+        "10.1/retracted": {"verified": True, "retracted": True},
+    }
+    kept = trait_sources.verify_citations(
+        traits,
+        ghostcite_fn=lambda c: gc.get(c, {"verified": False, "retracted": False}),
+        resolve_fn=lambda url: url.endswith("Q23501"),
+    )
+    cites = [t["citation"] for t in kept]
+    assert cites == ["10.1/real", "https://www.wikidata.org/wiki/Q23501"]
