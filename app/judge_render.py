@@ -7,12 +7,15 @@ driver lives in scripts/judge_capture.py). Sheets cache to disk by convention
 from __future__ import annotations
 
 import io
+import logging
 from pathlib import Path
 
 from PIL import Image
 
 from . import config
 from .models import ModelOutput
+
+logger = logging.getLogger(__name__)
 
 CONDITIONS: dict[str, dict] = {
     "single": {"azimuths": [30], "elev": 75, "cols": 1, "rows": 1},
@@ -50,7 +53,8 @@ def render_contact_sheets(db, output_ids: list[int], condition: str, *, capture_
     spec = CONDITIONS[condition]
     renders_dir = Path(config.ASSET_DIR) / "renders"
     renders_dir.mkdir(parents=True, exist_ok=True)
-    rendered = errors = 0
+    rendered = 0
+    failures: list[dict] = []  # {oid, error} per output that failed — surfaced, not swallowed
     for oid in output_ids:
         rel = contact_sheet_path(oid, condition)
         abs_path = Path(config.ASSET_DIR) / rel
@@ -59,13 +63,19 @@ def render_contact_sheets(db, output_ids: list[int], condition: str, *, capture_
         try:
             out = db.get(ModelOutput, oid)
             if out is None:
-                errors += 1
-                continue
+                raise LookupError(f"ModelOutput {oid} not found")
             glb_abs = str(Path(config.ASSET_DIR) / out.asset_path)
             tiles = capture_multi(glb_abs, spec["azimuths"], spec["elev"])
             sheet = tile_contact_sheet(tiles, spec["cols"], spec["rows"])
             abs_path.write_bytes(sheet)
             rendered += 1
-        except Exception:  # noqa: BLE001 — best-effort batch; caller logs counts
-            errors += 1
-    return {"rendered": rendered, "errors": errors}
+        except Exception as exc:  # noqa: BLE001 — best-effort batch: log + record, don't abort
+            logger.warning(
+                "contact-sheet render failed for output %s (%s): %s",
+                oid,
+                condition,
+                exc,
+                exc_info=True,
+            )
+            failures.append({"oid": oid, "error": f"{type(exc).__name__}: {exc}"})
+    return {"rendered": rendered, "errors": len(failures), "failures": failures}
