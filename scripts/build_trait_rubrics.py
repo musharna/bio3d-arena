@@ -113,7 +113,15 @@ def _live_lit_resolve(pub: dict) -> str | None:
 
 
 def _ghostcite_verify(citation: str) -> dict:
-    """Run ghostcite on one DOI; return {'verified': bool, 'retracted': bool}."""
+    """Run ghostcite on one DOI; return {'verified': bool, 'retracted': bool}.
+
+    ghostcite --json (probed 2026-06-29) emits {"summary": {..., "with_doi": N}, "findings": [...]}
+    where `findings` lists PROBLEMS (empty = clean). A finding with tier "R" / "RETRACTED" message
+    is a retraction; any other finding (e.g. tier "U" "DOI does not resolve") is unverifiable. A
+    retracted DOI makes ghostcite exit non-zero, so the verdict is driven off `findings`, NOT the
+    exit code. Verified requires a clean result AND a DOI ghostcite actually recognized
+    (`summary.with_doi >= 1`), so a bare title/PMID citation is not spuriously trusted.
+    Unparseable / wrong-shape output (bad flag, crash) is the real tool error → fail loud + closed."""
     try:
         proc = _subprocess.run(
             ["ghostcite", "--format", "doi", "--json", "-"],
@@ -122,26 +130,23 @@ def _ghostcite_verify(citation: str) -> dict:
             text=True,
             timeout=60,
         )
-        if proc.returncode != 0:
-            snippet = (proc.stderr or proc.stdout or "")[:200]
-            print(
-                f"ghostcite non-zero exit {proc.returncode} on {citation!r}: {snippet}",
-                file=sys.stderr,
-            )
-            return {"verified": False, "retracted": False}
-        data = _json.loads(proc.stdout or "{}")
-    except Exception as e:  # noqa: BLE001 — fail closed: unverifiable → not verified
+        data = _json.loads(proc.stdout or "")
+    except Exception as e:  # noqa: BLE001 — unparseable output = tool error: fail loud + closed
         print(f"ghostcite error on {citation!r}: {e}", file=sys.stderr)
         return {"verified": False, "retracted": False}
-    # ghostcite --json reports per-entry results; treat a clean, non-retracted match as verified.
-    entries = data.get("results") or data.get("entries") or []
-    if not entries:
+    if not isinstance(data, dict) or "findings" not in data:
+        print(f"ghostcite unexpected output on {citation!r}: {str(data)[:200]}", file=sys.stderr)
         return {"verified": False, "retracted": False}
-    e0 = entries[0]
-    status = (e0.get("status") or "").lower()
-    retracted = bool(e0.get("retracted")) or status == "retracted"
-    verified = status in ("ok", "verified", "match") and not retracted
-    return {"verified": verified, "retracted": retracted}
+    findings = data.get("findings") or []
+    if findings:
+        retracted = any(
+            f.get("tier") == "R" or "RETRACTED" in (f.get("message") or "").upper()
+            for f in findings
+        )
+        return {"verified": False, "retracted": retracted}
+    # No findings: verified only if ghostcite recognized a DOI to check (not a bare title).
+    verified = bool((data.get("summary") or {}).get("with_doi"))
+    return {"verified": verified, "retracted": False}
 
 
 def _resolve_url(url: str, timeout: int = 20) -> bool:

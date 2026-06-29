@@ -200,19 +200,57 @@ def test_upsert_rubric_persists_validated_traits():
         assert json.loads(db.get(TraitRubric, r.id).traits_json)[0]["key"] == "habit"
 
 
-def test_ghostcite_verify_nonzero_exit_fails_closed_and_logs(capsys, monkeypatch):
-    """ghostcite non-zero returncode → fail-closed sentinel + visible stderr; no raise."""
+def _fake_ghostcite(monkeypatch, *, stdout, returncode=0):
+    """Patch subprocess.run inside build_trait_rubrics to return a canned ghostcite result."""
     import types
 
     import scripts.build_trait_rubrics as b
 
-    fake_proc = types.SimpleNamespace(returncode=2, stdout='{"results": []}', stderr="usage error")
-    monkeypatch.setattr(b._subprocess, "run", lambda *a, **kw: fake_proc)
+    proc = types.SimpleNamespace(returncode=returncode, stdout=stdout, stderr="")
+    monkeypatch.setattr(b._subprocess, "run", lambda *a, **kw: proc)
+    return b
 
-    result = b._ghostcite_verify("10.x/y")
-    assert result == {"verified": False, "retracted": False}
-    captured = capsys.readouterr()
-    assert captured.err  # something must be written to stderr
+
+# Real ghostcite --json shapes probed 2026-06-29 (see _ghostcite_verify docstring).
+_GC_CLEAN = '{"summary": {"total": 1, "with_doi": 1, "findings": 0}, "findings": []}'
+_GC_FABRICATED = (
+    '{"summary": {"total": 1, "with_doi": 1, "findings": 1}, '
+    '"findings": [{"tier": "U", "message": "DOI does not resolve (dead or fabricated DOI)"}]}'
+)
+_GC_RETRACTED = (
+    '{"summary": {"total": 1, "with_doi": 1, "findings": 1}, '
+    '"findings": [{"tier": "R", "message": "RETRACTED per CrossRef"}]}'
+)
+_GC_TITLE_ONLY = '{"summary": {"total": 1, "with_doi": 0, "findings": 0}, "findings": []}'
+
+
+def test_ghostcite_verify_clean_doi_is_verified(monkeypatch):
+    b = _fake_ghostcite(monkeypatch, stdout=_GC_CLEAN)
+    assert b._ghostcite_verify("10.1038/nature11119") == {"verified": True, "retracted": False}
+
+
+def test_ghostcite_verify_fabricated_doi_not_verified(monkeypatch):
+    b = _fake_ghostcite(monkeypatch, stdout=_GC_FABRICATED)
+    assert b._ghostcite_verify("10.9999/nope") == {"verified": False, "retracted": False}
+
+
+def test_ghostcite_verify_retracted_doi_with_nonzero_exit(monkeypatch):
+    # Retractions make ghostcite exit non-zero; verdict must come from findings, not exit code.
+    b = _fake_ghostcite(monkeypatch, stdout=_GC_RETRACTED, returncode=1)
+    assert b._ghostcite_verify("10.1016/x") == {"verified": False, "retracted": True}
+
+
+def test_ghostcite_verify_bare_title_not_verified(monkeypatch):
+    # with_doi=0 → ghostcite recognized no DOI to check → not trusted despite empty findings.
+    b = _fake_ghostcite(monkeypatch, stdout=_GC_TITLE_ONLY)
+    assert b._ghostcite_verify("Some paper title") == {"verified": False, "retracted": False}
+
+
+def test_ghostcite_verify_unparseable_output_fails_loud_and_closed(capsys, monkeypatch):
+    # Bad flag / crash → non-JSON stdout → fail loud (stderr) + fail closed.
+    b = _fake_ghostcite(monkeypatch, stdout="usage: ghostcite ...", returncode=2)
+    assert b._ghostcite_verify("10.x/y") == {"verified": False, "retracted": False}
+    assert capsys.readouterr().err  # the failure is surfaced, not silent
 
 
 def test_dry_run_reports_counts_without_spend(capsys, monkeypatch):
