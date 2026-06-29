@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Coverage &amp; Governance · Bio 3D Arena{% endblock %}
+{% block content %}
+<section class="board prose">
+  <h2>Coverage &amp; governance</h2>
+  <p class="subtle">What is in the arena, how much evidence backs each ranking, and the
+    rules that govern how models enter and compete. Published in full so a rank can be
+    read with its uncertainty — not in isolation.</p>
+
+  <h3>How models enter &amp; compete</h3>
+  <ul>
+    <li><b>Entry</b> — every output is added by an administrator or via the public
+      <a href="/submit">submission</a> queue, then moderated before it enters the arena.
+      There is <b>no private or preferential pre-testing</b>: a model is not quietly trialled
+      and published only if it scores well.</li>
+    <li><b>Fair matchmaking</b> — pairs are drawn by a sampler that <b>biases toward the
+      least-compared outputs</b>, so coverage spreads evenly rather than concentrating votes
+      on a favoured few. Every model is drawn from the same pool by the same sampler.</li>
+    <li><b>No silent deprecation</b> — outputs are not removed to flatter the board; the arena
+      has no deprecation mechanism, so what competed stays on the record.</li>
+    <li><b>Exclusions are principled, not selective</b> — only reference ground-truth scans and
+      untextured geometry-only outputs are held out of the Mode-A perceptual pool (they confound
+      a visual-preference vote); they remain in the objective Mode-B board. Excluded generators
+      are flagged in the table below.</li>
+  </ul>
+
+  <h3>Reading a rank</h3>
+  <p>A generator's rank is only as trustworthy as the votes behind it. Below
+    <b>{{ firm_threshold }}</b> total Mode-A votes a rank is marked
+    <span class="cov-badge cov-prov">provisional</span>; at or above it,
+    <span class="cov-badge cov-firm">firm</span>. Bradley–Terry confidence intervals on the
+    <a href="/leaderboard">leaderboard</a> make the same uncertainty visible per generator.</p>
+  <p class="subtle"><b>Current limits, stated plainly:</b> the arena is in an internal
+    evaluation phase, so vote volume is low and most ranks read <i>provisional</i> — ranks will
+    firm up as voting scales. Mode-A votes here are internal and not yet from a public pool.</p>
+</section>
+
+<section class="board">
+  <h3>Generator coverage</h3>
+  <p class="subtle">{{ generators|length }} generators with arena outputs, by total Mode-A votes.</p>
+  <table class="ranktable">
+    <thead>
+      <tr><th>Generator</th><th>Kind</th><th>Tasks</th><th>Outputs</th>
+        <th>Mode-A votes</th><th>Confidence</th><th>Mode-A</th></tr>
+    </thead>
+    <tbody>
+      {% for g in generators %}
+      <tr>
+        <td>{{ g.generator }}</td>
+        <td class="subtle">{{ g.kind }}</td>
+        <td>{{ g.tasks }}</td>
+        <td>{{ g.outputs }}</td>
+        <td>{{ g.votes }}</td>
+        <td><span class="cov-badge cov-{{ 'firm' if g.confidence == 'firm' else 'prov' }}">{{ g.confidence }}</span></td>
+        <td>{% if g.excluded_from_mode_a %}<span class="subtle">excluded</span>{% else %}✓{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="board">
+  <h3>Task coverage</h3>
+  <p class="subtle">{{ tasks|length }} active tasks. "Mode-B" = objective scoring against
+    held-out ground-truth is available for that task.</p>
+  <table class="ranktable">
+    <thead>
+      <tr><th>Task</th><th>Category</th><th>Tier</th><th>Generators</th><th>Outputs</th>
+        <th>Mode-A votes</th><th>Judge votes</th><th>Mode-B</th></tr>
+    </thead>
+    <tbody>
+      {% for t in tasks %}
+      <tr>
+        <td>{{ t.task }}</td>
+        <td class="subtle">{{ t.category }}</td>
+        <td>{{ t.tier or "—" }}</td>
+        <td>{{ t.generators }}</td>
+        <td>{{ t.outputs }}</td>
+        <td>{{ t.mode_a_votes }}</td>
+        <td>{{ t.judge_votes }}</td>
+        <td>{% if t.has_mode_b %}✓{% else %}<span class="subtle">—</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="board prose">
+  <p class="subtle">Machine-readable: <a href="/api/coverage.json">/api/coverage.json</a>.</p>
+</section>
+{% endblock %}

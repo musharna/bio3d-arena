@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import config, ranking
@@ -21,9 +21,11 @@ from .models import (
     Generator,
     JudgeRating,
     JudgeVote,
+    Metric,
     ModelOutput,
     Rating,
     Task,
+    TaskDifficulty,
     Vote,
     VoterSession,
 )
@@ -495,3 +497,79 @@ def compute_bias(db: Session) -> dict:
         "sessions": len(sessions),
         "low_trust_sessions": low_trust,
     }
+
+
+# Below this many total Mode-A votes a generator's rank is flagged "provisional" — the
+# transparency knob that answers "is this rank trustworthy yet?" on the coverage page.
+FIRM_VOTE_THRESHOLD = 30
+
+
+def coverage_summary(db: Session) -> dict:
+    """Per-generator + per-task coverage & vote-count disclosure (governance transparency).
+
+    Read-only aggregate powering /coverage and /api/coverage.json. Surfaces, per generator,
+    how many votes/outputs/tasks back its rank (+ a firm/provisional confidence flag), and per
+    task, how thinly or richly it is covered — the data the post-2025 "leaderboard illusion"
+    critique asks every arena to publish, and the substrate for a future phylogenetic map."""
+    names = generator_display_names(db)
+    excluded = mode_a_excluded_generator_ids(db)
+
+    gen_rows = []
+    for g in db.execute(select(Generator)).scalars().all():
+        outs = [o for o in g.outputs if not o.is_gold]
+        if not outs:
+            continue  # gold-only / empty generators don't appear on the public board
+        votes = sum(o.n_comparisons for o in outs)
+        gen_rows.append(
+            {
+                "generator": names.get(g.id, g.name),
+                "kind": g.kind,
+                "tasks": len({o.task_id for o in outs}),
+                "outputs": len(outs),
+                "votes": votes,
+                "excluded_from_mode_a": g.id in excluded,
+                "confidence": "firm" if votes >= FIRM_VOTE_THRESHOLD else "provisional",
+            }
+        )
+    gen_rows.sort(key=lambda r: (-r["votes"], r["generator"]))
+
+    task_rows = []
+    for t in db.execute(select(Task).where(Task.active.is_(True))).scalars().all():
+        outs = [o for o in t.outputs if not o.is_gold]
+        cat = db.get(Category, t.category_id)
+        diff = (
+            db.execute(select(TaskDifficulty).where(TaskDifficulty.task_id == t.id))
+            .scalars()
+            .first()
+        )
+        mode_a_votes = db.execute(
+            select(func.count(Vote.id))
+            .select_from(Vote)
+            .join(Comparison, Vote.comparison_id == Comparison.id)
+            .where(Comparison.task_id == t.id, Comparison.is_gold.is_(False))
+        ).scalar_one()
+        judge_votes = db.execute(
+            select(func.count(JudgeVote.id)).where(JudgeVote.task_id == t.id)
+        ).scalar_one()
+        out_ids = [o.id for o in outs]
+        has_mode_b = bool(
+            out_ids
+            and db.execute(
+                select(func.count(Metric.id)).where(Metric.output_id.in_(out_ids))
+            ).scalar_one()
+        )
+        task_rows.append(
+            {
+                "task": t.title,
+                "category": cat.name if cat else "",
+                "tier": diff.tier if diff else None,
+                "generators": len({o.generator_id for o in outs}),
+                "outputs": len(outs),
+                "mode_a_votes": mode_a_votes,
+                "judge_votes": judge_votes,
+                "has_mode_b": has_mode_b,
+            }
+        )
+    task_rows.sort(key=lambda r: (-r["outputs"], r["task"]))
+
+    return {"generators": gen_rows, "tasks": task_rows}
