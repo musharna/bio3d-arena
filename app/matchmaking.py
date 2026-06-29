@@ -20,13 +20,25 @@ def _real_outputs(task: Task) -> list[ModelOutput]:
     return [o for o in task.outputs if not o.is_gold]
 
 
-def pick_task(db: Session, category_id: int | None = None) -> Task | None:
-    """Pick a random active task that has at least two (non-gold) outputs."""
+def pick_task(db: Session, category_id: int | None = None, exclude_fn=None) -> Task | None:
+    """Pick a random active task that has at least two votable (non-gold) outputs.
+
+    `exclude_fn(output) -> bool` must be the SAME filter pick_pair will apply, so a task
+    is only a candidate if it still has >=2 outputs AFTER exclusion. Counting pre-exclusion
+    here (while pick_pair filters post-exclusion) let pick_task return a task pick_pair then
+    rejected → a spurious None → intermittent 404 on /api/next."""
     stmt = select(Task).where(Task.active.is_(True))
     if category_id is not None:
         stmt = stmt.where(Task.category_id == category_id)
     tasks = db.execute(stmt).scalars().all()
-    candidates = [t for t in tasks if len(_real_outputs(t)) >= 2]
+
+    def votable_count(t: Task) -> int:
+        outs = _real_outputs(t)
+        if exclude_fn is not None:
+            outs = [o for o in outs if not exclude_fn(o)]
+        return len(outs)
+
+    candidates = [t for t in tasks if votable_count(t) >= 2]
     if not candidates:
         return None
     return random.choice(candidates)
