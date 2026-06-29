@@ -613,11 +613,20 @@ def accepted_trait_classes(db: Session) -> set[str]:
     }
 
 
-def recompute_trait_calibration(db: Session, human_labels) -> dict:
+def recompute_trait_calibration(db: Session, human_labels, judge_model: str | None = None) -> dict:
     """human_labels: iterable of (output_id, trait_key, trait_class, human_verdict). Pairs with
-    stored TraitVerdicts on (output_id, trait_key); per class, Cohen's kappa of human vs VLM."""
+    stored TraitVerdicts on (output_id, trait_key); per class, Cohen's kappa of human vs VLM.
+
+    Verdicts are filtered to a single judge_model so a second model can't collide on the
+    (output_id, trait_key) key (last-write-wins) and silently corrupt the agreement count."""
+    if judge_model is None:
+        from . import judge
+
+        judge_model = judge.JUDGE_MODEL
     stored = {
-        (v.output_id, v.trait_key): v.verdict for v in db.execute(select(TraitVerdict)).scalars()
+        (v.output_id, v.trait_key): v.verdict
+        for v in db.execute(select(TraitVerdict)).scalars()
+        if v.judge_model == judge_model
     }
     by_class: dict[str, tuple[list, list]] = {}
     for oid, key, cls, human in human_labels:
@@ -646,10 +655,16 @@ def recompute_trait_calibration(db: Session, human_labels) -> dict:
     return {"classes": written}
 
 
-def recompute_trait_scores(db: Session) -> dict:
+def recompute_trait_scores(db: Session, judge_model: str | None = None) -> dict:
+    if judge_model is None:
+        from . import judge
+
+        judge_model = judge.JUDGE_MODEL
     accepted = accepted_trait_classes(db)
     by_output: dict[int, list] = {}
     for v in db.execute(select(TraitVerdict)).scalars():
+        if v.judge_model != judge_model:
+            continue  # one model per score; mixing would double-count verdicts
         by_output.setdefault(v.output_id, []).append(v)
     n_out = 0
     for oid, verdicts in by_output.items():
@@ -666,7 +681,7 @@ def recompute_trait_scores(db: Session) -> dict:
         row.botanical_accuracy = acc
         row.n_scored = n_scored
         row.n_total = len(verdicts)
-        row.judge_model = verdicts[0].judge_model if verdicts else ""
+        row.judge_model = judge_model
         n_out += 1
     db.commit()
     return {"outputs": n_out}
@@ -694,3 +709,33 @@ def trait_leaderboard(db: Session) -> list[dict]:
     ]
     rows.sort(key=lambda r: r["botanical_accuracy"], reverse=True)
     return rows
+
+
+def tier_trait_accuracy(db: Session) -> list[dict]:
+    """Per-difficulty-tier mean botanical accuracy over scored outputs (calibrated classes
+    only), ordered by TIERS. Empty until a trait class passes the kappa-gate (all scores
+    None) — the difficulty view hides the section until then. Feeds axis-A's phylogenetic
+    difficulty map later."""
+    from .difficulty import TIERS
+
+    tier_of = {td.task_id: td.tier for td in db.execute(select(TaskDifficulty)).scalars()}
+    agg: dict[str, list] = {}
+    for ts in db.execute(select(TraitScore)).scalars():
+        if ts.botanical_accuracy is None:
+            continue
+        out = db.get(ModelOutput, ts.output_id)
+        if out is None or out.is_gold:
+            continue
+        tier = tier_of.get(out.task_id)
+        if tier is None:
+            continue
+        agg.setdefault(tier, []).append(ts.botanical_accuracy)
+    return [
+        {
+            "tier": t,
+            "mean_accuracy": round(sum(agg[t]) / len(agg[t]), 3),
+            "n_outputs": len(agg[t]),
+        }
+        for t in TIERS
+        if agg.get(t)
+    ]

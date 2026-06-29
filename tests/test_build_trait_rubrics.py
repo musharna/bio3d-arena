@@ -78,6 +78,24 @@ def test_validate_rejects_uncited_and_bad_class():
             pass
 
 
+def test_build_rubric_traits_does_not_mutate_source_dicts():
+    import scripts.build_trait_rubrics as b
+
+    # A real fetcher may hand back cached/shared dicts; stamping source_tier must
+    # not leak back into the caller's object.
+    shared = {
+        "key": "color",
+        "trait_class": "color",
+        "type": "categorical",
+        "expected": "red",
+        "visual": True,
+        "citation": "POWO",
+    }
+    out = b.build_rubric_traits("X", fetch_db=lambda _t: [shared], draft_llm=lambda _t: [])
+    assert "source_tier" not in shared  # source dict untouched
+    assert out[0]["source_tier"] == "db"  # the copy got stamped
+
+
 def test_upsert_rubric_persists_validated_traits():
     import scripts.build_trait_rubrics as b
 

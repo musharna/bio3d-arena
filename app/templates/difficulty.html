@@ -66,6 +66,29 @@
   </div>
   {% endif %}
 
+  {% if trait_tiers %}
+  <h3>Botanical accuracy by tier
+    <span class="flag flag-shape">experimental</span>
+    <span class="subtle">— Mode-C trait check, calibrated classes only</span></h3>
+  <p class="subtle">
+    Mean botanical accuracy (literature-sourced trait rubric vs the model, scored by the
+    calibrated VLM trait-checker) per difficulty tier. Only trait classes that have passed the
+    κ-gate contribute; the section stays hidden until then.
+  </p>
+  <table class="ranktable compact">
+    <thead><tr><th>Tier</th><th>Mean accuracy ↑</th><th>n outputs</th></tr></thead>
+    <tbody>
+      {% for r in trait_tiers %}
+      <tr>
+        <td>{{ r.tier | capitalize }}</td>
+        <td class="num strong">{{ '%.3f'|format(r.mean_accuracy) }}</td>
+        <td class="num">{{ r.n_outputs }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
   {% for block in scorecard %}
   {% if block.tier in tiers and block.rows %}
   <h3>{{ block.tier | capitalize }} tier

@@ -88,9 +88,11 @@ def build_rubric_traits(
     source can't smuggle an uncited trait through."""
     traits: list[dict] = []
     for t in fetch_db(taxon):
+        t = dict(t)  # copy: a real fetcher may return shared/cached dicts
         t.setdefault("source_tier", "db")
         traits.append(t)
     for t in draft_llm(taxon):
+        t = dict(t)
         t.setdefault("source_tier", "llm")
         traits.append(t)
     for t in traits:

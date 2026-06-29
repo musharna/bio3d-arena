@@ -902,6 +902,7 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
     gradient.sort(key=lambda g: g["generator"].lower())
 
     perceptual = service.tier_perceptual_ranking(db)
+    trait_tiers = service.tier_trait_accuracy(db)
 
     return templates.TemplateResponse(
         request,
@@ -912,6 +913,7 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
             "tiers": tiers,
             "gradient": gradient,
             "perceptual": perceptual,
+            "trait_tiers": trait_tiers,
         },
     )
 
