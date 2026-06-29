@@ -53,6 +53,23 @@ def test_validate_rejects_uncited_and_bad_class():
             "source_tier": "guess",
             "citation": "x",
         },  # bad tier
+        {
+            "key": "k",
+            "trait_class": "color",
+            "type": "categorical",
+            "expected": "red",
+            "visual": True,
+            "source_tier": "db",
+            "citation": None,
+        },  # None citation
+        {
+            "key": "k",
+            "trait_class": "color",
+            "type": "categorical",
+            "expected": "red",
+            "visual": True,
+            "source_tier": "db",
+        },  # missing citation key
     ]:
         try:
             b.validate_trait(bad)
