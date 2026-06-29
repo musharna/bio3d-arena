@@ -122,6 +122,13 @@ def _ghostcite_verify(citation: str) -> dict:
             text=True,
             timeout=60,
         )
+        if proc.returncode != 0:
+            snippet = (proc.stderr or proc.stdout or "")[:200]
+            print(
+                f"ghostcite non-zero exit {proc.returncode} on {citation!r}: {snippet}",
+                file=sys.stderr,
+            )
+            return {"verified": False, "retracted": False}
         data = _json.loads(proc.stdout or "{}")
     except Exception as e:  # noqa: BLE001 — fail closed: unverifiable → not verified
         print(f"ghostcite error on {citation!r}: {e}", file=sys.stderr)
@@ -274,14 +281,15 @@ def main() -> int:
     ap.add_argument(
         "--dry-run",
         action="store_true",
-        help="build + validate rubrics but write nothing to the DB",
+        help="search-only cost report: Wikidata + Europe PMC counts; no LLM calls, no DB writes, no spend",
     )
     args = ap.parse_args()
 
     if not args.live and not args.dry_run:
         print(
-            "refusing to build real rubrics without --live "
-            "(fetch_db_traits/draft_llm_traits are network-bound stubs).",
+            "refusing to run real sourcing without --live "
+            "(performs live Wikidata/Europe PMC/ghostcite/Anthropic calls with API spend); "
+            "use --dry-run for a no-spend search-only preview.",
             file=sys.stderr,
         )
         return 2

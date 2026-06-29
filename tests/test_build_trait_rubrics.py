@@ -200,6 +200,21 @@ def test_upsert_rubric_persists_validated_traits():
         assert json.loads(db.get(TraitRubric, r.id).traits_json)[0]["key"] == "habit"
 
 
+def test_ghostcite_verify_nonzero_exit_fails_closed_and_logs(capsys, monkeypatch):
+    """ghostcite non-zero returncode → fail-closed sentinel + visible stderr; no raise."""
+    import types
+
+    import scripts.build_trait_rubrics as b
+
+    fake_proc = types.SimpleNamespace(returncode=2, stdout='{"results": []}', stderr="usage error")
+    monkeypatch.setattr(b._subprocess, "run", lambda *a, **kw: fake_proc)
+
+    result = b._ghostcite_verify("10.x/y")
+    assert result == {"verified": False, "retracted": False}
+    captured = capsys.readouterr()
+    assert captured.err  # something must be written to stderr
+
+
 def test_dry_run_reports_counts_without_spend(capsys, monkeypatch):
     import scripts.build_trait_rubrics as b
 
