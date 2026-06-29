@@ -511,6 +511,25 @@ def methodology_page(request: Request):
     )
 
 
+@app.get("/coverage", response_class=HTMLResponse)
+def coverage_page(request: Request, db: Session = Depends(get_db)):
+    summary = service.coverage_summary(db)
+    return templates.TemplateResponse(
+        request,
+        "coverage.html",
+        {
+            "generators": summary["generators"],
+            "tasks": summary["tasks"],
+            "firm_threshold": service.FIRM_VOTE_THRESHOLD,
+        },
+    )
+
+
+@app.get("/api/coverage.json")
+def api_coverage(db: Session = Depends(get_db)):
+    return service.coverage_summary(db)
+
+
 # --------------------------------------------------------- significance + bias
 
 

@@ -956,3 +956,23 @@ details.group[open] > summary.group-title::before {
     height: 60vh;
   }
 }
+
+/* coverage page — confidence badges */
+.cov-badge {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.78em;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.cov-firm {
+  color: #1a7f37;
+  background: rgba(35, 134, 54, 0.14);
+  border-color: rgba(35, 134, 54, 0.35);
+}
+.cov-prov {
+  color: #b07a00;
+  background: rgba(176, 122, 0, 0.14);
+  border-color: rgba(176, 122, 0, 0.35);
+}
