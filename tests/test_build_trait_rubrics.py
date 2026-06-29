@@ -149,6 +149,36 @@ def test_build_rubric_traits_merges_dedups_and_verifies():
     assert out[0]["source_tier"] == "db"
 
 
+def test_merge_dedup_key_collision_suffix():
+    """Two traits with different (trait_class, expected) sigs but the same key:
+    both survive; the second gets key_2."""
+    import scripts.build_trait_rubrics as b
+
+    t1 = {
+        "key": "petal_trait",
+        "trait_class": "color",
+        "type": "categorical",
+        "expected": "red",
+        "visual": True,
+        "source_tier": "db",
+        "citation": "POWO",
+    }
+    t2 = {
+        "key": "petal_trait",  # same key, distinct (trait_class, expected)
+        "trait_class": "organ_shape",
+        "type": "categorical",
+        "expected": "obovate",
+        "visual": True,
+        "source_tier": "llm",
+        "citation": "10.1/x",
+    }
+    out = b._merge_dedup([t1, t2])
+    assert len(out) == 2, f"expected 2 traits, got {len(out)}"
+    keys = [t["key"] for t in out]
+    assert "petal_trait" in keys, "first trait should keep original key"
+    assert "petal_trait_2" in keys, "second trait should get _2 suffix"
+
+
 def test_upsert_rubric_persists_validated_traits():
     import scripts.build_trait_rubrics as b
 
