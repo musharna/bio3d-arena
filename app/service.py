@@ -28,6 +28,7 @@ from .models import (
     Task,
     TaskDifficulty,
     TraitCalibration,
+    TraitRubric,
     TraitScore,
     TraitVerdict,
     Vote,
@@ -562,6 +563,24 @@ def coverage_summary(db: Session) -> dict:
                 select(func.count(Metric.id)).where(Metric.output_id.in_(out_ids))
             ).scalar_one()
         )
+        # Mode-C: this task has a literature-sourced trait rubric, and the mean
+        # botanical-accuracy over its scored (calibrated-class) outputs.
+        has_rubric = bool(
+            db.execute(
+                select(func.count(TraitRubric.id)).where(TraitRubric.task_id == t.id)
+            ).scalar_one()
+        )
+        mode_c_accuracy = None
+        if out_ids:
+            accs = [
+                ts.botanical_accuracy
+                for ts in db.execute(
+                    select(TraitScore).where(TraitScore.output_id.in_(out_ids))
+                ).scalars()
+                if ts.botanical_accuracy is not None
+            ]
+            if accs:
+                mode_c_accuracy = round(sum(accs) / len(accs), 3)
         task_rows.append(
             {
                 "task": t.title,
@@ -572,6 +591,8 @@ def coverage_summary(db: Session) -> dict:
                 "mode_a_votes": mode_a_votes,
                 "judge_votes": judge_votes,
                 "has_mode_b": has_mode_b,
+                "has_rubric": has_rubric,
+                "mode_c_accuracy": mode_c_accuracy,
             }
         )
     task_rows.sort(key=lambda r: (-r["outputs"], r["task"]))

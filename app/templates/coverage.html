@@ -66,7 +66,7 @@
   <table class="ranktable">
     <thead>
       <tr><th>Task</th><th>Category</th><th>Tier</th><th>Generators</th><th>Outputs</th>
-        <th>Mode-A votes</th><th>Judge votes</th><th>Mode-B</th></tr>
+        <th>Mode-A votes</th><th>Judge votes</th><th>Mode-B</th><th>Mode-C</th></tr>
     </thead>
     <tbody>
       {% for t in tasks %}
@@ -79,10 +79,40 @@
         <td>{{ t.mode_a_votes }}</td>
         <td>{{ t.judge_votes }}</td>
         <td>{% if t.has_mode_b %}✓{% else %}<span class="subtle">—</span>{% endif %}</td>
+        <td>{% if t.mode_c_accuracy is not none %}{{ '%.0f%%'|format(t.mode_c_accuracy * 100) }}{% elif t.has_rubric %}<span class="subtle">rubric</span>{% else %}<span class="subtle">—</span>{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+</section>
+
+<section class="board">
+  <h3>Mode-C — botanical-trait accuracy
+    {% if mode_c_experimental %}<span class="cov-badge cov-prov">experimental</span>{% endif %}
+  </h3>
+  <p class="subtle">Generator-level mean botanical accuracy — a 3D model graded against a
+    literature-sourced per-taxon trait rubric by a calibrated VLM trait-checker. Only trait classes
+    that have passed the human↔VLM agreement gate count toward the score.
+    {% if mode_c_experimental %}No class has passed the gate yet, so this axis is
+    <b>experimental</b>: shown for inspection, not yet a ranking signal.{% endif %}</p>
+  {% if trait_board %}
+  <table class="ranktable">
+    <thead>
+      <tr><th>Generator</th><th>Botanical accuracy</th><th>Outputs scored</th></tr>
+    </thead>
+    <tbody>
+      {% for r in trait_board %}
+      <tr>
+        <td>{{ r.generator }}</td>
+        <td>{{ '%.0f%%'|format(r.botanical_accuracy * 100) }}</td>
+        <td>{{ r.n_outputs }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="subtle">No scored outputs yet. Per-output scorecards live at <code>/trait/&lt;id&gt;</code>.</p>
+  {% endif %}
 </section>
 
 <section class="board prose">

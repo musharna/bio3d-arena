@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Trait scorecard · Bio 3D Arena{% endblock %}
+{% block content %}
+<section class="board prose">
+  <h2>Mode-C trait scorecard
+    <span class="subtle">— output #{{ output_id }}{% if taxon %} · {{ taxon }}{% endif %}</span>
+  </h2>
+
+  {% if mode_c_experimental %}
+  <p class="cov-badge cov-prov">Mode-C — experimental</p>
+  <p class="subtle">No trait class has yet passed the human↔VLM calibration gate, so these
+    verdicts are shown for inspection only and do not yet feed a calibrated score.</p>
+  {% endif %}
+
+  {% if task %}
+  <p class="subtle">Task: {{ task.title }}</p>
+  {% endif %}
+
+  {% if score and score.botanical_accuracy is not none %}
+  <p><b>Botanical accuracy:</b> {{ '%.0f%%'|format(score.botanical_accuracy * 100) }}
+    <span class="subtle">({{ score.n_scored }} of {{ score.n_total }} traits scored,
+      calibrated classes only)</span></p>
+  {% else %}
+  <p class="subtle">No calibrated botanical-accuracy score for this output yet.</p>
+  {% endif %}
+</section>
+
+<section class="board">
+  <h3>Per-trait verdicts</h3>
+  {% if rows %}
+  <table class="ranktable">
+    <thead>
+      <tr><th>Trait</th><th>Class</th><th>Expected</th><th>Verdict</th>
+        <th>Calibrated</th><th>Rationale</th><th>Citation</th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.trait_key }}</td>
+        <td class="subtle">{{ r.trait_class }}</td>
+        <td>{{ r.expected }}</td>
+        <td>{{ r.verdict }}</td>
+        <td>{% if r.calibrated %}✓{% else %}<span class="subtle">—</span>{% endif %}</td>
+        <td class="subtle">{{ r.rationale }}</td>
+        <td class="subtle">{{ r.citation }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="subtle">Only traits whose class has passed calibration (✓) count toward the score;
+    <code>not_assessable</code> verdicts are excluded from both numerator and denominator.</p>
+  {% else %}
+  <p class="subtle">No trait verdicts recorded for this output yet.</p>
+  {% endif %}
+</section>
+
+<section class="board prose">
+  <p class="subtle">Machine-readable:
+    <a href="/api/trait_scores.json">/api/trait_scores.json</a> ·
+    <a href="/api/traits.json">/api/traits.json</a>.</p>
+</section>
+{% endblock %}

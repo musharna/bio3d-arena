@@ -521,6 +521,8 @@ def coverage_page(request: Request, db: Session = Depends(get_db)):
             "generators": summary["generators"],
             "tasks": summary["tasks"],
             "firm_threshold": service.FIRM_VOTE_THRESHOLD,
+            "trait_board": service.trait_leaderboard(db),
+            "mode_c_experimental": not service.accepted_trait_classes(db),
         },
     )
 
@@ -918,6 +920,101 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
 def api_difficulty(db: Session = Depends(get_db)):
     """Per-(difficulty-tier × generator) objective scorecard over existing metrics."""
     return {"scorecard": difficulty.tier_scorecard(db)}
+
+
+# ----------------------------------------------------------- Mode-C trait scoring
+
+
+@app.get("/api/trait_scores.json")
+def api_trait_scores(db: Session = Depends(get_db)):
+    """Mode-C botanical-accuracy: generator leaderboard + per-output scores."""
+    from .models import TraitScore
+
+    outputs = [
+        {
+            "output_id": ts.output_id,
+            "botanical_accuracy": ts.botanical_accuracy,
+            "n_scored": ts.n_scored,
+            "n_total": ts.n_total,
+        }
+        for ts in db.execute(select(TraitScore)).scalars()
+    ]
+    return {"generators": service.trait_leaderboard(db), "outputs": outputs}
+
+
+@app.get("/api/traits.json")
+def api_traits(db: Session = Depends(get_db)):
+    """The literature-sourced trait rubrics (one per taxon/task)."""
+    from .models import TraitRubric
+
+    rubrics = []
+    for r in db.execute(select(TraitRubric)).scalars():
+        try:
+            traits = json.loads(r.traits_json or "[]")
+        except json.JSONDecodeError:
+            traits = []
+        rubrics.append({"taxon": r.taxon, "task_id": r.task_id, "traits": traits})
+    return {"rubrics": rubrics}
+
+
+@app.get("/trait/{output_id}", response_class=HTMLResponse)
+def trait_scorecard_page(output_id: int, request: Request, db: Session = Depends(get_db)):
+    """Per-output Mode-C scorecard: each verdict joined to its rubric trait + the score."""
+    from .models import TraitRubric, TraitScore, TraitVerdict
+
+    output = db.get(ModelOutput, output_id)
+    if output is None:
+        raise HTTPException(404, "Unknown output")
+
+    rubric = (
+        db.execute(select(TraitRubric).where(TraitRubric.task_id == output.task_id))
+        .scalars()
+        .first()
+    )
+    rubric_by_key: dict[str, dict] = {}
+    if rubric is not None:
+        try:
+            for t in json.loads(rubric.traits_json or "[]"):
+                rubric_by_key[t.get("key")] = t
+        except json.JSONDecodeError:
+            pass
+
+    accepted = service.accepted_trait_classes(db)
+    verdicts = (
+        db.execute(select(TraitVerdict).where(TraitVerdict.output_id == output_id)).scalars().all()
+    )
+    rows = []
+    for v in verdicts:
+        meta = rubric_by_key.get(v.trait_key, {})
+        rows.append(
+            {
+                "trait_key": v.trait_key,
+                "trait_class": v.trait_class,
+                "expected": meta.get("expected", "—"),
+                "citation": meta.get("citation", "—"),
+                "verdict": v.verdict,
+                "rationale": v.rationale,
+                "calibrated": v.trait_class in accepted,
+            }
+        )
+    rows.sort(key=lambda r: (not r["calibrated"], r["trait_class"], r["trait_key"]))
+
+    score = (
+        db.execute(select(TraitScore).where(TraitScore.output_id == output_id)).scalars().first()
+    )
+    task = db.get(Task, output.task_id)
+    return templates.TemplateResponse(
+        request,
+        "trait_scorecard.html",
+        {
+            "output_id": output_id,
+            "task": task,
+            "taxon": rubric.taxon if rubric else None,
+            "rows": rows,
+            "score": score,
+            "mode_c_experimental": not accepted,
+        },
+    )
 
 
 # ----------------------------------------------------------- ingestion API (JSON)
