@@ -98,6 +98,18 @@ async function vote(winner) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ comparison_id: current.comparison_id, winner }),
     });
+    if (!res.ok) {
+      // Failed vote (rate-limit 429, already-voted/dup 409, captcha 403, unknown 404):
+      // surface the reason and do NOT claim success or advance.
+      let detail = "vote not recorded";
+      try {
+        detail = (await res.json()).detail || detail;
+      } catch (_) {
+        /* non-JSON error body */
+      }
+      setStatus("Could not record vote: " + detail);
+      return;
+    }
     const data = await res.json();
     if (inSessionMode()) {
       // In a scoped mode the embedded `data.next` shortcut is built by the
