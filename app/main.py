@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import random
 import uuid
 from pathlib import Path
@@ -40,6 +41,8 @@ from .models import (
 )
 from .schemas import CategoryIn, GeneratorIn, TaskIn, VoteIn
 from .storage import get_storage
+
+logger = logging.getLogger(__name__)
 
 config.ensure_dirs()
 init_db()
@@ -111,6 +114,12 @@ def _build_gold_comparison(db: Session, session_id: str, crit: Criterion) -> dic
     good = db.get(ModelOutput, gp.good_output_id)
     bad = db.get(ModelOutput, gp.bad_output_id)
     task = db.get(Task, gp.task_id)
+    if good is None or bad is None or task is None:
+        # Dangling gold pair: a referenced task/output was deleted (e.g. a data purge). The
+        # create_all-only schema has no FK cascade, so guard rather than 500 the vote path.
+        # Returning None makes the caller fall through to a real comparison.
+        logger.warning("skipping dangling gold pair %s (task/output deleted)", gp.id)
+        return None
     # Randomize which slot holds the good asset; gold_expected records it.
     if random.random() < 0.5:
         out_a, out_b, expected = good, bad, "a"
@@ -154,15 +163,19 @@ def _build_comparison(
     from .sourcing import is_reference_scan, is_untextured_output
 
     category_id = _resolve_category_id(db, category_slug)
-    task = matchmaking.pick_task(db, category_id=category_id)
-    if task is None:
-        return None
+
     # Exclude from the perceptual vote pool: raw-scan reference outputs (render as ugly
     # point clouds, confound metric↔vote agreement) AND geometry-only outputs (flat grey
     # blobs that lose votes for lack of texture, not shape). Both stay in the Mode-B board.
-    pair = matchmaking.pick_pair(
-        db, task, exclude_fn=lambda o: is_reference_scan(o.source) or is_untextured_output(o)
-    )
+    # Same predicate for task AND pair selection so pick_task never returns a task whose
+    # only outputs pick_pair then excludes (which caused intermittent /api/next 404s).
+    def _vote_excluded(o):
+        return is_reference_scan(o.source) or is_untextured_output(o)
+
+    task = matchmaking.pick_task(db, category_id=category_id, exclude_fn=_vote_excluded)
+    if task is None:
+        return None
+    pair = matchmaking.pick_pair(db, task, exclude_fn=_vote_excluded)
     if pair is None:
         return None
     out_a, out_b = pair
