@@ -22,6 +22,12 @@ two backends so rubrics can be authored, then T7 proceeds.
 3. **`db`-tier source:** Wikidata via SPARQL (free, no key, stable Q-IDs as citations).
 4. **`llm`-tier rigor:** extract-from-retrieved-text — the LLM may only emit a trait it can
    quote from text fetched for that taxon; the citation is that source.
+5. **`--live` literature seam:** direct HTTP to **Europe PMC + OpenAlex** REST (free, no key,
+   OA fulltext, organism search). data-aggregator is stdio-MCP (agent-callable, not
+   script-callable) and importing its package would create cross-project coupling the parent
+   spec forbids; it stays an _agent exploration_ tool. The injected `search_fn`/`resolve_fn`
+   seam means the core module + unit tests are identical regardless — only the `--live` wiring
+   binds the HTTP client.
 
 ## Architecture
 
@@ -29,11 +35,11 @@ New module **`app/trait_sources.py`** — pure core with injected network functi
 how `app/judge.py` / `app/traits.py` isolate the Anthropic client so units test without
 network). It implements the two tiers; `build_trait_rubrics.py` delegates to them.
 
-| Component                                                                 | Tier  | Responsibility                                                                                                                                                                         | Citation emitted                                  |
-| ------------------------------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `wikidata_traits(taxon, *, sparql_fn)`                                    | `db`  | SPARQL the taxon's Wikidata item; map the morphology/phenology properties it exposes (growth habit, flower color, leaf arrangement, …) → trait dicts                                   | Wikidata Q-ID URL (resolvable; no paper to ghost) |
-| `literature_grounded_traits(taxon, *, search_fn, resolve_fn, llm_client)` | `llm` | data-aggregator organism-aware search → resolve OA fulltext/abstract → LLM forced-tool extracts **only traits stated in the retrieved text, each with a verbatim quote** → trait dicts | source publication DOI/PMID                       |
-| `verify_citations(traits, *, ghostcite_fn, resolve_fn)`                   | both  | paper citations → ghostcite (`--json`; byline+year+retraction); Wikidata IDs → resolve-check. Unverifiable ⇒ trait dropped                                                             | —                                                 |
+| Component                                                                 | Tier  | Responsibility                                                                                                                                                                                                      | Citation emitted                                  |
+| ------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `wikidata_traits(taxon, *, sparql_fn)`                                    | `db`  | SPARQL the taxon's Wikidata item; map the morphology/phenology properties it exposes (growth habit, flower color, leaf arrangement, …) → trait dicts                                                                | Wikidata Q-ID URL (resolvable; no paper to ghost) |
+| `literature_grounded_traits(taxon, *, search_fn, resolve_fn, llm_client)` | `llm` | injected organism-aware lit search (`--live`: Europe PMC/OpenAlex) → resolve OA fulltext/abstract → LLM forced-tool extracts **only traits stated in the retrieved text, each with a verbatim quote** → trait dicts | source publication DOI/PMID                       |
+| `verify_citations(traits, *, ghostcite_fn, resolve_fn)`                   | both  | paper citations → ghostcite (`--json`; byline+year+retraction); Wikidata IDs → resolve-check. Unverifiable ⇒ trait dropped                                                                                          | —                                                 |
 
 **Anti-hallucination, two layers beyond ghostcite:**
 
@@ -81,7 +87,7 @@ taxon name
 
 ## Spend gate (operator discipline; API opt-in rule)
 
-- `--dry-run` (no LLM, no spend): runs Wikidata + data-aggregator _search only_; reports per
+- `--dry-run` (no LLM, no spend): runs Wikidata + Europe PMC/OpenAlex _search only_; reports per
   taxon — # db traits, # candidate pubs, # OA-resolvable, **estimated LLM extraction calls**
   (≈ pubs-to-read) + rough token/cost estimate. This count is brought to the user for an
   explicit go-ahead.
@@ -123,7 +129,7 @@ Unit tests inject stubs (no network), plus a real-execution boundary probe.
 - `--dry-run` smoke — search-only path with stubs; asserts counts printed + nothing written +
   no LLM client constructed.
 - **Real-execution check** (operator, not pytest): `Solanum lycopersicum` through `--dry-run`
-  live against actual Wikidata + data-aggregator, confirming SPARQL + search params return
+  live against actual Wikidata + Europe PMC/OpenAlex, confirming SPARQL + search params return
   real bindings before any spend.
 
 ## Edit surface
@@ -139,8 +145,10 @@ Unit tests inject stubs (no network), plus a real-execution boundary probe.
   judge/scoring side consumes whatever rubrics land.
 
 **Dependencies:** `ghostcite` (installed at `~/miniconda3/bin/ghostcite`) invoked as a
-subprocess with `--json`; data-aggregator (MCP) + Wikidata reached only under `--live` / real
-`--dry-run` via the injected fns. No new Python packages for the unit-test path.
+subprocess with `--json`; Wikidata SPARQL + Europe PMC/OpenAlex REST (HTTP, no key) reached only
+under `--live` / real `--dry-run` via the injected fns. data-aggregator (MCP) is an agent-side
+exploration tool, not a runtime dependency. No new Python packages for the unit-test path
+(stdlib `urllib` for the HTTP clients; `requests` if already vendored).
 
 ## Risks & mitigations
 
@@ -150,7 +158,7 @@ subprocess with `--json`; data-aggregator (MCP) + Wikidata reached only under `-
 | LLM invents a quote                                                | Verbatim-substring check drops it.                                                           |
 | Hallucinated/retracted citation                                    | ghostcite byline+year+retraction gate; unverifiable ⇒ dropped.                               |
 | Wikidata thin on visual traits                                     | Acceptable — `llm` tier carries fine visual traits; `db` is the authoritative backbone.      |
-| data-aggregator unavailable in headless/cron                       | Backends are `--live`-only and operator-run; not on any request path.                        |
+| Lit API (Europe PMC/OpenAlex) down/rate-limited                    | `--live`-only, operator-run, serial pacing; not on any request path; fail loud, re-runnable. |
 | Empty rubric silently skips judging                                | Zero-trait taxon → hard error, no write.                                                     |
 
 ## Out of scope
