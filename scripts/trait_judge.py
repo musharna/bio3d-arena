@@ -96,6 +96,13 @@ def run_batch(
         if max_outputs is not None and outputs_done >= max_outputs:
             break
         oid = item["output_id"]
+        # Skip BEFORE the paid call: one check_fn covers ALL traits of an output, so if every
+        # (output_id, trait_key, judge_model) is already stored there is nothing to gain from
+        # rendering the sheet + calling the VLM. Avoids re-spend on full re-runs.
+        trait_keys = [t["key"] for t in item["traits"]]
+        if trait_keys and all((oid, tk, judge_model) in seen for tk in trait_keys):
+            skipped += len(trait_keys)
+            continue
         try:
             b64 = sheet_b64(oid)
             results = check_fn(item["species"], item["prompt"], b64, item["traits"])
@@ -173,15 +180,23 @@ def main() -> int:
             task_ids = [r.task_id for r in db.execute(select(TraitRubric)).scalars() if r.task_id]
         work = enumerate_work(db, task_ids)
         seen = existing_keys(db)
-        uncovered = sum(
+        uncovered_traits = sum(
             1
             for w in work
             for t in w["traits"]
             if (w["output_id"], t["key"], JUDGE_MODEL) not in seen
         )
+        # One check_fn call covers every trait of an output, and fully-covered outputs are
+        # skipped before that call — so real API spend == outputs with >=1 uncovered trait.
+        outputs_needing_call = sum(
+            1
+            for w in work
+            if any((w["output_id"], t["key"], JUDGE_MODEL) not in seen for t in w["traits"])
+        )
         print(
             f"trait-judge scope: tasks={task_ids} → {len(work)} outputs; "
-            f"{uncovered} uncovered (output,trait) verdicts (≈ trait rows; 1 API call/output)"
+            f"{outputs_needing_call} outputs need a call (≈ API calls); "
+            f"{uncovered_traits} uncovered (output,trait) verdict rows"
         )
         if args.dry_run:
             return 0

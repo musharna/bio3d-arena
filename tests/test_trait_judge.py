@@ -55,7 +55,10 @@ def test_run_batch_writes_verdicts_and_is_resumable():
         work = tj.enumerate_work(db, [task.id])
         assert len(work) == 1
 
+        calls = {"check": 0, "sheet": 0}
+
         def check_fn(species, prompt, sheet_b64, traits):
+            calls["check"] += 1
             return [
                 {
                     "trait_key": "habit",
@@ -65,13 +68,20 @@ def test_run_batch_writes_verdicts_and_is_resumable():
                 }
             ]
 
+        def sheet_b64(oid):
+            calls["sheet"] += 1
+            return "x"
+
         res = tj.run_batch(
-            db, check_fn=check_fn, sheet_b64=lambda oid: "x", work=work, judge_model="stub"
+            db, check_fn=check_fn, sheet_b64=sheet_b64, work=work, judge_model="stub"
         )
         assert res["written"] == 1
+        assert calls["check"] == 1
         assert db.query(TraitVerdict).filter_by(output_id=o.id, judge_model="stub").count() == 1
-        # resumable: second run skips
+        # resumable AND no re-spend: a full re-run must skip the paid check_fn/sheet entirely
         res2 = tj.run_batch(
-            db, check_fn=check_fn, sheet_b64=lambda oid: "x", work=work, judge_model="stub"
+            db, check_fn=check_fn, sheet_b64=sheet_b64, work=work, judge_model="stub"
         )
         assert res2["written"] == 0 and res2["skipped"] >= 1
+        assert calls["check"] == 1  # NOT called again — spend avoided, not just dedup at write
+        assert calls["sheet"] == 1
