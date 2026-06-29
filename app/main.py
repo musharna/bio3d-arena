@@ -7,6 +7,7 @@ import logging
 import random
 import uuid
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import (
     Depends,
@@ -238,6 +239,13 @@ def _require_admin(token: str | None) -> None:
 def require_admin_header(x_admin_token: str | None = Header(default=None)) -> None:
     """Dependency for programmatic JSON/upload endpoints (token via X-Admin-Token)."""
     _require_admin(x_admin_token)
+
+
+def require_admin_query(token: str | None = None) -> None:
+    """Dependency for admin HTML pages (token via ?token= query). These GET pages render
+    admin/moderation data (incl. submitter PII + un-vetted asset URLs), so they must not be
+    world-readable even though the mutating POSTs are already token-gated."""
+    _require_admin(token)
 
 
 # ------------------------------------------------------------------- arena UI
@@ -587,7 +595,7 @@ def spotlight_page(slug: str, request: Request, db: Session = Depends(get_db)):
 # ------------------------------------------------------------------------ admin
 
 
-@app.get("/admin", response_class=HTMLResponse)
+@app.get("/admin", response_class=HTMLResponse, dependencies=[Depends(require_admin_query)])
 def admin_page(request: Request, db: Session = Depends(get_db)):
     ctx = {
         "categories": db.execute(select(Category)).scalars().all(),
@@ -1045,7 +1053,11 @@ def api_submissions(db: Session = Depends(get_db), status: str | None = None):
     }
 
 
-@app.get("/admin/moderation", response_class=HTMLResponse)
+@app.get(
+    "/admin/moderation",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_admin_query)],
+)
 def moderation_page(request: Request, db: Session = Depends(get_db)):
     pending = submissions.list_submissions(db, status="pending")
     rows = []
@@ -1079,7 +1091,8 @@ def admin_approve(
     except ingest.IngestError as exc:
         raise HTTPException(400, str(exc)) from exc
     db.commit()
-    return RedirectResponse("/admin/moderation", status_code=303)
+    # Carry the token so the redirect lands on the now token-gated moderation page.
+    return RedirectResponse(f"/admin/moderation?token={quote(token)}", status_code=303)
 
 
 @app.post("/admin/submissions/{submission_id}/reject")
@@ -1095,7 +1108,8 @@ def admin_reject(
     except ingest.IngestError as exc:
         raise HTTPException(400, str(exc)) from exc
     db.commit()
-    return RedirectResponse("/admin/moderation", status_code=303)
+    # Carry the token so the redirect lands on the now token-gated moderation page.
+    return RedirectResponse(f"/admin/moderation?token={quote(token)}", status_code=303)
 
 
 @app.get("/healthz")

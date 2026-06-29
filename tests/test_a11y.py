@@ -31,8 +31,9 @@ def test_admin_not_in_public_nav():
     html = client.get("/").text
     nav = html.split("<nav>")[1].split("</nav>")[0]
     assert ">Admin<" not in nav
-    # the admin route itself stays reachable by direct URL
-    assert client.get("/admin").status_code == 200
+    # the admin route stays reachable by direct URL — but only with the admin token
+    assert client.get("/admin").status_code == 401
+    assert client.get("/admin", params={"token": "test-token"}).status_code == 200
 
 
 def test_favicon_link_present_and_served():
