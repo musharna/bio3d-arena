@@ -115,4 +115,6 @@ def test_api_submissions_listing_requires_token():
 
 def test_submit_and_moderation_pages_render():
     assert "Submit a model output" in client.get("/submit").text
-    assert client.get("/admin/moderation").status_code == 200
+    # Moderation page is token-gated (renders submitter PII + un-vetted asset URLs).
+    assert client.get("/admin/moderation").status_code == 401
+    assert client.get("/admin/moderation", params={"token": "test-token"}).status_code == 200
