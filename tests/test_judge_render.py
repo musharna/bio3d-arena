@@ -55,12 +55,47 @@ def test_render_contact_sheets_writes_file_and_is_idempotent(tmp_path, monkeypat
         db.commit()
 
         res = judge_render.render_contact_sheets(db, [out.id], "multi4", capture_multi=fake_capture)
-        assert res == {"rendered": 1, "errors": 0}
+        assert res == {"rendered": 1, "errors": 0, "failures": []}
         sheet = tmp_path / judge_render.contact_sheet_path(out.id, "multi4")
         assert sheet.exists() and sheet.stat().st_size > 0
         # Idempotent: second call skips (no new capture).
         res2 = judge_render.render_contact_sheets(
             db, [out.id], "multi4", capture_multi=fake_capture
         )
-        assert res2 == {"rendered": 0, "errors": 0}
+        assert res2 == {"rendered": 0, "errors": 0, "failures": []}
         assert calls["n"] == 1
+
+
+def test_render_contact_sheets_surfaces_capture_failure(tmp_path, monkeypatch):
+    """A capture exception is logged + recorded in failures, not silently swallowed."""
+    import app.config as config
+
+    monkeypatch.setattr(config, "ASSET_DIR", tmp_path)
+
+    def boom_capture(glb_abs, azimuths, elev):
+        raise RuntimeError("headless browser timed out")
+
+    with SessionLocal() as db:
+        cat = Category(slug="jrf-cat", name="C")
+        db.add(cat)
+        db.flush()
+        task = Task(category_id=cat.id, title="jrf-task", prompt="p")
+        gen = Generator(slug="jrf-gen", name="G")
+        db.add_all([task, gen])
+        db.flush()
+        (tmp_path / "seed").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "seed" / "y.glb").write_bytes(b"glTF-stub")
+        out = ModelOutput(task_id=task.id, generator_id=gen.id, asset_path="seed/y.glb")
+        db.add(out)
+        db.commit()
+
+        res = judge_render.render_contact_sheets(db, [out.id], "multi4", capture_multi=boom_capture)
+        assert res["rendered"] == 0
+        assert res["errors"] == 1
+        assert len(res["failures"]) == 1
+        assert res["failures"][0]["oid"] == out.id
+        # the real cause is surfaced, not lost
+        assert "headless browser timed out" in res["failures"][0]["error"]
+        # no empty/partial sheet left behind
+        sheet = tmp_path / judge_render.contact_sheet_path(out.id, "multi4")
+        assert not sheet.exists()

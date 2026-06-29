@@ -218,10 +218,18 @@ def _real_sheet_b64_factory(db, capture_multi):
     """Render-on-demand sheet provider for production runs."""
 
     def sheet_b64(output_id: int, condition: str) -> str:
-        judge_render.render_contact_sheets(db, [output_id], condition, capture_multi=capture_multi)
+        res = judge_render.render_contact_sheets(
+            db, [output_id], condition, capture_multi=capture_multi
+        )
         from app import config
 
         path = Path(config.ASSET_DIR) / judge_render.contact_sheet_path(output_id, condition)
+        if not (path.exists() and path.stat().st_size > 0):
+            # Surface the real render cause instead of a misleading FileNotFoundError on read.
+            detail = next(
+                (f["error"] for f in res["failures"] if f["oid"] == output_id), "no sheet written"
+            )
+            raise RuntimeError(f"render failed for output {output_id} ({condition}): {detail}")
         return base64.b64encode(path.read_bytes()).decode()
 
     return sheet_b64
