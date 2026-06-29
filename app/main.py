@@ -193,12 +193,24 @@ def _build_comparison(
 
 
 def _build_calibration_comparison(db: Session, session_id: str) -> dict | None:
-    """Serve the next un-voted CalibrationPair for this session (with progress)."""
+    """Serve the next un-voted CalibrationPair for this session (with progress).
+
+    Pairs whose task/criterion/outputs were deleted (dangling refs — the create_all schema
+    has no FK cascade, so a data purge can leave them) are skipped: excluded from `total` AND
+    never selected as target, so they can't 500 this path the way the gold path once did."""
     all_pairs = db.execute(select(CalibrationPair)).scalars().all()
-    total = len(all_pairs)
+    total = 0
     voted = 0
     target = None
+    target_rows = None
     for cp in all_pairs:
+        crit = db.get(Criterion, cp.criterion_id)
+        task = db.get(Task, cp.task_id)
+        out_a = db.get(ModelOutput, cp.output_a_id)
+        out_b = db.get(ModelOutput, cp.output_b_id)
+        if crit is None or task is None or out_a is None or out_b is None:
+            continue  # dangling pair — unusable; exclude from progress + target selection
+        total += 1
         already = integrity.already_voted_pair(
             db, session_id, cp.output_a_id, cp.output_b_id, cp.criterion_id
         )
@@ -206,14 +218,12 @@ def _build_calibration_comparison(db: Session, session_id: str) -> dict | None:
             voted += 1
         elif target is None:
             target = cp
+            target_rows = (crit, task, out_a, out_b)
     progress = {"voted": voted, "total": total}
-    if target is None:
+    if target_rows is None:
         return {"set": "calibration", "done": True, "progress": progress}
 
-    crit = db.get(Criterion, target.criterion_id)
-    task = db.get(Task, target.task_id)
-    out_a = db.get(ModelOutput, target.output_a_id)
-    out_b = db.get(ModelOutput, target.output_b_id)
+    crit, task, out_a, out_b = target_rows
     if random.random() < 0.5:
         out_a, out_b = out_b, out_a
     comparison = Comparison(
