@@ -83,6 +83,69 @@ def enumerate_work(
     return items
 
 
+def enumerate_sample(
+    db,
+    task_ids,
+    *,
+    criterion_slug: str = "overall",
+    condition: str = GRID_CONDITION,
+    per_output_k: int = 3,
+) -> list[dict]:
+    """Bounded connected pair sample for ONE criterion/condition over the given tasks.
+
+    Densifies the per-tier perceptual ranking without the O(n²) full grid. Excludes Mode-A
+    outputs (reference scans + untextured) — they're not ranked, so judging them wastes calls.
+    Pairs form a circulant graph (each output vs its next k) → connected (so Bradley-Terry can
+    rank every node) at ~n·k/2 pairs instead of n²/2. Two ordered rows per pair (swap_group).
+    """
+    from app.sourcing import is_reference_scan, is_untextured_output
+
+    crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+    if crit is None:
+        return []
+    items: list[dict] = []
+
+    def add(task_id, a, b):
+        grp = judge.swap_group_id(task_id, a, b, crit.id, condition)
+        for oa, ob in ((a, b), (b, a)):
+            items.append(
+                {
+                    "task_id": task_id,
+                    "output_a_id": oa,
+                    "output_b_id": ob,
+                    "criterion_id": crit.id,
+                    "criterion_slug": crit.slug,
+                    "condition": condition,
+                    "swap_group": grp,
+                }
+            )
+
+    for tid in task_ids:
+        task = db.get(Task, tid)
+        if task is None:
+            continue
+        ids = sorted(
+            o.id
+            for o in _real_outputs(task)
+            if not is_reference_scan(o.source) and not is_untextured_output(o)
+        )
+        n = len(ids)
+        if n < 2:
+            continue
+        seen_pairs: set[tuple[int, int]] = set()
+        for i in range(n):
+            for d in range(1, per_output_k + 1):
+                j = (i + d) % n
+                if i == j:
+                    continue
+                a, b = sorted((ids[i], ids[j]))
+                if (a, b) in seen_pairs:
+                    continue
+                seen_pairs.add((a, b))
+                add(tid, a, b)
+    return items
+
+
 def existing_swap_orders(db) -> set:
     return {
         (v.swap_group, v.output_a_id, v.output_b_id)
@@ -99,10 +162,13 @@ def run_batch(
     criteria_slugs=None,
     max_votes: int | None = None,
     calibration_only: bool = False,
+    work=None,
 ) -> dict:
     """judge_fn(species, prompt, criterion_name, criterion_desc, a_b64, b_b64)->(winner,rationale).
-    sheet_b64(output_id, condition)->base64 PNG string."""
-    work = enumerate_work(db, grid_condition, criteria_slugs, calibration_only=calibration_only)
+    sheet_b64(output_id, condition)->base64 PNG string. Pass `work` to run over a prebuilt work
+    list (e.g. enumerate_sample); otherwise the full grid / calibration ladder is enumerated."""
+    if work is None:
+        work = enumerate_work(db, grid_condition, criteria_slugs, calibration_only=calibration_only)
     seen = existing_swap_orders(db)
     written = skipped = errors = 0
     for item in work:
@@ -164,10 +230,7 @@ def _real_sheet_b64_factory(db, capture_multi):
 def main() -> int:
     import argparse
 
-    import anthropic
-
     from app.database import SessionLocal
-    from scripts.judge_capture import browser_capture_multi_factory
 
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--max", type=int, default=None, help="cap votes written this run")
@@ -176,7 +239,49 @@ def main() -> int:
         action="store_true",
         help="judge only the calibration ladder (skip the full pairwise grid)",
     )
+    ap.add_argument(
+        "--sample",
+        action="store_true",
+        help="bounded connected pair sample (one criterion) over --tasks, not the full grid",
+    )
+    ap.add_argument("--tasks", default="10,11,12,13,19", help="comma task ids for --sample")
+    ap.add_argument("--criterion", default="overall", help="criterion slug for --sample")
+    ap.add_argument("--per-output-k", type=int, default=3, help="neighbors per output in --sample")
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="with --sample: print the uncovered call count and exit (no API/browser)",
+    )
     args = ap.parse_args()
+
+    # Build the sample work list up front; --dry-run reports the count without any API/browser.
+    sample_work = None
+    if args.sample:
+        task_ids = [int(x) for x in args.tasks.split(",") if x.strip()]
+        with SessionLocal() as db:
+            sample_work = enumerate_sample(
+                db,
+                task_ids,
+                criterion_slug=args.criterion,
+                per_output_k=args.per_output_k,
+            )
+            seen = existing_swap_orders(db)
+            uncovered = sum(
+                1
+                for w in sample_work
+                if (w["swap_group"], w["output_a_id"], w["output_b_id"]) not in seen
+            )
+        pairs = len(sample_work) // 2
+        print(
+            f"sample scope: tasks={task_ids} criterion={args.criterion!r} k={args.per_output_k} "
+            f"→ {pairs} pairs / {len(sample_work)} ordered rows; {uncovered} uncovered (≈ API calls)"
+        )
+        if args.dry_run:
+            return 0
+
+    import anthropic
+
+    from scripts.judge_capture import browser_capture_multi_factory
 
     client = anthropic.Anthropic()
 
@@ -200,6 +305,7 @@ def main() -> int:
             sheet_b64=sheet_b64,
             max_votes=args.max,
             calibration_only=args.calibration_only,
+            work=sample_work,
         )
     print(res)
     return 0
