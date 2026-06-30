@@ -74,3 +74,19 @@ def test_build_no_wikidata_still_valid():
     traits = build_morphology_rubric("Pinus sylvestris", sparql_fn=lambda taxon: None)
     assert len(traits) >= 8
     assert all(t["source_tier"] == "ref" for t in traits)
+
+
+def test_build_dedups_real_collision_db_wins():
+    # stub Wikidata flower color to EXACTLY match the authored tomato flower trait,
+    # forcing the (trait_class, expected) dedup branch to fire; db must win.
+    def fake_sparql(taxon):
+        return {"qid": "Q23501", "props": {"P2827": "yellow flower"}}
+
+    traits = build_morphology_rubric("Solanum lycopersicum", sparql_fn=fake_sparql)
+    matches = [
+        t
+        for t in traits
+        if t["trait_class"] == "color" and t["expected"].lower() == "yellow flower"
+    ]
+    assert len(matches) == 1  # collision deduped, not duplicated
+    assert matches[0]["source_tier"] == "db"  # db preferred over the authored ref

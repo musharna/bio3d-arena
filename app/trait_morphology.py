@@ -64,8 +64,8 @@ MORPHOLOGY_TRAITS: dict[str, list[dict]] = {
         _t(
             "plant_proportion",
             "proportion",
-            "medium height plant",
-            "knee-to-head height, taller than a seedling, not a tree",
+            "wider than tall (sprawling)",
+            "spreads outward, not an upright narrow plant or a tree",
         ),
     ],
     "Zea mays": [
@@ -93,7 +93,7 @@ MORPHOLOGY_TRAITS: dict[str, list[dict]] = {
         _t(
             "stem_form",
             "organ_shape",
-            "single solid unbranched culm",
+            "single unbranched culm",
             "one thick stem, no woody branching",
         ),
         _t("plant_proportion", "proportion", "tall plant", "tall, much taller than wide"),
@@ -193,7 +193,12 @@ MORPHOLOGY_TRAITS: dict[str, list[dict]] = {
             "leaves attach singly, alternating along the stem",
         ),
         _t("pod_form", "organ_shape", "elongate pod", "narrow slightly curved pods"),
-        _t("plant_proportion", "proportion", "medium height plant", "knee-to-waist height bush"),
+        _t(
+            "plant_proportion",
+            "proportion",
+            "about as tall as wide (bushy)",
+            "compact upright bush, not a tall tree or a flat groundcover",
+        ),
     ],
     "Arabidopsis thaliana": [
         _t(
@@ -218,7 +223,12 @@ MORPHOLOGY_TRAITS: dict[str, list[dict]] = {
             "basal rosette leaves",
             "most leaves in a flat basal rosette",
         ),
-        _t("plant_proportion", "proportion", "small plant", "small plant, ankle-to-knee height"),
+        _t(
+            "plant_proportion",
+            "proportion",
+            "taller than wide (slender)",
+            "narrow upright form on a thin stalk",
+        ),
     ],
 }
 
