@@ -283,6 +283,40 @@ def test_live_wikidata_degrades_on_outage_but_raises_on_bad_query(capsys, monkey
         pass
 
 
+def test_validate_trait_rejects_non_judgeable():
+    import scripts.build_trait_rubrics as b
+
+    bad = {
+        "key": "flowering_time_early",
+        "trait_class": "presence",
+        "type": "qualitative",
+        "expected": "earlier flowering (promoted)",
+        "visual": "n/a",
+        "source_tier": "ref",
+        "citation": "https://example.org",
+    }
+    try:
+        b.validate_trait(bad)
+        assert False, "expected ValueError for non-judgeable trait"
+    except ValueError as e:
+        assert "not visually judgeable" in str(e), f"wrong message: {e}"
+
+
+def test_validate_trait_accepts_judgeable():
+    import scripts.build_trait_rubrics as b
+
+    ok = {
+        "key": "fruit_shape",
+        "trait_class": "organ_shape",
+        "type": "qualitative",
+        "expected": "globose berry",
+        "visual": "round fleshy fruit",
+        "source_tier": "ref",
+        "citation": "https://species.wikimedia.org/wiki/Solanum_lycopersicum",
+    }
+    b.validate_trait(ok)  # no raise
+
+
 def test_dry_run_reports_counts_without_spend(capsys, monkeypatch):
     import scripts.build_trait_rubrics as b
 

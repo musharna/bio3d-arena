@@ -39,6 +39,10 @@ def validate_trait(t: dict) -> None:
         raise ValueError(f"bad source_tier {t['source_tier']!r}")
     if not (t.get("citation") or "").strip():
         raise ValueError("trait has empty citation")
+    from app.traits import is_visually_judgeable, judgeable_reason
+
+    if not is_visually_judgeable(t):
+        raise ValueError(f"trait not visually judgeable ({judgeable_reason(t)}): {t.get('key')}")
 
 
 def upsert_rubric(db, taxon, task_id, traits):
