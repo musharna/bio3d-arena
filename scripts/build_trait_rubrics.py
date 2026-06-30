@@ -35,7 +35,7 @@ def validate_trait(t: dict) -> None:
             raise ValueError(f"trait missing field {f!r}: {t}")
     if t["trait_class"] not in SCORED_CLASSES:
         raise ValueError(f"trait_class {t['trait_class']!r} not scoreable")
-    if t["source_tier"] not in ("db", "llm"):
+    if t["source_tier"] not in ("db", "llm", "ref"):
         raise ValueError(f"bad source_tier {t['source_tier']!r}")
     if not (t.get("citation") or "").strip():
         raise ValueError("trait has empty citation")

@@ -5,6 +5,7 @@ scripts/trait_judge.py). Mirrors app.judge. Verdict vocabulary is exactly the fo
 
 from __future__ import annotations
 
+
 from .judge import JUDGE_MODEL
 
 SCORED_CLASSES = {
@@ -17,6 +18,63 @@ SCORED_CLASSES = {
     "proportion",
 }
 VERDICTS = {"present_correct", "present_wrong", "absent", "not_assessable"}
+
+import re  # noqa: E402 — must follow VERDICTS so formatter keeps it with its usages
+
+# Reject patterns derived from the 2026-06-30 judgeability audit. A trait is admissible
+# only if it names a static, macroscopic, external, absolute, correctly-attributed,
+# concrete morphological feature. Matched against f"{key} {expected}".lower().
+_REJECT_EMPTY = {"", "not explicitly stated", "unknown", "n/a", "na", "none", "variable"}
+_REJECT_PATTERNS = [
+    (
+        r"\baccelerat|transition|recurren|\bonset\b|\btiming\b|rate of|maturation|ripening process|"
+        r"senescence|degreening|flowering time|earlier flower|delayed flower|bud stage",
+        "temporal/process",
+    ),
+    (
+        r"\baltered|\bchange[sd]?\b|reduced|increased|smaller|larger|thicken|prolong|extended|"
+        r"superior|affected|malformed|\bdefect|disruption|loss of|abnormal",
+        "comparative without baseline",
+    ),
+    (
+        r"trichome|glandular|multicellular|\bcellular|stomat|epiderm|\bmicro|ovary|carpel|"
+        r"seed coat|seeds? per|abscission|\bpollen\b|meristem|\brgb\b|brightness|reflectan|quantif",
+        "microscopic/internal/instrument",
+    ),
+    (
+        r"\bcommelina|poaceae|\bcannabis|\bflake\b|circularity|lithic|arabidopsis",
+        "wrong-taxon/domain token",
+    ),
+    (
+        r"diversif|\bcomplex|architecture|substantial variation|depending on|% of individual|"
+        r"across .*(combination|cultivar|hybrid|accession)",
+        "vague/population",
+    ),
+]
+
+
+def judgeable_reason(trait: dict) -> str | None:
+    """Return None if the trait is visually judgeable on a static render of one normal
+    specimen, else a short reason string. See the 2026-06-30 morphology-rubrics spec."""
+    expected = (trait.get("expected") or "").strip().lower()
+    if expected in _REJECT_EMPTY:
+        return "no concrete value"
+    blob = f"{trait.get('key', '')} {expected}".lower()
+    taxon = (trait.get("taxon") or "").lower()
+    for pat, reason in _REJECT_PATTERNS:
+        m = re.search(pat, blob)
+        if m:
+            tok = m.group(0).lower()
+            # allow an "off-taxon" token only when it actually matches this rubric's taxon
+            if reason == "wrong-taxon/domain token" and tok and tok in taxon:
+                continue
+            return reason
+    return None
+
+
+def is_visually_judgeable(trait: dict) -> bool:
+    return judgeable_reason(trait) is None
+
 
 TRAITS_TOOL = {
     "name": "record_traits",
