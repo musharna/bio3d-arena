@@ -8,3 +8,4 @@ data/arena.db
 data/assets/
 *.egg-info/
 /data/
+.claude/settings.local.json
