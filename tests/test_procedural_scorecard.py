@@ -168,3 +168,124 @@ def test_scorecard_empty_when_no_procedural_generators():
         db.commit()
         rows = service.procedural_scorecard(db)
         assert all(r["model"] != g.name for r in rows)
+
+
+def test_scorecard_morph_fidelity_0_sorts_before_none():
+    """Test that real morph_fidelity == 0.0 sorts BEFORE None.
+
+    When two generators have the same pass_at_1 (tiebreak), the one with
+    morph_fidelity == 0.0 (a real computed value where all traits are wrong)
+    must sort before the one with morph_fidelity == None (no trait verdicts).
+
+    This tests the fix for the bug where `r["morph_fidelity"] or -1.0`
+    incorrectly treated 0.0 as falsy and mapped both 0.0 and None to -1.0.
+    """
+    with SessionLocal() as db:
+        tag = uuid.uuid4().hex
+        # Generator B: morph_fidelity == None (no verdicts) — added FIRST to test stable sort.
+        gen_b = Generator(
+            slug=f"fid0-b-{tag}",
+            name=f"model-fidelity-none-{tag}",
+            kind="model",
+            paradigm="procedural_llm",
+        )
+        # Generator A: morph_fidelity == 0.0 (1 assessable, 0 correct) — added SECOND.
+        gen_a = Generator(
+            slug=f"fid0-a-{tag}",
+            name=f"model-fidelity-0-{tag}",
+            kind="model",
+            paradigm="procedural_llm",
+        )
+        db.add_all([gen_b, gen_a])
+        db.flush()
+
+        t1, t2 = _mk_task(db), _mk_task(db)
+
+        # Both generators: 1/1 ok attempts → pass@1 == 1.0 (same tiebreak position).
+        db.add_all(
+            [
+                CommissionAttempt(
+                    task_id=t1,
+                    model_id=gen_b.name,
+                    generator_id=gen_b.id,
+                    status="ok",
+                    mesh_stats_json=json.dumps({"vertices": 100}),
+                ),
+                CommissionAttempt(
+                    task_id=t2,
+                    model_id=gen_a.name,
+                    generator_id=gen_a.id,
+                    status="ok",
+                    mesh_stats_json=json.dumps({"vertices": 100}),
+                ),
+            ]
+        )
+
+        # Gen B: commissioned output with a scope but no trait verdicts → fidelity None.
+        out_b = ModelOutput(
+            task_id=t1,
+            generator_id=gen_b.id,
+            asset_path=f"commissioned/fid0-b-{tag}.glb",
+            source="commissioned",
+        )
+        db.add(out_b)
+        db.flush()
+        db.add(
+            ModelScope(
+                output_id=out_b.id,
+                is_plant=True,
+                parts_json=json.dumps(["whole_plant"]),
+                judge_model="j",
+            )
+        )
+        # No TraitVerdicts for gen_b → morph_fidelity will be None.
+
+        # Gen A: commissioned output with a scope + one assessable trait verdict (wrong).
+        out_a = ModelOutput(
+            task_id=t2,
+            generator_id=gen_a.id,
+            asset_path=f"commissioned/fid0-a-{tag}.glb",
+            source="commissioned",
+        )
+        db.add(out_a)
+        db.flush()
+        db.add(
+            ModelScope(
+                output_id=out_a.id,
+                is_plant=True,
+                parts_json=json.dumps(["whole_plant"]),
+                judge_model="j",
+            )
+        )
+        db.add(
+            TraitVerdict(
+                output_id=out_a.id,
+                rubric_id=0,
+                trait_key="test_key",
+                trait_class="presence",
+                verdict="present_wrong",  # 0 correct, 1 assessable → fidelity 0.0
+            )
+        )
+
+        db.commit()
+
+        rows = service.procedural_scorecard(db)
+        by_model = {r["model"]: r for r in rows}
+
+        a_row = by_model[gen_a.name]
+        b_row = by_model[gen_b.name]
+
+        # Both have same pass_at_1.
+        assert a_row["pass_at_1"] == 1.0
+        assert b_row["pass_at_1"] == 1.0
+
+        # A has morph_fidelity == 0.0, B has None.
+        assert a_row["morph_fidelity"] == 0.0
+        assert b_row["morph_fidelity"] is None
+
+        # A must come before B in the ranked list.
+        model_order = [r["model"] for r in rows if r["model"] in (gen_a.name, gen_b.name)]
+        assert model_order == [gen_a.name, gen_b.name], (
+            f"Expected {gen_a.name} (fidelity=0.0) before {gen_b.name} (fidelity=None), "
+            f"got {model_order}"
+        )

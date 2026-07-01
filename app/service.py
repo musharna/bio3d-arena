@@ -745,7 +745,13 @@ def procedural_scorecard(db: Session) -> list[dict]:
                 "n": n_attempts,
             }
         )
-    rows.sort(key=lambda r: (r["pass_at_1"], r["morph_fidelity"] or -1.0), reverse=True)
+    rows.sort(
+        key=lambda r: (
+            r["pass_at_1"],
+            r["morph_fidelity"] if r["morph_fidelity"] is not None else -1.0,
+        ),
+        reverse=True,
+    )
     return rows
 
 
