@@ -94,7 +94,7 @@ def render_datasheet(version: str, manifest: dict, rollup: list[dict]) -> str:
             "the sole ranking (morphological completeness matters — geometry alone can mislead).",
             "",
             "## Held-out ground truth",
-            "The raw held-out GT point clouds are WITHELD to preserve benchmark integrity. The",
+            "The raw held-out GT point clouds are WITHHELD to preserve benchmark integrity. The",
             "release ships baked GT *reference render* GLBs only — no raw scan data.",
             "",
             "## Known limitations",
