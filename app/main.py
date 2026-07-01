@@ -517,8 +517,13 @@ def leaderboard(
     db: Session = Depends(get_db),
     criterion: str = "overall",
     category: str = "all",
+    verified: bool = False,
 ):
-    rows = _leaderboard_rows(db, criterion, category)
+    rows = (
+        service.verified_leaderboard_rows(db, criterion, category)
+        if verified
+        else _leaderboard_rows(db, criterion, category)
+    )
     total = matchmaking.total_votes(db)
     cats = db.execute(select(Category)).scalars().all()
     crits = db.execute(select(Criterion)).scalars().all()
@@ -551,6 +556,7 @@ def leaderboard(
             "sel_criterion": criterion,
             "sel_category": category,
             "judge_rows": _judge_leaderboard_rows(db, criterion, "multi4"),
+            "verified": verified,
         },
     )
 
