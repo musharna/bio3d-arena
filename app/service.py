@@ -262,6 +262,8 @@ def _judge_matches_for_scope(
         gen_b = db.get(ModelOutput, jv.output_b_id).generator_id
         if gen_a in ref_gens or gen_b in ref_gens:
             continue  # GT/reference scans are not perceptual competitors (Mode-A exclusion)
+        if not same_paradigm(db.get(Generator, gen_a).paradigm, db.get(Generator, gen_b).paradigm):
+            continue  # never rank across paradigms
         if jv.winner == "a":
             matches.append((gen_a, gen_b))
         elif jv.winner == "b":
@@ -381,6 +383,8 @@ def tier_perceptual_ranking(
         gen_b = db.get(ModelOutput, jv.output_b_id).generator_id
         if gen_a in excluded or gen_b in excluded:
             continue
+        if not same_paradigm(db.get(Generator, gen_a).paradigm, db.get(Generator, gen_b).paradigm):
+            continue  # never rank across paradigms
         if jv.winner == "a":
             matches_by_tier[tier].append((gen_a, gen_b))
         elif jv.winner == "b":
