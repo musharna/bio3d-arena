@@ -16,6 +16,24 @@ from pathlib import Path
 import trimesh
 
 
+_SECRET_ENV_MARKERS = ("KEY", "TOKEN", "SECRET", "PASSWORD")
+_SECRET_ENV_EXACT = {"BIO3D_DATABASE_URL"}
+
+
+def _sandbox_env(out_glb, base_env=None) -> dict:
+    """Environment for the untrusted bpy subprocess: inherit the parent env MINUS any
+    secret-looking vars (name contains KEY/TOKEN/SECRET/PASSWORD, or is BIO3D_DATABASE_URL),
+    then inject OUT_GLB. Keeps PATH/HOME/etc. so Blender still runs."""
+    src = os.environ if base_env is None else base_env
+    out = {
+        k: v
+        for k, v in src.items()
+        if k not in _SECRET_ENV_EXACT and not any(m in k.upper() for m in _SECRET_ENV_MARKERS)
+    }
+    out["OUT_GLB"] = str(out_glb)
+    return out
+
+
 def is_valid_mesh(glb_path) -> tuple[bool, dict]:
     """Load a GLB and report whether it has real geometry. (False, {}) on any load failure."""
     p = Path(glb_path)
@@ -40,17 +58,19 @@ def run_bpy(
     blender_bin: str = "blender",
     sandbox_prefix: list[str] | None = None,
 ) -> dict:
-    """Run an LLM-authored bpy script headless in a throwaway temp cwd, exposing only
-    OUT_GLB. Returns a status dict; never raises on script failure. sandbox_prefix lets the
-    caller wrap the command (e.g. ["heavy-run"] for a memory cap, ["unshare","-rn"] for no
-    network) — kept configurable so tests run bare."""
+    """Run an LLM-authored bpy script headless in a throwaway temp cwd with a sandboxed
+    environment. Injects OUT_GLB into the environment and strips secret-looking vars
+    (containing KEY/TOKEN/SECRET/PASSWORD, or BIO3D_DATABASE_URL). Returns a status dict;
+    never raises on script failure. sandbox_prefix lets the caller wrap the command
+    (e.g. ["heavy-run"] for a memory cap, ["unshare","-rn"] for no network) — kept
+    configurable so tests run bare."""
     out_glb = Path(out_glb)
     prefix = list(sandbox_prefix or [])
     start = time.monotonic()
     with tempfile.TemporaryDirectory() as td:
         script_path = Path(td) / "gen.py"
         script_path.write_text(script_text)
-        env = {**os.environ, "OUT_GLB": str(out_glb)}
+        env = _sandbox_env(out_glb)
         cmd = [*prefix, blender_bin, "--background", "--python", str(script_path)]
         try:
             proc = subprocess.run(

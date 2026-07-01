@@ -45,3 +45,26 @@ def test_run_bpy_missing_blender_returns_error(tmp_path):
         "print('x')", out_glb=tmp_path / "o.glb", blender_bin="definitely-not-blender"
     )
     assert res["status"] == "error" and res["glb_path"] is None
+
+
+def test_sandbox_env_strips_secrets_keeps_essentials():
+    base = {
+        "PATH": "/usr/bin",
+        "HOME": "/home/u",
+        "OPENROUTER_API_KEY": "sk-x",
+        "ANTHROPIC_API_KEY": "sk-y",
+        "BIO3D_DATABASE_URL": "sqlite:///study.db",
+        "MY_TOKEN": "t",
+        "APP_SECRET": "s",
+    }
+    env = commission._sandbox_env("/tmp/out.glb", base_env=base)
+    assert env["PATH"] == "/usr/bin" and env["HOME"] == "/home/u"
+    assert env["OUT_GLB"] == "/tmp/out.glb"
+    for leaked in (
+        "OPENROUTER_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "BIO3D_DATABASE_URL",
+        "MY_TOKEN",
+        "APP_SECRET",
+    ):
+        assert leaked not in env
