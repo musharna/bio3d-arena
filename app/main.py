@@ -380,7 +380,7 @@ def _leaderboard_rows(
         gen = db.get(Generator, r.generator_id)
         if gen is None:
             continue  # stale rating row (generator deleted); skip rather than crash
-        if paradigm is not None and gen.paradigm != paradigm:
+        if paradigm and gen.paradigm != paradigm:
             continue
         rows.append(
             {
@@ -394,23 +394,33 @@ def _leaderboard_rows(
                 "n_games": r.n_games,
             }
         )
-    rows.sort(key=lambda x: x["bt_score"], reverse=True)
-    # CI-grouped rank (overlapping 95% CIs share a rank), computed on the displayed
-    # (rounded) bounds so the rank matches the numbers shown.
-    ranks = ranking.rank_by_ci([(r["bt_lower"], r["bt_upper"]) for r in rows])
-    for row, rank in zip(rows, ranks):
-        row["rank"] = rank
-    # CI whisker-bar geometry: position each [lower, point, upper] as a percent of the
-    # column's full value span so ties are visible at a glance.
-    if rows:
-        lo = min(r["bt_lower"] for r in rows)
-        hi = max(r["bt_upper"] for r in rows)
+    # Rank + CI-bar geometry are computed WITHIN each paradigm group, never across
+    # paradigms — cross-paradigm BT comparisons are the confound this project removes
+    # (spec §D). When a single paradigm filter is active there is exactly one group,
+    # which reduces to the old flat-list behavior.
+    groups: dict[str, list[dict]] = {}
+    for r in rows:
+        groups.setdefault(r["paradigm"], []).append(r)
+    grouped_rows: list[dict] = []
+    for pgm in sorted(groups):
+        grows = groups[pgm]
+        grows.sort(key=lambda x: x["bt_score"], reverse=True)
+        # CI-grouped rank (overlapping 95% CIs share a rank), computed on the displayed
+        # (rounded) bounds so the rank matches the numbers shown.
+        ranks = ranking.rank_by_ci([(r["bt_lower"], r["bt_upper"]) for r in grows])
+        for row, rank in zip(grows, ranks):
+            row["rank"] = rank
+        # CI whisker-bar geometry: position each [lower, point, upper] as a percent of the
+        # column's full value span so ties are visible at a glance.
+        lo = min(r["bt_lower"] for r in grows)
+        hi = max(r["bt_upper"] for r in grows)
         span = (hi - lo) or 1.0
-        for r in rows:
+        for r in grows:
             r["ci_left"] = round(100.0 * (r["bt_lower"] - lo) / span, 1)
             r["ci_width"] = round(100.0 * (r["bt_upper"] - r["bt_lower"]) / span, 1)
             r["ci_point"] = round(100.0 * (r["bt_score"] - lo) / span, 1)
-    return rows
+        grouped_rows.extend(grows)
+    return grouped_rows
 
 
 def _judge_leaderboard_rows(
@@ -465,6 +475,7 @@ def leaderboard(
     category: str = "all",
     paradigm: str | None = None,
 ):
+    paradigm = paradigm or None  # "" (unset <select>) and None both mean "no filter"
     rows = _leaderboard_rows(db, criterion, category, paradigm)
     total = matchmaking.total_votes(db)
     cats = db.execute(select(Category)).scalars().all()
@@ -519,6 +530,7 @@ def api_leaderboard(
     category: str = "all",
     paradigm: str | None = None,
 ):
+    paradigm = paradigm or None  # "" (unset filter) and None both mean "no filter"
     return {
         "criterion": criterion,
         "category": category,

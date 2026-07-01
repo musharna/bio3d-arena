@@ -61,8 +61,20 @@ def get_db() -> Iterator[Session]:
         db.close()
 
 
+def _ensure_columns(engine) -> None:  # noqa: ANN001
+    """create_all does not add columns to existing tables; add any missing additive columns
+    here so pre-existing / restored SQLite DBs self-heal on boot."""
+
+    with engine.begin() as conn:
+        cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(generator)")]
+        if "generator" and cols and "paradigm" not in cols:
+            conn.exec_driver_sql("ALTER TABLE generator ADD COLUMN paradigm VARCHAR(32) DEFAULT ''")
+
+
 def init_db() -> None:
-    """Create all tables. Idempotent."""
+    """Create all tables, then self-heal any additive columns missing from a pre-existing
+    (e.g. restored-from-backup) DB. Idempotent."""
     from . import models  # noqa: F401  (import registers models on Base.metadata)
 
     Base.metadata.create_all(bind=engine)
+    _ensure_columns(engine)

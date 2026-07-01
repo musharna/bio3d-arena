@@ -39,6 +39,9 @@
     <a href="/significance?criterion={{ sel_criterion }}&category={{ sel_category }}">significance &amp; full audit →</a>
   </p>
   {% if rows %}
+  {% for pgm, group_rows in rows|groupby('paradigm') %}
+  <h3 class="paradigm-heading">{{ paradigm_display_names.get(pgm, pgm) if pgm else "Untagged" }}</h3>
+  <p class="subtle">Scores are only comparable within a paradigm.</p>
   <table class="ranktable">
     <thead>
       <tr>
@@ -53,7 +56,7 @@
       </tr>
     </thead>
     <tbody>
-      {% for r in rows %}
+      {% for r in group_rows %}
       <tr>
         <td>{{ r.rank }}</td>
         <td class="gen">{{ r.generator }}</td>
@@ -79,6 +82,7 @@
       {% endfor %}
     </tbody>
   </table>
+  {% endfor %}
   {% else %}
   <p>No ratings yet for this slice. Cast some votes in the <a href="/">Arena</a>.</p>
   {% endif %}
