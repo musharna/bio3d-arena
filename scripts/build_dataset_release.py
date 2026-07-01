@@ -10,17 +10,29 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app import dataset  # noqa: E402
+from app import config, dataset  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
 from app.storage import StorageBackend, get_storage  # noqa: E402
 from scripts.export_public import export_bundle  # noqa: E402
+
+_TEXT_SUFFIXES = {".json", ".md", ".txt", ""}
+_BINARY_PATH_PARTS = {"assets", "gt"}
 
 
 def _assert_no_leak(root: Path) -> None:
     if list(root.rglob("*.npy")):
         raise RuntimeError(f"release {root} contains raw .npy GT — refusing to publish")
+    needles = ("/home/mjarnold/agrigen", str(config.GT_BUNDLE_DIR))
     for p in root.rglob("*"):
-        if p.is_file() and "/home/mjarnold/agrigen" in p.read_bytes().decode("utf-8", "ignore"):
+        if not p.is_file():
+            continue
+        rel_parts = set(p.relative_to(root).parts[:-1])
+        if rel_parts & _BINARY_PATH_PARTS:
+            continue  # baked GT / asset blobs (GLB/PLY) — binary, never text-leak carriers
+        if p.suffix not in _TEXT_SUFFIXES:
+            continue
+        text = p.read_bytes().decode("utf-8", "ignore")
+        if any(needle in text for needle in needles):
             raise RuntimeError(f"release {root} leaks an agrigen path in {p}")
 
 
@@ -42,7 +54,10 @@ def build_release(
     (out / "LICENSE").write_text(dataset.render_license(rollup))
     (out / "DATASHEET.md").write_text(dataset.render_datasheet(version, manifest, rollup))
     (out / "VERSION").write_text(f"{version}\nsha256:{manifest.get('sha256', '')}\n")
-    (out / "preference_records.json").write_text(json.dumps(dataset.build_preference_records(db)))
+    comp_ids = {r["id"] for r in rows.get("comparison", [])}
+    (out / "preference_records.json").write_text(
+        json.dumps(dataset.build_preference_records(db, comparison_ids=comp_ids))
+    )
 
     _assert_no_leak(out)
 
