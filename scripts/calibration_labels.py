@@ -161,6 +161,16 @@ def cmd_export(args):
     classes = set(args.classes.split(",")) if args.classes else None
     judgeable = [r for r in all_rows if is_judgeable(r["expected"])]
     dropped = len(all_rows) - len(judgeable)
+    exclude = (
+        {int(x) for x in args.exclude_outputs.split(",") if x.strip()}
+        if args.exclude_outputs
+        else set()
+    )
+    excluded_n = 0
+    if exclude:
+        before = len(judgeable)
+        judgeable = [r for r in judgeable if r["output_id"] not in exclude]
+        excluded_n = before - len(judgeable)
     sample = stratified_sample(judgeable, per_class=args.per_class, classes=classes, seed=args.seed)
     missing = sum(1 for r in sample if not Path(r["contact_sheet"]).exists())
     out = Path(args.out)
@@ -175,6 +185,8 @@ def cmd_export(args):
     print(f"wrote {len(sample)} blind rows → {out}")
     if dropped:
         print(f"  (dropped {dropped} unjudgeable-'expected' verdicts before sampling)")
+    if excluded_n:
+        print(f"  (excluded {excluded_n} verdicts on {len(exclude)} listed output_ids — junk pass)")
     print("  per class: " + ", ".join(f"{c}={per_cls[c]}" for c in sorted(per_cls)))
     if missing:
         print(
@@ -200,21 +212,20 @@ def cmd_ingest(args):
     db = SessionLocal()
     try:
         # Always preview per-class kappa in-memory (matches the gate logic) before any write.
+        # Uses the same pairing helper the committed calibration uses, so the dry-run number
+        # is the number you get — including dropping not_assessable pairs (junk / not-visible).
         stored = {
             (v.output_id, v.trait_key): v.verdict
             for v in db.execute(select(TraitVerdict)).scalars()
             if v.judge_model == judge.JUDGE_MODEL
         }
-        by_class: dict[str, tuple[list, list]] = {}
-        unmatched = 0
-        for oid, key, cls, human in labels:
-            vlm = stored.get((oid, key))
-            if vlm is None:
-                unmatched += 1
-                continue
-            h, m = by_class.setdefault(cls, ([], []))
-            h.append(human)
-            m.append(vlm)
+        scopes = service.load_scopes(db)
+        by_class, stats = service.calibration_pairs_by_class(
+            labels, stored, scope_by_output=scopes or None
+        )
+        unmatched = stats["unmatched"]
+        dropped_na = stats["dropped_vlm_na"]
+        dropped_scope = stats["dropped_scope"]
         print(
             f"\nper-class agreement (gate: kappa>={service.MODE_C_KAPPA_BAR} & n>="
             f"{service.MODE_C_MIN_N}):"
@@ -229,6 +240,16 @@ def cmd_ingest(args):
             print(f"  {cls:14s} {n:4d} {ks:>7s}  {'YES' if ok else 'no'}")
         if unmatched:
             print(f"  ({unmatched} labels had no matching stored verdict — ignored)")
+        if dropped_scope:
+            print(
+                f"  ({dropped_scope} pairs dropped: trait not assessable on the model's depicted "
+                "scope — e.g. a whole-plant trait on a single-organ model)"
+            )
+        if dropped_na:
+            print(
+                f"  ({dropped_na} pairs dropped: VLM returned not_assessable — no scoreable "
+                "call to calibrate. Human not_assessable vs a VLM call is KEPT as disagreement.)"
+            )
 
         if not args.commit:
             print(
@@ -262,6 +283,11 @@ def main(argv=None):
     )
     pe.add_argument(
         "--classes", default=None, help="comma-separated trait_class filter (default: all)"
+    )
+    pe.add_argument(
+        "--exclude-outputs",
+        default=None,
+        help="comma-separated output_ids to exclude from sampling (e.g. junk/non-plant models)",
     )
     pe.add_argument("--seed", type=int, default=20260630)
     pe.set_defaults(func=cmd_export)

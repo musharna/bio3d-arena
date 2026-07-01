@@ -514,3 +514,21 @@ class TraitCalibration(Base):
     n: Mapped[int] = mapped_column(Integer, default=0)
     accepted: Mapped[bool] = mapped_column(Boolean, default=False)
     updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class ModelScope(Base):
+    """What plant parts a model actually depicts (VLM 'scope' pass). is_plant=False marks junk;
+    parts_json is a JSON list drawn from scope.SCOPE_PARTS. Consulted by scope.is_assessable so
+    a trait is only judged on a model that shows the relevant structure (e.g. habit is skipped
+    on a single-fruit model). One row per output per judge_model."""
+
+    __tablename__ = "model_scope"
+    __table_args__ = (UniqueConstraint("output_id", "judge_model", name="uq_model_scope"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"), index=True)
+    is_plant: Mapped[bool] = mapped_column(Boolean, default=True)
+    parts_json: Mapped[str] = mapped_column(Text, default="[]")
+    rationale: Mapped[str] = mapped_column(Text, default="")
+    judge_model: Mapped[str] = mapped_column(String(64), default="")
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)

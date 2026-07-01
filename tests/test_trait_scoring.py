@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from app import service
 from app.database import SessionLocal, init_db
-from app.models import TraitCalibration, TraitScore, TraitVerdict
+from app.models import ModelScope, TraitCalibration, TraitScore, TraitVerdict
 
 
 def setup_module(_m):
@@ -16,6 +16,7 @@ _OIDS = [9001, 9002, 9003, 9004]
 def _clear(db):
     db.query(TraitScore).filter(TraitScore.output_id.in_(_OIDS)).delete(False)
     db.query(TraitVerdict).filter(TraitVerdict.output_id.in_(_OIDS)).delete(False)
+    db.query(ModelScope).filter(ModelScope.output_id.in_(_OIDS)).delete(False)
     db.query(TraitCalibration).delete(False)
     db.commit()
 
@@ -49,6 +50,62 @@ def test_scores_use_only_accepted_classes_and_skip_not_assessable():
         assert ts.n_scored == 2 and ts.botanical_accuracy == 0.5
 
 
+def test_scores_gate_on_model_scope():
+    """A verdict is scored only if its trait is assessable on what the model depicts. On a
+    single-fruit model, fruit_form counts but a VLM 'habit present_correct' over-read is dropped
+    — so the model can't earn botanical accuracy on a plant structure it doesn't show."""
+    with SessionLocal() as db:
+        _clear(db)
+        db.add(TraitCalibration(trait_class="organ_shape", kappa=0.8, n=30, accepted=True))
+        db.add(TraitCalibration(trait_class="habit", kappa=0.8, n=30, accepted=True))
+        db.add(ModelScope(output_id=9001, is_plant=True, parts_json='["fruit"]', judge_model="m"))
+        for key, cls in [("fruit_form", "organ_shape"), ("plant_habit", "habit")]:
+            db.add(
+                TraitVerdict(
+                    output_id=9001,
+                    rubric_id=1,
+                    trait_key=key,
+                    trait_class=cls,
+                    verdict="present_correct",
+                    judge_model="m",
+                )
+            )
+        db.commit()
+        service.recompute_trait_scores(db, judge_model="m")
+        ts = db.query(TraitScore).filter_by(output_id=9001).one()
+        # only fruit_form is assessable on a fruit-only model; habit dropped by scope
+        assert ts.n_scored == 1 and ts.botanical_accuracy == 1.0
+
+
+def test_calibration_gates_on_model_scope():
+    """A human/VLM pair is dropped from kappa when the trait isn't assessable on the model's
+    scope — so a VLM habit over-read on a single-fruit model doesn't enter calibration either."""
+    with SessionLocal() as db:
+        _clear(db)
+        db.add(ModelScope(output_id=9002, is_plant=True, parts_json='["fruit"]', judge_model="m"))
+        rows = [
+            ("fruit_form", "organ_shape", "present_correct", "present_correct"),  # kept
+            ("plant_habit", "habit", "not_assessable", "present_correct"),  # scope drops
+        ]
+        labels = []
+        for key, cls, human, vlm in rows:
+            db.add(
+                TraitVerdict(
+                    output_id=9002,
+                    rubric_id=1,
+                    trait_key=key,
+                    trait_class=cls,
+                    verdict=vlm,
+                    judge_model="m",
+                )
+            )
+            labels.append((9002, key, cls, human))
+        db.commit()
+        service.recompute_trait_calibration(db, labels, judge_model="m")
+        assert db.query(TraitCalibration).filter_by(trait_class="organ_shape").one().n == 1
+        assert db.query(TraitCalibration).filter_by(trait_class="habit").one_or_none() is None
+
+
 def test_calibration_gate_threshold():
     with SessionLocal() as db:
         _clear(db)
@@ -69,6 +126,40 @@ def test_calibration_gate_threshold():
         cal = db.query(TraitCalibration).filter_by(trait_class="color").one()
         assert cal.accepted is False  # n=1 < MODE_C_MIN_N
         assert res["classes"] == 1
+
+
+def test_calibration_drops_vlm_not_assessable_but_keeps_human_na_overreads():
+    """Dropping from kappa is ASYMMETRIC and aligned with scoring. A pair whose VLM verdict is
+    not_assessable is dropped (the VLM made no scoreable call — scoring excludes it too). But a
+    pair whose HUMAN verdict is not_assessable while the VLM made a scoreable call is KEPT: that
+    is the VLM over-reading a trait the model doesn't depict (e.g. habit on a single-fruit
+    tomato), and scoring COUNTS that verdict — so it must count against agreement, not vanish."""
+    with SessionLocal() as db:
+        _clear(db)
+        rows = [
+            ("k0", "present_correct", "present_correct"),  # kept (both scoreable, agree)
+            ("k1", "absent", "not_assessable"),  # dropped (VLM made no scoreable call)
+            ("k2", "not_assessable", "absent"),  # KEPT (VLM over-read; disagreement)
+            ("k3", "not_assessable", "not_assessable"),  # dropped (VLM not_assessable)
+        ]
+        labels = []
+        for key, human, vlm in rows:
+            db.add(
+                TraitVerdict(
+                    output_id=9003,
+                    rubric_id=1,
+                    trait_key=key,
+                    trait_class="color",
+                    verdict=vlm,
+                    judge_model="m",
+                )
+            )
+            labels.append((9003, key, "color", human))
+        db.commit()
+        service.recompute_trait_calibration(db, labels, judge_model="m")
+        cal = db.query(TraitCalibration).filter_by(trait_class="color").one()
+        # k0 (agree) + k2 (VLM over-read, kept as disagreement); k1 & k3 dropped (VLM na)
+        assert cal.n == 2
 
 
 def test_calibration_gate_accepts_above_threshold():
