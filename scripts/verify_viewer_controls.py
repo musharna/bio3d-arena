@@ -53,13 +53,17 @@ reset = p.evaluate(
     """async () => {
       const nextFrames = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       const mv = document.querySelector('#slot-a model-viewer');
+      const mvb = document.querySelector('#slot-b model-viewer');
       mv.cameraOrbit = '1.4rad 0.9rad 3m'; mv.jumpCameraToGoal();
       await nextFrames();
       const moved = mv.getCameraOrbit();
+      const bBefore = mvb.getCameraOrbit().toString();  // B's orbit BEFORE Reset on A
       document.querySelector('#slot-a .viewer-ctl').click();  // Reset (first button)
       await nextFrames();
       const o = mv.getCameraOrbit();
-      return { movedTheta: moved.theta, movedPhi: moved.phi, theta: o.theta, phi: o.phi };
+      const bAfter = mvb.getCameraOrbit().toString();  // B's orbit AFTER Reset on A
+      return { movedTheta: moved.theta, movedPhi: moved.phi, theta: o.theta, phi: o.phi,
+               bBefore, bAfter };
     }"""
 )
 # PRECONDITION: the camera must genuinely leave default before Reset, or the post-reset
@@ -75,6 +79,11 @@ if abs(reset["theta"]) > 0.05 or abs(reset["phi"] - 1.309) > 0.05:
     fails.append(
         f"Reset did not restore default framing: theta={reset['theta']} phi={reset['phi']}"
     )
+# HEADLINE GUARANTEE: Reset on A must NOT cross-sync to B (synced-rotation pairing).
+before = reset["bBefore"]
+after = reset["bAfter"]
+if before != after:
+    fails.append(f"Reset on A propagated to B (should not): before={before} after={after}")
 
 # Fullscreen: click A's second .viewer-ctl → A's .viewer-slot becomes fullscreenElement; click again → null.
 enter = p.evaluate(

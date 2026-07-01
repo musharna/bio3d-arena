@@ -29,6 +29,8 @@
 
   function failed(slot, msg) {
     slot.innerHTML = "";
+    slot._resetView = null;
+    slot._onResize = null;
     const d = document.createElement("div");
     d.className = "viewer-error";
     d.innerHTML = "⚠️ <span>" + msg + "</span>";
