@@ -94,7 +94,7 @@ Then append a `<kbd>` to each of the 4 vote buttons (lines 63-66) so they read:
 Add near the other component styles (e.g. after the `.vote-btn` rules, ~line 410):
 
 ```css
-.onboard-banner {
+.onboard-banner:not([hidden]) {
   display: flex;
   align-items: center;
   justify-content: space-between;
