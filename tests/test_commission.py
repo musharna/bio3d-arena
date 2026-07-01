@@ -97,3 +97,28 @@ def test_species_common_covers_six_taxa():
         "Glycine max",
         "Arabidopsis thaliana",
     }
+
+
+def test_openrouter_complete_returns_message_content():
+    captured = {}
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"choices": [{"message": {"content": "import bpy"}}]}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        captured["url"] = url
+        captured["model"] = json["model"]
+        captured["auth"] = headers["Authorization"]
+        return _Resp()
+
+    out = commission.openrouter_complete(
+        fake_post, "anthropic/claude-opus-4.8", "make a plant", api_key="sk-xyz"
+    )
+    assert out == "import bpy"
+    assert captured["url"] == commission.OPENROUTER_URL
+    assert captured["model"] == "anthropic/claude-opus-4.8"
+    assert captured["auth"] == "Bearer sk-xyz"

@@ -21,6 +21,8 @@ _SECRET_ENV_MARKERS = ("KEY", "TOKEN", "SECRET", "PASSWORD")
 _SECRET_ENV_EXACT = {"BIO3D_DATABASE_URL"}
 
 
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
 SPECIES_COMMON: dict[str, str] = {
     "Solanum lycopersicum": "tomato",
     "Zea mays": "maize (corn)",
@@ -45,6 +47,25 @@ def build_prompt(species: str, common: str) -> str:
         "interaction and no external asset files.\n"
         "- Output ONLY the Python script — no explanation, no markdown prose."
     )
+
+
+def openrouter_complete(
+    post, model_id: str, prompt: str, *, api_key: str, max_tokens: int = 8000
+) -> str:
+    """One chat completion via OpenRouter (OpenAI-compatible). `post` injected (httpx.post) for
+    testing. Raises on HTTP error so the caller records a transport failure."""
+    resp = post(
+        OPENROUTER_URL,
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={
+            "model": model_id,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+        },
+        timeout=180,
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
 
 
 def _sandbox_env(out_glb, base_env=None) -> dict:
