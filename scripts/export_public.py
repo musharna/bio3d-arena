@@ -63,30 +63,43 @@ def _row_to_dict(obj) -> dict:
 
 def _filtered_rows(db, inc: public_export.IncludeSet) -> dict[str, list[dict]]:
     all_out = inc.output_ids | inc.gold_output_ids
+    # Pre-pass: a comparison ships only if its task AND BOTH referenced outputs are in the
+    # bundle -- otherwise output_a_id/output_b_id would dangle (partial-generator promotion).
+    included_comparison_ids = {
+        c.id
+        for c in db.execute(select(Comparison)).scalars()
+        if c.task_id in inc.task_ids
+        and c.output_a_id in all_out
+        and c.output_b_id in all_out
+    }
     tables: dict[str, list[dict]] = {}
     for model in EXPORT_MODELS:
         name = model.__tablename__
-        q = select(model)
-        rows = [r for r in db.execute(q).scalars()]
         keep = []
-        for r in rows:
-            d = _row_to_dict(r)
+        for r in db.execute(select(model)).scalars():
             if name == "task" and r.id not in inc.task_ids:
                 continue
             if name == "generator" and r.id not in inc.generator_ids:
                 continue
             if name == "model_output" and r.id not in all_out:
                 continue
-            if (
-                name in ("comparison", "recon_task", "task_difficulty")
-                and getattr(r, "task_id", None) not in inc.task_ids
-            ):
+            if name == "comparison" and r.id not in included_comparison_ids:
+                continue
+            if name == "vote" and r.comparison_id not in included_comparison_ids:
+                continue
+            if name in ("recon_task", "task_difficulty") and getattr(r, "task_id", None) not in inc.task_ids:
                 continue
             if name == "metric" and getattr(r, "output_id", None) not in all_out:
                 continue
             if name == "rating" and getattr(r, "generator_id", None) not in inc.generator_ids:
                 continue
-            keep.append(d)
+            if name == "gold_pair" and (
+                r.task_id not in inc.task_ids
+                or r.good_output_id not in all_out
+                or r.bad_output_id not in all_out
+            ):
+                continue
+            keep.append(_row_to_dict(r))
         tables[name] = keep
     return tables
 
