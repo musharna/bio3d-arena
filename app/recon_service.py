@@ -17,6 +17,10 @@ from .storage import get_storage
 MESH_FORMATS = {"glb", "gltf"}
 
 
+class ScoringDisabled(RuntimeError):
+    """Raised by the default scorer when SCORING_ENABLED is False (public instance)."""
+
+
 def species_slug_for_task(db: Session, task_id: int) -> str | None:
     """The GT-bundle species slug bound to a Task (via ReconTask), or None if the Task
     is not a Mode-B recon benchmark. This is the key the scoring service resolves GT by."""
@@ -30,6 +34,8 @@ def _default_scorer(glb_bytes: bytes, species_slug: str | None) -> dict:
     """Live scorer for the batch path. `species_slug` is the GT-bundle key resolved from
     the output's Task (ReconTask). rescore_all only reaches this for recon-benchmark
     outputs (slug present); a None slug here would 404 (fail-loud)."""
+    if not config.SCORING_ENABLED:
+        raise ScoringDisabled("scoring disabled on this instance (empty RECON_SCORER_URL)")
     return score_output(glb_bytes, str(species_slug), base_url=config.RECON_SCORER_URL)
 
 

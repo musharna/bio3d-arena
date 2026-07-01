@@ -52,6 +52,10 @@ REDIS_URL = os.environ.get("BIO3D_REDIS_URL", "")
 # bytes here for objective chamfer/F-score grading vs held-out GT (never imports agrigen).
 RECON_SCORER_URL = os.environ.get("BIO3D_RECON_SCORER_URL", "http://127.0.0.1:8800")
 
+# Public instances run with an empty scorer URL → scoring disabled (scores are promoted,
+# never recomputed). Keeps the public deploy free of the Agrigen scoring microservice.
+SCORING_ENABLED = bool(RECON_SCORER_URL.strip())
+
 # Held-out GT scan bundle (the scorer's gt_bundle_prod). Read ONCE at build time by
 # scripts/render_gt.py to bake per-species reference GLBs into bio3d's own asset store;
 # the running server never touches this path (stays decoupled from the scorer's FS).

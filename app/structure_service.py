@@ -28,6 +28,10 @@ from .structure_records import VARIANT_SPECIES, load_sidecar, seed_record_for_sp
 MESH_FORMATS = {"glb", "gltf"}
 
 
+class ScoringDisabled(RuntimeError):
+    """Raised by the default scorer when SCORING_ENABLED is False (public instance)."""
+
+
 def _slug(species: str) -> str:
     """Canonical species slug — 'Zea mays' and 'zea_mays' both → 'zea_mays' (mirrors the
     AgriGen-side slugifier; the endpoint slugifies too, this keeps our stored slug consistent)."""
@@ -63,6 +67,8 @@ def resolve_record(db: Session, output: ModelOutput) -> tuple[dict | None, str]:
 
 def _default_scorer(record: dict) -> dict:
     """Live /score_structure call. Injectable so tests run without the microservice."""
+    if not config.SCORING_ENABLED:
+        raise ScoringDisabled("scoring disabled on this instance (empty RECON_SCORER_URL)")
     return score_structure(record, base_url=config.RECON_SCORER_URL)
 
 
