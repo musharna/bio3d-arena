@@ -20,28 +20,45 @@ from app.models import Generator, ModelOutput  # noqa: E402
 
 
 def classify(slug: str, kind: str, sources: set[str]) -> str | None:
-    """Return a paradigm for a generator, or None if no rule matches. Order matters:
-    most-specific families first."""
+    """Return a paradigm for a generator, or None if no rule matches. Source-prefix rules
+    (how the asset entered the arena) take priority; slug keywords are the fallback."""
     s = slug.lower()
     src = {x.lower() for x in sources}
 
-    def any_in(needles, hay):
-        return any(n in h for n in needles for h in hay)
+    def any_src_prefix(*prefixes: str) -> bool:
+        return any(h.startswith(p) for h in src for p in prefixes)
 
     if s.startswith("openrouter-"):
         return "procedural_llm"
-    if any(k in s for k in ("lpy", "l-py", "lsystem", "infinigen", "procedural")):
+    if any_src_prefix("procedural:"):
         return "procedural_expert"
-    if "sketchfab" in s or "objaverse" in s or any_in(("sketchfab", "objaverse"), src):
+    if any_src_prefix("found:"):
         return "retrieval"
-    if any(k in s for k in ("icrisat", "romi", "scan")) or any_in(
-        ("icrisat", "romi", "scan", "reference"), src
-    ):
+    if any_src_prefix("scan:", "ct:", "mri:"):
         return "capture_scan"
-    if any(k in s for k in ("hunyuan", "tripo", "partcrafter", "meshy", "trellis", "recon")) or any(
-        h.startswith("api:") for h in src
+    if any_src_prefix("api:"):
+        return "image_recon"
+    if any(k in s for k in ("lpy", "l-py", "lsystem", "infinigen", "procedural", "helios")):
+        return "procedural_expert"
+    if "sketchfab" in s or "objaverse" in s:
+        return "retrieval"
+    if any(
+        k in s
+        for k in (
+            "hunyuan",
+            "tripo",
+            "triposr",
+            "partcrafter",
+            "meshy",
+            "trellis",
+            "hyper3d",
+            "recon",
+            "instantmesh",
+        )
     ):
         return "image_recon"
+    if any(k in s for k in ("icrisat", "romi", "scan")):
+        return "capture_scan"
     return None
 
 
@@ -49,7 +66,11 @@ def assign_paradigms(db, *, commit: bool) -> dict:
     gens = db.execute(select(Generator)).scalars().all()
     assigned: dict[str, str] = {}
     unmapped: list[str] = []
+    skipped: list[str] = []
     for g in gens:
+        if g.kind in ("decoy", "gold"):
+            skipped.append(g.slug)
+            continue
         sources = {
             o.source
             for o in db.execute(
@@ -58,6 +79,9 @@ def assign_paradigms(db, *, commit: bool) -> dict:
         }
         p = classify(g.slug, g.kind, sources)
         if p is None:
+            if not sources:  # 0-output, unclassifiable — not a ranking competitor
+                skipped.append(g.slug)
+                continue
             unmapped.append(g.slug)
         else:
             assigned[g.slug] = p
@@ -65,9 +89,10 @@ def assign_paradigms(db, *, commit: bool) -> dict:
         if unmapped:
             raise ValueError(f"unmapped generators (refusing to write): {sorted(unmapped)}")
         for g in gens:
-            g.paradigm = assigned[g.slug]
+            if g.slug in assigned:
+                g.paradigm = assigned[g.slug]
         db.commit()
-    return {"assigned": assigned, "unmapped": unmapped}
+    return {"assigned": assigned, "unmapped": unmapped, "skipped": skipped}
 
 
 def main(argv=None) -> int:
