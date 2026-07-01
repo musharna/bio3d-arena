@@ -449,23 +449,7 @@ def _leaderboard_rows(
                 "n_games": r.n_games,
             }
         )
-    rows.sort(key=lambda x: x["bt_score"], reverse=True)
-    # CI-grouped rank (overlapping 95% CIs share a rank), computed on the displayed
-    # (rounded) bounds so the rank matches the numbers shown.
-    ranks = ranking.rank_by_ci([(r["bt_lower"], r["bt_upper"]) for r in rows])
-    for row, rank in zip(rows, ranks):
-        row["rank"] = rank
-    # CI whisker-bar geometry: position each [lower, point, upper] as a percent of the
-    # column's full value span so ties are visible at a glance.
-    if rows:
-        lo = min(r["bt_lower"] for r in rows)
-        hi = max(r["bt_upper"] for r in rows)
-        span = (hi - lo) or 1.0
-        for r in rows:
-            r["ci_left"] = round(100.0 * (r["bt_lower"] - lo) / span, 1)
-            r["ci_width"] = round(100.0 * (r["bt_upper"] - r["bt_lower"]) / span, 1)
-            r["ci_point"] = round(100.0 * (r["bt_score"] - lo) / span, 1)
-    return rows
+    return service.finalize_rows(rows)
 
 
 def _judge_leaderboard_rows(
@@ -558,13 +542,16 @@ def leaderboard(
 
 @app.get("/api/leaderboard")
 def api_leaderboard(
-    db: Session = Depends(get_db), criterion: str = "overall", category: str = "all"
+    db: Session = Depends(get_db),
+    criterion: str = "overall",
+    category: str = "all",
+    verified: bool = False,
 ):
-    return {
-        "criterion": criterion,
-        "category": category,
-        "rows": _leaderboard_rows(db, criterion, category),
-    }
+    if verified:
+        rows = service.verified_leaderboard_rows(db, criterion, category)
+    else:
+        rows = _leaderboard_rows(db, criterion, category)
+    return {"criterion": criterion, "category": category, "verified": verified, "rows": rows}
 
 
 @app.get("/dataset", response_class=HTMLResponse)
