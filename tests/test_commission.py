@@ -82,6 +82,13 @@ def test_extract_script_plain_fence_and_unfenced_and_empty():
     assert commission.extract_script(None) == ""
 
 
+def test_extract_script_unclosed_fence_is_stripped():
+    # A truncated/unterminated completion opens ```python but never closes it — the opening
+    # fence line must still be stripped so the script doesn't die on line 1 (the Gemini bug).
+    txt = "```python\nimport bpy\nbpy.ops.mesh.primitive_cube_add()"
+    assert commission.extract_script(txt) == "import bpy\nbpy.ops.mesh.primitive_cube_add()"
+
+
 def test_build_prompt_pins_contract():
     p = commission.build_prompt("Solanum lycopersicum", "tomato")
     assert "OUT_GLB" in p and "tomato" in p and "Solanum lycopersicum" in p

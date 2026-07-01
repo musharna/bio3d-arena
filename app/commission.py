@@ -57,7 +57,7 @@ def openrouter_complete(
     prompt: str,
     *,
     api_key: str,
-    max_tokens: int = 8000,
+    max_tokens: int = 32000,
     max_retries: int = 3,
     sleep_fn=None,
 ) -> str:
@@ -86,7 +86,9 @@ def openrouter_complete(
             last_exc = e
             if attempt < max_retries - 1:
                 sleep(2**attempt)
-    raise last_exc
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("openrouter_complete: max_retries must be >= 1")
 
 
 def _sandbox_env(out_glb, base_env=None) -> dict:
@@ -181,13 +183,18 @@ def run_bpy(
 
 
 def extract_script(text: str) -> str:
-    """Pull the Python script out of a chat completion. Single fenced block, literal
-    terminator — no nested/ambiguous quantifiers (safe on arbitrary completions)."""
+    """Pull the Python script out of a chat completion. Prefer a CLOSED ```python fenced
+    block; if the model opened a fence but never closed it (truncation / unterminated output),
+    still strip the opening fence line and take the rest — otherwise the literal ```python line
+    lands in the script and it dies on line 1. No nested/ambiguous quantifiers."""
     if not text:
         return ""
     m = re.search(r"```(?:python)?[ \t]*\n(.*?)```", text, re.DOTALL)
     if m:
         return m.group(1).strip()
+    m2 = re.search(r"```(?:python)?[ \t]*\n(.*)", text, re.DOTALL)
+    if m2:
+        return m2.group(1).strip()
     return text.strip()
 
 
