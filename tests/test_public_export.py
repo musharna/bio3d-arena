@@ -1,6 +1,6 @@
 import pytest
 from app import public_export as pe
-from app.models import Category, Generator, Task, ModelOutput
+from app.models import Category, Generator, GoldPair, ModelOutput, Task
 
 
 def _mk(db):
@@ -57,3 +57,39 @@ def test_check_licenses_fails_loud_on_unknown(db_session):
 def test_check_licenses_exempts_self_authored(db_session):
     e = _mk(db_session)
     pe.check_licenses(db_session, {e["o_self"].id})  # bio3d-arena source, no raise
+
+
+def test_resolve_propagates_gold_pair_decoys(db_session):
+    """The GoldPair loop in resolve_include_ids is the only real-world path that
+    populates IncludeSet.gold_output_ids. A gold pair's good/bad outputs must
+    travel with an included task even though they're flagged is_gold (and so are
+    excluded from the normal ModelOutput.is_gold split above the loop)."""
+    e = _mk(db_session)
+    o_good = ModelOutput(
+        task_id=e["t_pub"].id,
+        generator_id=e["g_ok"].id,
+        asset_path="gold-good.glb",
+        source="bio3d-arena",
+        license=None,
+        is_gold=True,
+    )
+    o_decoy = ModelOutput(
+        task_id=e["t_pub"].id,
+        generator_id=e["g_ok"].id,
+        asset_path="gold-bad.glb",
+        source="bio3d-arena",
+        license=None,
+        is_gold=True,
+    )
+    db_session.add_all([o_good, o_decoy])
+    db_session.flush()
+    gp = GoldPair(task_id=e["t_pub"].id, good_output_id=o_good.id, bad_output_id=o_decoy.id)
+    db_session.add(gp)
+    db_session.flush()
+
+    inc = pe.resolve_include_ids(db_session, task_titles=["maize-a"], generator_slugs=["lpy"])
+
+    assert o_good.id in inc.gold_output_ids
+    assert o_decoy.id in inc.gold_output_ids
+    assert o_good.id not in inc.output_ids
+    assert o_decoy.id not in inc.output_ids
