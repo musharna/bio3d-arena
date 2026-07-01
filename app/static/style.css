@@ -360,6 +360,46 @@ main {
 .viewer-slot:hover .viewer-hint {
   opacity: 1;
 }
+.viewer-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+  z-index: 4;
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+  pointer-events: auto;
+}
+.viewer-slot:hover .viewer-controls {
+  opacity: 1;
+}
+.viewer-ctl {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+  color: #e8eef5;
+  background: rgba(15, 20, 25, 0.72);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.viewer-ctl:hover,
+.viewer-ctl:focus {
+  background: rgba(30, 40, 52, 0.92);
+  outline: none;
+}
+/* Touch devices have no hover — keep the toolbar always tappable. */
+@media (hover: none) {
+  .viewer-controls {
+    opacity: 1;
+  }
+}
 .viewer-loading,
 .viewer-error {
   position: absolute;
