@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import uuid
+
 from app import matchmaking
 from app.models import Generator, ModelOutput, Task
 
 
 def _out(gen_paradigm, n):
-    g = Generator(slug=f"g{id(object())}", name="g", kind="model", paradigm=gen_paradigm)
+    g = Generator(slug=f"g{uuid.uuid4().hex}", name="g", kind="model", paradigm=gen_paradigm)
     return ModelOutput(generator=g, n_comparisons=n, asset_path="x.glb", is_gold=False)
 
 

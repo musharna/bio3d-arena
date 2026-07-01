@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from app import service
 from app.database import SessionLocal, init_db
 from app.models import (
@@ -18,7 +20,9 @@ def setup_module(_m):
 
 
 def _mk(db, paradigm):
-    g = Generator(slug=f"agg-{paradigm}-{id(object())}", name="g", kind="model", paradigm=paradigm)
+    g = Generator(
+        slug=f"agg-{paradigm}-{uuid.uuid4().hex}", name="g", kind="model", paradigm=paradigm
+    )
     db.add(g)
     db.flush()
     o = ModelOutput(task_id=db._task_id, generator_id=g.id, asset_path="x.glb", is_gold=False)
@@ -29,7 +33,7 @@ def _mk(db, paradigm):
 
 def test_cross_paradigm_comparison_excluded_from_matches():
     with SessionLocal() as db:
-        cat = Category(slug=f"c{id(object())}", name="c")
+        cat = Category(slug=f"c{uuid.uuid4().hex}", name="c")
         db.add(cat)
         db.flush()
         crit = db.execute(

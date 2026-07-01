@@ -1,21 +1,11 @@
 from __future__ import annotations
 
-import pytest
+import uuid
 
 from app import main as arena_main
 from app import service
 from app.database import SessionLocal, init_db
 from app.models import Criterion, Generator, Rating
-
-
-@pytest.fixture(autouse=True)
-def _reset_test_db(request):
-    """Reset database before each test to ensure isolation."""
-    with SessionLocal() as db:
-        db.query(Rating).delete()
-        db.query(Generator).delete()
-        db.commit()
-    yield
 
 
 def setup_module(_m):
@@ -32,7 +22,9 @@ def test_leaderboard_rows_carry_and_filter_paradigm():
             db.commit()
         gen_ids = {}
         for pgm in ("image_recon", "procedural_llm"):
-            g = Generator(slug=f"lbtest-{pgm}-{id(object())}", name=pgm, kind="model", paradigm=pgm)
+            g = Generator(
+                slug=f"lbtest-{pgm}-{uuid.uuid4().hex}", name=pgm, kind="model", paradigm=pgm
+            )
             db.add(g)
             db.flush()
             gen_ids[pgm] = g.id
