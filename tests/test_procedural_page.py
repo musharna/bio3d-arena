@@ -50,6 +50,7 @@ def test_procedural_page_renders_and_names_model():
     assert name in body  # models are named, not anonymized
     assert "experimental" in body.lower()  # fidelity caveat present
     assert "pass@1" in body
+    assert "—" in body or "&mdash;" in body  # em-dash renders when morph_fidelity is None
 
 
 def test_procedural_json_shape():

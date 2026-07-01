@@ -1,7 +1,8 @@
 {% extends "base.html" %} {% block title %}Procedural code-gen arena · Bio 3D
 Arena{% endblock %} {% block content %}
-<h1>Procedural code-gen arena</h1>
-<p class="lede">
+<section class="board">
+<h2>Procedural code-gen arena</h2>
+<p class="subtle">
   Each model authors a Blender-Python script that must run headless (Blender
   4.2) and produce a valid plant mesh.
 </p>
@@ -11,20 +12,20 @@ Arena{% endblock %} {% block content %}
   </li>
   <li>
     <strong>Morphology fidelity</strong> — share of judgeable traits the model
-    got right. <em>Experimental / uncalibrated</em>: the VLM judge has not
+    got right. <span class="cov-badge cov-prov">experimental</span>: the VLM judge has not
     passed the Mode-C agreement (&kappa;) gate. Treat it as a relative signal,
     not certified accuracy.
   </li>
 </ul>
 
 {% if rows %}
-<table class="board">
+<table class="ranktable">
   <thead>
     <tr>
       <th>Rank</th>
       <th>Model</th>
       <th>pass@1</th>
-      <th>Morphology fidelity <span class="tag">experimental</span></th>
+      <th>Morphology fidelity</th>
       <th>Median verts</th>
       <th>n</th>
     </tr>
@@ -51,5 +52,7 @@ Arena{% endblock %} {% block content %}
   </tbody>
 </table>
 {% else %}
-<p>No procedural code-gen results yet.</p>
-{% endif %} {% endblock %}
+<p class="subtle">No procedural code-gen results yet.</p>
+{% endif %}
+</section>
+{% endblock %}
