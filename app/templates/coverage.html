@@ -115,6 +115,26 @@
   {% endif %}
 </section>
 
+<section class="board">
+  <h3>Coverage by paradigm</h3>
+  <p class="subtle">Non-gold outputs by creation approach.</p>
+  {% if by_paradigm %}
+  <ul>
+    {% for paradigm, count in by_paradigm|dictsort %}
+    <li>
+      {% if paradigm %}
+        <b>{{ paradigm_display_names.get(paradigm, paradigm) }}</b>: {{ count }} outputs
+      {% else %}
+        <b>Untagged</b>: {{ count }} outputs
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="subtle">No outputs yet.</p>
+  {% endif %}
+</section>
+
 <section class="board prose">
   <p class="subtle">Machine-readable: <a href="/api/coverage.json">/api/coverage.json</a>.</p>
 </section>

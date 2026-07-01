@@ -26,7 +26,17 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import config, difficulty, ingest, integrity, matchmaking, ranking, service, submissions
+from . import (
+    config,
+    difficulty,
+    ingest,
+    integrity,
+    matchmaking,
+    paradigms,
+    ranking,
+    service,
+    submissions,
+)
 from .database import get_db, init_db
 from .models import (
     CalibrationPair,
@@ -346,7 +356,10 @@ def api_vote(
 
 
 def _leaderboard_rows(
-    db: Session, criterion_slug: str = "overall", category_slug: str | None = None
+    db: Session,
+    criterion_slug: str = "overall",
+    category_slug: str | None = None,
+    paradigm: str | None = None,
 ) -> list[dict]:
     crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
     if crit is None:
@@ -367,10 +380,13 @@ def _leaderboard_rows(
         gen = db.get(Generator, r.generator_id)
         if gen is None:
             continue  # stale rating row (generator deleted); skip rather than crash
+        if paradigm is not None and gen.paradigm != paradigm:
+            continue
         rows.append(
             {
                 "generator": names.get(r.generator_id, gen.name),
                 "kind": gen.kind,
+                "paradigm": gen.paradigm,
                 "elo": round(r.elo, 1),
                 "bt_score": round(r.bt_score, 1),
                 "bt_lower": round(r.bt_lower, 1),
@@ -447,8 +463,9 @@ def leaderboard(
     db: Session = Depends(get_db),
     criterion: str = "overall",
     category: str = "all",
+    paradigm: str | None = None,
 ):
-    rows = _leaderboard_rows(db, criterion, category)
+    rows = _leaderboard_rows(db, criterion, category, paradigm)
     total = matchmaking.total_votes(db)
     cats = db.execute(select(Category)).scalars().all()
     crits = db.execute(select(Criterion)).scalars().all()
@@ -469,6 +486,14 @@ def leaderboard(
     criterion_options = [
         {"slug": c.slug, "name": c.name, "selected": criterion == c.slug} for c in crits
     ]
+    # Collect all paradigms present in the rows
+    paradigms_in_rows = sorted({r["paradigm"] for r in rows if r.get("paradigm")})
+    paradigm_options = [
+        {"value": None, "display": "All paradigms", "selected": paradigm is None}
+    ] + [
+        {"value": p, "display": paradigms.DISPLAY_NAMES.get(p, p), "selected": paradigm == p}
+        for p in paradigms_in_rows
+    ]
     return templates.TemplateResponse(
         request,
         "leaderboard.html",
@@ -477,6 +502,8 @@ def leaderboard(
             "total_votes": total,
             "category_options": category_options,
             "criterion_options": criterion_options,
+            "paradigm_options": paradigm_options,
+            "paradigm_display_names": paradigms.DISPLAY_NAMES,
             "bias": service.compute_bias(db),
             "sel_criterion": criterion,
             "sel_category": category,
@@ -487,12 +514,16 @@ def leaderboard(
 
 @app.get("/api/leaderboard")
 def api_leaderboard(
-    db: Session = Depends(get_db), criterion: str = "overall", category: str = "all"
+    db: Session = Depends(get_db),
+    criterion: str = "overall",
+    category: str = "all",
+    paradigm: str | None = None,
 ):
     return {
         "criterion": criterion,
         "category": category,
-        "rows": _leaderboard_rows(db, criterion, category),
+        "paradigm": paradigm,
+        "rows": _leaderboard_rows(db, criterion, category, paradigm),
     }
 
 
@@ -520,6 +551,8 @@ def coverage_page(request: Request, db: Session = Depends(get_db)):
         {
             "generators": summary["generators"],
             "tasks": summary["tasks"],
+            "by_paradigm": summary.get("by_paradigm", {}),
+            "paradigm_display_names": paradigms.DISPLAY_NAMES,
             "firm_threshold": service.FIRM_VOTE_THRESHOLD,
             "trait_board": service.trait_leaderboard(db),
             "mode_c_experimental": not service.accepted_trait_classes(db),

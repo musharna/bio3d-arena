@@ -604,7 +604,14 @@ def coverage_summary(db: Session) -> dict:
         )
     task_rows.sort(key=lambda r: (-r["outputs"], r["task"]))
 
-    return {"generators": gen_rows, "tasks": task_rows}
+    # Count non-gold outputs by paradigm
+    by_paradigm: dict[str, int] = {}
+    for o in db.execute(select(ModelOutput).where(ModelOutput.is_gold.is_(False))).scalars():
+        g = db.get(Generator, o.generator_id)
+        key = g.paradigm if g else ""
+        by_paradigm[key] = by_paradigm.get(key, 0) + 1
+
+    return {"generators": gen_rows, "tasks": task_rows, "by_paradigm": by_paradigm}
 
 
 MODE_C_KAPPA_BAR = 0.6

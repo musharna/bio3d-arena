@@ -18,6 +18,13 @@
         {% endfor %}
       </select>
     </label>
+    <label>Paradigm
+      <select name="paradigm" onchange="this.form.submit()">
+        {% for opt in paradigm_options %}
+        <option value="{% if opt.value %}{{ opt.value }}{% endif %}" {% if opt.selected %}selected{% endif %}>{{ opt.display }}</option>
+        {% endfor %}
+      </select>
+    </label>
   </form>
   <p class="subtle">
     {{ total_votes }} votes cast. <b>Rank (UB)</b> groups models whose 95% bootstrap
@@ -38,6 +45,7 @@
         <th title="Models with overlapping 95% CIs share a rank">Rank (UB)</th>
         <th>Generator</th>
         <th>Kind</th>
+        <th>Paradigm</th>
         <th>BT score</th>
         <th>95% CI</th>
         <th>Elo</th>
@@ -50,6 +58,7 @@
         <td>{{ r.rank }}</td>
         <td class="gen">{{ r.generator }}</td>
         <td><span class="kind kind-{{ r.kind }}">{{ r.kind }}</span></td>
+        <td class="subtle">{{ paradigm_display_names.get(r.paradigm, r.paradigm) if r.paradigm else "—" }}</td>
         <td class="num strong">{{ r.bt_score }}</td>
         <td class="ci-cell">
           <div
