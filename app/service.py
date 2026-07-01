@@ -19,6 +19,7 @@ from .paradigms import same_paradigm
 from .sourcing import is_reference_scan, is_untextured_output
 from .models import (
     Category,
+    CommissionAttempt,
     Comparison,
     Criterion,
     Generator,
@@ -663,6 +664,89 @@ def load_scopes(db: Session, judge_model: str | None = None) -> dict[int, dict]:
             parts = []
         scopes[s.output_id] = {"is_plant": bool(s.is_plant), "visible_parts": parts}
     return scopes
+
+
+def procedural_scorecard(db: Session) -> list[dict]:
+    """Per-model scorecard for the procedural_llm paradigm (LLMs authoring Blender-Python).
+    Existing data only. pass@1 = valid/attempts from CommissionAttempt (status 'ok').
+    Morphology fidelity = present_correct / scope-assessable non-na TraitVerdicts on the
+    generator's commissioned outputs — EXPERIMENTAL/uncalibrated (Mode-C kappa-gate open).
+    One row per procedural_llm generator, ranked by pass@1 desc (tiebreak morph_fidelity)."""
+    import json
+    import statistics
+
+    gens = (
+        db.execute(select(Generator).where(Generator.paradigm == "procedural_llm")).scalars().all()
+    )
+    if not gens:
+        return []
+    scopes = load_scopes(db)
+    rows: list[dict] = []
+    for gen in gens:
+        attempts = (
+            db.execute(select(CommissionAttempt).where(CommissionAttempt.generator_id == gen.id))
+            .scalars()
+            .all()
+        )
+        n_attempts = len(attempts)
+        ok = [a for a in attempts if a.status == "ok"]
+        n_valid = len(ok)
+        pass_at_1 = (n_valid / n_attempts) if n_attempts else 0.0
+
+        verts: list[int] = []
+        for a in ok:
+            try:
+                verts.append(int(json.loads(a.mesh_stats_json or "{}").get("vertices", 0)))
+            except (ValueError, TypeError):
+                continue
+        median_verts = int(statistics.median(verts)) if verts else 0
+
+        out_ids = (
+            db.execute(
+                select(ModelOutput.id).where(
+                    ModelOutput.generator_id == gen.id,
+                    ModelOutput.source == "commissioned",
+                )
+            )
+            .scalars()
+            .all()
+        )
+        morph_correct = 0
+        morph_assessable = 0
+        if out_ids:
+            verdicts = (
+                db.execute(select(TraitVerdict).where(TraitVerdict.output_id.in_(out_ids)))
+                .scalars()
+                .all()
+            )
+            for v in verdicts:
+                if v.verdict == "not_assessable":
+                    continue
+                if not is_assessable(
+                    scopes.get(v.output_id),
+                    {"key": v.trait_key, "trait_class": v.trait_class},
+                ):
+                    continue
+                morph_assessable += 1
+                if v.verdict == "present_correct":
+                    morph_correct += 1
+        morph_fidelity = (morph_correct / morph_assessable) if morph_assessable else None
+
+        rows.append(
+            {
+                "model": gen.name,
+                "attempts": n_attempts,
+                "valid": n_valid,
+                "pass_at_1": pass_at_1,
+                "morph_correct": morph_correct,
+                "morph_assessable": morph_assessable,
+                "morph_fidelity": morph_fidelity,
+                "median_verts": median_verts,
+                "n": n_attempts,
+            }
+        )
+    rows.sort(key=lambda r: (r["pass_at_1"], r["morph_fidelity"] or -1.0), reverse=True)
+    return rows
 
 
 def calibration_pairs_by_class(human_labels, stored, scope_by_output=None):
