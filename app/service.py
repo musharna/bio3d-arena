@@ -666,7 +666,7 @@ def load_scopes(db: Session, judge_model: str | None = None) -> dict[int, dict]:
     return scopes
 
 
-def procedural_scorecard(db: Session) -> list[dict]:
+def procedural_scorecard(db: Session, judge_model: str | None = None) -> list[dict]:
     """Per-model scorecard for the procedural_llm paradigm (LLMs authoring Blender-Python).
     Existing data only. pass@1 = valid/attempts from CommissionAttempt (status 'ok').
     Morphology fidelity = present_correct / scope-assessable non-na TraitVerdicts on the
@@ -675,6 +675,10 @@ def procedural_scorecard(db: Session) -> list[dict]:
     import json
     import statistics
 
+    if judge_model is None:
+        from . import judge
+
+        judge_model = judge.JUDGE_MODEL
     gens = (
         db.execute(select(Generator).where(Generator.paradigm == "procedural_llm")).scalars().all()
     )
@@ -715,7 +719,12 @@ def procedural_scorecard(db: Session) -> list[dict]:
         morph_assessable = 0
         if out_ids:
             verdicts = (
-                db.execute(select(TraitVerdict).where(TraitVerdict.output_id.in_(out_ids)))
+                db.execute(
+                    select(TraitVerdict).where(
+                        TraitVerdict.output_id.in_(out_ids),
+                        TraitVerdict.judge_model == judge_model,
+                    )
+                )
                 .scalars()
                 .all()
             )

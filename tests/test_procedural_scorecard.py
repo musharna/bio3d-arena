@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 
-from app import service
+from app import judge, service
 from app.database import SessionLocal, init_db
 from app.models import (
     Category,
@@ -114,6 +114,7 @@ def test_scorecard_pass_at_1_fidelity_rank_and_exclusion():
                     trait_key="k1",
                     trait_class="presence",
                     verdict="present_correct",
+                    judge_model=judge.JUDGE_MODEL,
                 ),
                 TraitVerdict(
                     output_id=out.id,
@@ -121,6 +122,7 @@ def test_scorecard_pass_at_1_fidelity_rank_and_exclusion():
                     trait_key="k2",
                     trait_class="presence",
                     verdict="present_wrong",
+                    judge_model=judge.JUDGE_MODEL,
                 ),
                 TraitVerdict(
                     output_id=out.id,
@@ -128,6 +130,7 @@ def test_scorecard_pass_at_1_fidelity_rank_and_exclusion():
                     trait_key="k3",
                     trait_class="presence",
                     verdict="not_assessable",
+                    judge_model=judge.JUDGE_MODEL,
                 ),
             ]
         )
@@ -264,6 +267,7 @@ def test_scorecard_morph_fidelity_0_sorts_before_none():
                 trait_key="test_key",
                 trait_class="presence",
                 verdict="present_wrong",  # 0 correct, 1 assessable → fidelity 0.0
+                judge_model=judge.JUDGE_MODEL,
             )
         )
 
@@ -289,3 +293,84 @@ def test_scorecard_morph_fidelity_0_sorts_before_none():
             f"Expected {gen_a.name} (fidelity=0.0) before {gen_b.name} (fidelity=None), "
             f"got {model_order}"
         )
+
+
+def test_procedural_scorecard_filters_by_judge_model():
+    """Test that procedural_scorecard only counts verdicts from the default judge_model.
+
+    When an output has two TraitVerdicts on the same trait with different judge_model values,
+    only the default judge_model verdict should be counted (no double-counting).
+    This mirrors the behavior of recompute_trait_scores.
+    """
+    with SessionLocal() as db:
+        tag = uuid.uuid4().hex
+        # Generator with procedural_llm paradigm
+        gen = Generator(
+            slug=f"jm-{tag}", name=f"model-jm-{tag}", kind="model", paradigm="procedural_llm"
+        )
+        db.add(gen)
+        db.flush()
+
+        t = _mk_task(db)
+        db.add(
+            CommissionAttempt(
+                task_id=t,
+                model_id=gen.name,
+                generator_id=gen.id,
+                status="ok",
+                mesh_stats_json=json.dumps({"vertices": 100}),
+            )
+        )
+
+        # Commissioned output with a plant scope
+        out = ModelOutput(
+            task_id=t,
+            generator_id=gen.id,
+            asset_path=f"commissioned/{tag}.glb",
+            source="commissioned",
+        )
+        db.add(out)
+        db.flush()
+        db.add(
+            ModelScope(
+                output_id=out.id,
+                is_plant=True,
+                parts_json=json.dumps(["whole_plant"]),
+                judge_model="j",
+            )
+        )
+
+        # Two TraitVerdicts on the same output and trait_key, but different judge_model values
+        # One with the default judge_model, one with a different judge_model
+        db.add_all(
+            [
+                TraitVerdict(
+                    output_id=out.id,
+                    rubric_id=0,
+                    trait_key="trait_v1",
+                    trait_class="presence",
+                    verdict="present_correct",
+                    judge_model=judge.JUDGE_MODEL,  # default
+                ),
+                TraitVerdict(
+                    output_id=out.id,
+                    rubric_id=0,
+                    trait_key="trait_v1",  # same trait_key
+                    trait_class="presence",
+                    verdict="present_correct",
+                    judge_model="other-judge-model",  # different judge_model
+                ),
+            ]
+        )
+        db.commit()
+
+        rows = service.procedural_scorecard(db)
+        by_model = {r["model"]: r for r in rows}
+
+        gen_row = by_model[gen.name]
+        # Only the default judge_model verdict should be counted: morph_assessable == 1, not 2
+        assert gen_row["morph_assessable"] == 1, (
+            f"Expected morph_assessable == 1 (only default judge_model counted), "
+            f"got {gen_row['morph_assessable']}"
+        )
+        assert gen_row["morph_correct"] == 1
