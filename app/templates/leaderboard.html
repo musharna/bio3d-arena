@@ -51,7 +51,6 @@
         <th>Paradigm</th>
         <th>BT score</th>
         <th>95% CI</th>
-        <th>Elo</th>
         <th>Games</th>
       </tr>
     </thead>
@@ -76,7 +75,6 @@
           </div>
           <span class="ci-nums">[{{ r.bt_lower }}, {{ r.bt_upper }}]</span>
         </td>
-        <td class="num">{{ r.elo }}</td>
         <td class="num">{{ r.n_games }}</td>
       </tr>
       {% endfor %}
