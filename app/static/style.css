@@ -434,7 +434,7 @@ main {
 .vote-btn.bad {
   border-color: #b9636b;
 }
-.onboard-banner {
+.onboard-banner:not([hidden]) {
   display: flex;
   align-items: center;
   justify-content: space-between;
