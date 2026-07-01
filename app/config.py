@@ -32,6 +32,8 @@ GOLD_RATE = float(os.environ.get("BIO3D_GOLD_RATE", "0.1"))
 TRUST_THRESHOLD = float(os.environ.get("BIO3D_TRUST_THRESHOLD", "0.5"))
 # Optional human-verification (captcha). Off by default so local/dev needs no keys.
 REQUIRE_CAPTCHA = os.environ.get("BIO3D_REQUIRE_CAPTCHA", "false").lower() in ("1", "true", "yes")
+CAPTCHA_PROVIDER = os.environ.get("BIO3D_CAPTCHA_PROVIDER", "turnstile").lower()  # turnstile|hcaptcha
+CAPTCHA_SECRET = os.environ.get("BIO3D_CAPTCHA_SECRET", "")
 
 # --- Scale-out: storage, DB pooling, distributed rate limiting ---
 # Asset storage backend: "local" (filesystem + StaticFiles) or "s3" (object store).
