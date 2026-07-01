@@ -35,6 +35,12 @@ REQUIRE_CAPTCHA = os.environ.get("BIO3D_REQUIRE_CAPTCHA", "false").lower() in ("
 CAPTCHA_PROVIDER = os.environ.get("BIO3D_CAPTCHA_PROVIDER", "turnstile").lower()  # turnstile|hcaptcha
 CAPTCHA_SECRET = os.environ.get("BIO3D_CAPTCHA_SECRET", "")
 
+# --- Verified login (Hugging Face OAuth). Off unless client id+secret are set. ---
+HF_CLIENT_ID = os.environ.get("BIO3D_HF_CLIENT_ID", "")
+HF_CLIENT_SECRET = os.environ.get("BIO3D_HF_CLIENT_SECRET", "")
+SESSION_SECRET = os.environ.get("BIO3D_SESSION_SECRET", "dev-session-secret-change-me")
+PUBLIC_BASE_URL = os.environ.get("BIO3D_PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+
 # --- Scale-out: storage, DB pooling, distributed rate limiting ---
 # Asset storage backend: "local" (filesystem + StaticFiles) or "s3" (object store).
 STORAGE_BACKEND = os.environ.get("BIO3D_STORAGE_BACKEND", "local").lower()
