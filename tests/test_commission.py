@@ -68,3 +68,15 @@ def test_sandbox_env_strips_secrets_keeps_essentials():
         "APP_SECRET",
     ):
         assert leaked not in env
+
+
+def test_extract_script_fenced_python():
+    txt = "Here it is:\n```python\nimport bpy\nprint(1)\n```\nDone."
+    assert commission.extract_script(txt) == "import bpy\nprint(1)"
+
+
+def test_extract_script_plain_fence_and_unfenced_and_empty():
+    assert commission.extract_script("```\nimport bpy\n```") == "import bpy"
+    assert commission.extract_script("import bpy\nx=1") == "import bpy\nx=1"
+    assert commission.extract_script("") == ""
+    assert commission.extract_script(None) == ""

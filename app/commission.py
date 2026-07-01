@@ -8,6 +8,7 @@ ingestion); scripts/commission_arena.py wires the real HTTP client + Blender."""
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import tempfile
 import time
@@ -109,3 +110,14 @@ def run_bpy(
             "glb_path": str(out_glb) if ok else None,
             "mesh_stats": stats,
         }
+
+
+def extract_script(text: str) -> str:
+    """Pull the Python script out of a chat completion. Single fenced block, literal
+    terminator — no nested/ambiguous quantifiers (safe on arbitrary completions)."""
+    if not text:
+        return ""
+    m = re.search(r"```(?:python)?[ \t]*\n(.*?)```", text, re.DOTALL)
+    if m:
+        return m.group(1).strip()
+    return text.strip()
