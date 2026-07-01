@@ -46,16 +46,30 @@ if counts["a"] != 2 or counts["b"] != 2:
     fails.append(f"expected 2 .viewer-ctl per slot, got A={counts['a']} B={counts['b']}")
 
 # Reset: spin A off default, click its Reset button (first .viewer-ctl), assert default framing.
+# model-viewer applies jumpCameraToGoal() on the NEXT frame, so getCameraOrbit() read
+# synchronously still shows the old (default) values — wait two animation frames each time
+# the camera is mutated before snapshotting, or the 'moved' precondition reads vacuously.
 reset = p.evaluate(
-    """() => {
+    """async () => {
+      const nextFrames = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       const mv = document.querySelector('#slot-a model-viewer');
       mv.cameraOrbit = '1.4rad 0.9rad 3m'; mv.jumpCameraToGoal();
+      await nextFrames();
       const moved = mv.getCameraOrbit();
       document.querySelector('#slot-a .viewer-ctl').click();  // Reset (first button)
+      await nextFrames();
       const o = mv.getCameraOrbit();
       return { movedTheta: moved.theta, movedPhi: moved.phi, theta: o.theta, phi: o.phi };
     }"""
 )
+# PRECONDITION: the camera must genuinely leave default before Reset, or the post-reset
+# check below is vacuous (Reset re-defaulting an already-default camera). The move sets
+# orbit '1.4rad 0.9rad 3m', so moved.theta≈1.4 and moved.phi≈0.9 — both far from default.
+if abs(reset["movedTheta"]) < 0.1 or abs(reset["movedPhi"] - 1.309) < 0.1:
+    fails.append(
+        "precondition failed: camera did not leave default before Reset "
+        f"(theta={reset['movedTheta']}, phi={reset['movedPhi']})"
+    )
 # default: theta 0 rad, phi 75deg = 1.309 rad. Tolerance for rounding.
 if abs(reset["theta"]) > 0.05 or abs(reset["phi"] - 1.309) > 0.05:
     fails.append(
