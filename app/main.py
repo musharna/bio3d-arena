@@ -511,6 +511,24 @@ def methodology_page(request: Request):
     )
 
 
+@app.get("/terms", response_class=HTMLResponse)
+def terms_page(request: Request):
+    return templates.TemplateResponse(request, "terms.html")
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy_page(request: Request):
+    return templates.TemplateResponse(request, "privacy.html")
+
+
+@app.get("/licenses", response_class=HTMLResponse)
+def licenses_page(request: Request, db: Session = Depends(get_db)):
+    rows = db.execute(
+        select(ModelOutput.license, ModelOutput.attribution, ModelOutput.source).distinct()
+    ).all()
+    return templates.TemplateResponse(request, "licenses.html", {"licenses": rows})
+
+
 @app.get("/coverage", response_class=HTMLResponse)
 def coverage_page(request: Request, db: Session = Depends(get_db)):
     summary = service.coverage_summary(db)
