@@ -245,6 +245,10 @@ PAGE_HTML = """<!doctype html><html><head><meta charset=utf-8>
  #cur{color:#9cf}.done{color:#3a8}
  select{background:#181818;color:#eee;border:1px solid #444;border-radius:6px;padding:4px}
  small{color:#888}
+ button.v{white-space:normal;line-height:1.35}
+ .eg{color:#8a8;font-weight:400}
+ .tree{background:#161c16;border:1px solid #2c3a2c;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;color:#bcd}
+ .tree b{color:#9cf}
 </style></head><body>
 <header>
  <b>Mode-C labeler</b>
@@ -261,12 +265,18 @@ PAGE_HTML = """<!doctype html><html><head><meta charset=utf-8>
    <div class=exp>Trait: <span id=exp></span></div>
    <small>Judge THIS trait from the 4 views. Keys 1-4. ←/→ navigate.</small>
   </div>
-  <button class="v pc" data-v=present_correct><span class=k>1</span>present_correct — shown & matches</button>
-  <button class="v pw" data-v=present_wrong><span class=k>2</span>present_wrong — shown but wrong</button>
-  <button class="v ab" data-v=absent><span class=k>3</span>absent — trait not there (counts against model)</button>
-  <button class="v na" data-v=not_assessable><span class=k>4</span>not_assessable — can't tell from views</button>
-  <textarea id=note placeholder="optional note (e.g. 'not a plant / total junk')"></textarea>
-  <div><span class=chip data-note="not a plant / junk">✗ not a plant</span>
+  <div class=tree>
+   <b>Decide in order:</b><br>
+   1. Is it a recognizable plant? <b>No</b> (junk / blob / not a plant) → press <b>4</b>.<br>
+   2. Is this feature present in the model? <b>No</b> → press <b>3</b>.<br>
+   3. Does it match the expected value? <b>Yes</b> → press <b>1</b>. &nbsp; <b>No</b> (wrong color/shape/count) → press <b>2</b>.
+  </div>
+  <button class="v pc" data-v=present_correct><span class=k>1</span><b>present_correct</b> — feature is there AND matches <span class=eg>(e.g. fruit present & red as expected)</span></button>
+  <button class="v pw" data-v=present_wrong><span class=k>2</span><b>present_wrong</b> — feature is there but the value is WRONG <span class=eg>(right organ, wrong color/shape/count — e.g. fruit present but green not red)</span></button>
+  <button class="v ab" data-v=absent><span class=k>3</span><b>absent</b> — a real plant, but this feature is genuinely missing <span class=eg>(counts against the model)</span></button>
+  <button class="v na" data-v=not_assessable><span class=k>4</span><b>not_assessable</b> — can't judge: not a recognizable plant / junk, or the region isn't visible <span class=eg>(dropped from scoring — NOT counted against the model)</span></button>
+  <textarea id=note placeholder="optional note (e.g. 'wrong shade', 'partial plant')"></textarea>
+  <div><span class=chip id=notplant>✗ not a plant → 4</span>
        <span class=chip data-note="too low-res to judge">blurry</span></div>
   <div class=nav>
    <button id=prev>← prev</button>
@@ -323,6 +333,8 @@ async function save(verdict){
 document.querySelectorAll('button.v').forEach(b=>b.onclick=()=>save(b.dataset.v));
 document.querySelectorAll('.chip[data-note]').forEach(c=>c.onclick=()=>{
  document.getElementById('note').value=c.dataset.note;document.getElementById('note').focus();});
+document.getElementById('notplant').onclick=()=>{
+ document.getElementById('note').value='not a plant / junk';save('not_assessable');};
 document.getElementById('prev').onclick=()=>{let n=cur-1;while(n>=0&&!inFilter(n))n--;if(n>=0){cur=n;render();}};
 document.getElementById('skip').onclick=()=>{let n=cur+1;while(n<ROWS.length&&!inFilter(n))n++;if(n<ROWS.length){cur=n;render();}};
 document.getElementById('nextunl').onclick=()=>{let n=cur+1;while(n<ROWS.length&&(!inFilter(n)||ROWS[n].human_verdict))n++;if(n<ROWS.length){cur=n;render();}};

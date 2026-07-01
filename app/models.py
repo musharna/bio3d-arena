@@ -527,3 +527,42 @@ class TraitCalibration(Base):
     n: Mapped[int] = mapped_column(Integer, default=0)
     accepted: Mapped[bool] = mapped_column(Boolean, default=False)
     updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class ModelScope(Base):
+    """What plant parts a model actually depicts (VLM 'scope' pass). is_plant=False marks junk;
+    parts_json is a JSON list drawn from scope.SCOPE_PARTS. Consulted by scope.is_assessable so
+    a trait is only judged on a model that shows the relevant structure (e.g. habit is skipped
+    on a single-fruit model). One row per output per judge_model."""
+
+    __tablename__ = "model_scope"
+    __table_args__ = (UniqueConstraint("output_id", "judge_model", name="uq_model_scope"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"), index=True)
+    is_plant: Mapped[bool] = mapped_column(Boolean, default=True)
+    parts_json: Mapped[str] = mapped_column(Text, default="[]")
+    rationale: Mapped[str] = mapped_column(Text, default="")
+    judge_model: Mapped[str] = mapped_column(String(64), default="")
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class CommissionAttempt(Base):
+    """One agent's attempt at one task in the commissioned-generation arena. Records the
+    script + outcome even on failure (output_id NULL), so execution-success rate is a real
+    metric. One row per (model_id, task_id) — resumable."""
+
+    __tablename__ = "commission_attempt"
+    __table_args__ = (UniqueConstraint("model_id", "task_id", name="uq_commission_attempt"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("task.id"), index=True)
+    model_id: Mapped[str] = mapped_column(String(128), index=True)
+    generator_id: Mapped[int | None] = mapped_column(ForeignKey("generator.id"), nullable=True)
+    output_id: Mapped[int | None] = mapped_column(ForeignKey("model_output.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(20))  # ok|error|timeout|invalid_mesh
+    error: Mapped[str] = mapped_column(Text, default="")
+    script: Mapped[str] = mapped_column(Text, default="")
+    mesh_stats_json: Mapped[str] = mapped_column(Text, default="{}")
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)

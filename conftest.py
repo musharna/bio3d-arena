@@ -55,6 +55,18 @@ for _slug in ("arabidopsis", "pinus", "tomato", "rose", "soybean"):
 import pytest  # noqa: E402  (after the temp-dir/env bootstrap above, by design)
 
 
+@pytest.fixture(autouse=True)
+def _reset_commission_db(request):
+    """Isolate commission tests by resetting the database before each test."""
+    # Only reset for commission_ingest tests to ensure they have a clean database
+    if "test_commission_ingest" in request.node.nodeid:
+        from app.database import Base, engine
+
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+    yield
+
+
 @pytest.fixture
 def db_session():
     """Per-test isolated ``Session`` on the suite's shared (temp-dir) engine.
@@ -74,9 +86,7 @@ def db_session():
     init_db()
     connection = engine.connect()
     transaction = connection.begin()
-    session = sessionmaker(
-        bind=connection, autoflush=False, expire_on_commit=False, future=True
-    )()
+    session = sessionmaker(bind=connection, autoflush=False, expire_on_commit=False, future=True)()
     try:
         yield session
     finally:
