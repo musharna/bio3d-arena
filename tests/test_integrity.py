@@ -132,6 +132,11 @@ def test_low_trust_votes_excluded_from_ranking():
 def test_captcha_gate(monkeypatch):
     client = TestClient(app)
     monkeypatch.setattr(config, "REQUIRE_CAPTCHA", True)
+    # verify_captcha now does REAL provider verification (SP1); stub it to accept any
+    # non-empty token and reject empty, so this integration test exercises the vote-gate
+    # WIRING (main.py → verify_captcha → 403). Provider logic is unit-tested in
+    # test_captcha.py; a live provider call here would fail-close and 403 the valid leg.
+    monkeypatch.setattr(integrity, "verify_captcha", lambda token, **kw: bool(token))
     integrity.reset_rate_limits()
     nxt = client.get("/api/next").json()
     blocked = client.post("/api/vote", json={"comparison_id": nxt["comparison_id"], "winner": "a"})

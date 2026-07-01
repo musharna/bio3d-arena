@@ -301,3 +301,39 @@ def test_benchmark_page_defaults_to_first_scored_task():
         )
     finally:
         db.close()
+
+
+# ── Visual audit 2026-06-30: nav /dataset link + verified-toggle + None guard ──
+
+
+def test_dataset_link_in_nav():
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    assert "/dataset" in client.get("/").text  # nav link present on every page
+
+
+def test_leaderboard_verified_toggle_and_scope():
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    r = client.get("/leaderboard")
+    assert r.status_code == 200 and "verified=true" in r.text  # toggle present
+    rv = client.get("/leaderboard?verified=true")
+    assert rv.status_code == 200  # verified scope renders
+
+
+def test_no_literal_none_in_bias_line_when_zero_votes():
+    # The bias-line guard must never leak the literal "None" into the rendered
+    # tie/bad rates, regardless of whether the shared test DB has prior votes.
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    text = client.get("/leaderboard").text
+    assert "tie None" not in text and "bad None" not in text

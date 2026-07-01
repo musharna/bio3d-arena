@@ -1,6 +1,22 @@
 {% extends "base.html" %} {% block title %}Arena · Bio 3D Arena{% endblock %} {%
 block content %}
 <section class="arena">
+  <div class="onboard-banner" id="onboard-banner" hidden>
+    <span
+      >👋 New here? <strong>Rotate &amp; zoom</strong> each model, then vote for
+      the better one. Keys: <kbd>←</kbd> A · <kbd>→</kbd> B · <kbd>T</kbd> tie ·
+      <kbd>X</kbd> both-bad.</span
+    >
+    <button
+      type="button"
+      class="onboard-dismiss"
+      id="onboard-dismiss"
+      aria-label="Dismiss"
+    >
+      ✕
+    </button>
+  </div>
+
   <div class="filter-row">
     <label
       >Category
@@ -27,8 +43,29 @@ block content %}
     </p>
   </div>
 
+  <div class="ab-toggle" role="tablist" aria-label="Which model to view">
+    <button
+      type="button"
+      class="ab-btn is-active"
+      data-ab="a"
+      role="tab"
+      aria-selected="true"
+    >
+      Model A
+    </button>
+    <button
+      type="button"
+      class="ab-btn"
+      data-ab="b"
+      role="tab"
+      aria-selected="false"
+    >
+      Model B
+    </button>
+  </div>
+
   <div class="pair">
-    <div class="model-col">
+    <div class="model-col is-active">
       <div class="model-label">Model A <span class="fmt-chip" id="fmt-a"></span></div>
       <div class="viewer-slot" id="slot-a"></div>
     </div>
@@ -39,10 +76,14 @@ block content %}
   </div>
 
   <div class="vote-bar">
-    <button class="vote-btn win" data-winner="a">👈 A is better</button>
-    <button class="vote-btn tie" data-winner="tie">🤝 Tie</button>
-    <button class="vote-btn bad" data-winner="bad">👎 Both bad</button>
-    <button class="vote-btn win" data-winner="b">B is better 👉</button>
+    <button class="vote-btn win" data-winner="a">
+      👈 A is better <kbd>←</kbd>
+    </button>
+    <button class="vote-btn tie" data-winner="tie">🤝 Tie <kbd>T</kbd></button>
+    <button class="vote-btn bad" data-winner="bad">👎 Both bad <kbd>X</kbd></button>
+    <button class="vote-btn win" data-winner="b">
+      B is better 👉 <kbd>→</kbd>
+    </button>
   </div>
   <p id="status-line" class="status-line"></p>
 </section>

@@ -9,7 +9,10 @@
 from __future__ import annotations
 
 import functools
+import json as _json
 import time
+import urllib.parse as _urlparse
+import urllib.request as _urlreq
 from collections import defaultdict, deque
 
 from sqlalchemy import select
@@ -77,15 +80,38 @@ def reset_rate_limits() -> None:
     _limiter().reset()
 
 
-def verify_captcha(token: str | None) -> bool:
+_SITEVERIFY = {
+    "turnstile": "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+    "hcaptcha": "https://api.hcaptcha.com/siteverify",
+}
+
+
+def _post_form(url: str, data: dict) -> dict:
+    body = _urlparse.urlencode(data).encode()
+    # urllib auto-sets this for bytes `data`, but be explicit — the siteverify
+    # endpoints expect a form-encoded body.
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    with _urlreq.urlopen(_urlreq.Request(url, data=body, headers=headers), timeout=10) as r:
+        return _json.loads(r.read().decode())
+
+
+def verify_captcha(token: str | None, *, _post=_post_form) -> bool:
     """Verify a human-check token. No-op unless REQUIRE_CAPTCHA is enabled.
 
-    Integration point: when enabling, validate `token` against Turnstile/hCaptcha
-    here. The stub accepts any non-empty token so the seam is wired + testable.
+    When enabled, POSTs `token` to the configured provider's siteverify endpoint
+    (Turnstile/hCaptcha). `_post` is injectable for testing; network/parse failure
+    fails closed (returns False) since a required captcha must not silently pass.
     """
     if not config.REQUIRE_CAPTCHA:
         return True
-    return bool(token)
+    if not token:
+        return False
+    url = _SITEVERIFY.get(config.CAPTCHA_PROVIDER, _SITEVERIFY["turnstile"])
+    try:
+        res = _post(url, {"secret": config.CAPTCHA_SECRET, "response": token})
+        return bool(res.get("success")) if isinstance(res, dict) else False
+    except Exception:
+        return False
 
 
 def get_or_create_session(db: Session, session_id: str) -> VoterSession:

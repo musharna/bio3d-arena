@@ -18,22 +18,38 @@
   <body>
     <header class="topbar">
       <a class="brand" href="/">🧬 Bio 3D Arena</a>
+      <input type="checkbox" id="nav-toggle" class="nav-toggle-cb" hidden />
+      <label for="nav-toggle" class="nav-burger" aria-label="Toggle navigation"
+        >☰</label
+      >
       <nav>
         <a href="/">Arena</a>
         <a href="/leaderboard">Leaderboard</a>
         <a href="/significance">Significance</a>
         <a href="/benchmark">Benchmark</a>
+        <a href="/dataset">Dataset</a>
         <a href="/difficulty">Difficulty</a>
         <a href="/tasks">Tasks</a>
         <a href="/submit">Submit</a>
         <a href="/coverage">Coverage</a>
         <a href="/procedural">Procedural</a>
         <a href="/methodology">Methodology</a>
+        {% if request.state.user %}
+        <span class="verified">✓ {{ request.state.user.username }}</span>
+        <form method="post" action="/auth/logout" style="display:inline">
+          <button type="submit">Sign out</button>
+        </form>
+        {% elif request.state.login_enabled %}
+        <a href="/auth/login">Sign in with Hugging Face</a>
+        {% endif %}
       </nav>
     </header>
     <main>{% block content %}{% endblock %}</main>
     <footer class="foot">
-      Anonymous pairwise comparison of biological 3D generations
+      Anonymous pairwise comparison of biological 3D generations ·
+      <a href="/terms">Terms</a> ·
+      <a href="/privacy">Privacy</a> ·
+      <a href="/licenses">Licenses</a>
     </footer>
   </body>
 </html>
