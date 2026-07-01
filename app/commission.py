@@ -7,6 +7,10 @@ ingestion); scripts/commission_arena.py wires the real HTTP client + Blender."""
 
 from __future__ import annotations
 
+import os
+import subprocess
+import tempfile
+import time
 from pathlib import Path
 
 import trimesh
@@ -26,3 +30,62 @@ def is_valid_mesh(glb_path) -> tuple[bool, dict]:
     faces = sum(len(g.faces) for g in geoms)
     ok = vertices > 0 and faces > 0
     return ok, {"meshes": len(geoms), "vertices": vertices, "faces": faces}
+
+
+def run_bpy(
+    script_text: str,
+    *,
+    out_glb,
+    timeout_s: int = 120,
+    blender_bin: str = "blender",
+    sandbox_prefix: list[str] | None = None,
+) -> dict:
+    """Run an LLM-authored bpy script headless in a throwaway temp cwd, exposing only
+    OUT_GLB. Returns a status dict; never raises on script failure. sandbox_prefix lets the
+    caller wrap the command (e.g. ["heavy-run"] for a memory cap, ["unshare","-rn"] for no
+    network) — kept configurable so tests run bare."""
+    out_glb = Path(out_glb)
+    prefix = list(sandbox_prefix or [])
+    start = time.monotonic()
+    with tempfile.TemporaryDirectory() as td:
+        script_path = Path(td) / "gen.py"
+        script_path.write_text(script_text)
+        env = {**os.environ, "OUT_GLB": str(out_glb)}
+        cmd = [*prefix, blender_bin, "--background", "--python", str(script_path)]
+        try:
+            proc = subprocess.run(
+                cmd, env=env, cwd=td, capture_output=True, text=True, timeout=timeout_s
+            )
+        except subprocess.TimeoutExpired:
+            return {
+                "status": "timeout",
+                "stderr": "wall-clock timeout",
+                "duration_ms": timeout_s * 1000,
+                "glb_path": None,
+                "mesh_stats": {},
+            }
+        except FileNotFoundError:
+            return {
+                "status": "error",
+                "stderr": f"blender binary not found: {blender_bin}",
+                "duration_ms": int((time.monotonic() - start) * 1000),
+                "glb_path": None,
+                "mesh_stats": {},
+            }
+        dur = int((time.monotonic() - start) * 1000)
+        if proc.returncode != 0:
+            return {
+                "status": "error",
+                "stderr": proc.stderr[-4000:],
+                "duration_ms": dur,
+                "glb_path": None,
+                "mesh_stats": {},
+            }
+        ok, stats = is_valid_mesh(out_glb)
+        return {
+            "status": "ok" if ok else "invalid_mesh",
+            "stderr": proc.stderr[-2000:],
+            "duration_ms": dur,
+            "glb_path": str(out_glb) if ok else None,
+            "mesh_stats": stats,
+        }
