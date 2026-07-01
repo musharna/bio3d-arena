@@ -857,31 +857,9 @@ def export_dataset(db: Session = Depends(get_db)):
 
     Generators are revealed here (post-hoc), enabling offline ranking studies.
     """
-    rows = db.execute(
-        select(Vote, Comparison).join(Comparison, Vote.comparison_id == Comparison.id)
-    ).all()
-    records = []
-    for vote, comp in rows:
-        out_a = db.get(ModelOutput, comp.output_a_id)
-        out_b = db.get(ModelOutput, comp.output_b_id)
-        task = db.get(Task, comp.task_id)
-        crit = db.get(Criterion, comp.criterion_id)
-        records.append(
-            {
-                "comparison_id": comp.id,
-                "task": task.title,
-                "category": task.category.slug,
-                "criterion": crit.slug,
-                "generator_a": db.get(Generator, out_a.generator_id).slug,
-                "generator_b": db.get(Generator, out_b.generator_id).slug,
-                "asset_a": out_a.asset_path,
-                "asset_b": out_b.asset_path,
-                "winner": vote.winner,  # a | b | tie | bad
-                "session": vote.session_id,
-                "voted_at": vote.created.isoformat(),
-            }
-        )
-    return {"n_votes": len(records), "votes": records}
+    from . import dataset as dataset_mod
+
+    return dataset_mod.build_preference_records(db)
 
 
 @app.get("/difficulty", response_class=HTMLResponse)
