@@ -1,0 +1,55 @@
+{% extends "base.html" %} {% block title %}Procedural code-gen arena · Bio 3D
+Arena{% endblock %} {% block content %}
+<h1>Procedural code-gen arena</h1>
+<p class="lede">
+  Each model authors a Blender-Python script that must run headless (Blender
+  4.2) and produce a valid plant mesh.
+</p>
+<ul>
+  <li>
+    <strong>pass@1</strong> — share of tasks that ran and yielded a valid mesh.
+  </li>
+  <li>
+    <strong>Morphology fidelity</strong> — share of judgeable traits the model
+    got right. <em>Experimental / uncalibrated</em>: the VLM judge has not
+    passed the Mode-C agreement (&kappa;) gate. Treat it as a relative signal,
+    not certified accuracy.
+  </li>
+</ul>
+
+{% if rows %}
+<table class="board">
+  <thead>
+    <tr>
+      <th>Rank</th>
+      <th>Model</th>
+      <th>pass@1</th>
+      <th>Morphology fidelity <span class="tag">experimental</span></th>
+      <th>Median verts</th>
+      <th>n</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td>{{ r.model }}</td>
+      <td>
+        {{ "%.0f%%"|format(r.pass_at_1 * 100) }}
+        <small>({{ r.valid }}/{{ r.attempts }})</small>
+      </td>
+      <td>
+        {% if r.morph_fidelity is none %}&mdash; {% else %}{{
+        "%.0f%%"|format(r.morph_fidelity * 100) }}
+        <small>({{ r.morph_correct }}/{{ r.morph_assessable }})</small>
+        {% endif %}
+      </td>
+      <td>{{ r.median_verts }}</td>
+      <td>{{ r.n }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No procedural code-gen results yet.</p>
+{% endif %} {% endblock %}

@@ -595,6 +595,20 @@ def api_coverage(db: Session = Depends(get_db)):
     return service.coverage_summary(db)
 
 
+@app.get("/procedural", response_class=HTMLResponse)
+def procedural_page(request: Request, db: Session = Depends(get_db)):
+    return templates.TemplateResponse(
+        request,
+        "procedural.html",
+        {"rows": service.procedural_scorecard(db)},
+    )
+
+
+@app.get("/api/procedural.json")
+def api_procedural(db: Session = Depends(get_db)):
+    return service.procedural_scorecard(db)
+
+
 # --------------------------------------------------------- significance + bias
 
 
