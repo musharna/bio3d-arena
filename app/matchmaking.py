@@ -73,10 +73,14 @@ def pick_pair(db: Session, task: Task, exclude_fn=None) -> tuple[ModelOutput, Mo
     pairable = [g for g in groups.values() if len(g) >= 2]
     if not pairable:
         return None
-    # Choose the paradigm group holding the globally least-sampled output (preserve the
+    # Choose a paradigm group holding the globally least-sampled output (preserve the
     # least-sampled-first fairness), then pick the two least-sampled within that group.
-    group = min(pairable, key=lambda g: min(o.n_comparisons for o in g))
-    group = list(group)
+    # Among groups tied at that global minimum, choose RANDOMLY — a plain min() breaks ties
+    # by dict insertion order, which permanently starves every paradigm but the first-inserted
+    # one whenever they tie (e.g. all outputs fresh at n_comparisons==0).
+    best = min(min(o.n_comparisons for o in g) for g in pairable)
+    tied = [g for g in pairable if min(o.n_comparisons for o in g) == best]
+    group = list(random.choice(tied))
     random.shuffle(group)
     group.sort(key=lambda o: o.n_comparisons)
     a, b = group[0], group[1]
