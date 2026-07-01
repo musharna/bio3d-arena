@@ -89,7 +89,12 @@ async def ensure_session(request: Request, call_next):
     response = await call_next(request)
     if is_new:
         response.set_cookie(
-            SESSION_COOKIE, sid, httponly=True, samesite="lax", max_age=60 * 60 * 24 * 365
+            SESSION_COOKIE,
+            sid,
+            httponly=True,
+            samesite="lax",
+            max_age=60 * 60 * 24 * 365,
+            secure=config.COOKIE_SECURE,
         )
     return response
 
@@ -106,7 +111,14 @@ def auth_login(request: Request):
     state = auth.new_state()
     redirect_uri = f"{config.PUBLIC_BASE_URL}/auth/callback"
     resp = RedirectResponse(auth.authorize_url(state, redirect_uri), status_code=302)
-    resp.set_cookie(OAUTH_STATE_COOKIE, state, max_age=600, httponly=True, samesite="lax")
+    resp.set_cookie(
+        OAUTH_STATE_COOKIE,
+        state,
+        max_age=600,
+        httponly=True,
+        samesite="lax",
+        secure=config.COOKIE_SECURE,
+    )
     return resp
 
 

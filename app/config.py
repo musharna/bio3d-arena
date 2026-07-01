@@ -38,8 +38,9 @@ CAPTCHA_SECRET = os.environ.get("BIO3D_CAPTCHA_SECRET", "")
 # --- Verified login (Hugging Face OAuth). Off unless client id+secret are set. ---
 HF_CLIENT_ID = os.environ.get("BIO3D_HF_CLIENT_ID", "")
 HF_CLIENT_SECRET = os.environ.get("BIO3D_HF_CLIENT_SECRET", "")
-SESSION_SECRET = os.environ.get("BIO3D_SESSION_SECRET", "dev-session-secret-change-me")
 PUBLIC_BASE_URL = os.environ.get("BIO3D_PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+# Set Secure flag on cookies when served over HTTPS (auto from PUBLIC_BASE_URL; env override).
+COOKIE_SECURE = os.environ.get("BIO3D_COOKIE_SECURE", "").lower() in ("1", "true", "yes") or PUBLIC_BASE_URL.startswith("https://")
 
 # --- Scale-out: storage, DB pooling, distributed rate limiting ---
 # Asset storage backend: "local" (filesystem + StaticFiles) or "s3" (object store).

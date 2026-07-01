@@ -40,3 +40,23 @@ def test_fetch_userinfo_maps_fields():
 def test_fetch_userinfo_requires_sub():
     with pytest.raises(auth.AuthError):
         auth.fetch_userinfo("tok", _get=lambda url, tok: {"preferred_username": "bob"})
+
+
+def test_cookie_secure_follows_public_base_url_scheme():
+    import importlib
+    import os
+
+    try:
+        os.environ["BIO3D_PUBLIC_BASE_URL"] = "https://arena.example.org"
+        os.environ.pop("BIO3D_COOKIE_SECURE", None)
+        importlib.reload(config)
+        assert config.COOKIE_SECURE is True
+
+        os.environ["BIO3D_PUBLIC_BASE_URL"] = "http://127.0.0.1:8000"
+        os.environ.pop("BIO3D_COOKIE_SECURE", None)
+        importlib.reload(config)
+        assert config.COOKIE_SECURE is False
+    finally:
+        os.environ.pop("BIO3D_PUBLIC_BASE_URL", None)
+        os.environ.pop("BIO3D_COOKIE_SECURE", None)
+        importlib.reload(config)
