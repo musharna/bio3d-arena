@@ -38,7 +38,9 @@ from .models import (
     ModelOutput,
     Rating,
     Task,
+    User,
     Vote,
+    VoterSession,
 )
 from .schemas import CategoryIn, GeneratorIn, TaskIn, VoteIn
 from .storage import get_storage
@@ -69,12 +71,81 @@ async def ensure_session(request: Request, call_next):
     if is_new:
         sid = uuid.uuid4().hex
     request.state.session_id = sid
+    # Resolve the verified user (if any) for templates — one light lookup per request.
+    request.state.user = None
+    try:
+        from .database import SessionLocal
+        from .models import User, VoterSession
+
+        with SessionLocal() as _db:
+            _vs = _db.get(VoterSession, sid)
+            if _vs is not None and _vs.user_id is not None:
+                request.state.user = _db.get(User, _vs.user_id)
+    except Exception:  # noqa: BLE001 — never let user-resolution break a page
+        request.state.user = None
     response = await call_next(request)
     if is_new:
         response.set_cookie(
             SESSION_COOKIE, sid, httponly=True, samesite="lax", max_age=60 * 60 * 24 * 365
         )
     return response
+
+
+OAUTH_STATE_COOKIE = "bio3d_oauth_state"
+
+
+@app.get("/auth/login")
+def auth_login(request: Request):
+    from . import auth
+
+    if not auth._login_enabled():
+        return RedirectResponse("/", status_code=302)
+    state = auth.new_state()
+    redirect_uri = f"{config.PUBLIC_BASE_URL}/auth/callback"
+    resp = RedirectResponse(auth.authorize_url(state, redirect_uri), status_code=302)
+    resp.set_cookie(OAUTH_STATE_COOKIE, state, max_age=600, httponly=True, samesite="lax")
+    return resp
+
+
+@app.get("/auth/callback")
+def auth_callback(request: Request, code: str = "", state: str = "", db: Session = Depends(get_db)):
+    from . import auth
+
+    cookie_state = request.cookies.get(OAUTH_STATE_COOKIE)
+    if not auth._login_enabled() or not code or not state or state != cookie_state:
+        resp = RedirectResponse("/?login=error", status_code=302)
+        resp.delete_cookie(OAUTH_STATE_COOKIE)
+        return resp
+    try:
+        redirect_uri = f"{config.PUBLIC_BASE_URL}/auth/callback"
+        token = auth.exchange_code(code, redirect_uri)
+        info = auth.fetch_userinfo(token)
+    except auth.AuthError:
+        resp = RedirectResponse("/?login=error", status_code=302)
+        resp.delete_cookie(OAUTH_STATE_COOKIE)
+        return resp
+    user = db.execute(select(User).where(User.hf_id == info["hf_id"])).scalars().first()
+    if user is None:
+        user = User(hf_id=info["hf_id"], username=info["username"])
+        db.add(user)
+        db.flush()
+    else:
+        user.username = info["username"]
+    vs = integrity.get_or_create_session(db, request.state.session_id)
+    vs.user_id = user.id
+    db.commit()
+    resp = RedirectResponse("/?login=ok", status_code=302)
+    resp.delete_cookie(OAUTH_STATE_COOKIE)
+    return resp
+
+
+@app.post("/auth/logout")
+def auth_logout(request: Request, db: Session = Depends(get_db)):
+    vs = db.get(VoterSession, request.state.session_id)
+    if vs is not None:
+        vs.user_id = None
+        db.commit()
+    return RedirectResponse("/", status_code=302)
 
 
 # --------------------------------------------------------------------- helpers
