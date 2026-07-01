@@ -63,6 +63,9 @@ class Generator(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     kind: Mapped[str] = mapped_column(String(64), default="model")  # model | human | baseline
     is_anonymous: Mapped[bool] = mapped_column(Boolean, default=True)
+    paradigm: Mapped[str] = mapped_column(
+        String(32), default="", index=True
+    )  # see app/paradigms.py
 
     outputs: Mapped[list["ModelOutput"]] = relationship(back_populates="generator")
 
