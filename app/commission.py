@@ -52,22 +52,41 @@ def build_prompt(species: str, common: str) -> str:
 
 
 def openrouter_complete(
-    post, model_id: str, prompt: str, *, api_key: str, max_tokens: int = 8000
+    post,
+    model_id: str,
+    prompt: str,
+    *,
+    api_key: str,
+    max_tokens: int = 8000,
+    max_retries: int = 3,
+    sleep_fn=None,
 ) -> str:
     """One chat completion via OpenRouter (OpenAI-compatible). `post` injected (httpx.post) for
-    testing. Raises on HTTP error so the caller records a transport failure."""
-    resp = post(
-        OPENROUTER_URL,
-        headers={"Authorization": f"Bearer {api_key}"},
-        json={
-            "model": model_id,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-        },
-        timeout=180,
-    )
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
+    testing. Retries up to max_retries times with exponential backoff on any dispatch failure
+    (covers transient 429/5xx/transport errors); re-raises the last error if all attempts fail."""
+    import time as _time
+
+    sleep = sleep_fn or _time.sleep
+    last_exc = None
+    for attempt in range(max_retries):
+        try:
+            resp = post(
+                OPENROUTER_URL,
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": model_id,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": max_tokens,
+                },
+                timeout=180,
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+        except Exception as e:  # noqa: BLE001 — bounded retry on transient dispatch failures
+            last_exc = e
+            if attempt < max_retries - 1:
+                sleep(2**attempt)
+    raise last_exc
 
 
 def _sandbox_env(out_glb, base_env=None) -> dict:

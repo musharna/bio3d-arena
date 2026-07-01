@@ -122,3 +122,38 @@ def test_openrouter_complete_returns_message_content():
     assert captured["url"] == commission.OPENROUTER_URL
     assert captured["model"] == "anthropic/claude-opus-4.8"
     assert captured["auth"] == "Bearer sk-xyz"
+
+
+def test_openrouter_complete_retries_transient_then_succeeds():
+    calls = {"n": 0}
+    slept = []
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"choices": [{"message": {"content": "ok"}}]}
+
+    def flaky_post(url, headers=None, json=None, timeout=None):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise RuntimeError("transient")
+        return _Resp()
+
+    out = commission.openrouter_complete(
+        flaky_post, "m", "p", api_key="k", max_retries=3, sleep_fn=lambda s: slept.append(s)
+    )
+    assert out == "ok" and calls["n"] == 3 and len(slept) == 2
+
+
+def test_openrouter_complete_raises_after_exhausting_retries():
+    import pytest
+
+    def always_fail(url, headers=None, json=None, timeout=None):
+        raise RuntimeError("down")
+
+    with pytest.raises(RuntimeError):
+        commission.openrouter_complete(
+            always_fail, "m", "p", api_key="k", max_retries=2, sleep_fn=lambda s: None
+        )

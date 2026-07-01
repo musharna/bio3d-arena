@@ -944,6 +944,10 @@ git commit -m "feat(commission): CLI driver (roster, dry-run, sandbox)"
 5. Inspect `CommissionAttempt` rows (status distribution, sample scripts) before the full run.
 6. → Spec #2: point scope/rubric/vote at `ModelOutput.source == "commissioned"`.
 
+- Transport-failed pairs are recorded as `error` CommissionAttempts and SKIPPED on resume. To retry them after an outage, delete those rows first: `DELETE FROM commission_attempt WHERE status='error';` then re-run.
+- The default `--sandbox-prefix` is `heavy-run` (memory cap only). For network isolation of untrusted scripts, use `--sandbox-prefix "heavy-run unshare -rn"` and confirm Blender still runs under it. Passing `--sandbox-prefix ""` runs untrusted code UNSANDBOXED — don't.
+- On the first `--max 2` smoke run, verify the wall-clock timeout actually KILLS Blender under your chosen sandbox prefix (submit a deliberately infinite bpy script once and confirm the process dies and status is `timeout`), since a `systemd-run`-based prefix can orphan the child.
+
 ## Self-Review
 
 - **Spec coverage:** prompt set (T4), OpenRouter dispatch (T5), bpy substrate + sandbox (T2), script extraction (T3), mesh validity (T1), CommissionAttempt + failures-first-class + ingestion (T6), resumable batch + dry-run (T7, T8), 6-taxa resolution via TraitRubric (T7), single-shot + transport-only retry (T7 dispatch try/except; note: httpx retry-on-5xx is a thin follow-up, acceptable to omit in v1 since failures are recorded), operator prereqs (runbook). Contact-sheet rendering intentionally omitted (downstream scorers render on demand — documented in the spec's out-of-scope reasoning).

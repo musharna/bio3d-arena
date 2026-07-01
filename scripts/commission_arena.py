@@ -30,7 +30,14 @@ def main(argv=None) -> int:
     ap.add_argument("--roster", required=True, help="comma-separated OpenRouter model ids")
     ap.add_argument("--blender-bin", default="blender")
     ap.add_argument("--timeout", type=int, default=120)
-    ap.add_argument("--sandbox-prefix", default="", help="e.g. 'heavy-run' or 'unshare -rn'")
+    ap.add_argument(
+        "--sandbox-prefix",
+        default="heavy-run",
+        help=(
+            "command prefix for the untrusted bpy subprocess; default 'heavy-run' (mem cap). "
+            "Use '' to disable, or e.g. 'heavy-run unshare -rn' to add network isolation."
+        ),
+    )
     ap.add_argument("--max", type=int, default=None)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
