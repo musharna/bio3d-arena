@@ -228,3 +228,92 @@ def ingest_attempt(db, *, task_id: int, model_id: str, run: dict, script: str, a
     db.add(att)
     db.commit()
     return att
+
+
+def resolve_taxon_tasks(db) -> list[tuple[str, int]]:
+    """Return (taxon, task_id) pairs for taxa in SPECIES_COMMON that have a TraitRubric."""
+    from .models import TraitRubric
+
+    out = []
+    for taxon in SPECIES_COMMON:
+        r = db.query(TraitRubric).filter_by(taxon=taxon).first()
+        if r is not None and r.task_id:
+            out.append((taxon, r.task_id))
+    return out
+
+
+def existing_pairs(db) -> set[tuple[str, int]]:
+    """Return set of (model_id, task_id) pairs already attempted."""
+    from .models import CommissionAttempt
+
+    return {(a.model_id, a.task_id) for a in db.query(CommissionAttempt).all()}
+
+
+def run_batch(db, *, complete_fn, run_fn, roster, taxon_tasks, asset_dir, max_calls=None):
+    """Run commissioned generation for each un-attempted (model_id, (taxon, task_id)) pair.
+
+    Args:
+        db: database session
+        complete_fn: (model_id, prompt) -> str (LLM response)
+        run_fn: (script, out_glb) -> dict (execution result)
+        roster: list of model IDs to try
+        taxon_tasks: list of (taxon, task_id) pairs
+        asset_dir: root directory for saving assets
+        max_calls: optional limit on number of attempts
+
+    Returns:
+        dict with counts by status: {"ok", "error", "timeout", "invalid_mesh", "skipped"}
+    """
+    counts = {"ok": 0, "error": 0, "timeout": 0, "invalid_mesh": 0, "skipped": 0}
+    seen = existing_pairs(db)
+    made = 0
+    for model_id in roster:
+        for taxon, task_id in taxon_tasks:
+            if (model_id, task_id) in seen:
+                counts["skipped"] += 1
+                continue
+            if max_calls is not None and made >= max_calls:
+                return counts
+            prompt = build_prompt(taxon, SPECIES_COMMON[taxon])
+            try:
+                text = complete_fn(model_id, prompt)
+                script = extract_script(text)
+            except Exception as e:  # noqa: BLE001 — transport failure: record + continue
+                run = {
+                    "status": "error",
+                    "stderr": f"dispatch: {e}",
+                    "duration_ms": 0,
+                    "glb_path": None,
+                    "mesh_stats": {},
+                }
+                script = ""
+            else:
+                with tempfile.TemporaryDirectory() as td:
+                    out_glb = Path(td) / "out.glb"
+                    run = run_fn(script, out_glb)
+                    if run.get("status") == "ok" and run.get("glb_path"):
+                        # ingest copies from glb_path; keep it alive past the tempdir by ingesting now
+                        att = ingest_attempt(
+                            db,
+                            task_id=task_id,
+                            model_id=model_id,
+                            run=run,
+                            script=script,
+                            asset_dir=asset_dir,
+                        )
+                        counts[att.status] = counts.get(att.status, 0) + 1
+                        seen.add((model_id, task_id))
+                        made += 1
+                        continue
+            att = ingest_attempt(
+                db,
+                task_id=task_id,
+                model_id=model_id,
+                run=run,
+                script=script,
+                asset_dir=asset_dir,
+            )
+            counts[att.status] = counts.get(att.status, 0) + 1
+            seen.add((model_id, task_id))
+            made += 1
+    return counts

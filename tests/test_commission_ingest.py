@@ -4,7 +4,7 @@ import trimesh
 
 from app import commission
 from app.database import SessionLocal, init_db
-from app.models import Generator, ModelOutput, Task, Category
+from app.models import CommissionAttempt, Generator, ModelOutput, Task, Category, TraitRubric
 
 
 def setup_module(_m):
@@ -17,6 +17,18 @@ def _task(db, cat_slug="t-cat"):
     db.flush()
     t = Task(category_id=cat.id, title="tomato", prompt="a tomato")
     db.add(t)
+    db.commit()
+    return t.id
+
+
+def _rubric_task(db, taxon):
+    cat = Category(slug=f"c-{taxon}", name="c")
+    db.add(cat)
+    db.flush()
+    t = Task(category_id=cat.id, title=taxon, prompt=f"a {taxon}")
+    db.add(t)
+    db.flush()
+    db.add(TraitRubric(taxon=taxon, task_id=t.id, traits_json="[]"))
     db.commit()
     return t.id
 
@@ -68,3 +80,49 @@ def test_ingest_failure_writes_attempt_without_output(tmp_path):
         )
         assert att.status == "error" and att.output_id is None
         assert att.error == "boom" and att.script == "bad"
+
+
+def test_run_batch_persists_and_resumes(tmp_path):
+    import trimesh
+
+    with SessionLocal() as db:
+        tid = _rubric_task(db, "Solanum lycopersicum")
+
+        def complete_fn(model_id, prompt):
+            return "```python\nimport bpy\n```"
+
+        def run_fn(script, out_glb):
+            trimesh.creation.box().export(str(out_glb))
+            return {
+                "status": "ok",
+                "stderr": "",
+                "duration_ms": 5,
+                "glb_path": str(out_glb),
+                "mesh_stats": {"vertices": 8, "faces": 12},
+            }
+
+        roster = ["anthropic/claude-opus-4.8"]
+        tt = [("Solanum lycopersicum", tid)]
+        res = commission.run_batch(
+            db,
+            complete_fn=complete_fn,
+            run_fn=run_fn,
+            roster=roster,
+            taxon_tasks=tt,
+            asset_dir=tmp_path / "assets",
+        )
+        assert res["ok"] == 1
+        att = db.query(CommissionAttempt).filter_by(model_id=roster[0], task_id=tid).one()
+        assert att.status == "ok"
+
+        # resume: same pair is skipped, no second attempt
+        res2 = commission.run_batch(
+            db,
+            complete_fn=complete_fn,
+            run_fn=run_fn,
+            roster=roster,
+            taxon_tasks=tt,
+            asset_dir=tmp_path / "assets",
+        )
+        assert res2["skipped"] == 1 and res2["ok"] == 0
+        assert db.query(CommissionAttempt).filter_by(model_id=roster[0], task_id=tid).count() == 1
