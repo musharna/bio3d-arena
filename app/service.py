@@ -400,18 +400,23 @@ def tier_perceptual_ranking(
         rows = []
         if players:
             result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP)
-            rows = sorted(
-                (
-                    {
-                        "generator": names.get(p, str(p)),
-                        "bt_score": round(result.scores.get(p, ranking.BT_BASE), 1),
-                        "n_games": int(result.n_games.get(p, 0)),
-                    }
-                    for p in players
-                ),
-                key=lambda r: r["bt_score"],
-                reverse=True,
-            )
+            rows = [
+                {
+                    "generator": names.get(p, str(p)),
+                    "paradigm": db.get(Generator, p).paradigm,
+                    "bt_score": round(result.scores.get(p, ranking.BT_BASE), 1),
+                    "n_games": int(result.n_games.get(p, 0)),
+                }
+                for p in players
+            ]
+            # Rank WITHIN each paradigm group, mirroring the human/judge leaderboards —
+            # matches never cross paradigms (I3 gate), but a tier can still host multiple
+            # within-paradigm BT components that must not share one flat ranking (I3b).
+            rows.sort(key=lambda r: (r["paradigm"], -r["bt_score"]))
+            rank_counters: dict[str, int] = {}
+            for r in rows:
+                rank_counters[r["paradigm"]] = rank_counters.get(r["paradigm"], 0) + 1
+                r["rank"] = rank_counters[r["paradigm"]]
         out.append({"tier": tier, "rows": rows, "n_matches": len(matches)})
     return out
 

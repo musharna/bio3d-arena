@@ -453,6 +453,7 @@ def _judge_leaderboard_rows(
             {
                 "generator": names.get(r.generator_id, gen.name),
                 "kind": gen.kind,
+                "paradigm": gen.paradigm,
                 "elo": round(r.elo, 1),
                 "bt_score": round(r.bt_score, 1),
                 "bt_lower": round(r.bt_lower, 1),
@@ -460,11 +461,28 @@ def _judge_leaderboard_rows(
                 "n_games": r.n_games,
             }
         )
-    rows.sort(key=lambda x: x["bt_score"], reverse=True)
-    ranks = ranking.rank_by_ci([(r["bt_lower"], r["bt_upper"]) for r in rows])
-    for row, rank in zip(rows, ranks):
-        row["rank"] = rank
-    return rows
+    # Rank + CI-bar geometry are computed WITHIN each paradigm group, mirroring
+    # _leaderboard_rows — cross-paradigm BT scores come from disconnected match
+    # components, so a single flat cross-paradigm ranking would be meaningless (I3b).
+    groups: dict[str, list[dict]] = {}
+    for r in rows:
+        groups.setdefault(r["paradigm"], []).append(r)
+    grouped_rows: list[dict] = []
+    for pgm in sorted(groups):
+        grows = groups[pgm]
+        grows.sort(key=lambda x: x["bt_score"], reverse=True)
+        ranks = ranking.rank_by_ci([(r["bt_lower"], r["bt_upper"]) for r in grows])
+        for row, rank in zip(grows, ranks):
+            row["rank"] = rank
+        lo = min(r["bt_lower"] for r in grows)
+        hi = max(r["bt_upper"] for r in grows)
+        span = (hi - lo) or 1.0
+        for r in grows:
+            r["ci_left"] = round(100.0 * (r["bt_lower"] - lo) / span, 1)
+            r["ci_width"] = round(100.0 * (r["bt_upper"] - r["bt_lower"]) / span, 1)
+            r["ci_point"] = round(100.0 * (r["bt_score"] - lo) / span, 1)
+        grouped_rows.extend(grows)
+    return grouped_rows
 
 
 @app.get("/leaderboard", response_class=HTMLResponse)
@@ -959,6 +977,7 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
             "gradient": gradient,
             "perceptual": perceptual,
             "trait_tiers": trait_tiers,
+            "paradigm_display_names": paradigms.DISPLAY_NAMES,
         },
     )
 

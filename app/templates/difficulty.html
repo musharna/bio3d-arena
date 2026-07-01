@@ -51,15 +51,18 @@
     <div class="perceptual-tier">
       <h4>{{ block.tier | capitalize }} <span class="subtle">({{ block.n_matches }} judge matches)</span></h4>
       {% if block.rows %}
+      {% for pgm, group_rows in block.rows|groupby('paradigm') %}
+      <p class="subtle paradigm-heading">{{ paradigm_display_names.get(pgm, pgm) if pgm else "Untagged" }}</p>
       <table class="ranktable compact">
         <thead><tr><th>#</th><th>Method</th><th>BT</th><th>n</th></tr></thead>
         <tbody>
-          {% for r in block.rows[:6] %}
-          <tr><td>{{ loop.index }}</td><td class="gen">{{ r.generator }}</td>
+          {% for r in group_rows[:6] %}
+          <tr><td>{{ r.rank }}</td><td class="gen">{{ r.generator }}</td>
             <td class="num">{{ r.bt_score }}</td><td class="num">{{ r.n_games }}</td></tr>
           {% endfor %}
         </tbody>
       </table>
+      {% endfor %}
       {% else %}<p class="subtle">Too few votes to rank.</p>{% endif %}
     </div>
     {% endfor %}

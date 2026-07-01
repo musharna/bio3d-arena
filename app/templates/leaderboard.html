@@ -86,6 +86,9 @@
   {% endif %}
   {% if judge_rows %}
   <h2>VLM judge (Sonnet 4.6, multi-view)</h2>
+  {% for pgm, group_rows in judge_rows|groupby('paradigm') %}
+  <h3 class="paradigm-heading">{{ paradigm_display_names.get(pgm, pgm) if pgm else "Untagged" }}</h3>
+  <p class="subtle">Scores are only comparable within a paradigm.</p>
   <table class="ranktable">
     <thead>
       <tr>
@@ -96,7 +99,7 @@
       </tr>
     </thead>
     <tbody>
-      {% for r in judge_rows %}
+      {% for r in group_rows %}
       <tr>
         <td>{{ r.rank }}</td>
         <td class="gen">{{ r.generator }}</td>
@@ -106,6 +109,7 @@
       {% endfor %}
     </tbody>
   </table>
+  {% endfor %}
   {% endif %}
 </section>
 {% endblock %}
