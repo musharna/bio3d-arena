@@ -324,6 +324,9 @@ main {
   background: var(--panel2);
   letter-spacing: 0.05em;
 }
+.ab-toggle {
+  display: none;
+}
 .viewer-slot {
   position: relative; /* 3Dmol positions its canvas absolutely inside */
   width: 100%;
@@ -614,6 +617,44 @@ main {
     margin-left: 0;
     padding: 0.7rem 0;
     border-top: 1px solid var(--border);
+  }
+  .ab-toggle {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.8rem;
+  }
+  .ab-btn {
+    flex: 1;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel2);
+    color: var(--muted);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .ab-btn.is-active {
+    color: var(--text);
+    border-color: var(--accent);
+    background: var(--panel);
+  }
+  body.js-ab .pair .model-col {
+    display: none;
+  }
+  body.js-ab .pair .model-col.is-active {
+    display: flex;
+  }
+  .vote-bar {
+    position: sticky;
+    bottom: 0;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    padding: 0.6rem 0;
+    margin-top: 0;
+    z-index: 5;
+  }
+  .arena {
+    padding-bottom: 4.5rem;
   }
 }
 

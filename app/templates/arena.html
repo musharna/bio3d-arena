@@ -27,8 +27,29 @@ block content %}
     </p>
   </div>
 
+  <div class="ab-toggle" role="tablist" aria-label="Which model to view">
+    <button
+      type="button"
+      class="ab-btn is-active"
+      data-ab="a"
+      role="tab"
+      aria-selected="true"
+    >
+      Model A
+    </button>
+    <button
+      type="button"
+      class="ab-btn"
+      data-ab="b"
+      role="tab"
+      aria-selected="false"
+    >
+      Model B
+    </button>
+  </div>
+
   <div class="pair">
-    <div class="model-col">
+    <div class="model-col is-active">
       <div class="model-label">Model A <span class="fmt-chip" id="fmt-a"></span></div>
       <div class="viewer-slot" id="slot-a"></div>
     </div>
