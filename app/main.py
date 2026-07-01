@@ -71,6 +71,9 @@ async def ensure_session(request: Request, call_next):
     if is_new:
         sid = uuid.uuid4().hex
     request.state.session_id = sid
+    from . import auth
+
+    request.state.login_enabled = auth._login_enabled()
     # Resolve the verified user (if any) for templates — one light lookup per request.
     request.state.user = None
     try:

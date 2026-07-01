@@ -28,6 +28,14 @@
         <a href="/submit">Submit</a>
         <a href="/coverage">Coverage</a>
         <a href="/methodology">Methodology</a>
+        {% if request.state.user %}
+        <span class="verified">✓ {{ request.state.user.username }}</span>
+        <form method="post" action="/auth/logout" style="display:inline">
+          <button type="submit">Sign out</button>
+        </form>
+        {% elif request.state.login_enabled %}
+        <a href="/auth/login">Sign in with Hugging Face</a>
+        {% endif %}
       </nav>
     </header>
     <main>{% block content %}{% endblock %}</main>
