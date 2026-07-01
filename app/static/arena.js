@@ -4,6 +4,24 @@ let current = null;
 let busy = false;
 
 const el = (id) => document.getElementById(id);
+
+// Mobile A/B toggle: mark JS active (gates the "hide inactive model" CSS) + wire the switch.
+document.body.classList.add("js-ab");
+
+function setAB(which) {
+  document.querySelectorAll(".ab-btn").forEach((b) => {
+    const on = b.dataset.ab === which;
+    b.classList.toggle("is-active", on);
+    b.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  const cols = document.querySelectorAll(".pair .model-col");
+  if (cols[0]) cols[0].classList.toggle("is-active", which === "a");
+  if (cols[1]) cols[1].classList.toggle("is-active", which === "b");
+}
+
+document
+  .querySelectorAll(".ab-btn")
+  .forEach((b) => b.addEventListener("click", () => setAB(b.dataset.ab)));
 const qs = () => {
   const cat = el("sel-category").value;
   const crit = el("sel-criterion").value;
@@ -85,6 +103,7 @@ function render(data) {
     el("slot-b"),
     data.b,
   ).toUpperCase();
+  setAB("a"); // each new pair starts on Model A
   setStatus("");
 }
 
