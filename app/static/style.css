@@ -434,6 +434,43 @@ main {
 .vote-btn.bad {
   border-color: #b9636b;
 }
+.onboard-banner:not([hidden]) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+  margin-bottom: 1rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+.onboard-banner strong {
+  color: var(--text);
+}
+.onboard-dismiss {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.onboard-dismiss:hover {
+  color: var(--text);
+}
+kbd {
+  font-family: ui-monospace, monospace;
+  font-size: 0.8em;
+  padding: 0.1em 0.4em;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel2);
+  color: var(--text);
+}
 .status-line {
   text-align: center;
   color: var(--muted);
@@ -597,6 +634,10 @@ main {
   }
   .vote-bar {
     grid-template-columns: 1fr 1fr;
+  }
+  .vote-btn kbd,
+  .onboard-banner kbd {
+    display: none;
   }
   .topbar {
     flex-wrap: wrap;

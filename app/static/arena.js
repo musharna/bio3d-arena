@@ -5,6 +5,28 @@ let busy = false;
 
 const el = (id) => document.getElementById(id);
 
+// First-visit onboarding banner: shown once, state persisted in localStorage. Fail-quiet.
+(function initOnboarding() {
+  const banner = document.getElementById("onboard-banner");
+  const dismiss = document.getElementById("onboard-dismiss");
+  if (!banner || !dismiss) return;
+  let seen = true;
+  try {
+    seen = !!localStorage.getItem("bio3d_onboarded");
+  } catch (e) {
+    seen = true; // localStorage unavailable → don't show, never break the arena
+  }
+  if (!seen) banner.hidden = false;
+  dismiss.addEventListener("click", () => {
+    banner.hidden = true;
+    try {
+      localStorage.setItem("bio3d_onboarded", "1");
+    } catch (e) {
+      /* ignore */
+    }
+  });
+})();
+
 // Mobile A/B toggle: mark JS active (gates the "hide inactive model" CSS) + wire the switch.
 document.body.classList.add("js-ab");
 
