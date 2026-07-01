@@ -105,5 +105,32 @@
     return fmt;
   }
 
-  window.Bio3DViewer = { mount, MESH_FORMATS: MESH, MOLECULAR_FORMATS: MOL };
+  // Lock two mesh viewers' cameras together (side-by-side comparison at the same angle).
+  // No-op unless BOTH slots hold a <model-viewer> (molecular/mixed/failed pairs rotate freely).
+  // Only user-initiated camera-change events propagate — programmatic writes fire source
+  // "none" and are ignored, so applying A→B never bounces back (no mutex needed).
+  function syncPair(slotA, slotB) {
+    const a = slotA && slotA.querySelector("model-viewer");
+    const b = slotB && slotB.querySelector("model-viewer");
+    if (!a || !b) return;
+    function copyCam(src, dst) {
+      dst.cameraOrbit = src.getCameraOrbit().toString();
+      dst.cameraTarget = src.getCameraTarget().toString();
+      dst.fieldOfView = src.getFieldOfView() + "deg";
+      dst.jumpCameraToGoal();
+    }
+    a.addEventListener("camera-change", (e) => {
+      if (e.detail && e.detail.source === "user-interaction") copyCam(a, b);
+    });
+    b.addEventListener("camera-change", (e) => {
+      if (e.detail && e.detail.source === "user-interaction") copyCam(b, a);
+    });
+  }
+
+  window.Bio3DViewer = {
+    mount,
+    syncPair,
+    MESH_FORMATS: MESH,
+    MOLECULAR_FORMATS: MOL,
+  };
 })();

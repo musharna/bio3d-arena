@@ -125,6 +125,7 @@ function render(data) {
     el("slot-b"),
     data.b,
   ).toUpperCase();
+  window.Bio3DViewer.syncPair(el("slot-a"), el("slot-b"));
   setAB("a"); // each new pair starts on Model A
   setStatus("");
 }
