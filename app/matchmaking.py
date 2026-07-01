@@ -8,6 +8,7 @@ order to avoid position bias.
 from __future__ import annotations
 
 import random
+from collections import defaultdict
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -18,6 +19,14 @@ from .models import GoldPair, ModelOutput, Task
 def _real_outputs(task: Task) -> list[ModelOutput]:
     """Task outputs eligible for normal matchmaking (gold/decoy assets excluded)."""
     return [o for o in task.outputs if not o.is_gold]
+
+
+def _paradigm_groups(outputs: list[ModelOutput]) -> dict[str, list[ModelOutput]]:
+    """Group outputs by their generator's paradigm value."""
+    groups: dict[str, list[ModelOutput]] = defaultdict(list)
+    for o in outputs:
+        groups[o.generator.paradigm].append(o)
+    return groups
 
 
 def pick_task(db: Session, category_id: int | None = None, exclude_fn=None) -> Task | None:
@@ -36,7 +45,8 @@ def pick_task(db: Session, category_id: int | None = None, exclude_fn=None) -> T
         outs = _real_outputs(t)
         if exclude_fn is not None:
             outs = [o for o in outs if not exclude_fn(o)]
-        return len(outs)
+        groups = _paradigm_groups(outs)
+        return max((len(g) for g in groups.values()), default=0)
 
     candidates = [t for t in tasks if votable_count(t) >= 2]
     if not candidates:
@@ -59,13 +69,17 @@ def pick_pair(db: Session, task: Task, exclude_fn=None) -> tuple[ModelOutput, Mo
     outputs = _real_outputs(task)
     if exclude_fn is not None:
         outputs = [o for o in outputs if not exclude_fn(o)]
-    if len(outputs) < 2:
+    groups = _paradigm_groups(outputs)
+    pairable = [g for g in groups.values() if len(g) >= 2]
+    if not pairable:
         return None
-    # Least-sampled first; random tiebreak so equal-count outputs rotate fairly.
-    random.shuffle(outputs)
-    outputs.sort(key=lambda o: o.n_comparisons)
-    a, b = outputs[0], outputs[1]
-    # Randomize which side is shown as A vs B to neutralize position bias.
+    # Choose the paradigm group holding the globally least-sampled output (preserve the
+    # least-sampled-first fairness), then pick the two least-sampled within that group.
+    group = min(pairable, key=lambda g: min(o.n_comparisons for o in g))
+    group = list(group)
+    random.shuffle(group)
+    group.sort(key=lambda o: o.n_comparisons)
+    a, b = group[0], group[1]
     if random.random() < 0.5:
         a, b = b, a
     return a, b
