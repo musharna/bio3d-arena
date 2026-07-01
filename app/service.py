@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from . import config, ranking
 from .calibration import cohens_kappa
 from .scope import is_assessable
+from .paradigms import same_paradigm
 from .sourcing import is_reference_scan, is_untextured_output
 from .models import (
     Category,
@@ -165,10 +166,14 @@ def _matches_for_scope(
     for vote, comparison in db.execute(stmt).all():
         if vote.winner == "bad":
             continue
-        gen_a = db.get(ModelOutput, comparison.output_a_id).generator_id
-        gen_b = db.get(ModelOutput, comparison.output_b_id).generator_id
+        out_a = db.get(ModelOutput, comparison.output_a_id)
+        out_b = db.get(ModelOutput, comparison.output_b_id)
+        gen_a = out_a.generator_id
+        gen_b = out_b.generator_id
         if gen_a in ref_gens or gen_b in ref_gens:
             continue  # GT/reference scans are not perceptual competitors (Mode-A exclusion)
+        if not same_paradigm(db.get(Generator, gen_a).paradigm, db.get(Generator, gen_b).paradigm):
+            continue  # never rank across paradigms
         if vote.winner == "a":
             matches.append((gen_a, gen_b))
         elif vote.winner == "b":
