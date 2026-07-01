@@ -50,3 +50,18 @@ for _slug in ("arabidopsis", "pinus", "tomato", "rose", "soybean"):
         _dst = _test_ref / f"{_slug}_ref{_ext}"
         if _src.exists() and not _dst.exists():
             shutil.copy(_src, _dst)
+
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _reset_commission_db(request):
+    """Isolate commission tests by resetting the database before each test."""
+    # Only reset for commission_ingest tests to ensure they have a clean database
+    if "test_commission_ingest" in request.node.nodeid:
+        from app.database import engine, Base
+
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+    yield

@@ -126,3 +126,12 @@ def test_run_batch_persists_and_resumes(tmp_path):
         )
         assert res2["skipped"] == 1 and res2["ok"] == 0
         assert db.query(CommissionAttempt).filter_by(model_id=roster[0], task_id=tid).count() == 1
+
+
+def test_dry_run_plan_counts_uncovered_pairs(tmp_path):
+    from scripts import commission_arena
+
+    with SessionLocal() as db:
+        tid = _rubric_task(db, "Zea mays")
+        plan = commission_arena.plan(db, roster=["m1", "m2"])
+        assert plan["tasks"] == 1 and plan["roster"] == 2 and plan["calls_needed"] == 2
