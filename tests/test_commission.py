@@ -80,3 +80,20 @@ def test_extract_script_plain_fence_and_unfenced_and_empty():
     assert commission.extract_script("import bpy\nx=1") == "import bpy\nx=1"
     assert commission.extract_script("") == ""
     assert commission.extract_script(None) == ""
+
+
+def test_build_prompt_pins_contract():
+    p = commission.build_prompt("Solanum lycopersicum", "tomato")
+    assert "OUT_GLB" in p and "tomato" in p and "Solanum lycopersicum" in p
+    assert "bpy" in p.lower()
+
+
+def test_species_common_covers_six_taxa():
+    assert set(commission.SPECIES_COMMON) == {
+        "Solanum lycopersicum",
+        "Zea mays",
+        "Pinus sylvestris",
+        "Rosa",
+        "Glycine max",
+        "Arabidopsis thaliana",
+    }

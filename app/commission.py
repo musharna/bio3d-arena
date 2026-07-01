@@ -21,6 +21,32 @@ _SECRET_ENV_MARKERS = ("KEY", "TOKEN", "SECRET", "PASSWORD")
 _SECRET_ENV_EXACT = {"BIO3D_DATABASE_URL"}
 
 
+SPECIES_COMMON: dict[str, str] = {
+    "Solanum lycopersicum": "tomato",
+    "Zea mays": "maize (corn)",
+    "Pinus sylvestris": "Scots pine",
+    "Rosa": "rose",
+    "Glycine max": "soybean",
+    "Arabidopsis thaliana": "Arabidopsis (thale cress)",
+}
+
+
+def build_prompt(species: str, common: str) -> str:
+    """Build a prompt for LLM-based plant generation."""
+    return (
+        f"Write a complete Blender Python (bpy) script that procedurally generates a "
+        f"botanically accurate 3D model of a whole {common} plant ({species}).\n\n"
+        "Requirements:\n"
+        "- Build real geometry: stem/trunk, leaves, and species-appropriate organs "
+        "(flowers, fruit, cones, etc. where applicable).\n"
+        "- Export the result as GLB to the path in the environment variable OUT_GLB "
+        "(read it with os.environ['OUT_GLB']).\n"
+        "- The script must run headless under `blender --background --python` with no user "
+        "interaction and no external asset files.\n"
+        "- Output ONLY the Python script — no explanation, no markdown prose."
+    )
+
+
 def _sandbox_env(out_glb, base_env=None) -> dict:
     """Environment for the untrusted bpy subprocess: inherit the parent env MINUS any
     secret-looking vars (name contains KEY/TOKEN/SECRET/PASSWORD, or is BIO3D_DATABASE_URL),
