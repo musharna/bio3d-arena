@@ -93,6 +93,7 @@ def test_build_prompt_pins_contract():
     p = commission.build_prompt("Solanum lycopersicum", "tomato")
     assert "OUT_GLB" in p and "tomato" in p and "Solanum lycopersicum" in p
     assert "bpy" in p.lower()
+    assert "4.2" in p  # pins the target Blender version so models use the right bpy API
 
 
 def test_species_common_covers_six_taxa():

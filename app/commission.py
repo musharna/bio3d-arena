@@ -40,6 +40,10 @@ def build_prompt(species: str, common: str) -> str:
     return (
         f"Write a complete Blender Python (bpy) script that procedurally generates a "
         f"botanically accurate 3D model of a whole {common} plant ({species}).\n\n"
+        "Runtime: the script runs on Blender 4.2.0 — use only bpy APIs valid in Blender 4.2 "
+        "(note Blender 4.x renamed several Principled BSDF sockets, e.g. 'Subsurface' -> "
+        "'Subsurface Weight'). Keep material setup minimal and defensive so one wrong socket "
+        "name cannot abort the whole script (guard optional material tweaks in try/except).\n\n"
         "Requirements:\n"
         "- Build real geometry: stem/trunk, leaves, and species-appropriate organs "
         "(flowers, fruit, cones, etc. where applicable).\n"
