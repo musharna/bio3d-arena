@@ -67,6 +67,9 @@ GT_BUNDLE_DIR = Path(
 # Storage subdir (relative to ASSET_DIR / S3 prefix) for baked GT reference GLBs.
 GT_ASSET_SUBDIR = "gt"
 
+# Directory holding built dataset releases (each a <version>/ subdir with VERSION + DATASHEET).
+RELEASES_DIR = DATA_DIR / "releases"
+
 
 def is_safe_test_db_target(value: str | None) -> bool:
     """True if a DB URL/path is a throwaway that's safe for the test suite to drop/recreate.

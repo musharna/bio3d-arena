@@ -1,0 +1,29 @@
+{% extends "base.html" %} {% block title %}Dataset · Bio 3D Arena{% endblock %}
+{% block content %}
+<h1>Benchmark Dataset</h1>
+<p>
+  A citable, licensed release of the biological-3D generation benchmark: tasks,
+  3D outputs, baked GT reference renders, and objective metrics. Held-out raw GT
+  is withheld for integrity. Human preference votes ship as a secondary file.
+</p>
+{% if releases %}
+<ul>
+  {% for r in releases %}
+  <li>
+    <b>{{ r.version }}</b> —
+    <a href="/api/export.json">preference records (live)</a>
+    <pre>{{ r.version_text }}</pre>
+  </li>
+  {% endfor %}
+</ul>
+<p>
+  See each release's <code>DATASHEET.md</code> and <code>LICENSE</code> for
+  contents and citation. API: <a href="/openapi.json">/openapi.json</a>.
+</p>
+{% else %}
+<p>
+  <em>No release published yet.</em> The live API is available at
+  <a href="/api/export.json">/api/export.json</a> and
+  <a href="/api/leaderboard">/api/leaderboard</a>.
+</p>
+{% endif %} {% endblock %}

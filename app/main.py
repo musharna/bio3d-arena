@@ -496,6 +496,18 @@ def api_leaderboard(
     }
 
 
+@app.get("/dataset", response_class=HTMLResponse)
+def dataset_page(request: Request):
+    releases_dir = config.RELEASES_DIR
+    releases = []
+    if releases_dir.is_dir():
+        for d in sorted(releases_dir.iterdir(), reverse=True):
+            vf = d / "VERSION"
+            if d.is_dir() and vf.is_file():
+                releases.append({"version": d.name, "version_text": vf.read_text()})
+    return templates.TemplateResponse(request, "dataset.html", {"releases": releases})
+
+
 @app.get("/methodology", response_class=HTMLResponse)
 def methodology_page(request: Request):
     return templates.TemplateResponse(
