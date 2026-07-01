@@ -72,6 +72,16 @@ def _filtered_rows(db, inc: public_export.IncludeSet) -> dict[str, list[dict]]:
         and c.output_a_id in all_out
         and c.output_b_id in all_out
     }
+    # Referential completeness: gold decoy outputs belong to the "calibration" generator,
+    # which a curator's generator_slugs allowlist won't include (resolve_include_ids adds
+    # gold outputs to gold_output_ids via the GoldPair loop, not generator_ids). Every
+    # generator actually referenced by an included output must ship too, or the output's
+    # generator_id dangles on import.
+    gen_keep = set(inc.generator_ids) | {
+        o.generator_id
+        for o in db.execute(select(ModelOutput)).scalars()
+        if o.id in all_out
+    }
     tables: dict[str, list[dict]] = {}
     for model in EXPORT_MODELS:
         name = model.__tablename__
@@ -79,7 +89,7 @@ def _filtered_rows(db, inc: public_export.IncludeSet) -> dict[str, list[dict]]:
         for r in db.execute(select(model)).scalars():
             if name == "task" and r.id not in inc.task_ids:
                 continue
-            if name == "generator" and r.id not in inc.generator_ids:
+            if name == "generator" and r.id not in gen_keep:
                 continue
             if name == "model_output" and r.id not in all_out:
                 continue
@@ -99,7 +109,10 @@ def _filtered_rows(db, inc: public_export.IncludeSet) -> dict[str, list[dict]]:
                 or r.bad_output_id not in all_out
             ):
                 continue
-            keep.append(_row_to_dict(r))
+            d = _row_to_dict(r)
+            if name == "task" and d.get("reference_asset_id") not in all_out:
+                d["reference_asset_id"] = None
+            keep.append(d)
         tables[name] = keep
     return tables
 

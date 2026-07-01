@@ -106,9 +106,9 @@ def verify_captcha(token: str | None, *, _post=_post_form) -> bool:
     url = _SITEVERIFY.get(config.CAPTCHA_PROVIDER, _SITEVERIFY["turnstile"])
     try:
         res = _post(url, {"secret": config.CAPTCHA_SECRET, "response": token})
+        return bool(res.get("success")) if isinstance(res, dict) else False
     except Exception:
         return False
-    return bool(res.get("success"))
 
 
 def get_or_create_session(db: Session, session_id: str) -> VoterSession:
