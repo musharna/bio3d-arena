@@ -7,8 +7,10 @@ ingestion); scripts/commission_arena.py wires the real HTTP client + Blender."""
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import time
@@ -168,3 +170,61 @@ def extract_script(text: str) -> str:
     if m:
         return m.group(1).strip()
     return text.strip()
+
+
+def slug_for_model(model_id: str) -> str:
+    return "openrouter-" + re.sub(r"[^a-z0-9]+", "-", model_id.lower()).strip("-")
+
+
+def get_or_create_generator(db, model_id: str):
+    from .models import Generator
+
+    slug = slug_for_model(model_id)
+    gen = db.query(Generator).filter_by(slug=slug).first()
+    if gen is None:
+        gen = Generator(
+            slug=slug, name=model_id, kind="model", description="commissioned via OpenRouter"
+        )
+        db.add(gen)
+        db.flush()
+    return gen
+
+
+def ingest_attempt(db, *, task_id: int, model_id: str, run: dict, script: str, asset_dir):
+    """Persist one attempt. On status 'ok', copy the GLB under asset_dir/commissioned and
+    create a ModelOutput(source='commissioned'); always create a CommissionAttempt."""
+    from .models import CommissionAttempt, ModelOutput
+
+    gen = get_or_create_generator(db, model_id)
+    output_id = None
+    if run.get("status") == "ok" and run.get("glb_path"):
+        rel = Path("commissioned") / f"{gen.slug}_{task_id}.glb"
+        dst = Path(asset_dir) / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(run["glb_path"], dst)
+        out = ModelOutput(
+            task_id=task_id,
+            generator_id=gen.id,
+            title=model_id,
+            asset_path=str(rel),
+            asset_format="glb",
+            source="commissioned",
+            meta_json=json.dumps({"model_id": model_id, "mesh_stats": run.get("mesh_stats", {})}),
+        )
+        db.add(out)
+        db.flush()
+        output_id = out.id
+    att = CommissionAttempt(
+        task_id=task_id,
+        model_id=model_id,
+        generator_id=gen.id,
+        output_id=output_id,
+        status=run.get("status", "error"),
+        error=run.get("stderr", "") or "",
+        script=script or "",
+        mesh_stats_json=json.dumps(run.get("mesh_stats", {})),
+        duration_ms=int(run.get("duration_ms", 0)),
+    )
+    db.add(att)
+    db.commit()
+    return att
