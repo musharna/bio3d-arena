@@ -16,13 +16,13 @@ de-cluttering on desktop, share/embed. Not now.
 
 ## Constraints
 
-- **Desktop is untouched above the breakpoint** — all changes live inside `@media (max-width: 640px)`
+- **Desktop is untouched above the breakpoint** — all changes live inside `@media (max-width: 720px)`
   (nav) / the mobile branch of the arena layout. Desktop screenshots must be pixel-identical.
 - **No new dependencies, no server-side changes** — only `app/templates/base.html`,
   `app/templates/arena.html`, `app/static/style.css`, `app/static/arena.js`.
 - **Nav must work without JS** (it is global chrome) → CSS-only hamburger. The arena is already
   JS-dependent (it fetches pairs), so the A/B toggle may use a few lines of JS.
-- Breakpoint: **640px** (`max-width: 640px` = mobile treatment).
+- Breakpoint: **720px** — the codebase ALREADY has a `@media (max-width:720px)` block that sets `.pair`→1-col and `.vote-bar`→2-col; EXTEND that existing block rather than adding a new one. The nav-collapse is the missing piece.
 
 ## Components
 
@@ -31,7 +31,7 @@ de-cluttering on desktop, share/embed. Not now.
 - In `base.html`, wrap the nav toggle as a **checkbox hack**: a visually-hidden
   `<input type="checkbox" id="nav-toggle">` + a `<label for="nav-toggle" class="nav-burger">☰</label>`
   placed in the `.topbar`. The existing `<nav>` stays as-is.
-- CSS: the `.nav-burger` is `display:none` on desktop. In `@media (max-width:640px)`: show the
+- CSS: the `.nav-burger` is `display:none` on desktop. In `@media (max-width:720px)`: show the
   burger, `.topbar > nav` becomes `display:none` by default and `#nav-toggle:checked ~ nav`
   (or a wrapper) switches it to a stacked vertical drop-down (full-width links, larger tap
   targets ≥44px). Desktop keeps the horizontal bar unchanged.
@@ -43,7 +43,7 @@ de-cluttering on desktop, share/embed. Not now.
   `<div class="ab-toggle" role="tablist" aria-label="Which model to view">`
   with two buttons `data-ab="a"` / `data-ab="b"` (labels "Model A" / "Model B"). Hidden on desktop.
 - CSS: desktop `.pair` stays a 2-col grid (both `.model-col` visible); `.ab-toggle` is
-  `display:none`. In `@media (max-width:640px)`: `.pair` becomes one column; `.ab-toggle` shows;
+  `display:none`. In `@media (max-width:720px)`: `.pair` becomes one column; `.ab-toggle` shows;
   a `.model-col` is `display:none` unless it has an `is-active` class. Default: `.model-col:first-child`
   (A) active. Hiding a `.model-col` with `display:none` also **pauses its `<model-viewer>`** (a perf
   win on mobile).
@@ -55,7 +55,7 @@ de-cluttering on desktop, share/embed. Not now.
 
 ### 3. Sticky vote bar — `style.css`
 
-- In `@media (max-width:640px)`: `.vote-bar` becomes `position: sticky; bottom: 0` with a solid/
+- In `@media (max-width:720px)`: `.vote-bar` becomes `position: sticky; bottom: 0` with a solid/
   blurred background + top border + small padding, so the 4 vote buttons are always reachable
   without scrolling past a ~60vh viewer. Desktop unchanged (static below the pair).
 - Ensure the sticky bar doesn't cover the `.status-line`; add bottom padding to `.arena` on mobile
@@ -77,7 +77,7 @@ re-asserts "A active" on each new pair.
   gating the "hide inactive" rule on a JS-added class like `body.js-ab` so no-JS keeps both shown.)
 - **Model-viewer in a hidden col:** confirmed model-viewer pauses when `display:none`; switching
   back resumes. No leak.
-- **Rotation between breakpoints:** rotating a phone across 640px re-applies the correct layout via
+- **Rotation between breakpoints:** rotating a phone across 720px re-applies the correct layout via
   CSS; the `is-active` class is harmless on desktop.
 
 ## Testing
@@ -94,7 +94,7 @@ Frontend-only, so verification is visual + regression:
 
 ## Open decisions (defaults chosen)
 
-1. **Breakpoint** = 640px (covers phones; tablets keep desktop layout). Default.
+1. **Breakpoint** = 720px (covers phones; tablets keep desktop layout). Default.
 2. **A/B toggle style** = segmented buttons (not a swipe gesture — simpler, accessible, discoverable).
 3. **No-JS safety** = gate the "hide inactive model-col" rule on a `body.js-ab` class so no-JS shows
    both models stacked (graceful degradation).
