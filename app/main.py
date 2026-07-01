@@ -38,7 +38,9 @@ from .models import (
     ModelOutput,
     Rating,
     Task,
+    User,
     Vote,
+    VoterSession,
 )
 from .schemas import CategoryIn, GeneratorIn, TaskIn, VoteIn
 from .storage import get_storage
@@ -69,12 +71,96 @@ async def ensure_session(request: Request, call_next):
     if is_new:
         sid = uuid.uuid4().hex
     request.state.session_id = sid
+    from . import auth
+
+    request.state.login_enabled = auth._login_enabled()
+    # Resolve the verified user (if any) for templates — one light lookup per request.
+    request.state.user = None
+    try:
+        from .database import SessionLocal
+        from .models import User, VoterSession
+
+        with SessionLocal() as _db:
+            _vs = _db.get(VoterSession, sid)
+            if _vs is not None and _vs.user_id is not None:
+                request.state.user = _db.get(User, _vs.user_id)
+    except Exception:  # noqa: BLE001 — never let user-resolution break a page
+        request.state.user = None
     response = await call_next(request)
     if is_new:
         response.set_cookie(
-            SESSION_COOKIE, sid, httponly=True, samesite="lax", max_age=60 * 60 * 24 * 365
+            SESSION_COOKIE,
+            sid,
+            httponly=True,
+            samesite="lax",
+            max_age=60 * 60 * 24 * 365,
+            secure=config.COOKIE_SECURE,
         )
     return response
+
+
+OAUTH_STATE_COOKIE = "bio3d_oauth_state"
+
+
+@app.get("/auth/login")
+def auth_login(request: Request):
+    from . import auth
+
+    if not auth._login_enabled():
+        return RedirectResponse("/", status_code=302)
+    state = auth.new_state()
+    redirect_uri = f"{config.PUBLIC_BASE_URL}/auth/callback"
+    resp = RedirectResponse(auth.authorize_url(state, redirect_uri), status_code=302)
+    resp.set_cookie(
+        OAUTH_STATE_COOKIE,
+        state,
+        max_age=600,
+        httponly=True,
+        samesite="lax",
+        secure=config.COOKIE_SECURE,
+    )
+    return resp
+
+
+@app.get("/auth/callback")
+def auth_callback(request: Request, code: str = "", state: str = "", db: Session = Depends(get_db)):
+    from . import auth
+
+    cookie_state = request.cookies.get(OAUTH_STATE_COOKIE)
+    if not auth._login_enabled() or not code or not state or state != cookie_state:
+        resp = RedirectResponse("/?login=error", status_code=302)
+        resp.delete_cookie(OAUTH_STATE_COOKIE)
+        return resp
+    try:
+        redirect_uri = f"{config.PUBLIC_BASE_URL}/auth/callback"
+        token = auth.exchange_code(code, redirect_uri)
+        info = auth.fetch_userinfo(token)
+    except auth.AuthError:
+        resp = RedirectResponse("/?login=error", status_code=302)
+        resp.delete_cookie(OAUTH_STATE_COOKIE)
+        return resp
+    user = db.execute(select(User).where(User.hf_id == info["hf_id"])).scalars().first()
+    if user is None:
+        user = User(hf_id=info["hf_id"], username=info["username"])
+        db.add(user)
+        db.flush()
+    else:
+        user.username = info["username"]
+    vs = integrity.get_or_create_session(db, request.state.session_id)
+    vs.user_id = user.id
+    db.commit()
+    resp = RedirectResponse("/?login=ok", status_code=302)
+    resp.delete_cookie(OAUTH_STATE_COOKIE)
+    return resp
+
+
+@app.post("/auth/logout")
+def auth_logout(request: Request, db: Session = Depends(get_db)):
+    vs = db.get(VoterSession, request.state.session_id)
+    if vs is not None:
+        vs.user_id = None
+        db.commit()
+    return RedirectResponse("/", status_code=302)
 
 
 # --------------------------------------------------------------------- helpers
@@ -378,23 +464,7 @@ def _leaderboard_rows(
                 "n_games": r.n_games,
             }
         )
-    rows.sort(key=lambda x: x["bt_score"], reverse=True)
-    # CI-grouped rank (overlapping 95% CIs share a rank), computed on the displayed
-    # (rounded) bounds so the rank matches the numbers shown.
-    ranks = ranking.rank_by_ci([(r["bt_lower"], r["bt_upper"]) for r in rows])
-    for row, rank in zip(rows, ranks):
-        row["rank"] = rank
-    # CI whisker-bar geometry: position each [lower, point, upper] as a percent of the
-    # column's full value span so ties are visible at a glance.
-    if rows:
-        lo = min(r["bt_lower"] for r in rows)
-        hi = max(r["bt_upper"] for r in rows)
-        span = (hi - lo) or 1.0
-        for r in rows:
-            r["ci_left"] = round(100.0 * (r["bt_lower"] - lo) / span, 1)
-            r["ci_width"] = round(100.0 * (r["bt_upper"] - r["bt_lower"]) / span, 1)
-            r["ci_point"] = round(100.0 * (r["bt_score"] - lo) / span, 1)
-    return rows
+    return service.finalize_rows(rows)
 
 
 def _judge_leaderboard_rows(
@@ -447,8 +517,13 @@ def leaderboard(
     db: Session = Depends(get_db),
     criterion: str = "overall",
     category: str = "all",
+    verified: bool = False,
 ):
-    rows = _leaderboard_rows(db, criterion, category)
+    rows = (
+        service.verified_leaderboard_rows(db, criterion, category)
+        if verified
+        else _leaderboard_rows(db, criterion, category)
+    )
     total = matchmaking.total_votes(db)
     cats = db.execute(select(Category)).scalars().all()
     crits = db.execute(select(Criterion)).scalars().all()
@@ -481,19 +556,35 @@ def leaderboard(
             "sel_criterion": criterion,
             "sel_category": category,
             "judge_rows": _judge_leaderboard_rows(db, criterion, "multi4"),
+            "verified": verified,
         },
     )
 
 
 @app.get("/api/leaderboard")
 def api_leaderboard(
-    db: Session = Depends(get_db), criterion: str = "overall", category: str = "all"
+    db: Session = Depends(get_db),
+    criterion: str = "overall",
+    category: str = "all",
+    verified: bool = False,
 ):
-    return {
-        "criterion": criterion,
-        "category": category,
-        "rows": _leaderboard_rows(db, criterion, category),
-    }
+    if verified:
+        rows = service.verified_leaderboard_rows(db, criterion, category)
+    else:
+        rows = _leaderboard_rows(db, criterion, category)
+    return {"criterion": criterion, "category": category, "verified": verified, "rows": rows}
+
+
+@app.get("/dataset", response_class=HTMLResponse)
+def dataset_page(request: Request):
+    releases_dir = config.RELEASES_DIR
+    releases = []
+    if releases_dir.is_dir():
+        for d in sorted(releases_dir.iterdir(), reverse=True):
+            vf = d / "VERSION"
+            if d.is_dir() and vf.is_file():
+                releases.append({"version": d.name, "version_text": vf.read_text()})
+    return templates.TemplateResponse(request, "dataset.html", {"releases": releases})
 
 
 @app.get("/methodology", response_class=HTMLResponse)
@@ -509,6 +600,24 @@ def methodology_page(request: Request):
             "require_captcha": config.REQUIRE_CAPTCHA,
         },
     )
+
+
+@app.get("/terms", response_class=HTMLResponse)
+def terms_page(request: Request):
+    return templates.TemplateResponse(request, "terms.html")
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy_page(request: Request):
+    return templates.TemplateResponse(request, "privacy.html")
+
+
+@app.get("/licenses", response_class=HTMLResponse)
+def licenses_page(request: Request, db: Session = Depends(get_db)):
+    rows = db.execute(
+        select(ModelOutput.license, ModelOutput.attribution, ModelOutput.source).distinct()
+    ).all()
+    return templates.TemplateResponse(request, "licenses.html", {"licenses": rows})
 
 
 @app.get("/coverage", response_class=HTMLResponse)
@@ -839,31 +948,9 @@ def export_dataset(db: Session = Depends(get_db)):
 
     Generators are revealed here (post-hoc), enabling offline ranking studies.
     """
-    rows = db.execute(
-        select(Vote, Comparison).join(Comparison, Vote.comparison_id == Comparison.id)
-    ).all()
-    records = []
-    for vote, comp in rows:
-        out_a = db.get(ModelOutput, comp.output_a_id)
-        out_b = db.get(ModelOutput, comp.output_b_id)
-        task = db.get(Task, comp.task_id)
-        crit = db.get(Criterion, comp.criterion_id)
-        records.append(
-            {
-                "comparison_id": comp.id,
-                "task": task.title,
-                "category": task.category.slug,
-                "criterion": crit.slug,
-                "generator_a": db.get(Generator, out_a.generator_id).slug,
-                "generator_b": db.get(Generator, out_b.generator_id).slug,
-                "asset_a": out_a.asset_path,
-                "asset_b": out_b.asset_path,
-                "winner": vote.winner,  # a | b | tie | bad
-                "session": vote.session_id,
-                "voted_at": vote.created.isoformat(),
-            }
-        )
-    return {"n_votes": len(records), "votes": records}
+    from . import dataset as dataset_mod
+
+    return dataset_mod.build_preference_records(db)
 
 
 @app.get("/difficulty", response_class=HTMLResponse)

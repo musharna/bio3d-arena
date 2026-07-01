@@ -178,6 +178,17 @@ class Rating(Base):
     updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
+class User(Base):
+    """A verified voter, identified by their Hugging Face account (OAuth)."""
+
+    __tablename__ = "user"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    hf_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    username: Mapped[str] = mapped_column(String(128), default="")
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class VoterSession(Base):
     """Trust bookkeeping for an anonymous voter (keyed by the session cookie).
 
@@ -196,6 +207,8 @@ class VoterSession(Base):
     n_votes: Mapped[int] = mapped_column(Integer, default=0)
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
     updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+    # Verified-login link: NULL = anonymous, set = signed in with Hugging Face (SP2).
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("user.id"), nullable=True, index=True)
 
 
 class GoldPair(Base):

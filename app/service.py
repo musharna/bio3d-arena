@@ -137,13 +137,19 @@ def generator_display_names(db: Session) -> dict[int, str]:
 
 
 def _matches_for_scope(
-    db: Session, criterion_id: int, category_id: int | None, include_ties: bool = True
+    db: Session,
+    criterion_id: int,
+    category_id: int | None,
+    include_ties: bool = True,
+    verified_only: bool = False,
 ) -> list[tuple[int, int]]:
     """Decisive (winner_gen, loser_gen) pairs for a (criterion, category) scope.
 
     A 'tie' is credited as a split — one win in each direction — so ties inform
     Bradley-Terry without a separate tie parameter. 'bad' votes are excluded.
     category_id=None means the global scope (all categories).
+    verified_only=True further restricts to votes from a session with a linked
+    User (VoterSession.user_id set) — the "verified-only" leaderboard scope.
     """
     # Exclude gold attention-check comparisons, and (left outer join) any vote from
     # a session whose trust has fallen below TRUST_THRESHOLD — anti-abuse gating.
@@ -157,6 +163,8 @@ def _matches_for_scope(
             (VoterSession.trust.is_(None)) | (VoterSession.trust >= config.TRUST_THRESHOLD),
         )
     )
+    if verified_only:
+        stmt = stmt.where(VoterSession.user_id.is_not(None))
     if category_id is not None:
         stmt = stmt.join(Task, Comparison.task_id == Task.id).where(Task.category_id == category_id)
 
@@ -188,6 +196,63 @@ def _players_for_scope(db: Session, category_id: int | None) -> list[int]:
         )
     ref_gens = mode_a_excluded_generator_ids(db)
     return sorted({gid for gid in db.execute(stmt).scalars().all() if gid not in ref_gens})
+
+
+def finalize_rows(rows: list[dict]) -> list[dict]:
+    """Add CI-grouped rank + whisker-bar geometry to leaderboard rows (shared by the
+    trusted and verified boards). Rows must have numeric bt_score/bt_lower/bt_upper."""
+    rows.sort(key=lambda x: x["bt_score"], reverse=True)
+    # CI-grouped rank (overlapping 95% CIs share a rank), computed on the displayed
+    # (rounded) bounds so the rank matches the numbers shown.
+    ranks = ranking.rank_by_ci([(r["bt_lower"], r["bt_upper"]) for r in rows])
+    for row, rank in zip(rows, ranks):
+        row["rank"] = rank
+    # CI whisker-bar geometry: position each [lower, point, upper] as a percent of the
+    # column's full value span so ties are visible at a glance.
+    if rows:
+        lo = min(r["bt_lower"] for r in rows)
+        hi = max(r["bt_upper"] for r in rows)
+        span = (hi - lo) or 1.0
+        for r in rows:
+            r["ci_left"] = round(100.0 * (r["bt_lower"] - lo) / span, 1)
+            r["ci_width"] = round(100.0 * (r["bt_upper"] - r["bt_lower"]) / span, 1)
+            r["ci_point"] = round(100.0 * (r["bt_score"] - lo) / span, 1)
+    return rows
+
+
+def verified_leaderboard_rows(
+    db: Session, criterion_slug: str = "overall", category: str = "all"
+) -> list[dict]:
+    """On-demand Bradley-Terry over VERIFIED votes only (session.user_id set). Not cached."""
+    crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+    if crit is None:
+        return []
+    category_id = None
+    if category != "all":
+        cat = db.execute(select(Category).where(Category.slug == category)).scalars().first()
+        category_id = cat.id if cat else None
+    players = _players_for_scope(db, category_id)
+    matches = _matches_for_scope(db, crit.id, category_id, verified_only=True)
+    result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP)
+    names = generator_display_names(db)
+    rows = []
+    for gid in players:
+        if result.n_games.get(gid, 0) <= 0:
+            continue  # only generators with an actual verified game appear on the verified board
+        gen = db.get(Generator, gid)
+        rows.append(
+            {
+                "generator": names.get(gid, gen.name if gen else str(gid)),
+                "kind": gen.kind if gen else "model",
+                "bt_score": round(result.scores.get(gid, 0.0), 1),
+                "bt_lower": round(result.lower.get(gid, 0.0), 1),
+                "bt_upper": round(result.upper.get(gid, 0.0), 1),
+                "n_games": result.n_games.get(gid, 0),
+            }
+        )
+    if not rows:
+        return []
+    return finalize_rows(rows)
 
 
 def recompute_scope(

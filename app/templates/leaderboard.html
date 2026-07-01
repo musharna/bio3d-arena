@@ -19,6 +19,12 @@
       </select>
     </label>
   </form>
+  <p class="subtle scope-toggle">
+    Scope:
+    <a href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}"{% if not verified %} class="active"{% endif %}>Trusted</a> ·
+    <a href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}&verified=true"{% if verified %} class="active"{% endif %}>Verified ✓</a>
+    {% if verified %}<span class="subtle"> — Bradley–Terry over votes from signed-in (Hugging Face) users only.</span>{% endif %}
+  </p>
   <p class="subtle">
     {{ total_votes }} votes cast. <b>Rank (UB)</b> groups models whose 95% bootstrap
     CIs overlap into the same rank (they are not statistically separable). BT =
@@ -28,7 +34,7 @@
   <p class="subtle bias-line">
     Bias audit — left(A) win rate
     <b>{% if bias.left_win_rate is none %}—{% else %}{{ bias.left_win_rate }}{% endif %}</b>
-    (≈0.50 = unbiased) · tie {{ bias.tie_rate }} · bad {{ bias.bad_rate }} ·
+    (≈0.50 = unbiased) · tie {% if bias.tie_rate is none %}—{% else %}{{ bias.tie_rate }}{% endif %} · bad {% if bias.bad_rate is none %}—{% else %}{{ bias.bad_rate }}{% endif %} ·
     <a href="/significance?criterion={{ sel_criterion }}&category={{ sel_category }}">significance &amp; full audit →</a>
   </p>
   {% if rows %}
@@ -64,14 +70,14 @@
           </div>
           <span class="ci-nums">[{{ r.bt_lower }}, {{ r.bt_upper }}]</span>
         </td>
-        <td class="num">{{ r.elo }}</td>
+        <td class="num">{% if r.elo is defined %}{{ r.elo }}{% else %}—{% endif %}</td>
         <td class="num">{{ r.n_games }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   {% else %}
-  <p>No ratings yet for this slice. Cast some votes in the <a href="/">Arena</a>.</p>
+  {% if verified %}<p>No verified votes yet — sign in with Hugging Face and vote to seed the verified board.</p>{% else %}<p>No ratings yet for this slice. Cast some votes in the <a href="/">Arena</a>.</p>{% endif %}
   {% endif %}
   {% if judge_rows %}
   <h2>VLM judge (Sonnet 4.6, multi-view)</h2>
