@@ -50,3 +50,37 @@ for _slug in ("arabidopsis", "pinus", "tomato", "rose", "soybean"):
         _dst = _test_ref / f"{_slug}_ref{_ext}"
         if _src.exists() and not _dst.exists():
             shutil.copy(_src, _dst)
+
+
+import pytest  # noqa: E402  (after the temp-dir/env bootstrap above, by design)
+
+
+@pytest.fixture
+def db_session():
+    """Per-test isolated ``Session`` on the suite's shared (temp-dir) engine.
+
+    ``app.database.engine`` is a single engine for the whole run (see the temp-dir
+    setup above), so a plain ``SessionLocal()`` would let rows from one test leak into
+    the next. Instead bind a dedicated ``Session`` to its own connection + outer
+    transaction, and roll that transaction back on teardown -- nothing the test wrote
+    survives past it. Prefer ``db.flush()`` over ``db.commit()`` in tests using this
+    fixture (flush is enough to assign PKs); an explicit ``db.commit()`` would end the
+    isolation transaction early and persist rows into later tests.
+    """
+    from sqlalchemy.orm import sessionmaker
+
+    from app.database import engine, init_db
+
+    init_db()
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = sessionmaker(
+        bind=connection, autoflush=False, expire_on_commit=False, future=True
+    )()
+    try:
+        yield session
+    finally:
+        session.close()
+        if transaction.is_active:
+            transaction.rollback()
+        connection.close()
