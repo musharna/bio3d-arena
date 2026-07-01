@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import GoldPair, Generator, ModelOutput, Task
+from .models import Generator, GoldPair, ModelOutput, Task
 
 REDISTRIBUTABLE_LICENSES = frozenset(
     {
