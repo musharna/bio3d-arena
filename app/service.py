@@ -168,6 +168,8 @@ def _matches_for_scope(
             continue
         out_a = db.get(ModelOutput, comparison.output_a_id)
         out_b = db.get(ModelOutput, comparison.output_b_id)
+        if out_a is None or out_b is None:
+            continue  # dangling vote (output deleted) — not a valid comparison
         gen_a = out_a.generator_id
         gen_b = out_b.generator_id
         if gen_a in ref_gens or gen_b in ref_gens:
@@ -258,8 +260,12 @@ def _judge_matches_for_scope(
     for jv in db.execute(stmt).scalars():
         if jv.winner == "bad":
             continue
-        gen_a = db.get(ModelOutput, jv.output_a_id).generator_id
-        gen_b = db.get(ModelOutput, jv.output_b_id).generator_id
+        out_a = db.get(ModelOutput, jv.output_a_id)
+        out_b = db.get(ModelOutput, jv.output_b_id)
+        if out_a is None or out_b is None:
+            continue  # dangling vote (output deleted) — not a valid comparison
+        gen_a = out_a.generator_id
+        gen_b = out_b.generator_id
         if gen_a in ref_gens or gen_b in ref_gens:
             continue  # GT/reference scans are not perceptual competitors (Mode-A exclusion)
         if not same_paradigm(db.get(Generator, gen_a).paradigm, db.get(Generator, gen_b).paradigm):
@@ -379,8 +385,12 @@ def tier_perceptual_ranking(
         tier = tier_by_task.get(jv.task_id)
         if tier is None:
             continue
-        gen_a = db.get(ModelOutput, jv.output_a_id).generator_id
-        gen_b = db.get(ModelOutput, jv.output_b_id).generator_id
+        out_a = db.get(ModelOutput, jv.output_a_id)
+        out_b = db.get(ModelOutput, jv.output_b_id)
+        if out_a is None or out_b is None:
+            continue  # dangling vote (output deleted) — not a valid comparison
+        gen_a = out_a.generator_id
+        gen_b = out_b.generator_id
         if gen_a in excluded or gen_b in excluded:
             continue
         if not same_paradigm(db.get(Generator, gen_a).paradigm, db.get(Generator, gen_b).paradigm):
