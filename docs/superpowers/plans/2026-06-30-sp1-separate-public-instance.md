@@ -14,7 +14,7 @@
 - **Held-out GT stays internal:** the export ships only _baked_ GT reference GLBs (from `app/gt_render.py`), never raw `.npy` point clouds. The bundle must contain zero `.npy`.
 - **No Agrigen path in the public artifact:** neither the emitted bundle nor the documented public config may contain the string `/home/mjarnold/agrigen`.
 - **Never run pytest against a real DB:** the suite wipes tables. Tests use temp DBs only (`conftest.py` isolates; incident 2026-06-28). Never set `BIO3D_DATABASE_URL=study`.
-- **Explicit promotion:** the schema has no `is_published`/visibility column. Promotion is an explicit allowlist of task slugs + generator slugs. Nothing is public unless named.
+- **Explicit promotion:** the schema has no `is_published`/visibility column. Promotion is an explicit allowlist of task titles + generator slugs. Nothing is public unless named.
 - **v1 exported tables (arena + leaderboard + benchmark + integrity):** `category`, `criterion`, `generator`, `task`, `model_output`, `comparison`, `vote`, `rating`, `metric`, `gold_pair`, `recon_task`, `task_difficulty`. **Excluded (research-internal):** all Mode-C/judge/trait/calibration tables (`judge_vote`, `judge_rating`, `calibration_pair`, `plant_morphology`, `trait_*`, `organ_metric`, `critique`, `submission`, `voter_session`). Public vote pool + voter trust start clean.
 
 ---
@@ -127,7 +127,7 @@ git commit -m "feat(public): SCORING_ENABLED guard — public instance never dia
 
 - Produces:
   - `REDISTRIBUTABLE_LICENSES: frozenset[str]` — normalized allowlist.
-  - `resolve_include_ids(db, *, task_slugs, generator_slugs) -> IncludeSet` where `IncludeSet` is a dataclass with `generator_ids: set[int]`, `task_ids: set[int]`, `output_ids: set[int]`, `gold_output_ids: set[int]`.
+  - `resolve_include_ids(db, *, task_titles, generator_slugs) -> IncludeSet` where `IncludeSet` is a dataclass with `generator_ids: set[int]`, `task_ids: set[int]`, `output_ids: set[int]`, `gold_output_ids: set[int]`.
   - `check_licenses(db, output_ids) -> None` — raises `LicenseError(output_id, license)` on the first output whose `license` is null or not in the allowlist (self-authored `source == "bio3d-arena"` outputs and gold decoys are exempt — they are our own assets).
 - Consumes: `app.models` (Task, Generator, ModelOutput, GoldPair), a `Session`.
 
@@ -145,8 +145,8 @@ def _mk(db):
     g_ok = Generator(slug="lpy", name="L-Py", kind="model")
     g_hidden = Generator(slug="secret", name="Secret", kind="model")
     db.add_all([cat, g_ok, g_hidden]); db.flush()
-    t_pub = Task(category_id=cat.id, slug="maize-a", prompt="maize", active=True)
-    t_off = Task(category_id=cat.id, slug="maize-b", prompt="maize", active=False)
+    t_pub = Task(category_id=cat.id, title="maize-a", prompt="maize", active=True)
+    t_off = Task(category_id=cat.id, title="maize-b", prompt="maize", active=False)
     db.add_all([t_pub, t_off]); db.flush()
     o_ok = ModelOutput(task_id=t_pub.id, generator_id=g_ok.id, asset_path="a.glb",
                        source="external", license="CC-BY-4.0")
@@ -160,7 +160,7 @@ def _mk(db):
 
 def test_resolve_respects_allowlist_and_active(db_session):
     e = _mk(db_session)
-    inc = pe.resolve_include_ids(db_session, task_slugs=["maize-a", "maize-b"],
+    inc = pe.resolve_include_ids(db_session, task_titles=["maize-a", "maize-b"],
                                  generator_slugs=["lpy"])
     assert e["t_pub"].id in inc.task_ids
     assert e["t_off"].id not in inc.task_ids          # inactive task excluded
@@ -170,7 +170,7 @@ def test_resolve_respects_allowlist_and_active(db_session):
 
 def test_check_licenses_fails_loud_on_unknown(db_session):
     e = _mk(db_session)
-    inc = pe.resolve_include_ids(db_session, task_slugs=["maize-a"], generator_slugs=["lpy"])
+    inc = pe.resolve_include_ids(db_session, task_titles=["maize-a"], generator_slugs=["lpy"])
     with pytest.raises(pe.LicenseError) as ei:
         pe.check_licenses(db_session, inc.output_ids)
     assert ei.value.output_id == e["o_bad"].id        # external + null license aborts
@@ -226,7 +226,7 @@ class IncludeSet:
     gold_output_ids: set[int] = field(default_factory=set)
 
 
-def resolve_include_ids(db: Session, *, task_slugs: list[str],
+def resolve_include_ids(db: Session, *, task_titles: list[str],
                         generator_slugs: list[str]) -> IncludeSet:
     inc = IncludeSet()
     inc.generator_ids = {
@@ -236,7 +236,7 @@ def resolve_include_ids(db: Session, *, task_slugs: list[str],
     }
     inc.task_ids = {
         t.id for t in db.execute(
-            select(Task).where(Task.slug.in_(task_slugs), Task.active.is_(True))
+            select(Task).where(Task.title.in_(task_titles), Task.active.is_(True))
         ).scalars()
     }
     rows = db.execute(
@@ -293,7 +293,7 @@ git commit -m "feat(public): include-set resolution + fail-loud license gate"
 **Interfaces:**
 
 - Consumes: `app.public_export.resolve_include_ids`, `check_licenses`; `app.storage.get_storage`; `app.models`.
-- Produces: `export_bundle(db, storage, *, task_slugs, generator_slugs, out_dir) -> dict` writing `out_dir/{rows.json, assets/…, gt/…, manifest.json}` and returning the manifest dict (with `sha256` over `rows.json`). CLI: `python -m scripts.export_public --tasks a,b --generators lpy,icrisat --out public_bundle/v1 [--dry-run]`.
+- Produces: `export_bundle(db, storage, *, task_titles, generator_slugs, out_dir) -> dict` writing `out_dir/{rows.json, assets/…, gt/…, manifest.json}` and returning the manifest dict (with `sha256` over `rows.json`). CLI: `python -m scripts.export_public --tasks a,b --generators lpy,icrisat --out public_bundle/v1 [--dry-run]`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -313,7 +313,7 @@ def test_export_writes_bundle_and_no_agrigen_leak(db_session, tmp_path):
     store.save("a.glb", b"GLBDATA-a")
     store.save("b.glb", b"GLBDATA-b")
     out = tmp_path / "bundle"
-    manifest = export_bundle(db_session, store, task_slugs=["maize-a"],
+    manifest = export_bundle(db_session, store, task_titles=["maize-a"],
                              generator_slugs=["lpy"], out_dir=out)
     rows = json.loads((out / "rows.json").read_text())
     assert "model_output" in rows and len(rows["model_output"]) >= 1
@@ -403,10 +403,10 @@ def _filtered_rows(db, inc: public_export.IncludeSet) -> dict[str, list[dict]]:
     return tables
 
 
-def export_bundle(db, storage: StorageBackend, *, task_slugs, generator_slugs,
+def export_bundle(db, storage: StorageBackend, *, task_titles, generator_slugs,
                   out_dir, dry_run: bool = False) -> dict:
     inc = public_export.resolve_include_ids(
-        db, task_slugs=task_slugs, generator_slugs=generator_slugs)
+        db, task_titles=task_titles, generator_slugs=generator_slugs)
     public_export.check_licenses(db, inc.output_ids)  # fail-loud before writing anything
     all_out = inc.output_ids | inc.gold_output_ids
     tables = _filtered_rows(db, inc)
@@ -451,7 +451,7 @@ def export_bundle(db, storage: StorageBackend, *, task_slugs, generator_slugs,
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--tasks", required=True, help="comma-separated task slugs")
+    ap.add_argument("--tasks", required=True, help="comma-separated task titles")
     ap.add_argument("--generators", required=True, help="comma-separated generator slugs")
     ap.add_argument("--out", required=True)
     ap.add_argument("--dry-run", action="store_true")
@@ -460,7 +460,7 @@ def main() -> int:
     try:
         m = export_bundle(
             db, get_storage(),
-            task_slugs=a.tasks.split(","), generator_slugs=a.generators.split(","),
+            task_titles=a.tasks.split(","), generator_slugs=a.generators.split(","),
             out_dir=a.out, dry_run=a.dry_run,
         )
     finally:
@@ -519,7 +519,7 @@ def test_roundtrip_matches_and_no_leak(db_session, tmp_path):
     _mk(db_session)
     src = LocalStorageBackend(tmp_path / "src"); src.save("a.glb", b"A"); src.save("b.glb", b"B")
     out = tmp_path / "bundle"
-    export_bundle(db_session, src, task_slugs=["maize-a"], generator_slugs=["lpy"], out_dir=out)
+    export_bundle(db_session, src, task_titles=["maize-a"], generator_slugs=["lpy"], out_dir=out)
 
     dst_url = f"sqlite:///{tmp_path/'public.db'}"
     dst_store = LocalStorageBackend(tmp_path / "dst")
@@ -541,7 +541,7 @@ def test_import_rejects_tampered_bundle(db_session, tmp_path):
     _mk(db_session)
     src = LocalStorageBackend(tmp_path / "src"); src.save("a.glb", b"A"); src.save("b.glb", b"B")
     out = tmp_path / "bundle"
-    export_bundle(db_session, src, task_slugs=["maize-a"], generator_slugs=["lpy"], out_dir=out)
+    export_bundle(db_session, src, task_titles=["maize-a"], generator_slugs=["lpy"], out_dir=out)
     (out / "rows.json").write_bytes(b'{"tampered": []}')
     with pytest.raises(BundleChecksumError):
         import_bundle(out, database_url=f"sqlite:///{tmp_path/'p.db'}",

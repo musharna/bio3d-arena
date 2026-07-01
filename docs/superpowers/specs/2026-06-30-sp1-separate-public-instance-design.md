@@ -42,7 +42,7 @@ Reads the internal study DB + assets, emits a portable **public bundle**:
   **filtered** by a **curated promotion allowlist**. Note the schema has **no `is_published`/
   internal flag today**: `Task` has only `active` (bool), `Generator` has `kind`
   (model|human|baseline) + `is_anonymous` — no visibility column. So promotion is **explicit**:
-  the export takes an allowlist of task slugs + generator slugs to publish (nothing is public
+  the export takes an allowlist of task titles + generator slugs to publish (nothing is public
   unless named — matches the fail-loud, no-silent-inclusion boundary). Additional hard gates:
   (a) `Task.active == True`, (b) `ModelOutput.is_gold == False` (gold decoys never leave the
   internal instance), (c) `ModelOutput.license` in a redistributable-license allowlist
