@@ -85,3 +85,64 @@ def aggregate(rows: list[dict]) -> dict:
         "repairs": sum(1 for r in rows if r.get("bucket") == "repair"),
         "no_refinement": sum(1 for r in rows if r.get("bucket") == "no-refinement"),
     }
+
+
+def render_sheet(glb_abs: str, capture_multi, condition: str = "multi4") -> bytes:
+    """Render one GLB to a contact-sheet PNG (capture_multi + tile), mirroring dgen.score_glb."""
+    from app.judge_render import CONDITIONS, tile_contact_sheet
+
+    spec = CONDITIONS[condition]
+    pngs = capture_multi(str(glb_abs), spec["azimuths"], spec["elev"])
+    return tile_contact_sheet(pngs, spec["cols"], spec["rows"])
+
+
+def ab_work(db, run_id: int, asset_dir) -> list[dict]:
+    """Bucket each taxon of a DGenRun into ab / repair / no-refinement and resolve the baseline+best
+    GLB paths. baseline GLB = {asset_dir}/dgen_baseline/{run_id}_{taxon_slug}.glb; best GLB =
+    ASSET_DIR/<best iteration's ModelOutput.asset_path>."""
+    import collections
+    import os
+
+    from app.commission import SPECIES_COMMON
+    from app.config import ASSET_DIR
+    from app.dgen import _taxon_slug
+    from app.models import DGenIteration, ModelOutput
+
+    by_taxon = collections.defaultdict(list)
+    for it in db.query(DGenIteration).filter_by(run_id=run_id).all():
+        by_taxon[it.taxon].append(it)
+
+    rows = []
+    for taxon, iters in by_taxon.items():
+        iters.sort(key=lambda i: i.round)
+        best = next((i for i in iters if i.is_best), None)
+        best_round = best.round if best else None
+        best_glb = None
+        if best is not None and best.output_id is not None:
+            mo = db.get(ModelOutput, best.output_id)
+            if mo is not None:
+                best_glb = os.path.join(str(ASSET_DIR), mo.asset_path)
+        baseline_glb = os.path.join(
+            str(asset_dir), "dgen_baseline", f"{run_id}_{_taxon_slug(taxon)}.glb"
+        )
+        has_baseline = os.path.exists(baseline_glb)
+
+        if best is None or best_glb is None:
+            continue  # no promoted output for this taxon (all rounds failed) — nothing to compare
+        if best_round == 0:
+            bucket = "no-refinement"
+        elif not has_baseline:
+            bucket = "repair"
+        else:
+            bucket = "ab"
+        rows.append(
+            {
+                "taxon": taxon,
+                "common": SPECIES_COMMON.get(taxon, taxon),
+                "bucket": bucket,
+                "best_glb": best_glb,
+                "baseline_glb": baseline_glb if has_baseline else None,
+                "best_round": best_round,
+            }
+        )
+    return rows
