@@ -38,6 +38,8 @@ def classify(slug: str, kind: str, sources: set[str]) -> str | None:
         return "capture_scan"
     if any_src_prefix("api:text:"):  # text→3D (a text PROMPT input) — must precede the api: rule
         return "text_native"
+    if any_src_prefix("agentic:"):
+        return "agentic"
     if any_src_prefix("api:"):
         return "image_recon"
     if any(k in s for k in ("lpy", "l-py", "lsystem", "infinigen", "procedural", "helios")):

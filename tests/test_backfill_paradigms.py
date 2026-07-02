@@ -40,6 +40,13 @@ def test_classify_text_to_3d_is_text_native_not_image_recon():
     assert classify("fal:trellis", "model", {"api:fal:trellis"}) == "image_recon"
 
 
+def test_classify_agentic_source_is_agentic():
+    assert classify("agentic-openai-gpt-5-1", "model", {"agentic:openai/gpt-5.1"}) == "agentic"
+    # regression: image/text api sources unchanged
+    assert classify("fal:trellis", "model", {"api:fal:trellis"}) == "image_recon"
+    assert classify("fal:tripo-p1-text", "model", {"api:text:fal:tripo-p1-text"}) == "text_native"
+
+
 def test_assign_skips_decoy_and_zero_output(tmp_path):
     from app.database import SessionLocal, init_db
     from app.models import Generator
