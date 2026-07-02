@@ -90,14 +90,20 @@ def main() -> int:
             for w in ab_work(db, run.id, asset_dir):
                 row = {"run_id": run.id, "model_id": run.model_id, **w}
                 if w["bucket"] == "ab":
-                    sheet_base = render_sheet(w["baseline_glb"], capture_multi)
-                    sheet_best = render_sheet(w["best_glb"], capture_multi)
-                    comp_ab = composite_ab(sheet_base, sheet_best)  # baseline=A
-                    comp_ba = composite_ab(sheet_best, sheet_base)  # baseline=B
-                    pick1 = judge_pair(vision_fn, comp_ab, w["taxon"], w["common"])
-                    pick2 = judge_pair(vision_fn, comp_ba, w["taxon"], w["common"])
-                    row["verdict"] = verdict_both_orders(pick1, pick2)
-                    row["picks"] = [pick1, pick2]
+                    try:
+                        sheet_base = render_sheet(w["baseline_glb"], capture_multi)
+                        sheet_best = render_sheet(w["best_glb"], capture_multi)
+                        comp_ab = composite_ab(sheet_base, sheet_best)  # baseline=A
+                        comp_ba = composite_ab(sheet_best, sheet_base)  # baseline=B
+                        pick1 = judge_pair(vision_fn, comp_ab, w["taxon"], w["common"])
+                        pick2 = judge_pair(vision_fn, comp_ba, w["taxon"], w["common"])
+                        row["verdict"] = verdict_both_orders(pick1, pick2)
+                        row["picks"] = [pick1, pick2]
+                    except Exception as e:  # noqa: BLE001 — per-pair fail-loud: record + continue
+                        row["bucket"] = (
+                            "error"  # excluded from the A/B denominator, counted separately
+                        )
+                        row["error"] = repr(e)
                 all_rows.append(row)
                 print(
                     f"{run.model_id} {w['taxon']}: {row.get('bucket')} {row.get('verdict', '')}",
@@ -118,6 +124,7 @@ def main() -> int:
         f"- inconsistent (position-flip/tie): {agg['inconsistent']}/{agg['n_ab']}",
         f"- repairs (invalid baseline -> valid best, not A/B'd): {agg['repairs']}",
         f"- no-refinement (best == round 0): {agg['no_refinement']}",
+        f"- errors (render/judge failed, excluded): {sum(1 for r in all_rows if r.get('bucket') == 'error')}",
         "",
         "### Per (model, taxon)",
     ]
