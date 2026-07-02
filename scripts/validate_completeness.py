@@ -73,6 +73,23 @@ def main() -> int:
         f"- isolated-organ recall: {m['isolated_recall']}  (experimental)",
         f"- GT outputs with no metric prediction (dropped): {m['dropped']}",
         "",
+        "## Interpretation",
+        (
+            f"- Binary agreement kappa={bk:.3f} — "
+            + ("MODERATE" if (bk or 0) >= 0.4 else "LOW")
+            + (", clearing" if passed else ", just below")
+            + " the preregistered 0.6 gate → the metric is "
+            + ("VALIDATED." if passed else "EXPERIMENTAL (the spec's anticipated fallback).")
+        ),
+        (
+            "- Isolated-organ recall "
+            + (f"{m['isolated_recall']:.2f}" if m["isolated_recall"] is not None else "n/a")
+            + " — the core capability (flagging lone-organ outputs) works. The main disagreement is"
+            " human blanket 'not a plant / junk' labels (→fragment) vs the metric's literal organ"
+            " detection (→isolated/complete): a fragment/complete boundary + GT-philosophy gap, the"
+            " clear target for a v1.1 iteration (prompt/inventory or GT-definition alignment)."
+        ),
+        "",
         "## Distributions",
         f"- human GT (all labeled outputs, n={len(gt)}): {gt_dist}",
         f"- metric prediction on the eval set: {pred_dist_eval}",
