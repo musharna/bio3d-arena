@@ -114,3 +114,79 @@ def score_glb(
         "completeness_missing_organs": missing,
         "sheet_png": sheet_png,
     }
+
+
+def ingest_best(
+    db, *, model_id: str, task_id: int, glb_src, best_score: dict, best_iter, asset_dir
+) -> int:
+    """Promote the best round: copy its GLB, create a votable ModelOutput(source='commissioned')
+    under the '<model>-dgen' generator, persist a TraitVerdict per trait result + a Completeness
+    row (so it flows through the existing /procedural board with no board change), and mark the
+    iteration. Caller commits. Returns the new output id."""
+    import json
+    import shutil
+    from pathlib import Path
+
+    from app.commission import get_or_create_generator
+    from app.completeness import upsert_completeness
+    from app.judge import JUDGE_MODEL
+    from app.models import ModelOutput, TraitRubric, TraitVerdict
+
+    gen = get_or_create_generator(db, f"{model_id}-dgen")
+    rel = Path("dgen") / f"{gen.slug}_{task_id}.glb"
+    dst = Path(asset_dir) / rel
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(glb_src, dst)
+
+    out = ModelOutput(
+        task_id=task_id,
+        generator_id=gen.id,
+        asset_path=str(rel),
+        asset_format="glb",
+        source="commissioned",
+        title=f"{model_id} (D-Gen r{best_iter.round})",
+        meta_json=json.dumps(
+            {
+                "model_id": model_id,
+                "round": best_iter.round,
+                "fidelity": best_iter.fidelity,
+                "dgen_run_id": best_iter.run_id,
+            }
+        ),
+    )
+    db.add(out)
+    db.flush()
+
+    rubric = db.query(TraitRubric).filter_by(task_id=task_id).first()
+    rubric_id = rubric.id if rubric else None
+    for t in best_score.get("trait_results", []):
+        db.add(
+            TraitVerdict(
+                output_id=out.id,
+                rubric_id=rubric_id,
+                trait_key=t.get("trait_key", ""),
+                trait_class=t.get("trait_class", ""),
+                verdict=t.get("verdict", ""),
+                rationale=t.get("rationale", ""),
+                judge_model=JUDGE_MODEL,
+            )
+        )
+    upsert_completeness(
+        db,
+        out.id,
+        category=best_score.get("completeness_category", ""),
+        score=best_score.get("completeness_score"),
+        checklist={
+            "organs_present": [
+                {"key": t.get("trait_key"), "status": t.get("verdict")}
+                for t in best_score.get("trait_results", [])
+            ],
+            "note": "dgen-best",
+        },
+        judge_model=JUDGE_MODEL,
+        scorer_version="dgen-v1",
+    )
+
+    best_iter.output_id = out.id
+    best_iter.is_best = True
+    return out.id
