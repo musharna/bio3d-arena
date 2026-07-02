@@ -722,6 +722,11 @@ def api_procedural(db: Session = Depends(get_db)):
     return service.procedural_scorecard(db)
 
 
+@app.get("/api/completeness.json")
+def api_completeness(db: Session = Depends(get_db)):
+    return service.completeness_rows(db)
+
+
 # --------------------------------------------------------- significance + bias
 
 

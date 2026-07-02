@@ -1003,3 +1003,27 @@ def tier_trait_accuracy(db: Session) -> list[dict]:
         for t in TIERS
         if agg.get(t)
     ]
+
+
+def completeness_rows(db) -> list[dict]:
+    """Per-output completeness rows for /api/completeness.json (taxon via the output's
+    task rubric; None when no rubric)."""
+    from app.models import Completeness, ModelOutput, TraitRubric
+
+    out = []
+    for c in db.query(Completeness).all():
+        mo = db.get(ModelOutput, c.output_id)
+        taxon = None
+        if mo is not None:
+            rubric = db.query(TraitRubric).filter_by(task_id=mo.task_id).first()
+            taxon = rubric.taxon if rubric else None
+        out.append(
+            {
+                "output_id": c.output_id,
+                "taxon": taxon,
+                "generator_id": mo.generator_id if mo else None,
+                "category": c.category,
+                "score": c.score,
+            }
+        )
+    return out

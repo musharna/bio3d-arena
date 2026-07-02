@@ -6,6 +6,7 @@ derivation. Reference-free (no GT). Mirrors the app.input_grade VLM tool-use pat
 from __future__ import annotations
 
 import base64
+import json
 
 from app.judge import JUDGE_MODEL
 from app.organ_inventory import TaxonInventory
@@ -95,3 +96,28 @@ def score_completeness(client, sheet_png: bytes, *, inventory: TaxonInventory) -
         messages=_build_messages(sheet_png, inventory),
     )
     return _parse(resp)
+
+
+def upsert_completeness(
+    db,
+    output_id: int,
+    *,
+    category: str,
+    score: float | None,
+    checklist: dict,
+    judge_model: str,
+    scorer_version: str,
+):
+    """Insert or overwrite the single Completeness row for an output. Caller commits."""
+    from app.models import Completeness
+
+    row = db.query(Completeness).filter_by(output_id=output_id).one_or_none()
+    if row is None:
+        row = Completeness(output_id=output_id)
+        db.add(row)
+    row.category = category
+    row.score = score
+    row.checklist_json = json.dumps(checklist)
+    row.judge_model = judge_model
+    row.scorer_version = scorer_version
+    return row

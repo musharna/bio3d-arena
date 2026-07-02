@@ -293,6 +293,25 @@ class Metric(Base):
     computed: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
+class Completeness(Base):
+    """Organism-level completeness score for one ModelOutput (reference-free VLM read).
+    One row per output (latest); rescoring overwrites. checklist_json holds the raw
+    per-organ statuses + note for audit/explainability."""
+
+    __tablename__ = "completeness"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"), unique=True, index=True)
+    category: Mapped[str] = mapped_column(
+        String(20), default=""
+    )  # complete|partial-organism|isolated-organ|fragment
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    checklist_json: Mapped[str] = mapped_column(Text, default="{}")
+    judge_model: Mapped[str] = mapped_column(String(128), default="")
+    scorer_version: Mapped[str] = mapped_column(String(64), default="")
+    computed: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
 class OrganMetric(Base):
     """Mode-B *organ-structure* fidelity for one ModelOutput — the second objective axis
     beside chamfer (recon appearance). Higher = better (∈[0,1]); chamfer is lower=better.
