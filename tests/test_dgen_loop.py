@@ -99,6 +99,40 @@ def test_loop_plateau_stops_and_promotes_best():
         assert len(best) == 1 and best[0].round == 1 and best[0].output_id is not None
 
 
+def test_refine_loop_persists_round0_baseline_glb(tmp_path):
+    from pathlib import Path
+
+    from app.dgen import _taxon_slug
+
+    with SessionLocal() as db:
+        # NOTE: taxon="Vitis" (not "Rosa" as in the brief) — "Rosa" is already seeded by
+        # test_loop_repairs_failed_round below in this same file, and _seed()'s category slug
+        # (taxon[:4].lower()) would collide across the two tests: this suite's tests share one
+        # engine/DB for the whole run (see conftest.py) and commit (no rollback isolation), so a
+        # second _seed(db, "Rosa") hits UNIQUE constraint failed: category.slug.
+        task_id, run_id = _seed(db, "Vitis")
+        db.commit()
+        asset_dir = tmp_path / "assets"
+        refine_loop(
+            db,
+            run_id=run_id,
+            taxon="Vitis",
+            task_id=task_id,
+            prompt="p",
+            common="grape",
+            model_id="m",
+            traits=[],
+            complete_fn=lambda m, p: "import bpy",
+            run_fn=_run_fn_ok,
+            score_fn=lambda g: _score(0.5),
+            asset_dir=str(asset_dir),
+            max_rounds=1,
+        )
+        db.commit()
+        baseline = Path(asset_dir) / "dgen_baseline" / f"{run_id}_{_taxon_slug('Vitis')}.glb"
+        assert baseline.exists()
+
+
 def test_loop_repairs_failed_round():
     with SessionLocal() as db:
         task_id, run_id = _seed(db, "Rosa")

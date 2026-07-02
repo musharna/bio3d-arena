@@ -272,6 +272,12 @@ def refine_loop(
             run = run_fn(script, out_glb)
 
         status = run.get("status", "error")
+        if n == 0 and status == "ok" and run.get("glb_path"):
+            import shutil
+
+            baseline_dir = Path(asset_dir) / "dgen_baseline"
+            baseline_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(run["glb_path"], baseline_dir / f"{run_id}_{_taxon_slug(taxon)}.glb")
         score = None
         fid = None
         cat = ""
