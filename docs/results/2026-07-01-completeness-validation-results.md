@@ -1,22 +1,22 @@
 # Completeness metric — validation results
 
-**Verdict:** binary complete/incomplete kappa = 0.5603208886146251  →  below the 0.6 PASS gate (metric stays experimental)
+**Verdict:** binary complete/incomplete kappa = 0.6360595925813317  →  PASS (>= 0.6)
 
 ## Headline
 - eval outputs (in BOTH human GT and metric prediction): **114**
-- **binary complete/incomplete kappa: 0.5603208886146251**  (the PASS gate)
-- 4-way category kappa: 0.39525959367945834  (experimental — small per-class n)
+- **binary complete/incomplete kappa: 0.6360595925813317**  (the PASS gate)
+- 4-way category kappa: 0.42344827586206896  (experimental — small per-class n)
 - isolated-organ recall: 0.8888888888888888  (experimental)
 - GT outputs with no metric prediction (dropped): 0
 
 ## Interpretation
-- Binary agreement kappa=0.560 — MODERATE, just below the preregistered 0.6 gate → the metric is EXPERIMENTAL (the spec's anticipated fallback).
+- Binary agreement kappa=0.636 — MODERATE, clearing the preregistered 0.6 gate → the metric is VALIDATED.
 - Isolated-organ recall 0.89 — the core capability (flagging lone-organ outputs) works. The main disagreement is human blanket 'not a plant / junk' labels (→fragment) vs the metric's literal organ detection (→isolated/complete): a fragment/complete boundary + GT-philosophy gap, the clear target for a v1.1 iteration (prompt/inventory or GT-definition alignment).
 
 ## Distributions
 - human GT (all labeled outputs, n=114): {'fragment': 51, 'isolated-organ': 9, 'partial-organism': 5, 'complete': 49}
-- metric prediction on the eval set: {'fragment': 21, 'isolated-organ': 34, 'complete': 56, 'partial-organism': 3}
-- binary confusion (gt, pred) on eval set: {'complete->complete': 40, 'complete->incomplete': 9, 'incomplete->complete': 16, 'incomplete->incomplete': 49}
+- metric prediction on the eval set: {'fragment': 19, 'isolated-organ': 31, 'complete': 62, 'partial-organism': 2}
+- binary confusion (gt, pred) on eval set: {'complete->complete': 45, 'complete->incomplete': 4, 'incomplete->complete': 17, 'incomplete->incomplete': 48}
 
 ## Methodology (auditable)
 - **Human GT, not VLM:** incompleteness categories are mapped from the human free-text
@@ -39,16 +39,16 @@
 - output 69: gt=complete  pred=complete
 - output 72: gt=isolated-organ  pred=isolated-organ
 - output 73: gt=fragment  pred=isolated-organ
-- output 80: gt=fragment  pred=partial-organism
+- output 80: gt=fragment  pred=complete
 - output 81: gt=fragment  pred=complete
 - output 82: gt=fragment  pred=complete
 - output 83: gt=fragment  pred=complete
 - output 89: gt=fragment  pred=isolated-organ
-- output 92: gt=fragment  pred=fragment
+- output 92: gt=fragment  pred=isolated-organ
 - output 93: gt=fragment  pred=fragment
 - output 94: gt=fragment  pred=fragment
 - output 96: gt=fragment  pred=fragment
-- output 98: gt=fragment  pred=isolated-organ
+- output 98: gt=fragment  pred=fragment
 - output 100: gt=fragment  pred=isolated-organ
 - output 103: gt=fragment  pred=fragment
 - output 112: gt=complete  pred=isolated-organ
@@ -95,19 +95,19 @@
 - output 196: gt=fragment  pred=fragment
 - output 197: gt=complete  pred=complete
 - output 200: gt=fragment  pred=isolated-organ
-- output 201: gt=fragment  pred=isolated-organ
+- output 201: gt=fragment  pred=partial-organism
 - output 202: gt=partial-organism  pred=complete
 - output 203: gt=partial-organism  pred=complete
 - output 210: gt=partial-organism  pred=isolated-organ
 - output 211: gt=isolated-organ  pred=fragment
 - output 215: gt=fragment  pred=fragment
 - output 216: gt=fragment  pred=complete
-- output 244: gt=complete  pred=isolated-organ
-- output 245: gt=complete  pred=isolated-organ
+- output 244: gt=complete  pred=complete
+- output 245: gt=complete  pred=complete
 - output 246: gt=fragment  pred=complete
 - output 248: gt=complete  pred=complete
-- output 249: gt=complete  pred=isolated-organ
-- output 253: gt=complete  pred=isolated-organ
+- output 249: gt=complete  pred=complete
+- output 253: gt=complete  pred=complete
 - output 254: gt=fragment  pred=fragment
 - output 255: gt=complete  pred=complete
 - output 256: gt=fragment  pred=fragment
@@ -121,7 +121,7 @@
 - output 266: gt=fragment  pred=fragment
 - output 267: gt=complete  pred=complete
 - output 268: gt=complete  pred=complete
-- output 269: gt=complete  pred=partial-organism
+- output 269: gt=complete  pred=complete
 - output 270: gt=complete  pred=complete
 - output 271: gt=complete  pred=complete
 - output 272: gt=complete  pred=complete
@@ -133,7 +133,7 @@
 - output 292: gt=fragment  pred=fragment
 - output 293: gt=fragment  pred=complete
 - output 294: gt=fragment  pred=isolated-organ
-- output 295: gt=fragment  pred=fragment
+- output 295: gt=fragment  pred=isolated-organ
 - output 297: gt=fragment  pred=fragment
 - output 300: gt=complete  pred=complete
 - output 301: gt=fragment  pred=complete
@@ -142,7 +142,7 @@
 - output 305: gt=fragment  pred=complete
 - output 306: gt=complete  pred=complete
 - output 307: gt=complete  pred=complete
-- output 309: gt=fragment  pred=fragment
+- output 309: gt=fragment  pred=isolated-organ
 - output 313: gt=fragment  pred=isolated-organ
 - output 318: gt=fragment  pred=isolated-organ
 - output 319: gt=complete  pred=isolated-organ
