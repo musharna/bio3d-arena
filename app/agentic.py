@@ -4,9 +4,11 @@ procedural_llm (one-shot). Outputs are ModelOutput(source="agentic:<model>")."""
 
 from __future__ import annotations
 
+import base64
 import os
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -74,3 +76,46 @@ def render_glb_png(glb_path, *, blender_bin: str = "blender", timeout_s: int = 1
         if proc.returncode != 0 or not out_png.exists() or out_png.stat().st_size == 0:
             raise RuntimeError(f"render failed: rc={proc.returncode} {proc.stderr[-500:]}")
         return out_png.read_bytes()
+
+
+def vision_complete(
+    post,
+    model_id: str,
+    prompt: str,
+    image_png: bytes,
+    *,
+    api_key: str,
+    max_tokens: int = 32000,
+    max_retries: int = 3,
+    sleep_fn=None,
+) -> str:
+    """One OpenRouter vision completion (text + one PNG). `post` injected (httpx.post) for tests.
+    Same bounded-retry shape as commission.openrouter_complete. Key goes in the header only."""
+    sleep = sleep_fn or time.sleep
+    b64 = base64.b64encode(image_png).decode()
+    content = [
+        {"type": "text", "text": prompt},
+        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+    ]
+    last_exc = None
+    for attempt in range(max_retries):
+        try:
+            resp = post(
+                OPENROUTER_URL,
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": model_id,
+                    "messages": [{"role": "user", "content": content}],
+                    "max_tokens": max_tokens,
+                },
+                timeout=180,
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+        except Exception as e:  # noqa: BLE001 — bounded retry on transient dispatch failures
+            last_exc = e
+            if attempt < max_retries - 1:
+                sleep(2**attempt)
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("vision_complete: max_retries must be >= 1")
