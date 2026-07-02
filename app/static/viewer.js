@@ -29,11 +29,60 @@
 
   function failed(slot, msg) {
     slot.innerHTML = "";
+    slot._resetView = null;
+    slot._onResize = null;
     const d = document.createElement("div");
     d.className = "viewer-error";
     d.innerHTML = "⚠️ <span>" + msg + "</span>";
     slot.appendChild(d);
   }
+
+  function addControls(slot) {
+    const bar = document.createElement("div");
+    bar.className = "viewer-controls";
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "viewer-ctl";
+    reset.setAttribute("aria-label", "Reset view");
+    reset.title = "Reset view";
+    reset.textContent = "⟳";
+    reset.addEventListener("click", () => {
+      if (slot._resetView) slot._resetView();
+    });
+    const fs = document.createElement("button");
+    fs.type = "button";
+    fs.className = "viewer-ctl";
+    fs.setAttribute("aria-label", "Fullscreen");
+    fs.title = "Fullscreen";
+    fs.textContent = "⛶";
+    fs.addEventListener("click", () => toggleFullscreen(slot));
+    bar.appendChild(reset);
+    bar.appendChild(fs);
+    slot.appendChild(bar);
+  }
+
+  function toggleFullscreen(slot) {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (slot.requestFullscreen) slot.requestFullscreen();
+  }
+
+  // Single module-level fullscreen listener (added once). On enter, the slot is
+  // document.fullscreenElement; on exit it is null, so we keep the previously-
+  // fullscreen slot to resize it back. Only molecular slots have _onResize (mesh
+  // auto-resizes → null). try/catch guards a slot torn down while fullscreen.
+  let fsSlot = null;
+  document.addEventListener("fullscreenchange", () => {
+    const active = document.fullscreenElement;
+    const target = active || fsSlot;
+    if (target && target._onResize) {
+      try {
+        target._onResize();
+      } catch (e) {
+        /* stale viewer — ignore */
+      }
+    }
+    fsSlot = active;
+  });
 
   function mountMesh(slot, asset) {
     const myGen = slot._viewerGen;
@@ -57,6 +106,14 @@
       failed(slot, "Model failed to load");
     });
     slot.appendChild(mv);
+    slot._resetView = () => {
+      mv.cameraOrbit = "0deg 75deg auto";
+      mv.fieldOfView = "auto";
+      mv.cameraTarget = "auto auto auto";
+      mv.jumpCameraToGoal();
+    };
+    slot._onResize = null; // model-viewer auto-resizes; clear any stale molecular closure
+    addControls(slot);
   }
 
   async function mountMolecular(slot, asset, fmt) {
@@ -88,6 +145,16 @@
       viewer.render();
       loading.remove();
       hint(slot, "drag to rotate · scroll to zoom");
+      slot._molViewer = viewer;
+      slot._resetView = () => {
+        viewer.zoomTo();
+        viewer.render();
+      };
+      slot._onResize = () => {
+        viewer.resize();
+        viewer.render();
+      };
+      addControls(slot);
     } catch (e) {
       if (stale()) return;
       failed(slot, "Structure failed to load");
