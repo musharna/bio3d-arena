@@ -51,6 +51,14 @@ def test_run_agentic_batch_generates_and_is_idempotent(tmp_path):
         assert r1["ok"] == 1
         r2 = run_agentic_batch(db, **kw)  # idempotent second pass
         assert r2["skipped_exists"] == 1 and r2["ok"] == 0
-        assert db.query(ModelOutput).filter(ModelOutput.source.like("agentic:%")).count() == 1
+        # Scope to this test's own task: the suite shares one DB per pytest process (see
+        # conftest.py), and other agentic tests (e.g. test_agentic_loop.py) commit their own
+        # "agentic:*" rows against other tasks, so an unscoped source-prefix count isn't safe.
+        assert (
+            db.query(ModelOutput)
+            .filter(ModelOutput.task_id == t.id, ModelOutput.source.like("agentic:%"))
+            .count()
+            == 1
+        )
     finally:
         db.close()

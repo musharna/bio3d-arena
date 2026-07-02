@@ -40,19 +40,24 @@ def run_agentic_batch(
             continue
         common = commission.SPECIES_COMMON.get(species, species)
         for model_id in roster:
-            rep = agentic.agentic_generate(
-                db,
-                model_id=model_id,
-                task_id=task_id,
-                species=species,
-                common=common,
-                complete_fn=lambda prompt, _m=model_id: complete_fn(_m, prompt),
-                vision_fn=lambda prompt, png, _m=model_id: vision_fn(_m, prompt, png),
-                run_fn=run_fn,
-                render_fn=render_fn,
-                asset_dir=asset_dir,
-                n_iters=n_iters,
-            )
+            try:
+                rep = agentic.agentic_generate(
+                    db,
+                    model_id=model_id,
+                    task_id=task_id,
+                    species=species,
+                    common=common,
+                    complete_fn=lambda prompt, _m=model_id: complete_fn(_m, prompt),
+                    vision_fn=lambda prompt, png, _m=model_id: vision_fn(_m, prompt, png),
+                    run_fn=run_fn,
+                    render_fn=render_fn,
+                    asset_dir=asset_dir,
+                    n_iters=n_iters,
+                )
+            except Exception as e:  # noqa: BLE001 — one model's failure shouldn't abort the batch
+                counts["error"] += 1
+                print(f"  {species} / {model_id}: ERROR {type(e).__name__}: {e}")
+                continue
             counts[rep["status"]] = counts.get(rep["status"], 0) + 1
             print(
                 f"  {species} / {model_id}: {rep['status']}"

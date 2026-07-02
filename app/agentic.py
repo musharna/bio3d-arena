@@ -194,10 +194,10 @@ def agentic_generate(
         for i in range(1, n_iters):
             try:
                 png = render_fn(best_path)
-            except Exception:  # noqa: BLE001 — render failure stops refinement, keeps best mesh
+                new_script = extract_script(vision_fn(critique_prompt(species, common), png))
+                run2 = run_fn(new_script, str(Path(td) / f"iter{i}.glb"))
+            except Exception:  # noqa: BLE001 — any revise-round failure stops refinement, keeps best mesh
                 break
-            new_script = extract_script(vision_fn(critique_prompt(species, common), png))
-            run2 = run_fn(new_script, str(Path(td) / f"iter{i}.glb"))
             if run2.get("status") == "ok" and run2.get("glb_path"):
                 best_path = run2["glb_path"]
                 iter_vertices.append(run2.get("mesh_stats", {}).get("vertices", 0))

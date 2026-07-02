@@ -131,6 +131,34 @@ def test_agentic_no_output_when_iter0_invalid(tmp_path):
         db.close()
 
 
+def test_agentic_keeps_iter0_when_vision_fn_raises(tmp_path):
+    db = SessionLocal()
+    try:
+        t = _task(db)
+
+        def boom(prompt, png):
+            raise RuntimeError("vision 500")
+
+        rep = agentic.agentic_generate(
+            db,
+            model_id="x/m4",
+            task_id=t.id,
+            species="Zea mays",
+            common="maize",
+            complete_fn=lambda prompt: "s",
+            vision_fn=boom,
+            run_fn=_ok_run(8),
+            render_fn=lambda glb: b"png",
+            asset_dir=str(tmp_path),
+            n_iters=2,
+        )
+        assert rep["status"] == "ok" and rep["n_iterations"] == 1  # iter-0 kept, no crash
+        gen = agentic.get_or_create_agentic_generator(db, "x/m4")
+        assert db.query(ModelOutput).filter_by(generator_id=gen.id).count() == 1
+    finally:
+        db.close()
+
+
 def test_agentic_idempotent(tmp_path):
     db = SessionLocal()
     try:
