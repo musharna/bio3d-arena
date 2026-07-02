@@ -193,3 +193,153 @@ def ingest_best(
     best_iter.output_id = out.id
     best_iter.is_best = True
     return out.id
+
+
+def _select_best(rounds: list[dict]) -> dict | None:
+    """Best valid round: max fidelity; ties -> completeness 'complete' preferred, then earliest round."""
+    valid = [
+        r
+        for r in rounds
+        if r["status"] == "ok" and r["score"] and r["score"]["fidelity"] is not None
+    ]
+    if not valid:
+        return None
+    return max(
+        valid,
+        key=lambda r: (
+            r["score"]["fidelity"],
+            1 if r["comp_cat"] == "complete" else 0,
+            -r["round"],
+        ),
+    )
+
+
+def _taxon_slug(taxon: str) -> str:
+    return taxon.lower().replace(" ", "_")
+
+
+def refine_loop(
+    db,
+    *,
+    run_id,
+    taxon,
+    task_id,
+    prompt,
+    common,
+    model_id,
+    traits,
+    complete_fn,
+    run_fn,
+    score_fn,
+    asset_dir,
+    max_rounds: int = 3,
+) -> dict:
+    """Refine ONE taxon over <= max_rounds; plateau-stop on a valid-but-not-better round (a failed
+    round never stops the loop); persist a DGenIteration per round; promote the best via ingest_best."""
+    from pathlib import Path
+
+    from app.commission import extract_script
+    from app.models import DGenIteration
+
+    tmp_dir = Path(asset_dir) / "dgen_tmp"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+
+    rounds: list[dict] = []
+    best_fid: float | None = None
+    prev: dict | None = None
+
+    for n in range(max_rounds):
+        if n == 0 or prev is None:
+            prompt_text = build_prompt(taxon, common)
+            critique = ""
+        else:
+            critique = build_critique(
+                (prev["score"] or {}).get("trait_results", []),
+                traits,
+                {"category": prev["comp_cat"], "missing_organs": prev["missing"]},
+                prev["status"],
+                prev["error"],
+            )
+            prompt_text = build_refine_prompt(taxon, common, prev["script"], critique)
+
+        try:
+            script = extract_script(complete_fn(model_id, prompt_text))
+        except Exception as e:  # noqa: BLE001 — dispatch failure recorded, loop continues
+            script = ""
+            run = {"status": "error", "stderr": f"dispatch: {e}", "glb_path": None}
+        else:
+            out_glb = tmp_dir / f"{run_id}_{_taxon_slug(taxon)}_r{n}.glb"
+            run = run_fn(script, out_glb)
+
+        status = run.get("status", "error")
+        score = None
+        fid = None
+        cat = ""
+        cscore = None
+        missing: list[str] = []
+        if status == "ok" and run.get("glb_path"):
+            try:
+                score = score_fn(run["glb_path"])
+                fid = score["fidelity"]
+                cat = score["completeness_category"]
+                cscore = score["completeness_score"]
+                missing = score["completeness_missing_organs"]
+            except Exception as e:  # noqa: BLE001 — render/judge failure recorded, loop continues
+                status = "render_error"
+                run["stderr"] = f"score: {e}"
+
+        it = DGenIteration(
+            run_id=run_id,
+            taxon=taxon,
+            round=n,
+            fidelity=fid,
+            n_correct=(score or {}).get("n_correct", 0),
+            n_assessable=(score or {}).get("n_assessable", 0),
+            completeness_category=cat or "",
+            completeness_score=cscore,
+            critique=critique,
+            script=script,
+            status=status,
+        )
+        db.add(it)
+        db.flush()
+
+        rec = {
+            "round": n,
+            "score": score,
+            "glb_path": run.get("glb_path"),
+            "status": status,
+            "error": run.get("stderr", ""),
+            "script": script,
+            "comp_cat": cat,
+            "missing": missing,
+            "iter": it,
+        }
+        rounds.append(rec)
+        prev = rec
+
+        if status == "ok" and fid is not None:
+            if best_fid is not None and fid <= best_fid:
+                break  # plateau: a valid round that didn't beat the best
+            best_fid = fid if best_fid is None else max(best_fid, fid)
+
+    best = _select_best(rounds)
+    if best is not None:
+        ingest_best(
+            db,
+            model_id=model_id,
+            task_id=task_id,
+            glb_src=best["glb_path"],
+            best_score=best["score"],
+            best_iter=best["iter"],
+            asset_dir=asset_dir,
+        )
+
+    fid0 = rounds[0]["score"]["fidelity"] if (rounds and rounds[0]["score"]) else None
+    return {
+        "taxon": taxon,
+        "best_round": best["round"] if best else None,
+        "fidelity_0": fid0,
+        "fidelity_best": best_fid,
+        "n_rounds": len(rounds),
+    }
