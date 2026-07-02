@@ -293,6 +293,61 @@ class Metric(Base):
     computed: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
+class Completeness(Base):
+    """Organism-level completeness score for one ModelOutput (reference-free VLM read).
+    One row per output (latest); rescoring overwrites. checklist_json holds the raw
+    per-organ statuses + note for audit/explainability."""
+
+    __tablename__ = "completeness"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"), unique=True, index=True)
+    category: Mapped[str] = mapped_column(
+        String(20), default=""
+    )  # complete|partial-organism|isolated-organ|fragment
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    checklist_json: Mapped[str] = mapped_column(Text, default="{}")
+    judge_model: Mapped[str] = mapped_column(String(128), default="")
+    scorer_version: Mapped[str] = mapped_column(String(64), default="")
+    computed: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class DGenRun(Base):
+    """One D-Gen driver run (one model over the taxa)."""
+
+    __tablename__ = "dgen_run"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    model_id: Mapped[str] = mapped_column(String(128), index=True)
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class DGenIteration(Base):
+    """One refinement round for one taxon within a DGenRun. output_id is set only on the
+    promoted best round; is_best marks it. Intermediate rounds are never arena outputs."""
+
+    __tablename__ = "dgen_iteration"
+    __table_args__ = (UniqueConstraint("run_id", "taxon", "round", name="uq_dgen_iter"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("dgen_run.id"), index=True)
+    taxon: Mapped[str] = mapped_column(String(128), index=True)
+    round: Mapped[int] = mapped_column(Integer)
+    output_id: Mapped[int | None] = mapped_column(ForeignKey("model_output.id"), nullable=True)
+    fidelity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    n_correct: Mapped[int] = mapped_column(Integer, default=0)
+    n_assessable: Mapped[int] = mapped_column(Integer, default=0)
+    completeness_category: Mapped[str] = mapped_column(String(20), default="")
+    completeness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    critique: Mapped[str] = mapped_column(Text, default="")
+    script: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(
+        String(20), default=""
+    )  # ok|invalid_mesh|error|timeout|render_error
+    is_best: Mapped[bool] = mapped_column(Boolean, default=False)
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class OrganMetric(Base):
     """Mode-B *organ-structure* fidelity for one ModelOutput — the second objective axis
     beside chamfer (recon appearance). Higher = better (∈[0,1]); chamfer is lower=better.

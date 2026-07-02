@@ -1003,3 +1003,75 @@ def tier_trait_accuracy(db: Session) -> list[dict]:
         for t in TIERS
         if agg.get(t)
     ]
+
+
+def completeness_rows(db) -> list[dict]:
+    """Per-output completeness rows for /api/completeness.json (taxon via the output's
+    task rubric; None when no rubric)."""
+    from app.models import Completeness, ModelOutput, TraitRubric
+
+    out = []
+    for c in db.query(Completeness).all():
+        mo = db.get(ModelOutput, c.output_id)
+        taxon = None
+        if mo is not None:
+            rubric = db.query(TraitRubric).filter_by(task_id=mo.task_id).first()
+            taxon = rubric.taxon if rubric else None
+        out.append(
+            {
+                "output_id": c.output_id,
+                "taxon": taxon,
+                "generator_id": mo.generator_id if mo else None,
+                "category": c.category,
+                "score": c.score,
+            }
+        )
+    return out
+
+
+def dgen_trajectory(db, run_id: int | None = None) -> list[dict]:
+    """Per (run, taxon) the ordered refinement rounds + the round-0->best fidelity lift."""
+    import collections
+
+    from app.models import DGenIteration, DGenRun
+
+    q = db.query(DGenIteration)
+    if run_id is not None:
+        q = q.filter_by(run_id=run_id)
+    model_by_run = {r.id: r.model_id for r in db.query(DGenRun).all()}
+
+    groups: dict[tuple[int, str], list] = collections.defaultdict(list)
+    for it in q.all():
+        groups[(it.run_id, it.taxon)].append(it)
+
+    out = []
+    for (rid, taxon), iters in groups.items():
+        iters.sort(key=lambda i: i.round)
+        rounds = [
+            {
+                "round": i.round,
+                "fidelity": i.fidelity,
+                "completeness_category": i.completeness_category,
+                "status": i.status,
+                "is_best": i.is_best,
+            }
+            for i in iters
+        ]
+        fid0 = iters[0].fidelity if iters else None
+        best = next((i.fidelity for i in iters if i.is_best), None)
+        if best is None:
+            valids = [i.fidelity for i in iters if i.fidelity is not None]
+            best = max(valids) if valids else None
+        lift = (best - fid0) if (best is not None and fid0 is not None) else None
+        out.append(
+            {
+                "run_id": rid,
+                "model_id": model_by_run.get(rid, ""),
+                "taxon": taxon,
+                "rounds": rounds,
+                "fidelity_0": fid0,
+                "fidelity_best": best,
+                "lift": lift,
+            }
+        )
+    return out
