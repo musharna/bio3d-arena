@@ -28,6 +28,25 @@ def test_classify_source_prefix_families():
     assert classify("instantmesh", "model", {"bio3d-arena"}) == "image_recon"
 
 
+def test_classify_text_to_3d_is_text_native_not_image_recon():
+    # Text→3D outputs are tagged api:text:<slug>; they must classify as text_native, NOT
+    # image_recon (the generic api: rule) — the paradigm distinction is text prompt vs image input.
+    assert classify("fal:tripo-p1-text", "model", {"api:text:fal:tripo-p1-text"}) == "text_native"
+    assert (
+        classify("fal:hunyuan3d-v3-text", "model", {"api:text:fal:hunyuan3d-v3-text"})
+        == "text_native"
+    )
+    # Regression: a plain image→3D api: source is still image_recon.
+    assert classify("fal:trellis", "model", {"api:fal:trellis"}) == "image_recon"
+
+
+def test_classify_agentic_source_is_agentic():
+    assert classify("agentic-openai-gpt-5-1", "model", {"agentic:openai/gpt-5.1"}) == "agentic"
+    # regression: image/text api sources unchanged
+    assert classify("fal:trellis", "model", {"api:fal:trellis"}) == "image_recon"
+    assert classify("fal:tripo-p1-text", "model", {"api:text:fal:tripo-p1-text"}) == "text_native"
+
+
 def test_assign_skips_decoy_and_zero_output(tmp_path):
     from app.database import SessionLocal, init_db
     from app.models import Generator
