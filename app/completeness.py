@@ -5,6 +5,9 @@ derivation. Reference-free (no GT). Mirrors the app.input_grade VLM tool-use pat
 
 from __future__ import annotations
 
+import base64
+
+from app.judge import JUDGE_MODEL
 from app.organ_inventory import TaxonInventory
 
 
@@ -28,3 +31,67 @@ def derive(inventory: TaxonInventory, organs_present: list[dict]) -> tuple[str, 
     else:
         category = "partial-organism"
     return category, score
+
+
+COMPLETENESS_TOOL = {
+    "name": "record_completeness",
+    "description": "Record which expected organs are visible in the rendered plant model.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "organs_present": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "key": {"type": "string"},
+                        "status": {"type": "string", "enum": ["present", "absent", "uncertain"]},
+                    },
+                    "required": ["key", "status"],
+                },
+            },
+            "note": {"type": "string"},
+        },
+        "required": ["organs_present", "note"],
+    },
+}
+
+
+def _img_block(png: bytes) -> dict:
+    b64 = base64.b64encode(png).decode("ascii")
+    return {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}}
+
+
+def _build_messages(png: bytes, inventory: TaxonInventory) -> list[dict]:
+    lines = "\n".join(f"- {o.key}: {o.visual}" for o in inventory.organs)
+    text = (
+        f"This is a contact sheet of a generated 3D model of the plant {inventory.taxon}, "
+        "rendered from several angles. For EACH expected organ below, mark whether it is "
+        "visibly present in the model (present / absent / uncertain). Judge only what you can "
+        "see; a rendering of a single detached organ should mark the others absent.\n\n"
+        f"Expected organs:\n{lines}\n\nThen call record_completeness."
+    )
+    return [{"role": "user", "content": [{"type": "text", "text": text}, _img_block(png)]}]
+
+
+def _parse(response) -> dict:
+    for block in getattr(response, "content", []):
+        if (
+            getattr(block, "type", "") == "tool_use"
+            and getattr(block, "name", "") == "record_completeness"
+        ):
+            inp = block.input
+            return {"organs_present": inp.get("organs_present", []), "note": inp.get("note", "")}
+    raise ValueError("no record_completeness tool_use block in response")
+
+
+def score_completeness(client, sheet_png: bytes, *, inventory: TaxonInventory) -> dict:
+    """One VLM call over the contact sheet; returns the parsed organ checklist + note."""
+    resp = client.messages.create(
+        model=JUDGE_MODEL,
+        max_tokens=500,
+        tools=[COMPLETENESS_TOOL],
+        tool_choice={"type": "tool", "name": "record_completeness"},
+        messages=_build_messages(sheet_png, inventory),
+    )
+    return _parse(resp)
