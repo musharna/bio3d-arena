@@ -13,7 +13,7 @@
 - **Test runner is `.venv/bin/pytest`** (NOT bare `pytest`). Baseline on master @699d700 must stay green.
 - **NEVER set the `BIO3D_DATABASE_URL` env var to `study`** when running pytest — it wipes a real study DB. Just run `.venv/bin/pytest -q`.
 - **Reference-free:** the score must not require a GT scan/mesh; it reads only the output's own rendered views + the authored inventory.
-- **Reuse existing infra, do not reinvent:** VLM tool-use pattern from `app/input_grade.py`; contact sheets from `app/judge_render.render_contact_sheets` (condition `"multi8"` — an existing key in `judge_render.CONDITIONS`; do NOT invent a new condition); per-output persistence shape from the `Metric` model in `app/models.py`; `JUDGE_MODEL` from `app/judge.py`; κ from `app/calibration.cohens_kappa`; output eligibility filters `app/sourcing.is_reference_scan` + `app/sourcing.is_untextured_output`.
+- **Reuse existing infra, do not reinvent:** VLM tool-use pattern from `app/input_grade.py`; contact sheets from `app/judge_render.render_contact_sheets` (condition `"turntable"` (the existing 8-azimuth contact-sheet condition in app/judge_render.CONDITIONS); do NOT invent a new condition); per-output persistence shape from the `Metric` model in `app/models.py`; `JUDGE_MODEL` from `app/judge.py`; κ from `app/calibration.cohens_kappa`; output eligibility filters `app/sourcing.is_reference_scan` + `app/sourcing.is_untextured_output`.
 - **Taxon resolution:** an output's taxon = `TraitRubric.taxon` for the rubric whose `task_id == output.task_id` (same as `scripts/trait_judge.enumerate_work`). The 6 covered taxa are exactly the keys of `app.trait_morphology.MORPHOLOGY_TRAITS`: `"Solanum lycopersicum"`, `"Zea mays"`, `"Pinus sylvestris"`, `"Rosa"`, `"Glycine max"`, `"Arabidopsis thaliana"`.
 - **Framing:** organism-level missing-organ axis, NOT generic "plausibility." Required organs are the vegetative body (`vegetative_axis` + `foliage`); the reproductive organ is `optional` so a lone fruit registers as an isolated organ, not a "complete plant."
 - **No arena wiring in v1:** no board/UI, no vote-pool gating, no matchmaking change. `/api/completeness.json` is data-only.
@@ -739,8 +739,9 @@ def score_outputs(db, work, *, client, sheet_for, scorer_version: str) -> dict:
 
 ```python
 # scripts/score_completeness.py
-"""Batch-score organism-level completeness for outputs. Renders (or reuses) a multi8 contact
-sheet per output, VLM-checks organ presence, persists a Completeness row. Build the Anthropic
+"""Batch-score organism-level completeness for outputs. Renders (or reuses) a turntable (the
+existing 8-azimuth contact-sheet condition in app/judge_render.CONDITIONS) contact sheet per
+output, VLM-checks organ presence, persists a Completeness row. Build the Anthropic
 client from ANTHROPIC_API_KEY (as scripts/judge_vlm.py does). Never set BIO3D_DATABASE_URL=study."""
 
 from __future__ import annotations
@@ -755,11 +756,11 @@ from app.judge_render import contact_sheet_path, render_contact_sheets
 from app import config
 
 SCORER_VERSION = "completeness-v1"
-CONDITION = "multi8"
+CONDITION = "turntable"
 
 
 def _sheet_provider(db, capture_multi):
-    """Render (idempotently) then read the multi8 contact-sheet PNG bytes for an output."""
+    """Render (idempotently) then read the turntable contact-sheet PNG bytes for an output."""
     import os
 
     def sheet_for(output_id: int) -> bytes:
@@ -1048,7 +1049,7 @@ git commit -m "feat(completeness): validation harness (kappa vs human labels + i
 **Spec coverage:**
 
 - Organ inventory (authored per-taxon, 6 Mode-C taxa, required vegetative body + optional reproductive) → Task 1. ✓
-- VLM expected-organ checklist over reused judge contact sheets → Task 3 + Task 5's `sheet_for` (multi8). ✓
+- VLM expected-organ checklist over reused judge contact sheets → Task 3 + Task 5's `sheet_for` (turntable). ✓
 - Derivation → 4-way category + fraction (total/MECE rules) → Task 2. ✓
 - Persistence mirroring `Metric` (one row/output) + `/api/completeness.json` (data-only, no board) → Task 4. ✓
 - Batch scoring pass with the trait_judge eligibility filters + taxon resolution → Task 5. ✓

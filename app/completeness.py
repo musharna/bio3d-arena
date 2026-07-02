@@ -21,7 +21,7 @@ def derive(inventory: TaxonInventory, organs_present: list[dict]) -> tuple[str, 
     required = [o.key for o in inventory.organs if o.required]
     req_present = sum(1 for k in required if status.get(k) == "present")
     score = req_present / len(required) if required else 0.0
-    present_count = sum(1 for v in status.values() if v == "present")
+    present_count = sum(1 for o in inventory.organs if status.get(o.key) == "present")
 
     if present_count == 0:
         category = "fragment"
@@ -152,18 +152,23 @@ def score_outputs(db, work, *, client, sheet_for, scorer_version: str) -> dict:
 
     scored = skipped = errors = 0
     failures = []
+    seen = set()
     for item in work:
+        oid = item["output_id"]
+        if oid in seen:
+            continue
+        seen.add(oid)
         inv = inventory_for(item["taxon"])
         if inv is None:
             skipped += 1
             continue
         try:
-            png = sheet_for(item["output_id"])
+            png = sheet_for(oid)
             result = score_completeness(client, png, inventory=inv)
             category, score = derive(inv, result["organs_present"])
             upsert_completeness(
                 db,
-                item["output_id"],
+                oid,
                 category=category,
                 score=score,
                 checklist=result,
@@ -173,7 +178,7 @@ def score_outputs(db, work, *, client, sheet_for, scorer_version: str) -> dict:
             scored += 1
         except Exception as e:  # fail-loud per output, do not abort the batch
             errors += 1
-            failures.append({"output_id": item["output_id"], "error": repr(e)})
+            failures.append({"output_id": oid, "error": repr(e)})
     return {
         "scored": scored,
         "skipped_no_inventory": skipped,

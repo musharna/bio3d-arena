@@ -59,7 +59,7 @@ def main() -> int:
         from app.models import Task, TraitRubric
 
         if args.tasks:
-            task_ids = [int(x) for x in args.tasks.split(",") if x.strip()]
+            task_ids = sorted(set(int(x) for x in args.tasks.split(",") if x.strip()))
         else:
             task_ids = [
                 t.id for t in db.query(Task).join(TraitRubric, TraitRubric.task_id == Task.id)

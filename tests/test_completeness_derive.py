@@ -45,3 +45,16 @@ def test_uncertain_never_upgrades():
     )  # only 1 present -> isolated-organ, uncertain foliage not counted
     assert cat == "isolated-organ"
     assert score == 0.5
+
+
+def test_extraneous_present_key_does_not_inflate_count():
+    # VLM hallucinates an extra organ not in the inventory, marked present.
+    organs = [
+        {"key": "vegetative_axis", "status": "present"},
+        {"key": "foliage", "status": "absent"},
+        {"key": "reproductive_fruit", "status": "absent"},
+        {"key": "reproductive_bogus", "status": "present"},  # not in the tomato inventory
+    ]
+    cat, score = derive(INV, organs)
+    assert cat == "isolated-organ"  # only 1 real inventory organ present, not 2
+    assert score == 0.5
