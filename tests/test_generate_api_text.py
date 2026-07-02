@@ -48,12 +48,39 @@ def test_generate_api_text_hosts_with_text_modality(tmp_path):
             .scalars()
             .all()
         )
-        hit = [o for o in out if o.source == "api:fal:hunyuan3d-v3-text-tTxt"]
+        hit = [o for o in out if o.source == "api:text:fal:hunyuan3d-v3-text-tTxt"]
         assert len(hit) == 1
         meta = json.loads(hit[0].meta_json)
         assert meta["modality"] == "text" and meta["from_prompt"] is True
-        assert meta["depiction"] == "whole_plant"  # targets the whole plant, like image-recon baseline
+        assert (
+            meta["depiction"] == "whole_plant"
+        )  # targets the whole plant, like image-recon baseline
         assert "text→3D" in hit[0].attribution
+    finally:
+        db.close()
+
+
+def test_generate_api_text_is_idempotent_per_provider_task(tmp_path):
+    """Re-running the same (task, provider) must SKIP, not create a duplicate output — so an
+    interrupted batch can be safely re-run without duplicating already-generated meshes."""
+    db = SessionLocal()
+    try:
+        _tomato_task(db)
+
+        def fake_fn(prompt, *, api_key):
+            return _box_glb()
+
+        providers = {"fal:tripo-p1-text-tIdem": (fake_fn, "FAL_KEY", "Tripo P1 text")}
+        r1 = generate_api_text(db, "x", providers=providers, env={"FAL_KEY": "k"})
+        assert r1["generated"] == 1 and r1.get("skipped_exists", 0) == 0
+        r2 = generate_api_text(db, "x", providers=providers, env={"FAL_KEY": "k"})
+        assert r2["generated"] == 0 and r2["skipped_exists"] == 1
+        hits = [
+            o
+            for o in db.execute(select(ModelOutput)).scalars().all()
+            if o.source == "api:text:fal:tripo-p1-text-tIdem"
+        ]
+        assert len(hits) == 1  # still exactly one, no duplicate
     finally:
         db.close()
 
