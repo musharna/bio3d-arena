@@ -2,6 +2,8 @@
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from app.database import SessionLocal, init_db
 from app.models import (
     Category,
@@ -82,3 +84,40 @@ def test_ingest_best_creates_output_verdicts_completeness_and_marks_best():
             assert db.query(Completeness).filter_by(output_id=oid).one().category == "complete"
             assert it.output_id == oid and it.is_best is True
             assert (asset_dir / "dgen" / f"{gen.slug}_{task_id}.glb").exists()
+
+
+def test_ingest_best_raises_without_trait_rubric():
+    with SessionLocal() as db:
+        cat = Category(slug="soy-dgen-norubric-test", name="Glycine max")
+        db.add(cat)
+        db.flush()
+        task = Task(category_id=cat.id, title="t", prompt="a soybean plant")
+        db.add(task)
+        db.flush()
+        # Deliberately no TraitRubric for this task.
+        run = DGenRun(model_id="gemini-x")
+        db.add(run)
+        db.flush()
+        it = DGenIteration(run_id=run.id, taxon="Glycine max", round=1, fidelity=0.5, status="ok")
+        db.add(it)
+        db.flush()
+
+        best_score = {
+            "trait_results": [],
+            "completeness_category": "complete",
+            "completeness_score": 1.0,
+        }
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td) / "in.glb"
+            src.write_bytes(b"GLB")
+            asset_dir = Path(td) / "assets"
+            with pytest.raises(ValueError):
+                ingest_best(
+                    db,
+                    model_id="gemini-x",
+                    task_id=task.id,
+                    glb_src=src,
+                    best_score=best_score,
+                    best_iter=it,
+                    asset_dir=str(asset_dir),
+                )

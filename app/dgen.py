@@ -158,12 +158,15 @@ def ingest_best(
     db.flush()
 
     rubric = db.query(TraitRubric).filter_by(task_id=task_id).first()
-    rubric_id = rubric.id if rubric else None
+    if rubric is None:
+        raise ValueError(
+            f"ingest_best: no TraitRubric for task_id={task_id}; cannot persist trait verdicts"
+        )
     for t in best_score.get("trait_results", []):
         db.add(
             TraitVerdict(
                 output_id=out.id,
-                rubric_id=rubric_id,
+                rubric_id=rubric.id,
                 trait_key=t.get("trait_key", ""),
                 trait_class=t.get("trait_class", ""),
                 verdict=t.get("verdict", ""),
