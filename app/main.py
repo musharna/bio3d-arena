@@ -727,6 +727,11 @@ def api_completeness(db: Session = Depends(get_db)):
     return service.completeness_rows(db)
 
 
+@app.get("/api/dgen.json")
+def api_dgen(db: Session = Depends(get_db)):
+    return service.dgen_trajectory(db)
+
+
 # --------------------------------------------------------- significance + bias
 
 
