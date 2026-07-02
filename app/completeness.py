@@ -121,3 +121,62 @@ def upsert_completeness(
     row.judge_model = judge_model
     row.scorer_version = scorer_version
     return row
+
+
+def enumerate_completeness_work(db, task_ids) -> list[dict]:
+    """One row per eligible output (non-gold, non-reference-scan, non-untextured) of tasks
+    that HAVE a TraitRubric with an inventory-covered taxon. Mirrors trait_judge.enumerate_work."""
+    from app.models import Task, TraitRubric
+    from app.organ_inventory import inventory_for
+    from app.sourcing import is_reference_scan, is_untextured_output
+
+    items = []
+    for tid in task_ids:
+        rubric = db.query(TraitRubric).filter_by(task_id=tid).first()
+        if rubric is None or inventory_for(rubric.taxon) is None:
+            continue
+        task = db.get(Task, tid)
+        if task is None:
+            continue
+        for out in task.outputs:
+            if out.is_gold or is_reference_scan(out.source) or is_untextured_output(out):
+                continue
+            items.append({"output_id": out.id, "taxon": rubric.taxon})
+    return items
+
+
+def score_outputs(db, work, *, client, sheet_for, scorer_version: str) -> dict:
+    """Score each work row: get its contact sheet (injected sheet_for), VLM-check, derive,
+    upsert. Fail-loud per output (recorded, loop continues). Caller commits."""
+    from app.organ_inventory import inventory_for
+
+    scored = skipped = errors = 0
+    failures = []
+    for item in work:
+        inv = inventory_for(item["taxon"])
+        if inv is None:
+            skipped += 1
+            continue
+        try:
+            png = sheet_for(item["output_id"])
+            result = score_completeness(client, png, inventory=inv)
+            category, score = derive(inv, result["organs_present"])
+            upsert_completeness(
+                db,
+                item["output_id"],
+                category=category,
+                score=score,
+                checklist=result,
+                judge_model=JUDGE_MODEL,
+                scorer_version=scorer_version,
+            )
+            scored += 1
+        except Exception as e:  # fail-loud per output, do not abort the batch
+            errors += 1
+            failures.append({"output_id": item["output_id"], "error": repr(e)})
+    return {
+        "scored": scored,
+        "skipped_no_inventory": skipped,
+        "errors": errors,
+        "failures": failures,
+    }
