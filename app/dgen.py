@@ -8,6 +8,8 @@ per taxon, keeping the best round. All LLM/Blender/VLM/browser access is behind 
 
 from __future__ import annotations
 
+import base64
+
 from app.commission import build_prompt
 
 
@@ -65,3 +67,50 @@ def build_refine_prompt(species: str, common: str, prev_script: str, critique: s
         + critique
         + "\n\nOutput ONLY the revised complete Python script — no explanation, no markdown prose."
     )
+
+
+def score_glb(
+    glb_path,
+    *,
+    taxon: str,
+    prompt: str,
+    traits: list[dict],
+    capture_multi,
+    trait_client,
+    completeness_client,
+    condition: str = "multi4",
+) -> dict:
+    """Render the GLB directly (capture_multi -> tile_contact_sheet), then run the trait judge and
+    the completeness scorer over the sheet. Returns fidelity + trait_results + completeness. The
+    caller records failures; a render/judge exception propagates."""
+    from app.completeness import derive, score_completeness
+    from app.judge_render import CONDITIONS, tile_contact_sheet
+    from app.organ_inventory import inventory_for
+    from app.traits import check_traits
+
+    spec = CONDITIONS[condition]
+    pngs = capture_multi(str(glb_path), spec["azimuths"], spec["elev"])
+    sheet_png = tile_contact_sheet(pngs, spec["cols"], spec["rows"])
+    sheet_b64 = base64.b64encode(sheet_png).decode()
+
+    trait_results = check_traits(
+        trait_client, species=taxon, prompt=prompt, sheet_b64=sheet_b64, traits=traits
+    )
+    fid, n_correct, n_assessable = fidelity(trait_results)
+
+    inv = inventory_for(taxon)
+    comp = score_completeness(completeness_client, sheet_png, inventory=inv)
+    category, score = derive(inv, comp["organs_present"])
+    present = {o["key"] for o in comp["organs_present"] if o.get("status") == "present"}
+    missing = [o.key for o in inv.organs if o.required and o.key not in present]
+
+    return {
+        "fidelity": fid,
+        "n_correct": n_correct,
+        "n_assessable": n_assessable,
+        "trait_results": trait_results,
+        "completeness_category": category,
+        "completeness_score": score,
+        "completeness_missing_organs": missing,
+        "sheet_png": sheet_png,
+    }
