@@ -58,6 +58,7 @@ def main() -> int:
         for taxon, common in SPECIES_COMMON.items():
             rubric = db.query(TraitRubric).filter_by(taxon=taxon).first()
             if rubric is None or not rubric.task_id:
+                print(f"skip {taxon}: no TraitRubric/task_id", file=sys.stderr)
                 continue
             import json as _json
 

@@ -112,6 +112,7 @@ def score_glb(
         "completeness_category": category,
         "completeness_score": score,
         "completeness_missing_organs": missing,
+        "completeness_organs_present": comp["organs_present"],
         "sheet_png": sheet_png,
     }
 
@@ -133,6 +134,8 @@ def ingest_best(
     from app.models import ModelOutput, TraitRubric, TraitVerdict
 
     gen = get_or_create_generator(db, f"{model_id}-dgen")
+    if gen.paradigm != "procedural_llm":
+        gen.paradigm = "procedural_llm"
     rel = Path("dgen") / f"{gen.slug}_{task_id}.glb"
     dst = Path(asset_dir) / rel
     dst.parent.mkdir(parents=True, exist_ok=True)
@@ -180,10 +183,7 @@ def ingest_best(
         category=best_score.get("completeness_category", ""),
         score=best_score.get("completeness_score"),
         checklist={
-            "organs_present": [
-                {"key": t.get("trait_key"), "status": t.get("verdict")}
-                for t in best_score.get("trait_results", [])
-            ],
+            "organs_present": best_score.get("completeness_organs_present", []),
             "note": "dgen-best",
         },
         judge_model=JUDGE_MODEL,

@@ -60,6 +60,7 @@ def test_ingest_best_creates_output_verdicts_completeness_and_marks_best():
             ],
             "completeness_category": "complete",
             "completeness_score": 1.0,
+            "completeness_organs_present": [{"key": "vegetative_axis", "status": "present"}],
         }
         with tempfile.TemporaryDirectory() as td:
             src = Path(td) / "in.glb"
@@ -80,8 +81,16 @@ def test_ingest_best_creates_output_verdicts_completeness_and_marks_best():
             assert out.source == "commissioned"
             gen = db.get(Generator, out.generator_id)
             assert gen.slug.startswith("openrouter-") and gen.slug.endswith("-dgen")
+            assert gen.paradigm == "procedural_llm"
             assert db.query(TraitVerdict).filter_by(output_id=oid).count() == 2
-            assert db.query(Completeness).filter_by(output_id=oid).one().category == "complete"
+            comp = db.query(Completeness).filter_by(output_id=oid).one()
+            assert comp.category == "complete"
+            checklist = comp.checklist_json
+            if isinstance(checklist, str):
+                import json as _json
+
+                checklist = _json.loads(checklist)
+            assert checklist["organs_present"] == best_score["completeness_organs_present"]
             assert it.output_id == oid and it.is_best is True
             assert (asset_dir / "dgen" / f"{gen.slug}_{task_id}.glb").exists()
 

@@ -81,4 +81,5 @@ def test_score_glb_renders_and_scores():
     assert out["fidelity"] == 0.5  # 1 present_correct of 2 assessable
     assert out["completeness_category"] == "complete"  # axis+foliage present
     assert out["completeness_missing_organs"] == []  # both required present
+    assert any(o["key"] == "vegetative_axis" for o in out["completeness_organs_present"])
     assert isinstance(out["sheet_png"], bytes)
