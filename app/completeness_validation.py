@@ -1,59 +1,108 @@
 # app/completeness_validation.py
-"""Validate the completeness metric against human labels derived from the trait-level
-calibration CSVs. The GT is derived from free-text notes via an auditable keyword table;
-ambiguous outputs are dropped (counted), never coerced to complete."""
+"""Validate the completeness metric against HUMAN labels derived from the trait-level
+calibration CSVs.
+
+GT derivation (auditable, human-signal only — never the prior VLM judge's rationale, which
+would be circular):
+  * Incompleteness categories come from the human free-text `note` via an auditable keyword
+    table matched to the ACTUAL note vocabulary (fragment / isolated-organ / partial-organism).
+    Specific buckets are checked before generic ones so "not a plant / junk --fruit" (an isolated
+    fruit) maps to isolated-organ, not the generic "junk" -> fragment.
+  * `complete` is a POSITIVE label: an output with >=1 human `present_correct` trait verdict and
+    NO incompleteness note. Never inferred from mere absence of a bad note.
+  * Outputs with only trait-quibble notes ("bad trait", "no color", ...) and no present_correct
+    verdict are dropped (counted), never coerced to a class.
+
+The robust headline is BINARY complete-vs-incomplete kappa (the PASS gate); the 4-way kappa and
+isolated-organ recall are experimental (small per-class n in the calibration corpus)."""
 
 from __future__ import annotations
 
 from app.calibration import cohens_kappa
 
-# Order matters: the FIRST matching bucket wins (worst incompleteness first).
+# Incompleteness keyword table over the REAL human-note vocabulary. Order matters: the FIRST
+# matching bucket wins, so the SPECIFIC (isolated / partial) buckets precede the generic
+# fragment bucket — otherwise a bare "junk" substring would swallow "junk --fruit".
 _KEYWORDS = [
-    ("fragment", ["not a plant", "junk", "garbage", "blob", "unrecognizable", "wtf"]),
     (
-        "isolated-organ",
+        "isolated-organ",  # a single organ, rest of the plant absent
         [
-            "only a fruit",
+            "--fruit",
+            "/ fruit",
+            "just fruit",
             "just a fruit",
-            "isolated",
-            "single organ",
+            "jhust fruit",  # observed typo in the corpus
+            "fruit only",
+            "only fruit",
+            "only a fruit",
+            "only a flower",
+            "missing rest of plant",
+            "just leaf",
             "only a leaf",
-            "detached",
-            "lone ",
         ],
     ),
-    ("partial-organism", ["partial", "incomplete", "missing", "fragment of", "half a"]),
+    (
+        "partial-organism",  # some structure, but not a full plant
+        [
+            "just sticks",
+            "leafless",
+            "stub",
+            "seedling",
+            "partial plant",
+            "not a full plant",
+            "not full plant",
+        ],
+    ),
+    (
+        "fragment",  # unrecognizable junk / no identifiable organ
+        ["not a plant", "junk", "garbage", "blob", "unrecognizable", "trash"],
+    ),
 ]
-_COMPLETE_HINTS = ["whole", "complete", "full plant", "looks fine", "looks good", "ok", "correct"]
 
 
 def map_note_to_category(human_verdict: str, note: str) -> str | None:
+    """Map a human note to an INCOMPLETENESS category, or None (drop).
+
+    `complete` is intentionally NOT returned here — a complete plant rarely gets an explicit
+    "whole plant" note; it is assigned in `gt_by_output` from a `present_correct` trait verdict.
+    `human_verdict` is folded into the searched text for robustness but the corpus's verdict
+    tokens ("present_correct"/"absent"/"not_assessable") contain no keyword, so only the note
+    drives the mapping."""
     text = f"{human_verdict} {note}".lower()
     if not text.strip():
         return None
     for cat, kws in _KEYWORDS:
         if any(k in text for k in kws):
             return cat
-    if any(h in text for h in _COMPLETE_HINTS):
-        return "complete"
-    return None  # ambiguous -> drop from the eval set
+    return None  # trait-quibble / ambiguous -> drop from the eval set
 
 
 _SEVERITY = {"fragment": 0, "isolated-organ": 1, "partial-organism": 2, "complete": 3}
 
 
 def gt_by_output(rows: list[dict]) -> dict[int, str]:
-    """Aggregate trait-level rows to one category per output_id: the WORST (lowest-severity)
-    non-None mapped label across that output's rows. Outputs with only ambiguous rows drop."""
+    """Aggregate trait-level rows to one human GT category per output_id.
+
+    An output's category is the WORST (lowest-severity) incompleteness mapped from any of its
+    notes. If no note maps to an incompleteness category but the output has >=1 human
+    `present_correct` trait verdict, it is labeled `complete` (a positive signal, and one an
+    incompleteness note always outranks). Outputs with neither signal are dropped."""
     worst: dict[int, str] = {}
+    has_present: set[int] = set()
     for r in rows:
+        oid = r["output_id"]
+        if (r.get("human_verdict") or "").strip().lower() == "present_correct":
+            has_present.add(oid)
         cat = map_note_to_category(r.get("human_verdict", ""), r.get("note", ""))
         if cat is None:
             continue
-        oid = r["output_id"]
         if oid not in worst or _SEVERITY[cat] < _SEVERITY[worst[oid]]:
             worst[oid] = cat
-    return worst
+    gt = dict(worst)
+    for oid in has_present:
+        if oid not in gt:  # an incompleteness flag always outranks a present_correct trait
+            gt[oid] = "complete"
+    return gt
 
 
 def _binary(cat: str) -> str:
@@ -61,7 +110,7 @@ def _binary(cat: str) -> str:
 
 
 def agreement(pred: dict[int, str], gt: dict[int, str]) -> dict:
-    """κ (binary complete/incomplete + full 4-way) and isolated-organ recall over the
+    """kappa (binary complete/incomplete + full 4-way) and isolated-organ recall over the
     outputs present in BOTH pred and gt."""
     oids = [o for o in gt if o in pred]
     dropped = len(gt) - len(oids)
