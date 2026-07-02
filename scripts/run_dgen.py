@@ -33,6 +33,12 @@ def main() -> int:
         "--model", required=True, help="OpenRouter model id (e.g. google/gemini-2.5-pro)"
     )
     ap.add_argument("--max-rounds", type=int, default=3)
+    ap.add_argument(
+        "--run-id",
+        type=int,
+        default=None,
+        help="resume an existing DGenRun id; taxa that already have iterations are skipped",
+    )
     args = ap.parse_args()
 
     import anthropic
@@ -47,18 +53,30 @@ def main() -> int:
 
     init_db()
     from app.config import ASSET_DIR
-    from app.models import DGenRun, Task, TraitRubric
+    from app.models import DGenIteration, DGenRun, Task, TraitRubric
 
-    summaries = []
     with SessionLocal() as db:
-        run = DGenRun(model_id=args.model)
-        db.add(run)
-        db.flush()
-        run_id = run.id
+        if args.run_id is not None:
+            run = db.get(DGenRun, args.run_id)
+            if run is None:
+                print(f"run-id {args.run_id} not found", file=sys.stderr)
+                return 2
+            run_id = run.id
+        else:
+            run = DGenRun(model_id=args.model)
+            db.add(run)
+            db.commit()  # persist the run row immediately so a resume can find it
+            run_id = run.id
+        print(f"dgen run_id={run_id} model={args.model} max_rounds={args.max_rounds}", flush=True)
+
         for taxon, common in SPECIES_COMMON.items():
+            # Resume: a taxon with any committed iteration for this run is already done — skip it.
+            if db.query(DGenIteration).filter_by(run_id=run_id, taxon=taxon).first() is not None:
+                print(f"skip {taxon}: already has iterations for run {run_id}", flush=True)
+                continue
             rubric = db.query(TraitRubric).filter_by(taxon=taxon).first()
             if rubric is None or not rubric.task_id:
-                print(f"skip {taxon}: no TraitRubric/task_id", file=sys.stderr)
+                print(f"skip {taxon}: no TraitRubric/task_id", file=sys.stderr, flush=True)
                 continue
             import json as _json
 
@@ -89,11 +107,9 @@ def main() -> int:
                 asset_dir=str(ASSET_DIR),
                 max_rounds=args.max_rounds,
             )
-            summaries.append(summary)
-        db.commit()
+            db.commit()  # PER-TAXON commit: a kill only loses the in-progress taxon
+            print(f"done {taxon}: {summary}", flush=True)
 
-    for s in summaries:
-        print(s)
     return 0
 
 
