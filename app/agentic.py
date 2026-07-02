@@ -5,12 +5,16 @@ procedural_llm (one-shot). Outputs are ModelOutput(source="agentic:<model>")."""
 from __future__ import annotations
 
 import base64
+import json
 import os
+import re
+import shutil
 import subprocess
 import tempfile
 import time
 from pathlib import Path
 
+from .commission import build_prompt, extract_script
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 _SECRET_MARKERS = ("KEY", "TOKEN", "SECRET", "PASSWORD")
@@ -119,3 +123,111 @@ def vision_complete(
     if last_exc is not None:
         raise last_exc
     raise RuntimeError("vision_complete: max_retries must be >= 1")
+
+
+def agentic_slug(model_id: str) -> str:
+    return "agentic-" + re.sub(r"[^a-z0-9]+", "-", model_id.lower()).strip("-")
+
+
+def get_or_create_agentic_generator(db, model_id: str):
+    from .models import Generator
+
+    slug = agentic_slug(model_id)
+    gen = db.query(Generator).filter_by(slug=slug).first()
+    if gen is None:
+        gen = Generator(
+            slug=slug,
+            name=f"{model_id} (agentic)",
+            kind="model",
+            description="agentic (iterative render-critique-revise) via OpenRouter",
+        )
+        db.add(gen)
+        db.flush()
+    return gen
+
+
+def critique_prompt(species: str, common: str) -> str:
+    return (
+        f"The attached image is a render of YOUR current 3D mesh of a {common} plant "
+        f"({species}), built by your previous Blender-Python script. Critically compare it to a "
+        f"real {common}: name what is wrong or missing (proportions, missing organs, leaf/needle "
+        "shape, topology, obvious artefacts). Then output ONLY an improved, COMPLETE Blender 4.2 "
+        "bpy script that fixes those issues and re-exports GLB to os.environ['OUT_GLB'] — no "
+        "explanation, no markdown."
+    )
+
+
+def agentic_generate(
+    db,
+    *,
+    model_id: str,
+    task_id: int,
+    species: str,
+    common: str,
+    complete_fn,
+    vision_fn,
+    run_fn,
+    render_fn,
+    asset_dir,
+    n_iters: int = 2,
+) -> dict:
+    """One agentic generation for (model, task): generate a bpy script, then up to n_iters-1
+    render->critique->revise rounds. `complete_fn(prompt)->str`, `vision_fn(prompt, png)->str`,
+    `run_fn(script, out_glb)->run-dict`, `render_fn(glb_path)->png bytes`. Idempotent per
+    (task, agentic-generator). A failed/invalid revise never regresses below the last valid mesh."""
+    from .models import ModelOutput
+
+    gen = get_or_create_agentic_generator(db, model_id)
+    if db.query(ModelOutput).filter_by(task_id=task_id, generator_id=gen.id).first() is not None:
+        return {"status": "skipped_exists", "model_id": model_id, "task_id": task_id}
+
+    with tempfile.TemporaryDirectory() as td:
+        # iteration 0
+        script = extract_script(complete_fn(build_prompt(species, common)))
+        run = run_fn(script, str(Path(td) / "iter0.glb"))
+        if run.get("status") != "ok" or not run.get("glb_path"):
+            return {"status": run.get("status", "error"), "model_id": model_id, "task_id": task_id}
+        best_path = run["glb_path"]
+        iter_vertices = [run.get("mesh_stats", {}).get("vertices", 0)]
+
+        # revise iterations
+        for i in range(1, n_iters):
+            try:
+                png = render_fn(best_path)
+            except Exception:  # noqa: BLE001 — render failure stops refinement, keeps best mesh
+                break
+            new_script = extract_script(vision_fn(critique_prompt(species, common), png))
+            run2 = run_fn(new_script, str(Path(td) / f"iter{i}.glb"))
+            if run2.get("status") == "ok" and run2.get("glb_path"):
+                best_path = run2["glb_path"]
+                iter_vertices.append(run2.get("mesh_stats", {}).get("vertices", 0))
+
+        rel = Path("agentic") / f"{gen.slug}_{task_id}.glb"
+        dst = Path(asset_dir) / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(best_path, dst)
+        out = ModelOutput(
+            task_id=task_id,
+            generator_id=gen.id,
+            title=f"{model_id} (agentic)",
+            asset_path=str(rel),
+            asset_format="glb",
+            source=f"agentic:{model_id}",
+            meta_json=json.dumps(
+                {
+                    "model_id": model_id,
+                    "modality": "agentic",
+                    "n_iterations": len(iter_vertices),
+                    "iter_vertices": iter_vertices,
+                }
+            ),
+        )
+        db.add(out)
+        db.commit()
+        return {
+            "status": "ok",
+            "model_id": model_id,
+            "task_id": task_id,
+            "n_iterations": len(iter_vertices),
+            "output_id": out.id,
+        }
