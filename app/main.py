@@ -52,7 +52,7 @@ from .models import (
     Vote,
     VoterSession,
 )
-from .schemas import CategoryIn, GeneratorIn, TaskIn, VoteIn
+from .schemas import CategoryIn, FlagIn, GeneratorIn, TaskIn, VoteIn
 from .storage import get_storage
 
 logger = logging.getLogger(__name__)
@@ -456,6 +456,24 @@ def api_vote(
     # Keep the same criterion/category filter for the follow-up comparison.
     nxt = _build_comparison(db, sid, criterion, category)
     return {"status": "ok", "next": nxt}
+
+
+@app.post("/api/flag")
+def api_flag(flag_in: FlagIn, request: Request, db: Session = Depends(get_db)):
+    """Report an output as not-a-plant / failed. Rate-limited; one flag per session per output;
+    auto-hides the output at FLAG_HIDE_THRESHOLD distinct sessions. Not a vote — never advances."""
+    from . import flags
+
+    sid = request.state.session_id
+    if not integrity.check_rate_limit(sid):
+        raise HTTPException(429, "Rate limit exceeded — slow down")
+    if db.get(ModelOutput, flag_in.output_id) is None:
+        raise HTTPException(404, "Unknown output")
+    hidden, count = flags.record_flag(
+        db, flag_in.output_id, sid, flag_in.reason, config.FLAG_HIDE_THRESHOLD
+    )
+    db.commit()
+    return {"status": "ok", "hidden": hidden, "flags": count}
 
 
 # ------------------------------------------------------------------ leaderboard
