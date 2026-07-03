@@ -641,3 +641,23 @@ class OutputFlag(Base):
     session_id: Mapped[str] = mapped_column(String(64), index=True)
     reason: Mapped[str] = mapped_column(String(32), default="not_a_plant")
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class Admissibility(Base):
+    """One predicate verdict for one ModelOutput — the pre-vote admissibility gate. Multiple
+    rows per output (one per predicate); unique on (output_id, predicate), rescore overwrites."""
+
+    __tablename__ = "admissibility"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"), index=True)
+    predicate: Mapped[str] = mapped_column(String(32), index=True)
+    admit: Mapped[bool] = mapped_column(Boolean, default=True)
+    reason: Mapped[str] = mapped_column(String(64), default="")
+    detail_json: Mapped[str] = mapped_column(Text, default="{}")
+    version: Mapped[str] = mapped_column(String(64), default="")
+    computed: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("output_id", "predicate", name="uq_admissibility_output_predicate"),
+    )

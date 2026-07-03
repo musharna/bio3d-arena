@@ -17,6 +17,7 @@ from . import config
 from .assets_gen import build_asset, build_degenerate
 from .database import SessionLocal, init_db
 from .models import (
+    Admissibility,
     CalibrationPair,
     Category,
     Comparison,
@@ -68,6 +69,7 @@ _FORCE_DELETE_MODELS = (
     JudgeVote,  # child of ModelOutput — delete before it
     CalibrationPair,  # child of ModelOutput — delete before it
     CommissionAttempt,  # child of ModelOutput — delete before it
+    Admissibility,  # child of ModelOutput — delete before it
     VoterSession,
     ModelOutput,
     ReconTask,  # child of Task — delete before it
