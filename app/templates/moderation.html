@@ -38,5 +38,56 @@
   <p>No pending submissions. New ones from <a href="/submit">/submit</a> appear here.</p>
   {% endif %}
 </section>
+<section class="board">
+  <h2>Flagged / hidden outputs</h2>
+  {% if flagged %}
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Task</th>
+        <th>Preview</th>
+        <th>Flags</th>
+        <th>State</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in flagged %}
+      <tr>
+        <td>{{ f.id }}</td>
+        <td>{{ f.task }}</td>
+        <td><a href="{{ f.asset_url }}" target="_blank">asset</a></td>
+        <td>{{ f.flags }}</td>
+        <td>{{ "hidden" if f.hidden else "visible" }}</td>
+        <td>
+          {% if f.hidden %}
+          <form method="post" action="/admin/outputs/{{ f.id }}/restore">
+            <input
+              type="hidden"
+              name="token"
+              value="{{ request.query_params.get('token', '') }}"
+            />
+            <button type="submit">Restore</button>
+          </form>
+          {% else %}
+          <form method="post" action="/admin/outputs/{{ f.id }}/hide">
+            <input
+              type="hidden"
+              name="token"
+              value="{{ request.query_params.get('token', '') }}"
+            />
+            <button type="submit">Confirm-hide</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No flagged outputs.</p>
+  {% endif %}
+</section>
 <script src="/static/moderation.js"></script>
 {% endblock %}

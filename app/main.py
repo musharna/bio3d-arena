@@ -46,12 +46,14 @@ from .models import (
     Generator,
     JudgeRating,
     ModelOutput,
+    OutputFlag,
     Rating,
     Task,
     User,
     Vote,
     VoterSession,
 )
+from .models import _utcnow as _models_utcnow
 from .schemas import CategoryIn, FlagIn, GeneratorIn, TaskIn, VoteIn
 from .storage import get_storage
 
@@ -1428,7 +1430,29 @@ def moderation_page(request: Request, db: Session = Depends(get_db)):
                 "format": s.asset_format,
             }
         )
-    return templates.TemplateResponse(request, "moderation.html", {"pending": rows})
+
+    from . import flags as _flags
+
+    flagged_outputs = (
+        db.query(ModelOutput)
+        .join(OutputFlag, OutputFlag.output_id == ModelOutput.id)
+        .distinct()
+        .all()
+    )
+    flagged = []
+    for o in flagged_outputs:
+        flagged.append(
+            {
+                "id": o.id,
+                "asset_url": storage.url_for(o.asset_path),
+                "task": o.task.title if o.task else f"#{o.task_id}",
+                "flags": _flags.distinct_flag_count(db, o.id),
+                "hidden": o.hidden_at is not None,
+            }
+        )
+    return templates.TemplateResponse(
+        request, "moderation.html", {"pending": rows, "flagged": flagged}
+    )
 
 
 @app.post("/admin/submissions/{submission_id}/approve")
@@ -1462,6 +1486,29 @@ def admin_reject(
         raise HTTPException(400, str(exc)) from exc
     db.commit()
     # Carry the token so the redirect lands on the now token-gated moderation page.
+    return RedirectResponse(f"/admin/moderation?token={quote(token)}", status_code=303)
+
+
+@app.post("/admin/outputs/{output_id}/hide")
+def admin_hide_output(output_id: int, token: str = Form(...), db: Session = Depends(get_db)):
+    _require_admin(token)
+    out = db.get(ModelOutput, output_id)
+    if out is None:
+        raise HTTPException(404, "Unknown output")
+    if out.hidden_at is None:
+        out.hidden_at = _models_utcnow()
+    db.commit()
+    return RedirectResponse(f"/admin/moderation?token={quote(token)}", status_code=303)
+
+
+@app.post("/admin/outputs/{output_id}/restore")
+def admin_restore_output(output_id: int, token: str = Form(...), db: Session = Depends(get_db)):
+    _require_admin(token)
+    out = db.get(ModelOutput, output_id)
+    if out is None:
+        raise HTTPException(404, "Unknown output")
+    out.hidden_at = None
+    db.commit()
     return RedirectResponse(f"/admin/moderation?token={quote(token)}", status_code=303)
 
 
