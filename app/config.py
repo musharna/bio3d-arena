@@ -50,6 +50,14 @@ POOL_EXCLUDED_COMPLETENESS_CATEGORIES = {
 # Distinct-session flags on an output before it auto-hides (pending admin review).
 FLAG_HIDE_THRESHOLD = int(os.environ.get("BIO3D_FLAG_HIDE_THRESHOLD", "3"))
 
+# --- Semantic-admissibility predicate (VLM cardinality+identity) ---
+# off: dormant (not in the rubric, no advisory flags). advisory: surfaces confident rejects to
+# the ⚑ review queue as non-hiding flags but does NOT auto-exclude. gate: auto-excludes rejects
+# from the vote pool. Promote advisory -> gate only after a zero-FP-on-good acceptance run.
+SEMANTIC_ADMISSIBILITY_MODE = os.environ.get(
+    "BIO3D_SEMANTIC_ADMISSIBILITY_MODE", "advisory"
+).lower()
+
 # --- Verified login (Hugging Face OAuth). Off unless client id+secret are set. ---
 HF_CLIENT_ID = os.environ.get("BIO3D_HF_CLIENT_ID", "")
 HF_CLIENT_SECRET = os.environ.get("BIO3D_HF_CLIENT_SECRET", "")
