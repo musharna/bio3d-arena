@@ -198,8 +198,16 @@ def _serialize(
         "comparison_id": comparison.id,
         "task": {"title": task.title, "prompt": task.prompt, "category": task.category.name},
         "criterion": {"slug": crit.slug, "name": crit.name},
-        "a": {"url": storage.url_for(out_a.asset_path), "format": out_a.asset_format},
-        "b": {"url": storage.url_for(out_b.asset_path), "format": out_b.asset_format},
+        "a": {
+            "url": storage.url_for(out_a.asset_path),
+            "format": out_a.asset_format,
+            "output_id": out_a.id,
+        },
+        "b": {
+            "url": storage.url_for(out_b.asset_path),
+            "format": out_b.asset_format,
+            "output_id": out_b.id,
+        },
     }
 
 
