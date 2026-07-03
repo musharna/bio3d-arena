@@ -223,4 +223,12 @@ def register_output(
     )
     db.add(output)
     db.flush()
+    # Best-effort structural admissibility verdict so new assets are gated from first appearance.
+    # Guarded: a bad asset records a reject, never breaks ingest.
+    try:
+        from . import structural
+
+        structural.evaluate_outputs(db, [output.id])
+    except Exception:  # noqa: BLE001 — ingest must not fail on the admissibility hook
+        pass
     return output, True
