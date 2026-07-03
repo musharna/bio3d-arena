@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 from . import (
     config,
     difficulty,
+    fidelity,
     ingest,
     integrity,
     matchmaking,
@@ -730,6 +731,18 @@ def api_completeness(db: Session = Depends(get_db)):
 @app.get("/api/dgen.json")
 def api_dgen(db: Session = Depends(get_db)):
     return service.dgen_trajectory(db)
+
+
+@app.get("/api/fidelity.json")
+def api_fidelity(db: Session = Depends(get_db)):
+    return fidelity.fidelity_scorecard(db)
+
+
+@app.get("/fidelity", response_class=HTMLResponse)
+def fidelity_board(request: Request, db: Session = Depends(get_db)):
+    return templates.TemplateResponse(
+        request, "fidelity.html", {"board": fidelity.fidelity_scorecard(db)}
+    )
 
 
 # --------------------------------------------------------- significance + bias
