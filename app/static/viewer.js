@@ -181,9 +181,13 @@
     const b = slotB && slotB.querySelector("model-viewer");
     if (!a || !b) return;
     function copyCam(src, dst) {
-      dst.cameraOrbit = src.getCameraOrbit().toString();
-      dst.cameraTarget = src.getCameraTarget().toString();
-      dst.fieldOfView = src.getFieldOfView() + "deg";
+      // Sync ONLY the orbital angles (theta/phi) — the "same viewing angle" intent.
+      // Leave radius + target on each viewer's own "auto" so it frames its OWN
+      // bounding box: the two models can differ wildly in scale/center (a whole
+      // plant vs an isolated organ), and copying one's absolute radius+target onto
+      // the other aims the camera off its model and throws it out of view.
+      const o = src.getCameraOrbit();
+      dst.cameraOrbit = o.theta + "rad " + o.phi + "rad auto";
       dst.jumpCameraToGoal();
     }
     a.addEventListener("camera-change", (e) => {
