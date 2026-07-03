@@ -10,8 +10,14 @@ from __future__ import annotations
 
 import base64
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from . import flags
 from .admissibility import Verdict
 from .judge import JUDGE_MODEL
+from .models import Admissibility, ModelOutput, TraitRubric
+from .sourcing import is_reference_scan, is_untextured_output
 
 VERSION = "semantic-v1"
 
@@ -93,3 +99,80 @@ def score_semantic(client, sheet_png: bytes, *, taxon: str | None) -> dict:
         messages=_build_messages(sheet_png, taxon),
     )
     return _parse(resp)
+
+
+def enumerate_semantic_work(db: Session) -> list[dict]:
+    """One {'output_id', 'taxon'} per eligible output lacking a current-VERSION semantic verdict.
+    Eligible = non-gold, non-reference-scan, non-untextured (structural's breadth — NOT gated on a
+    taxon inventory, so this reaches the outputs completeness never scored). taxon = the output's
+    task's TraitRubric.taxon if a rubric exists, else None (the taxon-agnostic checks still run;
+    only wrong_species needs a taxon)."""
+    have = {
+        oid
+        for (oid,) in db.execute(
+            select(Admissibility.output_id).where(
+                Admissibility.predicate == "semantic", Admissibility.version == VERSION
+            )
+        ).all()
+    }
+    taxon_by_task = {
+        tid: taxon
+        for (tid, taxon) in db.execute(select(TraitRubric.task_id, TraitRubric.taxon)).all()
+    }
+    work: list[dict] = []
+    outs = db.execute(select(ModelOutput).where(ModelOutput.is_gold.is_(False))).scalars().all()
+    for out in outs:
+        if out.id in have:
+            continue
+        if is_reference_scan(out.source) or is_untextured_output(out):
+            continue
+        work.append({"output_id": out.id, "taxon": taxon_by_task.get(out.task_id)})
+    return work
+
+
+def evaluate_outputs(db: Session, work, *, client, sheet_for, emit_flags: bool) -> dict:
+    """Score each work row and upsert its semantic verdict (persistence is UNCONDITIONAL — the
+    acceptance run reads these rows regardless of mode). Fail-loud per output: an unreadable sheet
+    or a VLM error is recorded and the batch continues. If emit_flags AND the verdict rejects, also
+    record a NON-HIDING advisory OutputFlag (sentinel threshold) so a human sees it in the ⚑ queue.
+    Caller commits."""
+    from .structural import upsert_verdict  # function-local: avoids importing numpy in Task-1 core
+
+    scored = errors = flagged = 0
+    failures: list[dict] = []
+    seen: set[int] = set()
+    for item in work:
+        oid = item["output_id"]
+        if oid in seen:
+            continue
+        seen.add(oid)
+        try:
+            png = sheet_for(oid)
+            result = score_semantic(client, png, taxon=item.get("taxon"))
+            verdict = verdict_from_code(result["verdict"], result.get("note", ""))
+            upsert_verdict(db, oid, "semantic", verdict, VERSION)
+            scored += 1
+            if emit_flags and not verdict.admit:
+                flags.record_flag(
+                    db, oid, SEMANTIC_FLAG_SESSION, verdict.reason, ADVISORY_NO_HIDE_THRESHOLD
+                )
+                flagged += 1
+        except Exception as e:  # noqa: BLE001 — fail-loud per output, never abort the batch
+            errors += 1
+            failures.append({"output_id": oid, "error": repr(e)})
+    return {"scored": scored, "errors": errors, "flagged": flagged, "failures": failures}
+
+
+class SemanticPredicate:
+    name = "semantic"
+    version = VERSION
+
+    def rejected_output_ids(self, db: Session) -> set[int]:
+        return {
+            oid
+            for (oid,) in db.execute(
+                select(Admissibility.output_id).where(
+                    Admissibility.predicate == "semantic", Admissibility.admit.is_(False)
+                )
+            ).all()
+        }
