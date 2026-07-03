@@ -117,6 +117,10 @@ class ModelOutput(Base):
     attribution: Mapped[str | None] = mapped_column(String(256), nullable=True)
     external_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
+    # Non-null ⇒ pulled from the vote pool (auto-hidden at K flags, or by admin). Nullable so
+    # every existing/new output defaults to visible.
+    hidden_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+
     task: Mapped["Task"] = relationship(back_populates="outputs", foreign_keys=[task_id])
     generator: Mapped["Generator"] = relationship(back_populates="outputs")
 
@@ -623,4 +627,17 @@ class CommissionAttempt(Base):
     script: Mapped[str] = mapped_column(Text, default="")
     mesh_stats_json: Mapped[str] = mapped_column(Text, default="{}")
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class OutputFlag(Base):
+    """A human report that an output is not a plant / failed. Distinct-session count of these
+    on one output drives auto-hide; the rows are also a human-labeled failure dataset."""
+
+    __tablename__ = "output_flag"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"), index=True)
+    session_id: Mapped[str] = mapped_column(String(64), index=True)
+    reason: Mapped[str] = mapped_column(String(32), default="not_a_plant")
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
