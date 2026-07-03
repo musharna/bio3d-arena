@@ -45,17 +45,13 @@ DEFAULT_RUBRIC: list[str] = ["structural", "completeness"]
 
 
 def _registry() -> dict[str, Predicate]:
-    # Lazy (function-local) import of StructuralPredicate avoids a module-level import cycle
-    # (structural.py imports Verdict from this module). Guarded: structural.py doesn't exist
-    # until Task 4, so absence of the module is fine as long as it's never in the active rubric.
-    reg: dict[str, Predicate] = {"completeness": CompletenessPredicate()}
-    try:
-        from .structural import StructuralPredicate  # added in Task 4
+    # Function-local import: structural.py imports Verdict from this module, so a module-level
+    # import here would be a real circular import (not just a guard artifact). Direct
+    # (unguarded) as of Task 4 — structural.py exists now, so a genuine ImportError inside it
+    # must fail loud here, not degrade to "structural predicate absent" as the old try/except did.
+    from .structural import StructuralPredicate
 
-        reg["structural"] = StructuralPredicate()
-    except ImportError:
-        pass
-    return reg
+    return {"completeness": CompletenessPredicate(), "structural": StructuralPredicate()}
 
 
 def non_admitted_output_ids(db: Session, rubric: list[str] | None = None) -> set[int]:
