@@ -5,16 +5,16 @@ so thresholds are tuned to reject the flagged broken set with ZERO false positiv
 
 from __future__ import annotations
 
+import io
 import json
-import os
 
 import numpy as np
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import config
 from .admissibility import Verdict
 from .models import Admissibility, ModelOutput
+from .storage import get_storage
 
 VERSION = "structural-v1"
 
@@ -25,15 +25,8 @@ MIN_FACES = 8
 MIN_EXTENT_RATIO = 0.02  # smallest bbox extent / bbox diagonal; below this = a sliver/flat
 
 
-def evaluate_glb(path: str) -> Verdict:
-    """Load a GLB (concatenated to one mesh) and return an admissibility Verdict."""
-    import trimesh  # local import: heavy
-
-    try:
-        mesh = trimesh.load(path, force="mesh")  # repo idiom (ingest._validate_mesh)
-    except Exception as e:  # noqa: BLE001 — a corrupt asset is a reject, not a crash
-        return Verdict(False, "unreadable", {"error": str(e)[:200]})
-
+def _verdict_for_mesh(mesh) -> Verdict:
+    """Geometry checks shared by evaluate_glb and evaluate_bytes, given a loaded trimesh mesh."""
     verts = np.asarray(getattr(mesh, "vertices", np.empty((0, 3))), dtype=float)
     faces = getattr(mesh, "faces", None)
     nv = int(len(verts))
@@ -53,6 +46,35 @@ def evaluate_glb(path: str) -> Verdict:
         return Verdict(False, "degenerate_bbox", {"extent_ratio": ratio})
 
     return Verdict(True, "", {"verts": nv, "faces": nf, "extent_ratio": ratio})
+
+
+def evaluate_glb(path: str) -> Verdict:
+    """Load a GLB (concatenated to one mesh) and return an admissibility Verdict."""
+    import trimesh  # local import: heavy
+
+    try:
+        mesh = trimesh.load(path, force="mesh")  # repo idiom (ingest._validate_mesh)
+    except Exception as e:  # noqa: BLE001 — a corrupt asset is a reject, not a crash
+        return Verdict(False, "unreadable", {"error": str(e)[:200]})
+
+    return _verdict_for_mesh(mesh)
+
+
+def evaluate_bytes(data: bytes, file_type: str) -> Verdict:
+    """Load asset bytes (as read from the storage backend) and return an admissibility Verdict.
+
+    Backend-agnostic counterpart to evaluate_glb: works whether the bytes came from local
+    disk or an S3 GET, so evaluation never assumes the asset is reachable on the local
+    filesystem (config.STORAGE_BACKEND == "s3" has no local ASSET_DIR copy).
+    """
+    import trimesh  # local import: heavy
+
+    try:
+        mesh = trimesh.load(io.BytesIO(data), file_type=file_type, force="mesh")
+    except Exception as e:  # noqa: BLE001 — a corrupt asset is a reject, not a crash
+        return Verdict(False, "unreadable", {"error": str(e)[:200]})
+
+    return _verdict_for_mesh(mesh)
 
 
 def upsert_verdict(db: Session, output_id: int, predicate: str, verdict: Verdict, version: str):
@@ -88,16 +110,15 @@ def enumerate_structural_work(db: Session) -> list[int]:
     return [oid for oid in all_ids if oid not in have]
 
 
-def _asset_path(output: ModelOutput) -> str:
-    return os.path.join(str(config.ASSET_DIR), output.asset_path)
-
-
 def evaluate_outputs(db: Session, output_ids: list[int]) -> dict:
-    """Evaluate each output's GLB and upsert its structural verdict. Fail-loud per output:
-    a missing/unreadable asset yields a reject verdict (recorded), never aborts the batch.
-    Caller commits."""
+    """Evaluate each output's asset via the storage backend and upsert its structural verdict.
+    Reads through get_storage() (not the raw filesystem) so this is S3-safe: on the S3 backend
+    the asset never has a local ASSET_DIR copy, so a raw os.path read would spuriously reject
+    every output. Fail-loud per output: a missing/unreadable asset yields a reject verdict
+    (recorded), never aborts the batch. Caller commits."""
     scored = errors = 0
     seen: set[int] = set()
+    storage = get_storage()
     for oid in output_ids:
         if oid in seen:
             continue
@@ -107,7 +128,8 @@ def evaluate_outputs(db: Session, output_ids: list[int]) -> dict:
             errors += 1
             continue
         try:
-            verdict = evaluate_glb(_asset_path(out))
+            data = storage.read(out.asset_path)
+            verdict = evaluate_bytes(data, out.asset_format or "glb")
         except Exception as e:  # noqa: BLE001 — record a reject, keep going
             verdict = Verdict(False, "unreadable", {"error": str(e)[:200]})
             errors += 1

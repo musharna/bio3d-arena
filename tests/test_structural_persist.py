@@ -85,6 +85,32 @@ def test_evaluate_outputs_fail_loud_per_output():
         assert missing in structural.StructuralPredicate().rejected_output_ids(db)
 
 
+def test_evaluate_outputs_reads_via_storage_backend(monkeypatch):
+    """S3-safety proof (whole-branch review Fix 1): evaluate_outputs must resolve the asset
+    through get_storage().read(), never a raw ASSET_DIR filesystem path — on the S3 backend
+    there is no local copy to read. Point the output at a path with NO file on disk anywhere,
+    then monkeypatch get_storage() to hand back degenerate-mesh bytes regardless of path.
+    If evaluate_outputs still depended on the raw filesystem, this asset would be
+    "unreadable" (missing file); instead it must be rejected on genuine geometry grounds,
+    proving the read went through the (fake) storage backend."""
+
+    class FakeStorage:
+        def read(self, rel_path):
+            tri = trimesh.Trimesh(vertices=[[0, 0, 0], [1, 0, 0], [0, 1, 0]], faces=[[0, 1, 2]])
+            return tri.export(file_type="glb")
+
+    monkeypatch.setattr(structural, "get_storage", lambda: FakeStorage())
+    with SessionLocal() as db:
+        oid = _output(db, f"nowhere/{uuid.uuid4().hex}.glb")  # never written to ASSET_DIR
+        res = structural.evaluate_outputs(db, [oid])
+        db.commit()
+        assert res["scored"] == 1
+        row = db.query(Admissibility).filter_by(output_id=oid, predicate="structural").one()
+        assert row.admit is False
+        assert row.reason != "unreadable"  # rejected on geometry, not a missing-file fallback
+        assert oid in structural.StructuralPredicate().rejected_output_ids(db)
+
+
 def test_default_rubric_includes_structural_rejects():
     """Carry-forward from Task 2 review: after the direct (unguarded) import of
     StructuralPredicate in admissibility._registry(), the DEFAULT rubric must resolve

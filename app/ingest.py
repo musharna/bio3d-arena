@@ -228,7 +228,8 @@ def register_output(
     try:
         from . import structural
 
-        structural.evaluate_outputs(db, [output.id])
-    except Exception:  # noqa: BLE001 — ingest must not fail on the admissibility hook
+        with db.begin_nested():
+            structural.evaluate_outputs(db, [output.id])
+    except Exception:  # noqa: BLE001 — ingest must never fail on the admissibility hook
         pass
     return output, True
