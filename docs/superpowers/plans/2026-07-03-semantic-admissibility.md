@@ -473,12 +473,12 @@ Add these imports to the top of `app/semantic.py` (after the existing imports):
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import config, flags
+from . import flags
 from .models import Admissibility, ModelOutput, TraitRubric
 from .sourcing import is_reference_scan, is_untextured_output
 ```
 
-(`config` is imported for symmetry/future use; if a linter flags it as unused, drop it — it is not referenced in this task.) Then append:
+(`app/semantic.py` never reads `config` — the mode logic lives in `app/admissibility.py` and `scripts/score_semantic.py`, so do NOT import config here.) Then append:
 
 ```python
 def enumerate_semantic_work(db: Session) -> list[dict]:
