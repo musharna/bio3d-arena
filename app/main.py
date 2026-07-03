@@ -268,14 +268,13 @@ def _build_comparison(
             return gold
 
     from .sourcing import is_reference_scan, is_untextured_output
-    from . import flags
+    from . import admissibility
 
     category_id = _resolve_category_id(db, category_slug)
 
-    # Precompute the completeness-gated output ids ONCE (per-output exclude_fn stays O(1)).
-    _gated = flags.excluded_output_ids_by_completeness(
-        db, config.POOL_EXCLUDED_COMPLETENESS_CATEGORIES
-    )
+    # Precompute the gated output ids ONCE (per-output exclude_fn stays O(1)): the
+    # admissibility composer unions structural ∪ completeness behind one call.
+    _gated = admissibility.non_admitted_output_ids(db)  # structural ∪ completeness
 
     # Exclude from the perceptual vote pool: raw-scan reference outputs (render as ugly
     # point clouds, confound metric↔vote agreement) AND geometry-only outputs (flat grey
