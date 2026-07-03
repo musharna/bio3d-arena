@@ -12,6 +12,12 @@ from app.models import Category, Completeness, Generator, ModelOutput, Task
 client = TestClient(app)
 
 
+def setup_module(_module):
+    from app.seed import seed_all
+
+    seed_all(force=True)
+
+
 def _task_with(db, cats):
     """A task whose only paradigm group is `cats` (one output per completeness category)."""
     cat = Category(slug=f"pg-{uuid.uuid4().hex[:8]}", name="C")

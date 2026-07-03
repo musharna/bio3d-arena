@@ -19,11 +19,13 @@ from .database import SessionLocal, init_db
 from .models import (
     Category,
     Comparison,
+    Completeness,
     Criterion,
     Generator,
     GoldPair,
     Metric,
     ModelOutput,
+    OutputFlag,
     Rating,
     ReconTask,
     Submission,
@@ -357,6 +359,8 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
                 Submission,
                 Rating,
                 Metric,  # child of ModelOutput — delete before it
+                Completeness,  # child of ModelOutput — delete before it
+                OutputFlag,  # child of ModelOutput — delete before it
                 VoterSession,
                 ModelOutput,
                 ReconTask,  # child of Task — delete before it
