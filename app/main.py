@@ -258,16 +258,29 @@ def _build_comparison(
             return gold
 
     from .sourcing import is_reference_scan, is_untextured_output
+    from . import flags
 
     category_id = _resolve_category_id(db, category_slug)
+
+    # Precompute the completeness-gated output ids ONCE (per-output exclude_fn stays O(1)).
+    _gated = flags.excluded_output_ids_by_completeness(
+        db, config.POOL_EXCLUDED_COMPLETENESS_CATEGORIES
+    )
 
     # Exclude from the perceptual vote pool: raw-scan reference outputs (render as ugly
     # point clouds, confound metric↔vote agreement) AND geometry-only outputs (flat grey
     # blobs that lose votes for lack of texture, not shape). Both stay in the Mode-B board.
+    # Also exclude outputs auto-hidden (flag threshold) or D-Complete classified into a bad
+    # completeness category (config.POOL_EXCLUDED_COMPLETENESS_CATEGORIES).
     # Same predicate for task AND pair selection so pick_task never returns a task whose
     # only outputs pick_pair then excludes (which caused intermittent /api/next 404s).
     def _vote_excluded(o):
-        return is_reference_scan(o.source) or is_untextured_output(o)
+        return (
+            is_reference_scan(o.source)
+            or is_untextured_output(o)
+            or o.hidden_at is not None
+            or o.id in _gated
+        )
 
     # Pairings this session already voted on: the /api/vote guard 409s a re-vote of any of
     # them, so exclude them from BOTH task and pair selection (same set for both, mirroring
