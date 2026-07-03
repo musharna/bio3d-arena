@@ -269,10 +269,17 @@ def _build_comparison(
     def _vote_excluded(o):
         return is_reference_scan(o.source) or is_untextured_output(o)
 
-    task = matchmaking.pick_task(db, category_id=category_id, exclude_fn=_vote_excluded)
+    # Pairings this session already voted on: the /api/vote guard 409s a re-vote of any of
+    # them, so exclude them from BOTH task and pair selection (same set for both, mirroring
+    # the _vote_excluded parity) — else a session dead-ends re-served an already-voted pair.
+    voted_pairs = integrity.voted_pairs_for(db, session_id, crit.id)
+
+    task = matchmaking.pick_task(
+        db, category_id=category_id, exclude_fn=_vote_excluded, voted_pairs=voted_pairs
+    )
     if task is None:
         return None
-    pair = matchmaking.pick_pair(db, task, exclude_fn=_vote_excluded)
+    pair = matchmaking.pick_pair(db, task, exclude_fn=_vote_excluded, voted_pairs=voted_pairs)
     if pair is None:
         return None
     out_a, out_b = pair
