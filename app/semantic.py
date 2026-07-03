@@ -21,7 +21,8 @@ from .sourcing import is_reference_scan, is_untextured_output
 
 VERSION = "semantic-v1"
 
-ADMIT_CODES = {"ok", "uncertain"}
+# admit iff the VLM code is NOT one of these — so ok, uncertain, and any unrecognized
+# code all admit (precision-first; a false-reject silently biases the ranking).
 REJECT_CODES = {"multiple", "sub_part", "not_a_plant", "wrong_species"}
 
 # Advisory flags use one synthetic session id (record_flag is idempotent per (output, session_id)
@@ -63,15 +64,15 @@ def _img_block(png: bytes) -> dict:
 
 def _build_messages(png: bytes, taxon: str | None) -> list[dict]:
     of_taxon = f" of {taxon}" if taxon else ""
-    wrong_species = f"`wrong_species` (a plant, but clearly not a {taxon}), " if taxon else ""
+    wrong_species = f"; `wrong_species` (a plant, but clearly not a {taxon})" if taxon else ""
     text = (
         f"This is a contact sheet of a generated 3D model{of_taxon}, rendered from several angles "
         "on a neutral gray background. Judge whether it is a SINGLE, WHOLE, VALID plant specimen. "
-        "Reject as: `multiple` (more than one distinct plant, or a scene/cluster), "
-        "`sub_part` (only a detached organ — a single fruit, leaf, or flower — not a whole plant), "
-        "`not_a_plant` (not a recognizable plant at all — a blob or non-plant object), "
+        "Reject as: `multiple` (more than one distinct plant, or a scene/cluster); "
+        "`sub_part` (only a detached organ — a single fruit, leaf, or flower — not a whole plant); "
+        "`not_a_plant` (not a recognizable plant at all — a blob or non-plant object)"
         f"{wrong_species}"
-        "Otherwise answer `ok`. If you genuinely cannot tell, answer `uncertain`. "
+        ". Otherwise answer `ok`. If you genuinely cannot tell, answer `uncertain`. "
         "Reject ONLY when clearly inadmissible; when in doubt, prefer `ok` or `uncertain`. "
         "Then call record_admissibility."
     )

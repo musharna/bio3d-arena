@@ -273,8 +273,9 @@ def _build_comparison(
     category_id = _resolve_category_id(db, category_slug)
 
     # Precompute the gated output ids ONCE (per-output exclude_fn stays O(1)): the
-    # admissibility composer unions structural ∪ completeness behind one call.
-    _gated = admissibility.non_admitted_output_ids(db)  # structural ∪ completeness
+    # admissibility composer unions structural ∪ completeness (∪ semantic when
+    # SEMANTIC_ADMISSIBILITY_MODE=gate) behind one call.
+    _gated = admissibility.non_admitted_output_ids(db)  # structural ∪ completeness ∪ semantic(gate)
 
     # Exclude from the perceptual vote pool: raw-scan reference outputs (render as ugly
     # point clouds, confound metric↔vote agreement) AND geometry-only outputs (flat grey

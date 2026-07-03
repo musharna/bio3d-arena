@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import uuid
 
+import pytest
+
 from app import admissibility, config
 from app.database import SessionLocal, init_db
 from app.models import Admissibility, Generator, ModelOutput, Task
@@ -65,3 +67,11 @@ def test_effective_rubric_appends_semantic_in_gate(monkeypatch):
     assert admissibility._effective_rubric() == ["structural", "completeness", "semantic"]
     monkeypatch.setattr(config, "SEMANTIC_ADMISSIBILITY_MODE", "advisory")
     assert admissibility._effective_rubric() == ["structural", "completeness"]
+
+
+def test_valid_semantic_mode_fails_loud_on_unknown():
+    assert config._valid_semantic_mode("gate") == "gate"
+    assert config._valid_semantic_mode("advisory") == "advisory"
+    assert config._valid_semantic_mode("off") == "off"
+    with pytest.raises(ValueError):
+        config._valid_semantic_mode("gated")
