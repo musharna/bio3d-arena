@@ -197,6 +197,8 @@ def _serialize(
     comparison: Comparison, task: Task, crit: Criterion, out_a: ModelOutput, out_b: ModelOutput
 ) -> dict:
     """Anonymized arena payload — never leaks generator identity or gold status."""
+    from .public_export import is_commercial_model
+
     return {
         "comparison_id": comparison.id,
         "task": {"title": task.title, "prompt": task.prompt, "category": task.category.name},
@@ -205,11 +207,15 @@ def _serialize(
             "url": storage.url_for(out_a.asset_path),
             "format": out_a.asset_format,
             "output_id": out_a.id,
+            "machine_generated": is_commercial_model(out_a.source),
+            "attribution": out_a.attribution or None,
         },
         "b": {
             "url": storage.url_for(out_b.asset_path),
             "format": out_b.asset_format,
             "output_id": out_b.id,
+            "machine_generated": is_commercial_model(out_b.source),
+            "attribution": out_b.attribution or None,
         },
     }
 
