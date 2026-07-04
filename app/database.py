@@ -74,6 +74,10 @@ def _ensure_columns(engine) -> None:  # noqa: ANN001
         if cols and "hidden_at" not in cols:
             conn.exec_driver_sql("ALTER TABLE model_output ADD COLUMN hidden_at DATETIME")
 
+        cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(comparison)")]
+        if cols and "ballot_id" not in cols:
+            conn.exec_driver_sql("ALTER TABLE comparison ADD COLUMN ballot_id INTEGER")
+
 
 def init_db() -> None:
     """Create all tables, then self-heal any additive columns missing from a pre-existing
