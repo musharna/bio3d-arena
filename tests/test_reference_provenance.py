@@ -18,7 +18,7 @@ ALLOWED_LICENSES = {"CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0", "CC-BY-3.0", "CC-BY-
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-@pytest.mark.parametrize("slug", ["arabidopsis", "pinus"])
+@pytest.mark.parametrize("slug", ["arabidopsis", "maize", "rose", "soybean", "tomato", "pinus"])
 def test_reference_has_image_and_valid_provenance(slug):
     img = os.path.join(REPO_ROOT, f"data/assets/reference/{slug}_ref.jpg")
     meta = os.path.join(REPO_ROOT, f"data/assets/reference/{slug}_ref.json")
