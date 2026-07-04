@@ -29,6 +29,7 @@ from .models import (
     Generator,
     GoldPair,
     JudgeVote,
+    KBallot,
     Metric,
     ModelOutput,
     ModelScope,
@@ -54,6 +55,7 @@ from .storage import get_storage
 _FORCE_DELETE_MODELS = (
     Vote,
     Comparison,
+    KBallot,
     GoldPair,
     Submission,
     Rating,
