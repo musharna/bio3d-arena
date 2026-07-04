@@ -1,7 +1,6 @@
 // Arena client: fetch a comparison, render both models, record a vote, advance.
 // Category + criterion selectors scope what gets shown and which axis is judged.
 let current = null; // active pairwise comparison (2-up); null while a K-wise ballot is shown
-let currentKwise = null; // active K-wise ballot ({ballot_id, outputs}); null in pairwise/done modes
 let busy = false;
 
 const el = (id) => document.getElementById(id);
@@ -109,7 +108,6 @@ function render(data) {
   // Terminal payload from a scoped mode (e.g. calibration): no card to render.
   if (data && data.done) {
     current = null;
-    currentKwise = null;
     setKwiseVisible(false);
     const p = data.progress || {};
     const label = data.set
@@ -129,7 +127,6 @@ function render(data) {
 }
 
 function renderPair(data) {
-  currentKwise = null;
   setKwiseVisible(false);
   current = data;
   el("task-cat").textContent = data.task.category;
@@ -169,7 +166,6 @@ function setKwiseVisible(active) {
 
 function renderKwise(data) {
   current = null; // pairwise vote()/keyboard shortcuts must no-op while a K-wise ballot is shown
-  currentKwise = data;
   setKwiseVisible(true);
   el("task-cat").textContent = "K-wise"; // kwise task payload has no `category` field
   el("task-title").textContent = data.task.title;
@@ -243,7 +239,6 @@ async function submitKvote(ballotId, bestOutputId) {
       flash("Pick recorded ✓");
     } else {
       setStatus("Pick recorded. No more comparisons for this filter.");
-      currentKwise = null;
       setKwiseVisible(false);
     }
   } catch (e) {

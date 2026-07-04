@@ -228,11 +228,16 @@ def significance_matrix(
     bootstrap: int = 200,
     reg: float = 0.1,
     seed: int = 12345,
+    groups: list[int] | None = None,
 ) -> SignificanceResult:
-    """Bootstrap P(A ranks above B) for every pair — answers "is A *meaningfully* ahead?"."""
+    """Bootstrap P(A ranks above B) for every pair — answers "is A *meaningfully* ahead?".
+
+    `groups` mirrors `bradley_terry`: when given, whole ballot groups are resampled
+    together so correlated K-wise-derived pairs don't fake-tighten the probabilities.
+    """
     point = _strength_to_elo(_fit_strengths(players, matches, reg=reg))
     order = sorted(players, key=lambda p: point.get(p, BT_BASE), reverse=True)
-    samples = _bootstrap_scores(players, matches, bootstrap, reg=reg, seed=seed)
+    samples = _bootstrap_scores(players, matches, bootstrap, reg=reg, seed=seed, groups=groups)
 
     p_better: dict[tuple[int, int], float] = {}
     for i in players:

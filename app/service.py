@@ -551,9 +551,11 @@ def compute_significance(
     )
     if criterion is None:
         return {"status": "no-such-criterion"}
-    matches, _groups = _matches_for_scope(db, criterion.id, category_id)
+    matches, groups = _matches_for_scope(db, criterion.id, category_id)
     players = sorted(set(_players_for_scope(db, category_id)) | {p for m in matches for p in m})
-    result = ranking.significance_matrix(players, matches, bootstrap=config.BT_BOOTSTRAP)
+    result = ranking.significance_matrix(
+        players, matches, bootstrap=config.BT_BOOTSTRAP, groups=groups
+    )
     names = generator_display_names(db)
 
     ranked = []
