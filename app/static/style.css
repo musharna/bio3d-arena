@@ -449,6 +449,22 @@ main {
   gap: 0.7rem;
   margin-top: 1rem;
 }
+/* Guarded with :not([hidden]) — [hidden] is a UA style (display:none) that a plain
+   unconditional `.kwise-grid{display:grid}` rule would beat on specificity/origin, so the
+   attribute alone wouldn't actually hide the grid. Same pattern as .onboard-banner below. */
+.kwise-grid:not([hidden]) {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.kwise-cell .kwise-pick-btn {
+  margin: 0.6rem;
+}
+#kwise-allbad {
+  width: 100%;
+  margin-top: 0.7rem;
+}
 .vote-btn {
   padding: 0.9rem;
   border-radius: 10px;
@@ -673,6 +689,9 @@ kbd {
 
 @media (max-width: 720px) {
   .pair {
+    grid-template-columns: 1fr;
+  }
+  .kwise-grid {
     grid-template-columns: 1fr;
   }
   .vote-bar {

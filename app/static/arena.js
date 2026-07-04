@@ -1,6 +1,7 @@
 // Arena client: fetch a comparison, render both models, record a vote, advance.
 // Category + criterion selectors scope what gets shown and which axis is judged.
-let current = null;
+let current = null; // active pairwise comparison (2-up); null while a K-wise ballot is shown
+let currentKwise = null; // active K-wise ballot ({ballot_id, outputs}); null in pairwise/done modes
 let busy = false;
 
 const el = (id) => document.getElementById(id);
@@ -50,9 +51,13 @@ const qs = () => {
   const p = new URLSearchParams();
   if (cat && cat !== "all") p.set("category", cat);
   if (crit) p.set("criterion", crit);
-  // Thread ?set=calibration (or any other set) from the page URL into every fetch.
-  const urlSet = new URLSearchParams(location.search).get("set");
-  if (urlSet) p.set("set", urlSet);
+  // Thread ?set=... from the page URL when present (e.g. ?set=calibration scopes a session);
+  // otherwise default every fetch to K-wise so 4-up ballots are served where available.
+  // _build_kwise_comparison falls back to a transparent pairwise payload when no task has an
+  // admitted same-paradigm quad, and render() already branches on the resulting shape, so
+  // this default is always safe.
+  const urlSet = new URLSearchParams(location.search).get("set") || "kwise";
+  p.set("set", urlSet);
   const s = p.toString();
   return s ? "?" + s : "";
 };
@@ -104,6 +109,8 @@ function render(data) {
   // Terminal payload from a scoped mode (e.g. calibration): no card to render.
   if (data && data.done) {
     current = null;
+    currentKwise = null;
+    setKwiseVisible(false);
     const p = data.progress || {};
     const label = data.set
       ? data.set.charAt(0).toUpperCase() + data.set.slice(1)
@@ -111,6 +118,19 @@ function render(data) {
     setStatus(`${label} complete — ${p.voted ?? 0}/${p.total ?? 0} voted.`);
     return;
   }
+  // /api/next?set=kwise returns {kind:"kwise", ...} for a 4-up ballot, or a plain pairwise
+  // payload (no `kind` field at all) when _build_kwise_comparison fell back — that fallback
+  // shape is handled by the existing 2-up path below with no special-casing needed.
+  if (data && data.kind === "kwise") {
+    renderKwise(data);
+  } else {
+    renderPair(data);
+  }
+}
+
+function renderPair(data) {
+  currentKwise = null;
+  setKwiseVisible(false);
   current = data;
   el("task-cat").textContent = data.task.category;
   el("task-title").textContent = data.task.title;
@@ -130,6 +150,107 @@ function render(data) {
   window.Bio3DViewer.syncPair(el("slot-a"), el("slot-b"));
   setAB("a"); // each new pair starts on Model A
   setStatus("");
+}
+
+// Show the 4-up grid + all-bad button, hide the 2-up pair/vote-bar/ab-toggle (or vice versa).
+// .pair/.vote-bar/.ab-toggle each carry their own unconditional `display` rule in style.css
+// (.ab-toggle even has a mobile media-query override), so a plain `hidden` attribute would
+// lose the cascade to those author rules — inline style always wins, so use it here instead.
+function setKwiseVisible(active) {
+  const pair = document.querySelector(".pair");
+  const voteBar = document.querySelector(".vote-bar");
+  const abToggle = document.querySelector(".ab-toggle");
+  if (pair) pair.style.display = active ? "none" : "";
+  if (voteBar) voteBar.style.display = active ? "none" : "";
+  if (abToggle) abToggle.style.display = active ? "none" : "";
+  el("kwise-grid").hidden = !active;
+  el("kwise-allbad").hidden = !active;
+}
+
+function renderKwise(data) {
+  current = null; // pairwise vote()/keyboard shortcuts must no-op while a K-wise ballot is shown
+  currentKwise = data;
+  setKwiseVisible(true);
+  el("task-cat").textContent = "K-wise"; // kwise task payload has no `category` field
+  el("task-title").textContent = data.task.title;
+  el("task-prompt").textContent = data.task.prompt;
+  el("criterion-name").textContent = data.criterion.name;
+  const grid = el("kwise-grid");
+  grid.innerHTML = "";
+  data.outputs.forEach((o, i) => {
+    const cell = document.createElement("div");
+    cell.className = "model-col kwise-cell";
+    const label = document.createElement("div");
+    label.className = "model-label";
+    label.textContent = "Option " + (i + 1) + " ";
+    const fmtChip = document.createElement("span");
+    fmtChip.className = "fmt-chip";
+    label.appendChild(fmtChip);
+    const slot = document.createElement("div");
+    slot.className = "viewer-slot";
+    const pickBtn = document.createElement("button");
+    pickBtn.type = "button";
+    pickBtn.className = "vote-btn win kwise-pick-btn";
+    pickBtn.textContent = "Pick this one";
+    pickBtn.addEventListener("click", () =>
+      submitKvote(data.ballot_id, o.output_id),
+    );
+    cell.appendChild(label);
+    cell.appendChild(slot);
+    cell.appendChild(pickBtn);
+    grid.appendChild(cell);
+    // Shared viewer registry (viewer.js) picks model-viewer vs 3Dmol by format — same
+    // {url, format, output_id} shape _serialize uses for a/b, so the flag callback reuses
+    // flagOutput unchanged.
+    fmtChip.textContent = window.Bio3DViewer.mount(slot, o, (btn) =>
+      flagOutput(o.output_id, btn),
+    ).toUpperCase();
+  });
+  el("kwise-allbad").onclick = () => submitKvote(data.ballot_id, null);
+  setStatus("");
+}
+
+async function submitKvote(ballotId, bestOutputId) {
+  if (busy) return;
+  busy = true;
+  setStatus("Recording pick…");
+  try {
+    // qs() threads the current category/criterion filter (as /api/kvote reads them to scope
+    // the follow-up ballot) — dropping it here would silently reset the user's filter every pick.
+    const res = await fetch("/api/kvote" + qs(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ballot_id: ballotId,
+        best_output_id: bestOutputId,
+      }),
+    });
+    if (!res.ok) {
+      // Honor res.ok before treating this as success (arena.js vote() lesson: a past bug here
+      // showed failed votes as recorded because res.ok was never checked).
+      let detail = "pick not recorded";
+      try {
+        detail = (await res.json()).detail || detail;
+      } catch (_) {
+        /* non-JSON error body */
+      }
+      setStatus("Could not record pick: " + detail);
+      return;
+    }
+    const data = await res.json();
+    if (data.next) {
+      render(data.next);
+      flash("Pick recorded ✓");
+    } else {
+      setStatus("Pick recorded. No more comparisons for this filter.");
+      currentKwise = null;
+      setKwiseVisible(false);
+    }
+  } catch (e) {
+    setStatus("Error recording pick: " + e);
+  } finally {
+    busy = false;
+  }
 }
 
 async function vote(winner) {
@@ -215,7 +336,12 @@ function flash(msg) {
   setTimeout(() => s.classList.remove("flash"), 700);
 }
 
-document.querySelectorAll(".vote-btn").forEach((btn) => {
+// Scoped to .vote-bar (not the bare ".vote-btn" class) so the kwise-pick/all-bad buttons —
+// which reuse ".vote-btn" only for visual styling and get their own explicit listeners in
+// renderKwise() — don't also pick up this vote() binding (btn.dataset.winner would be
+// undefined for them, and vote() would be a silent no-op while current===null, but binding
+// it at all is an unnecessary implicit coupling).
+document.querySelectorAll(".vote-bar .vote-btn").forEach((btn) => {
   btn.addEventListener("click", () => vote(btn.dataset.winner));
 });
 
