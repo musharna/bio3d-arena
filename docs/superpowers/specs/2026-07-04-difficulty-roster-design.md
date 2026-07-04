@@ -45,7 +45,7 @@ The approved design said "add a nullable `species_slug` to `Task`." That contrad
 
 - **Read-only on the real study DB.** All scoring/materialize runs on a COPY. NEVER `BIO3D_DATABASE_URL=study`. Test runner `.venv/bin/pytest`.
 - **Never touch the human Bradley-Terry / Elo path.** The scorecard aggregates only pre-computed objective metrics, never recomputes BT, exactly as `tier_scorecard` does today.
-- **Fail-loud, no silent fallback.** A taxon with a missing or partial rubric score (fewer than all 5 axes, or any axis outside 0–2) raises — it is never defaulted to a tier or silently dropped. A task whose title does not parse to a non-empty species slug raises.
+- **Fail-loud, no silent fallback.** A taxon with a missing or partial rubric score (fewer than all 5 axes, or any axis outside 0–2) raises — it is never defaulted to a tier or silently dropped. A task whose title does not parse to a non-empty species slug raises. Coverage gaps (a task whose resolved species has no `TaxonDifficulty` row) are surfaced fail-loud at the **operational boundary**: `materialize_task_difficulty` _reports_ them in a `skipped` list (so it is testable/composable over a shared global `Task` table), and the seeding **script refuses to proceed (raises)** if `skipped` is non-empty. A gap is never silently left untiered.
 - **Honor the create_all-only + side-table schema convention.** No `ALTER TABLE task`. New data → new side table, picked up by `create_all`.
 - **Tier vocabulary stays exactly `{easy, moderate, hard}`** — do not widen.
 - **`tier_scorecard`'s existing (tier × generator) output stays behavior-identical** — the paradigm grid is an addition, not a replacement.
@@ -70,7 +70,7 @@ New table, keyed by `species_slug` (unique). Columns: `species_slug`, `tier`, `a
 
 - `species_slug_for_task(task) -> str` — normalize the title's binomial prefix: `title.split("—")[0].strip().lower().replace(" ", "_")` (e.g. `"Rosa — single-image → 3D reconstruction"` → `"rosa"`, `"Zea mays — botanical plausibility"` → `"zea_mays"`). Genus-only titles (`"Rosa"`) yield a one-word slug. Raise if the result is empty.
 - **Consistency invariant (test):** for every task that _has_ a `ReconTask`, `species_slug_for_task(task) == ReconTask.species_slug`. Guards the parser against title drift.
-- `materialize_task_difficulty(db)` — for every `Task`, resolve species → look up `TaxonDifficulty` → upsert a `TaskDifficulty(task_id, tier, rationale=<taxon rationale summary>)`. Idempotent. Fail-loud if a task's resolved species has no `TaxonDifficulty` row (surfaces coverage gaps rather than silently leaving tasks untiered).
+- `materialize_task_difficulty(db, commit=True) -> {"materialized": int, "skipped": list, "taxa": int}` — for every `Task`, resolve species → look up `TaxonDifficulty` → upsert a `TaskDifficulty(task_id, tier, rationale=<taxon rationale summary>)`. Idempotent. A task whose resolved species has no `TaxonDifficulty` row is **collected into `skipped`, not raised** — so the function is testable/composable over a shared global `Task` table (mirrors the existing `assign_all` `{assigned, skipped}` contract). The fail-loud policy lives in the script (unit 5): it raises if `skipped` is non-empty. `commit=False` lets tests run under transaction rollback.
 - `set_task_difficulty` is retained unchanged (still used for any manual override / existing callers).
 
 ### 4. Paradigm × tier scorecard (`app/difficulty.py`)
@@ -79,7 +79,7 @@ New table, keyed by `species_slug` (unique). Columns: `species_slug`, `tier`, `a
 
 ### 5. Seeding driver + view (`scripts/assign_difficulty.py` rewrite, `app/main.py` route)
 
-- `scripts/assign_difficulty.py` — seed `TaxonDifficulty` from `RUBRIC` (upsert per taxon, via `tier_for_scores`), then call `materialize_task_difficulty`. Prints a disposition summary (taxa seeded, tasks materialized, any skipped). Uses the existing `config.is_safe_test_db_target` default-deny guard before writing (never the real study DB).
+- `scripts/assign_difficulty.py` — seed `TaxonDifficulty` from `RUBRIC` (upsert per taxon, via `tier_for_scores`), then call `materialize_task_difficulty`. **Raises if the returned `skipped` is non-empty** (fail-loud on any uncovered task — the operational boundary). Prints a disposition summary (taxa seeded, tasks materialized). Uses the existing `config.is_safe_test_db_target` default-deny guard before writing (never the real study DB).
 - `/difficulty` view — extend the existing page/route to render the paradigm × tier grid (heatmap of the objective metrics per paradigm per tier) alongside the existing generator scorecard. The exact template/route wiring is nailed in the plan.
 
 ## Data flow
@@ -88,7 +88,7 @@ New table, keyed by `species_slug` (unique). Columns: `species_slug`, `tier`, `a
 
 ## Error handling
 
-Every gate fail-loud: partial/invalid axis scores raise in `tier_for_scores`; unknown/partial taxon raises in `taxon_tier`; unparseable title raises in `species_slug_for_task`; a task resolving to a species with no `TaxonDifficulty` raises in `materialize_task_difficulty`. No silent tier defaults, no silent drops.
+Every gate fail-loud: partial/invalid axis scores raise in `tier_for_scores`; unknown/partial taxon raises in `taxon_tier`; unparseable title raises in `species_slug_for_task`. A task resolving to a species with no `TaxonDifficulty` is reported in `materialize_task_difficulty`'s `skipped` list and raised by the **script** (`assign_difficulty.main`) — fail-loud at the operational boundary, never a silent untiered drop. No silent tier defaults.
 
 ## Testing
 
@@ -96,7 +96,7 @@ Every gate fail-loud: partial/invalid axis scores raise in `tier_for_scores`; un
 2. `RUBRIC` completeness — every in-scope taxon has all 5 axes ∈ {0,1,2} and a rationale per axis; `taxon_tier` returns a valid tier for each; unknown slug raises.
 3. `species_slug_for_task` — the 11 live task titles parse to expected slugs (incl. genus-only `"Rosa"` → `"rosa"` and the multi-task taxa); empty/malformed title raises.
 4. Consistency invariant — `species_slug_for_task(task) == ReconTask.species_slug` for all 5 recon tasks.
-5. `materialize_task_difficulty` — every task gets a `TaskDifficulty` row whose tier matches its taxon's `TaxonDifficulty`; both tasks of a two-task taxon (e.g. arabidopsis recon + botanical-plausibility) get the **same** tier; idempotent (second run no-ops); a task whose species lacks a `TaxonDifficulty` raises.
+5. `materialize_task_difficulty` — each covered task gets a `TaskDifficulty` row whose tier matches its taxon's `TaxonDifficulty`; both tasks of a two-task taxon (e.g. arabidopsis recon + botanical-plausibility) get the **same** tier; idempotent (second run re-upserts, no duplicate rows); a task whose species lacks a `TaxonDifficulty` lands in `skipped` (not raised). The **script** raises when `skipped` is non-empty. Tests run with `commit=False` under transaction rollback; assertions are scoped to the test's own task ids (never global counts).
 6. `paradigm_tier_scorecard` — groups by paradigm × tier; means skip `None`; `untiered`/`unspecified` buckets present; `tier_scorecard` output is unchanged (regression).
 
 ## Out of scope (deferred follow-on)
