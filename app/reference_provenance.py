@@ -25,7 +25,6 @@ _REQUIRED = {
     "title",
     "note",
 }
-_RECON_PREFIXES = ("api:", "recon:", "frontier:")
 
 
 class ReferenceProvenanceError(RuntimeError):
@@ -70,10 +69,12 @@ def _taxon_of(input_image: str | None) -> str | None:
 
 def assert_recon_photos_cleared(db: Session, output_ids: set[int]) -> None:
     """Raise if any recon output in the set uses a reference photo whose taxon lacks a cleared sidecar."""
+    from .public_export import _COMMERCIAL_MODEL_PREFIXES
+
     cleared = cleared_reference_taxa()
     for oid in sorted(output_ids):
         o = db.get(ModelOutput, oid)
-        if o is None or not (o.source or "").startswith(_RECON_PREFIXES):
+        if o is None or not (o.source or "").startswith(_COMMERCIAL_MODEL_PREFIXES):
             continue
         img = (json.loads(o.meta_json or "{}")).get("input_image")
         taxon = _taxon_of(img)

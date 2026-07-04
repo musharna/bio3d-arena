@@ -134,6 +134,7 @@ def export_bundle(
     )
     gated = admissibility.non_admitted_output_ids(db)  # structural ∪ completeness ∪ semantic(gate)
     public_export.filter_include_for_posture(db, inc, posture, gated)
+    public_export.filter_gold_for_posture(db, inc, posture, gated)
     if posture == "redistribute":
         public_export.check_licenses(db, inc.output_ids)  # fail-loud: nothing non-CC ships
     else:  # display

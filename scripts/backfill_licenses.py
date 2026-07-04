@@ -21,10 +21,11 @@ from app.models import ModelOutput  # noqa: E402
 from sqlalchemy import select  # noqa: E402
 
 CC0 = "CC0-1.0"
-HARD_EXCLUDE_SOURCES = {"found:xfrog", "procedural:demeter", "procedural:agrigen"}
 
 
 def _is_own_cc0(source: str | None) -> bool:
+    from app.public_export import HARD_EXCLUDE_SOURCES
+
     s = source or ""
     if s in HARD_EXCLUDE_SOURCES:
         return False
@@ -37,6 +38,8 @@ def _is_own_cc0(source: str | None) -> bool:
 
 
 def backfill_licenses(db, *, objaverse_license_for: Callable[[str], str | None]) -> dict:
+    from app.public_export import HARD_EXCLUDE_SOURCES
+
     disp: Counter = Counter()
     outs = db.execute(select(ModelOutput).where(ModelOutput.is_gold.is_(False))).scalars().all()
     for o in outs:

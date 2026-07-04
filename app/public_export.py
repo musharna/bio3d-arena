@@ -34,6 +34,26 @@ def is_commercial_model(source: str | None) -> bool:
     return (source or "").startswith(_COMMERCIAL_MODEL_PREFIXES)
 
 
+def effective_provenance(db: Session, o: ModelOutput) -> tuple[str | None, str | None]:
+    """True (source, license) for gating: for a gold output, that of the non-gold
+    ModelOutput sharing its asset_path (the real asset it silently aliases) if one
+    exists, else its own; for a non-gold output, always its own."""
+    if o.is_gold:
+        alias = (
+            db.execute(
+                select(ModelOutput).where(
+                    ModelOutput.asset_path == o.asset_path,
+                    ModelOutput.is_gold.is_(False),
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if alias is not None:
+            return alias.source, alias.license
+    return o.source, o.license
+
+
 class LicenseError(RuntimeError):
     def __init__(self, output_id: int, license_: str | None):
         self.output_id = output_id
@@ -111,6 +131,38 @@ def filter_include_for_posture(
         else:
             raise ValueError(f"unknown posture {posture!r}")
     inc.output_ids = keep
+
+
+def filter_gold_for_posture(db: Session, inc: "IncludeSet", posture: str, gated: set[int]) -> None:
+    """Narrow inc.gold_output_ids in place per posture, using the SAME predicate as
+    filter_include_for_posture but evaluated against the underlying asset's true
+    (effective_provenance) source/license -- a gold output's own source/license is a
+    calibration-generator decoy value and must never gate itself."""
+    from .licensing import normalize_license
+
+    keep: set[int] = set()
+    for oid in inc.gold_output_ids:
+        if oid in gated:
+            continue
+        o = db.get(ModelOutput, oid)
+        if o is None:
+            continue
+        eff_source, eff_license = effective_provenance(db, o)
+        if eff_source in HARD_EXCLUDE_SOURCES:
+            continue
+        redistributable = (
+            eff_source == "bio3d-arena"
+            or normalize_license(eff_license) in REDISTRIBUTABLE_LICENSES
+        )
+        if posture == "redistribute":
+            if redistributable and not is_commercial_model(eff_source):
+                keep.add(oid)
+        elif posture == "display":
+            if redistributable or is_commercial_model(eff_source):
+                keep.add(oid)
+        else:
+            raise ValueError(f"unknown posture {posture!r}")
+    inc.gold_output_ids = keep
 
 
 def check_licenses(db: Session, output_ids: set[int]) -> None:
