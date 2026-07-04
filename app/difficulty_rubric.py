@@ -159,6 +159,55 @@ RUBRIC: dict[str, dict] = {
             "thin_structure": "roots are thin filamentous structures throughout",
         },
     },
+    # --- Kingdom Fungi + easy-plant expansion (fills the corpus hard-skew) ---
+    "cucurbita_pepo": {  # sum 0 → easy  (tier-0 floor)
+        "scores": {
+            "fine_detail": 0,
+            "self_occlusion": 0,
+            "non_rigidity": 0,
+            "topology": 0,
+            "thin_structure": 0,
+        },
+        "rationale": {
+            "fine_detail": "smooth ribbed convex fruit, no fine repeated detail",
+            "self_occlusion": "single convex gourd, nothing occludes itself",
+            "non_rigidity": "rigid firm fruit",
+            "topology": "one solid connected body, no holes",
+            "thin_structure": "thick-walled fruit, no filaments",
+        },
+    },
+    "lycoperdon_perlatum": {  # sum 1 → easy
+        "scores": {
+            "fine_detail": 1,
+            "self_occlusion": 0,
+            "non_rigidity": 0,
+            "topology": 0,
+            "thin_structure": 0,
+        },
+        "rationale": {
+            "fine_detail": "granular conical warts on the surface",
+            "self_occlusion": "convex globe, no self-occlusion",
+            "non_rigidity": "firm solid fruiting body",
+            "topology": "single connected blob",
+            "thin_structure": "no filaments or thin parts",
+        },
+    },
+    "hericium_erinaceus": {  # sum 8 → hard
+        "scores": {
+            "fine_detail": 2,
+            "self_occlusion": 2,
+            "non_rigidity": 1,
+            "topology": 1,
+            "thin_structure": 2,
+        },
+        "rationale": {
+            "fine_detail": "hundreds of pendant spines",
+            "self_occlusion": "spines hang behind spines, heavy occlusion",
+            "non_rigidity": "soft drooping spines",
+            "topology": "one mass with many appendages",
+            "thin_structure": "cascading spines are the definitional thin structure",
+        },
+    },
 }
 
 

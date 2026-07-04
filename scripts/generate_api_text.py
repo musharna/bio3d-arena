@@ -56,6 +56,22 @@ TAXA: list[tuple[str, str]] = [
         "A soybean plant, Glycine max: an erect branching green stem with trifoliate leaves and "
         "small hairy seed pods.",
     ),
+    # Kingdom Fungi + easy-plant expansion
+    (
+        "Lycoperdon perlatum — single-image → 3D reconstruction",
+        "A common puffball, Lycoperdon perlatum: a small round white pear-shaped fungal fruiting "
+        "body covered in fine conical warts, on a short tapered base.",
+    ),
+    (
+        "Cucurbita pepo — single-image → 3D reconstruction",
+        "A pumpkin fruit, Cucurbita pepo: a single large round ribbed orange gourd with a short "
+        "woody stem and a smooth convex surface.",
+    ),
+    (
+        "Hericium erinaceus — single-image → 3D reconstruction",
+        "A lion's mane mushroom, Hericium erinaceus: a rounded white fungal mass on wood covered "
+        "in dense cascading icicle-like spines.",
+    ),
 ]
 
 

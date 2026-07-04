@@ -36,6 +36,19 @@ CROPS = {
         "image": "data/assets/reference/arabidopsis_ref.jpg",
     },
     "pinus": {"task_title": PINE_TITLE, "image": "data/assets/reference/pinus_ref.jpg"},
+    # Kingdom Fungi + easy-plant expansion (CC-clean reference photos)
+    "puffball": {
+        "task_title": "Lycoperdon perlatum — single-image → 3D reconstruction",
+        "image": "data/assets/reference/puffball_ref.jpg",
+    },
+    "gourd": {
+        "task_title": "Cucurbita pepo — single-image → 3D reconstruction",
+        "image": "data/assets/reference/gourd_ref.jpg",
+    },
+    "hericium": {
+        "task_title": "Hericium erinaceus — single-image → 3D reconstruction",
+        "image": "data/assets/reference/hericium_ref.jpg",
+    },
 }
 
 
