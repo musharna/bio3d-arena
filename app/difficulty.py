@@ -39,6 +39,52 @@ def set_task_difficulty(
     return row
 
 
+def species_slug_for_task(task) -> str:
+    """Resolve a task's taxon slug from its title's binomial prefix:
+    'Rosa — single-image → 3D reconstruction' → 'rosa',
+    'Zea mays — botanical plausibility' → 'zea_mays'. Matches ReconTask.species_slug.
+    Fail-loud if the title yields no slug."""
+    head = task.title.split("—")[0].strip()
+    slug = head.lower().replace(" ", "_")
+    if not slug:
+        raise ValueError(f"task {task.id} title yields no species slug: {task.title!r}")
+    return slug
+
+
+def materialize_task_difficulty(db, commit: bool = True) -> dict:
+    """Project TaxonDifficulty onto per-task TaskDifficulty rows via species_slug_for_task.
+    Idempotent (set_task_difficulty upserts by task_id). A task whose resolved species has no
+    TaxonDifficulty row is collected into `skipped` (NOT raised) — the seeding script enforces
+    fail-loud on a non-empty skipped. commit=False lets tests run under transaction rollback."""
+    from .models import Task, TaxonDifficulty
+
+    taxon = {t.species_slug: t for t in db.execute(select(TaxonDifficulty)).scalars()}
+    materialized = 0
+    skipped: list[tuple[int, str]] = []
+    for task in db.execute(select(Task)).scalars():
+        slug = species_slug_for_task(task)
+        td = taxon.get(slug)
+        if td is None:
+            skipped.append((task.id, slug))
+            continue
+        set_task_difficulty(
+            db,
+            task.id,
+            td.tier,
+            rationale=f"taxon {slug}: {td.tier} (see TaxonDifficulty)",
+            commit=False,
+        )
+        materialized += 1
+    # Explicit flush (SessionLocal is autoflush=False, see app/structural.py:upsert_verdict for
+    # the same pattern): makes the rows added above visible to callers querying TaskDifficulty
+    # in this same uncommitted session/transaction (tests; a re-run for idempotency), without
+    # ending the transaction the way an actual commit would.
+    db.flush()
+    if commit:
+        db.commit()
+    return {"materialized": materialized, "skipped": skipped, "taxa": len(taxon)}
+
+
 def _mean(xs: list[float]) -> float | None:
     return sum(xs) / len(xs) if xs else None
 
