@@ -6,12 +6,15 @@ Pure DB reads; no filesystem, no serialization (that's scripts/export_public.py)
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import Generator, GoldPair, ModelOutput, Task
+
+logger = logging.getLogger(__name__)
 
 REDISTRIBUTABLE_LICENSES = frozenset(
     {
@@ -130,6 +133,9 @@ def filter_include_for_posture(
                 keep.add(oid)
         else:
             raise ValueError(f"unknown posture {posture!r}")
+    dropped = inc.output_ids - keep
+    if dropped:
+        logger.info("posture %s dropped %d output ids: %s", posture, len(dropped), sorted(dropped))
     inc.output_ids = keep
 
 
@@ -162,6 +168,11 @@ def filter_gold_for_posture(db: Session, inc: "IncludeSet", posture: str, gated:
                 keep.add(oid)
         else:
             raise ValueError(f"unknown posture {posture!r}")
+    dropped = inc.gold_output_ids - keep
+    if dropped:
+        logger.info(
+            "posture %s dropped %d gold output ids: %s", posture, len(dropped), sorted(dropped)
+        )
     inc.gold_output_ids = keep
 
 

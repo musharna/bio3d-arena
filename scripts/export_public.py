@@ -127,7 +127,10 @@ def export_bundle(
     dry_run: bool = False,
 ) -> dict:
     from app import admissibility
-    from app.reference_provenance import assert_recon_photos_cleared
+    from app.reference_provenance import (
+        assert_recon_photos_cleared,
+        assert_recon_photos_cleared_for_gold,
+    )
 
     inc = public_export.resolve_include_ids(
         db, task_titles=task_titles, generator_slugs=generator_slugs
@@ -139,6 +142,10 @@ def export_bundle(
         public_export.check_licenses(db, inc.output_ids)  # fail-loud: nothing non-CC ships
     else:  # display
         assert_recon_photos_cleared(db, inc.output_ids)  # fail-loud: no uncleared reference photo
+        # Gold rows alias a real (possibly recon) asset under decoy source/meta_json -- the
+        # gate above reads each output's OWN source/meta_json and so silently skips every gold
+        # id, whose true reference photo (per the twin it aliases) was never clearance-checked.
+        assert_recon_photos_cleared_for_gold(db, inc.gold_output_ids)
     all_out = inc.output_ids | inc.gold_output_ids
     tables = _filtered_rows(db, inc)
 
@@ -171,6 +178,9 @@ def export_bundle(
         (out / "assets" / rel).write_bytes(storage.read(rel))
 
     # Baked GT reference GLBs only (never raw .npy). Copy whatever exists under gt/.
+    # INVARIANT: gt/ reference GLBs are bio3d's own held-out meshes / CC-licensed scans -- not
+    # license-gated here; must hold before any redistribute publish (no license/posture check
+    # runs on this loop).
     for d in tables["recon_task"]:
         slug = d.get("species_slug")
         rel = f"{config.GT_ASSET_SUBDIR}/{slug}.glb"

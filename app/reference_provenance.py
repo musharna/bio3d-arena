@@ -87,3 +87,46 @@ def assert_recon_photos_cleared(db: Session, output_ids: set[int]) -> None:
             raise ReferenceProvenanceError(
                 f"output {oid}: recon input '{img}' (taxon {taxon!r}) has no cleared CC provenance sidecar"
             )
+
+
+def assert_recon_photos_cleared_for_gold(db: Session, gold_output_ids: set[int]) -> None:
+    """Raise if any gold output's underlying non-gold twin (the ModelOutput sharing its
+    asset_path, per effective_provenance's resolution) is a commercial-model recon whose
+    reference photo lacks a cleared CC sidecar. A gold output's own `source`/`meta_json` are
+    calibration-generator decoy values (see public_export.effective_provenance) -- the twin's
+    asset is what actually ships under the gold row, so the twin's reference photo -- not the
+    gold row's own (absent) one -- must be checked."""
+    from sqlalchemy import select
+
+    from .public_export import _COMMERCIAL_MODEL_PREFIXES
+
+    cleared = cleared_reference_taxa()
+    for oid in sorted(gold_output_ids):
+        o = db.get(ModelOutput, oid)
+        if o is None:
+            continue
+        twin = (
+            db.execute(
+                select(ModelOutput).where(
+                    ModelOutput.asset_path == o.asset_path,
+                    ModelOutput.is_gold.is_(False),
+                )
+            )
+            .scalars()
+            .first()
+        )
+        asset = twin if twin is not None else o
+        if not (asset.source or "").startswith(_COMMERCIAL_MODEL_PREFIXES):
+            continue
+        img = (json.loads(asset.meta_json or "{}")).get("input_image")
+        taxon = _taxon_of(img)
+        if taxon is None:
+            raise ReferenceProvenanceError(
+                f"gold output {oid} (twin asset {asset.id}): recon input '{img}' has no"
+                " identifiable reference-photo taxon — cannot verify provenance"
+            )
+        if taxon not in cleared:
+            raise ReferenceProvenanceError(
+                f"gold output {oid} (twin asset {asset.id}): recon input '{img}'"
+                f" (taxon {taxon!r}) has no cleared CC provenance sidecar"
+            )
