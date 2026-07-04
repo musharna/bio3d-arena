@@ -77,11 +77,13 @@ def resolve_include_ids(
 
 
 def check_licenses(db: Session, output_ids: set[int]) -> None:
+    from .licensing import normalize_license
+
     for oid in sorted(output_ids):
         o = db.get(ModelOutput, oid)
         if o is None:
             continue
         if o.source == "bio3d-arena":  # our own asset — exempt
             continue
-        if o.license not in REDISTRIBUTABLE_LICENSES:
+        if normalize_license(o.license) not in REDISTRIBUTABLE_LICENSES:
             raise LicenseError(oid, o.license)
