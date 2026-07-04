@@ -1142,6 +1142,7 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
 
     perceptual = service.tier_perceptual_ranking(db)
     trait_tiers = service.tier_trait_accuracy(db)
+    paradigm_grid = difficulty.paradigm_tier_scorecard(db)
 
     return templates.TemplateResponse(
         request,
@@ -1153,6 +1154,7 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
             "gradient": gradient,
             "perceptual": perceptual,
             "trait_tiers": trait_tiers,
+            "paradigm_grid": paradigm_grid,
             "paradigm_display_names": paradigms.DISPLAY_NAMES,
         },
     )
@@ -1160,8 +1162,11 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/api/difficulty.json")
 def api_difficulty(db: Session = Depends(get_db)):
-    """Per-(difficulty-tier × generator) objective scorecard over existing metrics."""
-    return {"scorecard": difficulty.tier_scorecard(db)}
+    """Per-tier objective scorecard (× generator and × paradigm) over existing metrics."""
+    return {
+        "scorecard": difficulty.tier_scorecard(db),
+        "paradigm_grid": difficulty.paradigm_tier_scorecard(db),
+    }
 
 
 # ----------------------------------------------------------- Mode-C trait scoring
