@@ -128,16 +128,32 @@ def _bootstrap_scores(
     bootstrap: int,
     reg: float = 0.1,
     seed: int = 12345,
+    groups: list[int] | None = None,
 ) -> dict[int, list[float]]:
     """Resample the match list `bootstrap` times; return per-player Elo-score samples.
 
-    Index b across players corresponds to the SAME resample, so the samples are
-    paired — enabling paired pairwise significance, not just marginal CIs.
-    """
+    If `groups` is given (same length as matches), resample whole BALLOT GROUPS with
+    replacement instead of individual pairs — the K-1 pairs derived from one K-ballot are
+    NOT independent, so per-pair resampling fake-tightens the CIs. Native pairwise votes each
+    form their own singleton group. Index b across players is the SAME resample (paired)."""
     samples: dict[int, list[float]] = defaultdict(list)
     if bootstrap <= 0 or not matches:
         return samples
     rng = random.Random(seed)
+    if groups is not None:
+        by_group: dict[int, list[tuple[int, int]]] = defaultdict(list)
+        for m, g in zip(matches, groups):
+            by_group[g].append(m)
+        keys = list(by_group.keys())
+        gk = len(keys)
+        for _ in range(bootstrap):
+            resampled: list[tuple[int, int]] = []
+            for _ in range(gk):
+                resampled.extend(by_group[keys[rng.randrange(gk)]])
+            elo = _strength_to_elo(_fit_strengths(players, resampled, reg=reg))
+            for pid, val in elo.items():
+                samples[pid].append(val)
+        return samples
     n = len(matches)
     for _ in range(bootstrap):
         resampled = [matches[rng.randrange(n)] for _ in range(n)]
@@ -153,6 +169,7 @@ def bradley_terry(
     bootstrap: int = 200,
     reg: float = 0.1,
     seed: int = 12345,
+    groups: list[int] | None = None,
 ) -> BTResult:
     """Fit Bradley-Terry and bootstrap a 95% CI on the Elo-scaled scores.
 
@@ -169,7 +186,7 @@ def bradley_terry(
 
     lower: dict[int, float] = dict(point)
     upper: dict[int, float] = dict(point)
-    samples = _bootstrap_scores(players, matches, bootstrap, reg=reg, seed=seed)
+    samples = _bootstrap_scores(players, matches, bootstrap, reg=reg, seed=seed, groups=groups)
     for pid in players:
         vals = sorted(samples.get(pid, []))
         if vals:

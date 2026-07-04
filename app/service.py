@@ -144,8 +144,10 @@ def _matches_for_scope(
     category_id: int | None,
     include_ties: bool = True,
     verified_only: bool = False,
-) -> list[tuple[int, int]]:
-    """Decisive (winner_gen, loser_gen) pairs for a (criterion, category) scope.
+) -> tuple[list[tuple[int, int]], list[int]]:
+    """Decisive (winner_gen, loser_gen) pairs for a (criterion, category) scope, plus a
+    parallel ballot-group key list (same length as matches) for ballot-level bootstrap
+    resampling — see app/ranking.py::_bootstrap_scores.
 
     A 'tie' is credited as a split — one win in each direction — so ties inform
     Bradley-Terry without a separate tie parameter. 'bad' votes are excluded.
@@ -172,6 +174,7 @@ def _matches_for_scope(
 
     ref_gens = mode_a_excluded_generator_ids(db)
     matches: list[tuple[int, int]] = []
+    groups: list[int] = []
     for vote, comparison in db.execute(stmt).all():
         if vote.winner == "bad":
             continue
@@ -185,14 +188,22 @@ def _matches_for_scope(
             continue  # GT/reference scans are not perceptual competitors (Mode-A exclusion)
         if not same_paradigm(db.get(Generator, gen_a).paradigm, db.get(Generator, gen_b).paradigm):
             continue  # never rank across paradigms
+        # Ballot-group key: comparisons derived from one K-wise ballot share ballot_id, so
+        # their bootstrap resamples move together (not independently). Native pairwise votes
+        # (ballot_id is None) each get a unique negative key — a singleton group.
+        gkey = comparison.ballot_id if comparison.ballot_id is not None else -comparison.id
         if vote.winner == "a":
             matches.append((gen_a, gen_b))
+            groups.append(gkey)
         elif vote.winner == "b":
             matches.append((gen_b, gen_a))
+            groups.append(gkey)
         elif vote.winner == "tie" and include_ties:
             matches.append((gen_a, gen_b))
+            groups.append(gkey)
             matches.append((gen_b, gen_a))
-    return matches
+            groups.append(gkey)
+    return matches, groups
 
 
 def _players_for_scope(db: Session, category_id: int | None) -> list[int]:
@@ -240,8 +251,8 @@ def verified_leaderboard_rows(
         cat = db.execute(select(Category).where(Category.slug == category)).scalars().first()
         category_id = cat.id if cat else None
     players = _players_for_scope(db, category_id)
-    matches = _matches_for_scope(db, crit.id, category_id, verified_only=True)
-    result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP)
+    matches, groups = _matches_for_scope(db, crit.id, category_id, verified_only=True)
+    result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP, groups=groups)
     names = generator_display_names(db)
     rows = []
     for gid in players:
@@ -268,9 +279,9 @@ def recompute_scope(
     db: Session, criterion: Criterion, category_id: int | None, commit: bool = True
 ) -> dict:
     """Refit Bradley-Terry for one (criterion, category) scope and cache Rating rows."""
-    matches = _matches_for_scope(db, criterion.id, category_id)
+    matches, groups = _matches_for_scope(db, criterion.id, category_id)
     players = sorted(set(_players_for_scope(db, category_id)) | {p for m in matches for p in m})
-    result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP)
+    result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP, groups=groups)
     for gid in players:
         rating = get_or_create_rating(db, gid, criterion.id, category_id)
         rating.bt_score = result.scores.get(gid, ranking.BT_BASE)
@@ -507,7 +518,7 @@ def compute_significance(
     )
     if criterion is None:
         return {"status": "no-such-criterion"}
-    matches = _matches_for_scope(db, criterion.id, category_id)
+    matches, _groups = _matches_for_scope(db, criterion.id, category_id)
     players = sorted(set(_players_for_scope(db, category_id)) | {p for m in matches for p in m})
     result = ranking.significance_matrix(players, matches, bootstrap=config.BT_BOOTSTRAP)
     names = generator_display_names(db)
