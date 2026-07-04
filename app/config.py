@@ -54,7 +54,9 @@ FLAG_HIDE_THRESHOLD = int(os.environ.get("BIO3D_FLAG_HIDE_THRESHOLD", "3"))
 # --- Semantic-admissibility predicate (VLM cardinality+identity) ---
 # off: dormant (not in the rubric, no advisory flags). advisory: surfaces confident rejects to
 # the ⚑ review queue as non-hiding flags but does NOT auto-exclude. gate: auto-excludes rejects
-# from the vote pool. Promote advisory -> gate only after a zero-FP-on-good acceptance run.
+# from the vote pool. Default is `gate`: the semantic-v2 acceptance run cleared the zero-FP-on-good
+# bar (0/232 real FPs on `complete` outputs, recall 13/32); see
+# docs/results/2026-07-03-semantic-admissibility-results.md. Takes effect once scores are backfilled.
 def _valid_semantic_mode(mode: str) -> str:
     """Fail loud on an unrecognized mode rather than silently disabling the predicate."""
     if mode not in ("off", "advisory", "gate"):
@@ -65,7 +67,7 @@ def _valid_semantic_mode(mode: str) -> str:
 
 
 SEMANTIC_ADMISSIBILITY_MODE = _valid_semantic_mode(
-    os.environ.get("BIO3D_SEMANTIC_ADMISSIBILITY_MODE", "advisory").lower()
+    os.environ.get("BIO3D_SEMANTIC_ADMISSIBILITY_MODE", "gate").lower()
 )
 
 # --- Verified login (Hugging Face OAuth). Off unless client id+secret are set. ---

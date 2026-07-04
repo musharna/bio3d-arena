@@ -131,10 +131,11 @@ two v1 API-error flags (72, 128) scored cleanly this run and were both caught. T
 FP (`304`) is a verified human-label false-negative, so the predicate wrongly excludes **0** good
 `complete` outputs.
 
-**The zero-FP-on-good gate contract is met.** Recommendation: promote the
-`SEMANTIC_ADMISSIBILITY_MODE` default from `advisory` → `gate`. (Held pending a nod, since it
-changes production vote-pool behavior; the predicate ships advisory until then, now materially
-better: 13× structural's recall with a clean precision profile.)
+**The zero-FP-on-good gate contract is met.** Decision: **promoted** — the
+`SEMANTIC_ADMISSIBILITY_MODE` default is now `gate` (`app/config.py`). Once semantic scores are
+backfilled on the production DB, cardinality/kind failures (multiple plants, detached organs,
+non-plants) auto-exclude from the vote pool; until backfill runs there are no live semantic
+verdicts, so the flip is inert. `advisory` and `off` remain available via the env var.
 
 ### Reproduce (v2)
 
