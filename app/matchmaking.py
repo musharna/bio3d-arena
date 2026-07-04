@@ -133,6 +133,37 @@ def pick_pair(
     return None
 
 
+def pick_quad(
+    db: Session, task: Task, exclude_fn=None, seen_quads=None
+) -> list[ModelOutput] | None:
+    """Pick 4 distinct same-paradigm (non-gold) outputs for the task, biased toward least-compared.
+
+    Mirrors pick_pair: exclude_fn filters the pool first (admissibility etc.), outputs are grouped
+    by paradigm, the least-sampled group with >=4 members is chosen, and its 4 least-sampled
+    outputs are returned in shuffled order. `seen_quads` (set of frozenset of 4 output ids) is the
+    session's already-served quads; a quad already seen is skipped. Returns None when no group has
+    4 fresh outputs (caller falls back to pairwise)."""
+    outputs = _real_outputs(task)
+    if exclude_fn is not None:
+        outputs = [o for o in outputs if not exclude_fn(o)]
+    groups = _paradigm_groups(outputs)
+    seen = seen_quads or set()
+    remaining = [g for g in groups.values() if len(g) >= 4]
+    while remaining:
+        best = min(min(o.n_comparisons for o in g) for g in remaining)
+        tied = [g for g in remaining if min(o.n_comparisons for o in g) == best]
+        chosen = random.choice(tied)
+        ordered = list(chosen)
+        random.shuffle(ordered)
+        ordered.sort(key=lambda o: o.n_comparisons)
+        quad = ordered[:4]
+        if frozenset(o.id for o in quad) not in seen:
+            random.shuffle(quad)
+            return quad
+        remaining = [g for g in remaining if g is not chosen]
+    return None
+
+
 def total_votes(db: Session) -> int:
     from .models import Vote
 
