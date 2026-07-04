@@ -1,8 +1,8 @@
 # app/semantic.py
 """Semantic-admissibility predicate: one VLM tool-use call over an output's turntable contact
-sheet judging whether it is a single, whole, valid plant specimen. Rejects cardinality/identity
-failures (multiple plants, a detached organ, a non-plant, the wrong species) that structural
-geometry cannot see. Precision-first: uncertain (and any unmapped code) -> admit. Clones
+sheet judging whether it is a single, whole, valid plant specimen. Rejects cardinality/kind
+failures (multiple plants, a detached organ, a non-plant) that structural geometry cannot see.
+Precision-first: uncertain (and any unmapped code) -> admit. Clones
 app.completeness's VLM-judge shape; persistence reuses app.structural.upsert_verdict
 (predicate='semantic', no schema change)."""
 
@@ -19,16 +19,18 @@ from .judge import JUDGE_MODEL
 from .models import Admissibility, ModelOutput, TraitRubric
 from .sourcing import is_reference_scan, is_untextured_output
 
-VERSION = "semantic-v1"
+VERSION = "semantic-v2"
 
 # admit iff the VLM code is NOT one of these — so ok, uncertain, and any unrecognized
-# code all admit (precision-first; a false-reject silently biases the ranking).
-REJECT_CODES = {"multiple", "sub_part", "not_a_plant", "wrong_species"}
+# code all admit (precision-first; a false-reject silently biases the ranking). wrong_species
+# was dropped after the acceptance run (0 flags caught, 3 of 4 true FPs); a stale model that
+# still emits it now falls through to admit.
+REJECT_CODES = {"multiple", "sub_part", "not_a_plant"}
 
 # Advisory flags use one synthetic session id (record_flag is idempotent per (output, session_id)
 # and requires a non-null id) and a sentinel threshold so an advisory flag NEVER auto-hides the
 # output — advisory surfaces to the review queue; it does not remove from the pool (that is gating).
-SEMANTIC_FLAG_SESSION = "semantic-v1"
+SEMANTIC_FLAG_SESSION = "semantic-v2"
 ADVISORY_NO_HIDE_THRESHOLD = 10**9
 
 SEMANTIC_TOOL = {
@@ -39,7 +41,7 @@ SEMANTIC_TOOL = {
         "properties": {
             "verdict": {
                 "type": "string",
-                "enum": ["ok", "multiple", "sub_part", "not_a_plant", "wrong_species", "uncertain"],
+                "enum": ["ok", "multiple", "sub_part", "not_a_plant", "uncertain"],
             },
             "note": {"type": "string"},
         },
@@ -64,14 +66,12 @@ def _img_block(png: bytes) -> dict:
 
 def _build_messages(png: bytes, taxon: str | None) -> list[dict]:
     of_taxon = f" of {taxon}" if taxon else ""
-    wrong_species = f"; `wrong_species` (a plant, but clearly not a {taxon})" if taxon else ""
     text = (
         f"This is a contact sheet of a generated 3D model{of_taxon}, rendered from several angles "
         "on a neutral gray background. Judge whether it is a SINGLE, WHOLE, VALID plant specimen. "
         "Reject as: `multiple` (more than one distinct plant, or a scene/cluster); "
         "`sub_part` (only a detached organ — a single fruit, leaf, or flower — not a whole plant); "
         "`not_a_plant` (not a recognizable plant at all — a blob or non-plant object)"
-        f"{wrong_species}"
         ". Otherwise answer `ok`. If you genuinely cannot tell, answer `uncertain`. "
         "Reject ONLY when clearly inadmissible; when in doubt, prefer `ok` or `uncertain`. "
         "Then call record_admissibility."
@@ -106,8 +106,8 @@ def enumerate_semantic_work(db: Session) -> list[dict]:
     """One {'output_id', 'taxon'} per eligible output lacking a current-VERSION semantic verdict.
     Eligible = non-gold, non-reference-scan, non-untextured (structural's breadth — NOT gated on a
     taxon inventory, so this reaches the outputs completeness never scored). taxon = the output's
-    task's TraitRubric.taxon if a rubric exists, else None (the taxon-agnostic checks still run;
-    only wrong_species needs a taxon)."""
+    task's TraitRubric.taxon if a rubric exists, else None (used only to frame the prompt — every
+    reject code is taxon-agnostic, so a missing taxon changes nothing about admissibility)."""
     have = {
         oid
         for (oid,) in db.execute(

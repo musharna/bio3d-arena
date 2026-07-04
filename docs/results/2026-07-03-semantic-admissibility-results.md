@@ -62,6 +62,10 @@ species on good outputs), and `multiple` needs one clause tightening.
 
 ## Decision: ship ADVISORY (default unchanged); do NOT flip to gate
 
+> **Superseded by the v2 update at the bottom of this doc.** The follow-on below was executed:
+> `wrong_species` dropped, the acceptance gate re-run, and the one surviving FP shown to be a
+> human-label false-negative. The predicate now clears the zero-FP-on-good bar (0/232 real FPs).
+
 Per the precision-first contract, 4 known true false-positives (silent ranking bias) is enough to
 **keep `SEMANTIC_ADMISSIBILITY_MODE=advisory`** — the predicate surfaces all 74 rejects to the human
 ⚑ review queue but never auto-excludes, so the 4 FPs cost a human a glance, not a silent bias. This
@@ -85,4 +89,60 @@ BIO3D_DATA_DIR=<mvp-assets-root> BIO3D_DATABASE_URL="sqlite:///<copy>" \
   BIO3D_SEMANTIC_ADMISSIBILITY_MODE=off PYTHONPATH="$(pwd)" \
   .venv/bin/python scripts/score_semantic.py
 # then cross-tab admissibility(predicate='semantic') vs completeness.category and output_flag
+```
+
+---
+
+## Update — semantic-v2: followed the lever, gate now earned
+
+Acted on the follow-on. Two prompt/logic changes to `app/semantic.py` (VERSION bumped
+`semantic-v1` → `semantic-v2`), re-run on the SAME cached turntable images (only the prompt
+changed, so the prompt is the only variable), 0 errors, 232 scored.
+
+1. **Dropped `wrong_species` entirely** (enum, `REJECT_CODES`, prompt, mapping) — it caught 0 human
+   flags and caused 3 of the 4 v1 FPs. A stale model still emitting it now falls through to admit.
+2. **Tightened `multiple`, then reverted it** (see below).
+
+### The `multiple` tightening was a mistake — reverted
+
+The tightening ("a single many-stemmed plant is ONE plant") was meant to kill the one `multiple`
+FP, output `304`. The re-run showed it (a) did **not** kill 304, and (b) suppressed `multiple`
+catches 7 → 3, losing 4 genuine multi-plant catches (all human-flagged: 79, 80, 163, 290).
+Inspecting `304`'s contact sheet settled the question: **304 is genuinely TWO separate trees**
+(two trunks + two crowns in 6 of 8 angles) — a correct `multiple` catch the human audit missed,
+NOT a false positive. Every one of v1's 8 `complete` `multiple` rejects was legitimate; the feared
+"bushy single plant misread as multiple" never occurred in the data. The clause solved a
+non-problem at a real recall cost, so it was reverted. Final config = `wrong_species` dropped,
+`multiple` at its original wording.
+
+### Final config: gate-worthy
+
+| metric                          | v1 (shipped)                              | v2 tightened          | **v2-final**          |
+| ------------------------------- | ----------------------------------------- | --------------------- | --------------------- |
+| scored / errors                 | 227 / 5                                   | 232 / 0               | 232 / 0               |
+| true FP on `complete` (nominal) | 4/227                                     | 1/232                 | **1/232**             |
+| true FP after 304 correction    | —                                         | ~0                    | **0/232**             |
+| recall (caught human flags)     | 11                                        | 9                     | **13**                |
+| recall on scored flags          | 11/22 (50%)                               | 9/24 (38%)            | **13/24 (54%)**       |
+| rejects by code                 | sub_part 35, not_a_plant 24, mult 9, ws 6 | sub 38, np 22, mult 5 | sub 41, np 21, mult 9 |
+
+Dropping `wrong_species` removed its 3 FPs at zero recall cost; recall **rose** 11 → 13 because the
+two v1 API-error flags (72, 128) scored cleanly this run and were both caught. The single nominal
+FP (`304`) is a verified human-label false-negative, so the predicate wrongly excludes **0** good
+`complete` outputs.
+
+**The zero-FP-on-good gate contract is met.** Recommendation: promote the
+`SEMANTIC_ADMISSIBILITY_MODE` default from `advisory` → `gate`. (Held pending a nod, since it
+changes production vote-pool behavior; the predicate ships advisory until then, now materially
+better: 13× structural's recall with a clean precision profile.)
+
+### Reproduce (v2)
+
+```
+cp <study-copy>.db <copy2>.db                          # a copy of the study DB, never the real one
+BIO3D_DATA_DIR=<mvp-assets-root> BIO3D_DATABASE_URL="sqlite:///<copy2>" \
+  BIO3D_SEMANTIC_ADMISSIBILITY_MODE=off PYTHONPATH="$(pwd)" \
+  .venv/bin/python scripts/score_semantic.py           # VERSION=semantic-v2 → scores all, stamps v2
+# cross-tab: rejects on completeness.category='complete' not in output_flag = candidate FPs;
+# eyeball each candidate's renders/<id>_turntable.png before calling it a true FP (304 = 2 trees).
 ```

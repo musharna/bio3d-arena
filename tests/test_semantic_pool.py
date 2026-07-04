@@ -30,7 +30,7 @@ def _rejected_semantic_output(db):
             predicate="semantic",
             admit=False,
             reason="multiple",
-            version="semantic-v1",
+            version="semantic-v2",
         )
     )
     db.commit()
