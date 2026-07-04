@@ -26,6 +26,14 @@ REDISTRIBUTABLE_LICENSES = frozenset(
 )
 
 
+HARD_EXCLUDE_SOURCES = frozenset({"found:xfrog", "procedural:demeter", "procedural:agrigen"})
+_COMMERCIAL_MODEL_PREFIXES = ("api:", "recon:", "frontier:")
+
+
+def is_commercial_model(source: str | None) -> bool:
+    return (source or "").startswith(_COMMERCIAL_MODEL_PREFIXES)
+
+
 class LicenseError(RuntimeError):
     def __init__(self, output_id: int, license_: str | None):
         self.output_id = output_id
@@ -74,6 +82,35 @@ def resolve_include_ids(
             if o and o.task_id in inc.task_ids:
                 inc.gold_output_ids.add(oid)
     return inc
+
+
+def filter_include_for_posture(
+    db: Session, inc: "IncludeSet", posture: str, gated: set[int]
+) -> None:
+    """Narrow inc.output_ids in place per posture. redistribute = strict redistributable, no
+    commercial-model. display = redistributable OR commercial-model recon. Both drop the hard-
+    excludes and admissibility-gated. Attribution/labeling is carried by the row export."""
+    from .licensing import normalize_license
+
+    keep: set[int] = set()
+    for oid in inc.output_ids:
+        if oid in gated:
+            continue
+        o = db.get(ModelOutput, oid)
+        if o is None or o.source in HARD_EXCLUDE_SOURCES:
+            continue
+        redistributable = (
+            o.source == "bio3d-arena" or normalize_license(o.license) in REDISTRIBUTABLE_LICENSES
+        )
+        if posture == "redistribute":
+            if redistributable and not is_commercial_model(o.source):
+                keep.add(oid)
+        elif posture == "display":
+            if redistributable or is_commercial_model(o.source):
+                keep.add(oid)
+        else:
+            raise ValueError(f"unknown posture {posture!r}")
+    inc.output_ids = keep
 
 
 def check_licenses(db: Session, output_ids: set[int]) -> None:
