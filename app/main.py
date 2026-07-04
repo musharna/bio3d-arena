@@ -46,6 +46,7 @@ from .models import (
     Criterion,
     Generator,
     JudgeRating,
+    KBallot,
     ModelOutput,
     OutputFlag,
     Rating,
@@ -55,7 +56,7 @@ from .models import (
     VoterSession,
 )
 from .models import _utcnow as _models_utcnow
-from .schemas import CategoryIn, FlagIn, GeneratorIn, TaskIn, VoteIn
+from .schemas import CategoryIn, FlagIn, GeneratorIn, KVoteIn, TaskIn, VoteIn
 from .storage import get_storage
 
 logger = logging.getLogger(__name__)
@@ -214,6 +215,16 @@ def _serialize(
     }
 
 
+def _serialize_output(o: ModelOutput) -> dict:
+    """Anonymized per-output payload for the 4-up K-wise ballot — the SAME fields `_serialize`
+    exposes for a single output (url/format/output_id). Never leaks generator identity."""
+    return {
+        "output_id": o.id,
+        "url": storage.url_for(o.asset_path),
+        "format": o.asset_format,
+    }
+
+
 def _build_gold_comparison(db: Session, session_id: str, crit: Criterion) -> dict | None:
     """Build a gold attention-check comparison (good vs decoy) with a known answer."""
     gp = matchmaking.pick_gold_pair(db)
@@ -319,6 +330,68 @@ def _build_comparison(
     return _serialize(comparison, task, crit, out_a, out_b)
 
 
+def _build_kwise_comparison(
+    db: Session,
+    session_id: str,
+    criterion_slug: str | None = None,
+    category_slug: str | None = None,
+) -> dict | None:
+    """Serve a 4-up K-ballot (no gold in kwise). Falls back to a pairwise comparison when no task
+    has >=4 admitted same-paradigm fresh outputs."""
+    import json as _json
+    import random as _random
+
+    from .sourcing import is_reference_scan, is_untextured_output
+    from . import admissibility
+
+    crit = None
+    if criterion_slug:
+        crit = (
+            db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+        )
+    if crit is None:
+        crit = _default_criterion(db)
+
+    category_id = _resolve_category_id(db, category_slug)
+    _gated = admissibility.non_admitted_output_ids(db)
+
+    def _vote_excluded(o):
+        return (
+            is_reference_scan(o.source)
+            or is_untextured_output(o)
+            or o.hidden_at is not None
+            or o.id in _gated
+        )
+
+    seen = integrity.seen_quads_for(db, session_id, crit.id)
+    stmt = select(Task).where(Task.active.is_(True))
+    if category_id is not None:
+        stmt = stmt.where(Task.category_id == category_id)
+    tasks = list(db.execute(stmt).scalars().all())
+    _random.shuffle(tasks)
+    for task in tasks:
+        quad = matchmaking.pick_quad(db, task, exclude_fn=_vote_excluded, seen_quads=seen)
+        if quad is None:
+            continue
+        ballot = KBallot(
+            task_id=task.id,
+            criterion_id=crit.id,
+            session_id=session_id,
+            output_ids_json=_json.dumps([o.id for o in quad]),
+        )
+        db.add(ballot)
+        db.commit()
+        return {
+            "kind": "kwise",
+            "ballot_id": ballot.id,
+            "task": {"id": task.id, "title": task.title, "prompt": task.prompt},
+            "criterion": {"slug": crit.slug, "name": crit.name},
+            "outputs": [_serialize_output(o) for o in quad],
+        }
+    # No quad anywhere → transparent pairwise fallback.
+    return _build_comparison(db, session_id, criterion_slug, category_slug)
+
+
 def _build_calibration_comparison(db: Session, session_id: str) -> dict | None:
     """Serve the next un-voted CalibrationPair for this session (with progress).
 
@@ -416,6 +489,8 @@ def api_next(
 ):
     if mode == "calibration":
         payload = _build_calibration_comparison(db, request.state.session_id)
+    elif mode == "kwise":
+        payload = _build_kwise_comparison(db, request.state.session_id, criterion, category)
     else:
         payload = _build_comparison(db, request.state.session_id, criterion, category)
     if payload is None:
@@ -466,6 +541,37 @@ def api_vote(
     db.commit()
     # Keep the same criterion/category filter for the follow-up comparison.
     nxt = _build_comparison(db, sid, criterion, category)
+    return {"status": "ok", "next": nxt}
+
+
+@app.post("/api/kvote")
+def api_kvote(
+    kvote_in: KVoteIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    criterion: str | None = None,
+    category: str | None = None,
+    x_captcha_token: str | None = Header(default=None),
+):
+    import json as _json
+
+    sid = request.state.session_id
+    if not integrity.verify_captcha(x_captcha_token):
+        raise HTTPException(403, "Captcha verification required/failed")
+    if not integrity.check_rate_limit(sid):
+        raise HTTPException(429, "Rate limit exceeded — slow down")
+    ballot = db.get(KBallot, kvote_in.ballot_id)
+    if ballot is None:
+        raise HTTPException(404, "Unknown ballot")
+    if ballot.resolved:
+        raise HTTPException(409, "Ballot already resolved")
+    ids = _json.loads(ballot.output_ids_json)
+    if kvote_in.best_output_id is not None and kvote_in.best_output_id not in ids:
+        raise HTTPException(400, "best_output_id not among the shown outputs")
+    service.resolve_kballot(db, ballot, kvote_in.best_output_id, sid)
+    integrity.note_vote(db, sid)  # ONE rate-accounting per ballot, not per derived vote
+    db.commit()
+    nxt = _build_kwise_comparison(db, sid, criterion, category)
     return {"status": "ok", "next": nxt}
 
 

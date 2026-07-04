@@ -25,6 +25,7 @@ from .models import (
     Generator,
     JudgeRating,
     JudgeVote,
+    KBallot,
     Metric,
     ModelOutput,
     ModelScope,
@@ -80,6 +81,38 @@ def apply_vote(db: Session, vote: Vote) -> None:
     ra.elo, rb.elo = new_a, new_b
     ra.n_games += 1
     rb.n_games += 1
+
+
+def resolve_kballot(
+    db: Session, ballot: KBallot, best_output_id: int | None, session_id: str
+) -> int:
+    """Resolve a K-ballot. best_output_id=None -> 'all bad' (0 relations). Otherwise expand into
+    one (best beats loser) Comparison+Vote per loser, sharing ballot_id, each fed to apply_vote.
+    Sets ballot.resolved. Returns the number of pairwise relations created. Caller commits."""
+    import json as _json
+
+    ballot.best_output_id = best_output_id
+    ballot.resolved = True
+    if best_output_id is None:
+        return 0
+    ids = _json.loads(ballot.output_ids_json)
+    losers = [oid for oid in ids if oid != best_output_id]
+    for loser in losers:
+        comp = Comparison(
+            task_id=ballot.task_id,
+            output_a_id=best_output_id,
+            output_b_id=loser,
+            criterion_id=ballot.criterion_id,
+            session_id=session_id,
+            ballot_id=ballot.id,
+        )
+        db.add(comp)
+        db.flush()
+        vote = Vote(comparison_id=comp.id, winner="a", session_id=session_id)
+        db.add(vote)
+        db.flush()
+        apply_vote(db, vote)
+    return len(losers)
 
 
 def reference_scan_generator_ids(db: Session) -> set[int]:
