@@ -25,6 +25,8 @@ def test_ballot_grouping_widens_cis():
     groups = [g for g, ballot in enumerate(ballots) for _ in ballot]
     naive = ranking.bradley_terry(players, matches, bootstrap=200)
     grouped = ranking.bradley_terry(players, matches, bootstrap=200, groups=groups)
-    # Point estimates identical; grouped CI for the hub player must be >= naive CI.
+    # Point estimates identical; grouped CI for the hub player must be strictly wider
+    # than the naive per-pair CI (ballot-level resampling of 20 correlated ballots
+    # cannot be more certain than pseudo-independent per-pair resampling of 60 pairs).
     assert grouped.scores[1] == naive.scores[1]
-    assert _width(grouped, 1) >= _width(naive, 1)
+    assert _width(grouped, 1) > _width(naive, 1)
