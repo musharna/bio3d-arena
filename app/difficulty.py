@@ -169,3 +169,78 @@ def tier_scorecard(db) -> list[dict]:
         rows.sort(key=lambda r: r["generator"])
         card.append({"tier": tier, "rows": rows})
     return card
+
+
+def paradigm_tier_scorecard(db) -> list[dict]:
+    """Per-(tier × paradigm) aggregate of the existing objective metrics — the headline
+    cross-paradigm × difficulty grid. Same objective-metric plumbing as tier_scorecard,
+    grouped by Generator.paradigm instead of generator. Means skip None (never zero-fill);
+    canonical tier order + 'untiered' bucket; empty-paradigm generators bucket under
+    'unspecified'. Never recomputes Bradley-Terry; the human path is untouched."""
+    from . import paradigms
+    from .models import Generator, Metric, ModelOutput, OrganMetric
+
+    tier_by_task = {td.task_id: td.tier for td in db.execute(select(TaskDifficulty)).scalars()}
+    paradigm_by_gen = {g.id: (g.paradigm or "") for g in db.execute(select(Generator)).scalars()}
+    chamfer_by_out, fscore_by_out, verdict_by_out = {}, {}, {}
+    for m in db.execute(select(Metric)).scalars():
+        chamfer_by_out[m.output_id] = m.chamfer
+        fscore_by_out[m.output_id] = m.fscore
+        verdict_by_out[m.output_id] = m.species_verdict
+    structural_by_out = {
+        om.output_id: om.botanical_fidelity for om in db.execute(select(OrganMetric)).scalars()
+    }
+
+    acc: dict[tuple[str, str], dict] = {}
+    for out in db.execute(select(ModelOutput).where(ModelOutput.is_gold.is_(False))).scalars():
+        tier = tier_by_task.get(out.task_id, "untiered")
+        pgm = paradigm_by_gen.get(out.generator_id, "") or "unspecified"
+        a = acc.setdefault(
+            (tier, pgm),
+            {
+                "n_outputs": 0,
+                "n_scored": 0,
+                "chamfer": [],
+                "fscore": [],
+                "structural": [],
+                "verdicts": [],
+            },
+        )
+        a["n_outputs"] += 1
+        if out.id in chamfer_by_out:
+            a["n_scored"] += 1
+            if chamfer_by_out[out.id] is not None:
+                a["chamfer"].append(chamfer_by_out[out.id])
+            if fscore_by_out[out.id] is not None:
+                a["fscore"].append(fscore_by_out[out.id])
+            if verdict_by_out[out.id] is not None:
+                a["verdicts"].append(verdict_by_out[out.id])
+        if structural_by_out.get(out.id) is not None:
+            a["structural"].append(structural_by_out[out.id])
+
+    pgm_order = list(paradigms.PARADIGMS) + ["unspecified"]
+    card = []
+    for tier in list(TIERS) + ["untiered"]:
+        rows = []
+        for pgm in pgm_order:
+            a = acc.get((tier, pgm))
+            if not a:
+                continue
+            verdicts = a["verdicts"]
+            pass_rate = (
+                sum(1 for v in verdicts if v == "PASS") / len(verdicts) if verdicts else None
+            )
+            rows.append(
+                {
+                    "paradigm": pgm,
+                    "paradigm_display": paradigms.DISPLAY_NAMES.get(pgm, pgm),
+                    "n_outputs": a["n_outputs"],
+                    "n_scored": a["n_scored"],
+                    "mean_chamfer": _mean(a["chamfer"]),
+                    "mean_fscore": _mean(a["fscore"]),
+                    "mean_structural": _mean(a["structural"]),
+                    "species_pass_rate": pass_rate,
+                }
+            )
+        card.append({"tier": tier, "rows": rows})
+    return card
