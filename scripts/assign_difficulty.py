@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy import select  # noqa: E402
 
 from app import config, difficulty  # noqa: E402
-from app.database import SessionLocal  # noqa: E402
+from app.database import SessionLocal, init_db  # noqa: E402
 from app.difficulty_rubric import RUBRIC, tier_for_scores  # noqa: E402
 from app.models import TaxonDifficulty  # noqa: E402
 
@@ -58,6 +58,9 @@ def main() -> int:
         raise SystemExit(
             "refusing to run against a non-copy DB — is_safe_test_db_target False; use a copy"
         )
+    # Ensure the schema exists: a pre-existing DB copy predates the taxon_difficulty table,
+    # and create_all only adds missing tables (never drops/wipes). Mirrors app boot.
+    init_db()
     with SessionLocal() as db:
         seed = seed_taxon_difficulty(db)
         result = difficulty.materialize_task_difficulty(db)
