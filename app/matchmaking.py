@@ -29,26 +29,50 @@ def _paradigm_groups(outputs: list[ModelOutput]) -> dict[str, list[ModelOutput]]
     return groups
 
 
-def pick_task(db: Session, category_id: int | None = None, exclude_fn=None) -> Task | None:
-    """Pick a random active task that has at least two votable (non-gold) outputs.
+def _fresh_pair_exists(outs: list[ModelOutput], voted_pairs: set[frozenset[int]]) -> bool:
+    """True if some same-paradigm pair among `outs` is NOT in `voted_pairs` (the session's
+    already-voted set). With an empty voted_pairs this reduces to 'has any pairable group'."""
+    for g in _paradigm_groups(outs).values():
+        if len(g) < 2:
+            continue
+        if not voted_pairs:
+            return True
+        ids = [o.id for o in g]
+        for i in range(len(ids)):
+            for j in range(i + 1, len(ids)):
+                if frozenset((ids[i], ids[j])) not in voted_pairs:
+                    return True
+    return False
+
+
+def pick_task(
+    db: Session, category_id: int | None = None, exclude_fn=None, voted_pairs=None
+) -> Task | None:
+    """Pick a random active task that has at least one votable (non-gold) pair the session
+    has NOT already voted on.
 
     `exclude_fn(output) -> bool` must be the SAME filter pick_pair will apply, so a task
     is only a candidate if it still has >=2 outputs AFTER exclusion. Counting pre-exclusion
     here (while pick_pair filters post-exclusion) let pick_task return a task pick_pair then
-    rejected → a spurious None → intermittent 404 on /api/next."""
+    rejected → a spurious None → intermittent 404 on /api/next.
+
+    `voted_pairs` (set of frozenset({a_id, b_id})) is the session's already-voted pairings;
+    a task is only a candidate if it still has a FRESH pair after that exclusion too — else
+    pick_task offers a task whose every pair pick_pair must skip, dead-ending the session on
+    the /api/vote 409 'already voted on this pairing'."""
+    voted = voted_pairs or set()
     stmt = select(Task).where(Task.active.is_(True))
     if category_id is not None:
         stmt = stmt.where(Task.category_id == category_id)
     tasks = db.execute(stmt).scalars().all()
 
-    def votable_count(t: Task) -> int:
+    def is_candidate(t: Task) -> bool:
         outs = _real_outputs(t)
         if exclude_fn is not None:
             outs = [o for o in outs if not exclude_fn(o)]
-        groups = _paradigm_groups(outs)
-        return max((len(g) for g in groups.values()), default=0)
+        return _fresh_pair_exists(outs, voted)
 
-    candidates = [t for t in tasks if votable_count(t) >= 2]
+    candidates = [t for t in tasks if is_candidate(t)]
     if not candidates:
         return None
     return random.choice(candidates)
@@ -60,33 +84,53 @@ def pick_gold_pair(db: Session) -> GoldPair | None:
     return random.choice(golds) if golds else None
 
 
-def pick_pair(db: Session, task: Task, exclude_fn=None) -> tuple[ModelOutput, ModelOutput] | None:
+def pick_pair(
+    db: Session, task: Task, exclude_fn=None, voted_pairs=None
+) -> tuple[ModelOutput, ModelOutput] | None:
     """Pick two distinct (non-gold) outputs for the task, biased toward least-compared.
 
     `exclude_fn(output) -> bool` may optionally be passed to filter out specific
     outputs (e.g. reference-scan sources) before pair selection.
+
+    `voted_pairs` (set of frozenset({a_id, b_id})) is the session's already-voted pairings;
+    any pair in it is skipped so the served comparison can't 409 the /api/vote guard. If a
+    least-sampled group's pairs are all voted, fall through to the next group; return None
+    only when NO fresh pair remains (a clean end state → 404, not a dead-end re-serve).
     """
     outputs = _real_outputs(task)
     if exclude_fn is not None:
         outputs = [o for o in outputs if not exclude_fn(o)]
     groups = _paradigm_groups(outputs)
-    pairable = [g for g in groups.values() if len(g) >= 2]
-    if not pairable:
-        return None
-    # Choose a paradigm group holding the globally least-sampled output (preserve the
-    # least-sampled-first fairness), then pick the two least-sampled within that group.
-    # Among groups tied at that global minimum, choose RANDOMLY — a plain min() breaks ties
-    # by dict insertion order, which permanently starves every paradigm but the first-inserted
-    # one whenever they tie (e.g. all outputs fresh at n_comparisons==0).
-    best = min(min(o.n_comparisons for o in g) for g in pairable)
-    tied = [g for g in pairable if min(o.n_comparisons for o in g) == best]
-    group = list(random.choice(tied))
-    random.shuffle(group)
-    group.sort(key=lambda o: o.n_comparisons)
-    a, b = group[0], group[1]
-    if random.random() < 0.5:
-        a, b = b, a
-    return a, b
+    voted = voted_pairs or set()
+    remaining = [g for g in groups.values() if len(g) >= 2]
+
+    # Consider paradigm groups least-sampled-first (preserving fairness), and within the
+    # chosen group take the least-sampled pair NOT already voted. Among groups tied at the
+    # global minimum, choose RANDOMLY — a plain min() breaks ties by dict insertion order,
+    # which permanently starves every paradigm but the first-inserted one whenever they tie.
+    while remaining:
+        best = min(min(o.n_comparisons for o in g) for g in remaining)
+        tied = [g for g in remaining if min(o.n_comparisons for o in g) == best]
+        chosen = random.choice(tied)
+        ordered = list(chosen)
+        random.shuffle(ordered)
+        ordered.sort(key=lambda o: o.n_comparisons)
+        picked = None
+        for i in range(len(ordered)):
+            for j in range(i + 1, len(ordered)):
+                if frozenset((ordered[i].id, ordered[j].id)) not in voted:
+                    picked = (ordered[i], ordered[j])
+                    break
+            if picked:
+                break
+        if picked is not None:
+            a, b = picked
+            if random.random() < 0.5:
+                a, b = b, a
+            return a, b
+        # every pair in this group is already voted → drop it and try another group
+        remaining = [g for g in remaining if g is not chosen]
+    return None
 
 
 def total_votes(db: Session) -> int:

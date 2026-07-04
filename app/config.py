@@ -32,15 +32,54 @@ GOLD_RATE = float(os.environ.get("BIO3D_GOLD_RATE", "0.1"))
 TRUST_THRESHOLD = float(os.environ.get("BIO3D_TRUST_THRESHOLD", "0.5"))
 # Optional human-verification (captcha). Off by default so local/dev needs no keys.
 REQUIRE_CAPTCHA = os.environ.get("BIO3D_REQUIRE_CAPTCHA", "false").lower() in ("1", "true", "yes")
-CAPTCHA_PROVIDER = os.environ.get("BIO3D_CAPTCHA_PROVIDER", "turnstile").lower()  # turnstile|hcaptcha
+CAPTCHA_PROVIDER = os.environ.get(
+    "BIO3D_CAPTCHA_PROVIDER", "turnstile"
+).lower()  # turnstile|hcaptcha
 CAPTCHA_SECRET = os.environ.get("BIO3D_CAPTCHA_SECRET", "")
+
+# --- Bad-output handling ---
+# Vote pool drops outputs D-Complete classified into these completeness categories
+# (clearly not a whole plant). Empty set disables the completeness auto-gate.
+POOL_EXCLUDED_COMPLETENESS_CATEGORIES = {
+    c.strip()
+    for c in os.environ.get(
+        "BIO3D_POOL_EXCLUDED_COMPLETENESS_CATEGORIES", "isolated-organ,fragment"
+    ).split(",")
+    if c.strip()
+}
+# Distinct-session flags on an output before it auto-hides (pending admin review).
+FLAG_HIDE_THRESHOLD = int(os.environ.get("BIO3D_FLAG_HIDE_THRESHOLD", "3"))
+
+
+# --- Semantic-admissibility predicate (VLM cardinality+identity) ---
+# off: dormant (not in the rubric, no advisory flags). advisory: surfaces confident rejects to
+# the ⚑ review queue as non-hiding flags but does NOT auto-exclude. gate: auto-excludes rejects
+# from the vote pool. Default is `gate`: the semantic-v2 acceptance run cleared the zero-FP-on-good
+# bar (0/232 real FPs on `complete` outputs, recall 13/32); see
+# docs/results/2026-07-03-semantic-admissibility-results.md. Takes effect once scores are backfilled.
+def _valid_semantic_mode(mode: str) -> str:
+    """Fail loud on an unrecognized mode rather than silently disabling the predicate."""
+    if mode not in ("off", "advisory", "gate"):
+        raise ValueError(
+            f"BIO3D_SEMANTIC_ADMISSIBILITY_MODE must be one of off|advisory|gate, got {mode!r}"
+        )
+    return mode
+
+
+SEMANTIC_ADMISSIBILITY_MODE = _valid_semantic_mode(
+    os.environ.get("BIO3D_SEMANTIC_ADMISSIBILITY_MODE", "gate").lower()
+)
 
 # --- Verified login (Hugging Face OAuth). Off unless client id+secret are set. ---
 HF_CLIENT_ID = os.environ.get("BIO3D_HF_CLIENT_ID", "")
 HF_CLIENT_SECRET = os.environ.get("BIO3D_HF_CLIENT_SECRET", "")
 PUBLIC_BASE_URL = os.environ.get("BIO3D_PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 # Set Secure flag on cookies when served over HTTPS (auto from PUBLIC_BASE_URL; env override).
-COOKIE_SECURE = os.environ.get("BIO3D_COOKIE_SECURE", "").lower() in ("1", "true", "yes") or PUBLIC_BASE_URL.startswith("https://")
+COOKIE_SECURE = os.environ.get("BIO3D_COOKIE_SECURE", "").lower() in (
+    "1",
+    "true",
+    "yes",
+) or PUBLIC_BASE_URL.startswith("https://")
 
 # --- Scale-out: storage, DB pooling, distributed rate limiting ---
 # Asset storage backend: "local" (filesystem + StaticFiles) or "s3" (object store).

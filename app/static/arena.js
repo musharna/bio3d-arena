@@ -120,10 +120,12 @@ function render(data) {
   el("fmt-a").textContent = window.Bio3DViewer.mount(
     el("slot-a"),
     data.a,
+    (btn) => flagOutput(data.a.output_id, btn),
   ).toUpperCase();
   el("fmt-b").textContent = window.Bio3DViewer.mount(
     el("slot-b"),
     data.b,
+    (btn) => flagOutput(data.b.output_id, btn),
   ).toUpperCase();
   window.Bio3DViewer.syncPair(el("slot-a"), el("slot-b"));
   setAB("a"); // each new pair starts on Model A
@@ -170,6 +172,35 @@ async function vote(winner) {
     setStatus("Error recording vote: " + e);
   } finally {
     busy = false;
+  }
+}
+
+async function flagOutput(outputId, btn) {
+  if (!outputId || btn.disabled) return;
+  if (!confirm("Flag this model as not a plant / failed?")) return;
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/flag", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ output_id: outputId, reason: "not_a_plant" }),
+    });
+    if (!res.ok) {
+      btn.disabled = false;
+      let detail = "flag not recorded";
+      try {
+        detail = (await res.json()).detail || detail;
+      } catch (_) {
+        /* non-JSON error body */
+      }
+      setStatus("Could not flag: " + detail);
+      return;
+    }
+    btn.textContent = "✓";
+    flash("Flag recorded ✓");
+  } catch (e) {
+    btn.disabled = false;
+    setStatus("Error flagging: " + e);
   }
 }
 

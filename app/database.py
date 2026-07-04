@@ -70,6 +70,10 @@ def _ensure_columns(engine) -> None:  # noqa: ANN001
         if "generator" and cols and "paradigm" not in cols:
             conn.exec_driver_sql("ALTER TABLE generator ADD COLUMN paradigm VARCHAR(32) DEFAULT ''")
 
+        cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(model_output)")]
+        if cols and "hidden_at" not in cols:
+            conn.exec_driver_sql("ALTER TABLE model_output ADD COLUMN hidden_at DATETIME")
+
 
 def init_db() -> None:
     """Create all tables, then self-heal any additive columns missing from a pre-existing

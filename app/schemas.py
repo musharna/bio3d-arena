@@ -10,6 +10,11 @@ class VoteIn(BaseModel):
     winner: str = Field(pattern="^(a|b|tie|bad)$")
 
 
+class FlagIn(BaseModel):
+    output_id: int
+    reason: str = Field(default="not_a_plant", pattern="^(not_a_plant|failed|other)$")
+
+
 class CategoryIn(BaseModel):
     slug: str
     name: str

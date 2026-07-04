@@ -37,7 +37,7 @@
     slot.appendChild(d);
   }
 
-  function addControls(slot) {
+  function addControls(slot, onFlag) {
     const bar = document.createElement("div");
     bar.className = "viewer-controls";
     const reset = document.createElement("button");
@@ -58,6 +58,16 @@
     fs.addEventListener("click", () => toggleFullscreen(slot));
     bar.appendChild(reset);
     bar.appendChild(fs);
+    if (onFlag) {
+      const flag = document.createElement("button");
+      flag.type = "button";
+      flag.className = "viewer-ctl";
+      flag.setAttribute("aria-label", "Flag: not a plant / failed");
+      flag.title = "Flag: not a plant / failed";
+      flag.textContent = "⚑";
+      flag.addEventListener("click", () => onFlag(flag));
+      bar.appendChild(flag);
+    }
     slot.appendChild(bar);
   }
 
@@ -84,7 +94,7 @@
     fsSlot = active;
   });
 
-  function mountMesh(slot, asset) {
+  function mountMesh(slot, asset, onFlag) {
     const myGen = slot._viewerGen;
     const stale = () => slot._viewerGen !== myGen;
     const loading = spinner(slot, "Loading model…");
@@ -113,10 +123,10 @@
       mv.jumpCameraToGoal();
     };
     slot._onResize = null; // model-viewer auto-resizes; clear any stale molecular closure
-    addControls(slot);
+    addControls(slot, onFlag);
   }
 
-  async function mountMolecular(slot, asset, fmt) {
+  async function mountMolecular(slot, asset, fmt, onFlag) {
     const myGen = slot._viewerGen;
     const stale = () => slot._viewerGen !== myGen;
     const loading = spinner(slot, "Loading structure…");
@@ -154,7 +164,7 @@
         viewer.resize();
         viewer.render();
       };
-      addControls(slot);
+      addControls(slot, onFlag);
     } catch (e) {
       if (stale()) return;
       failed(slot, "Structure failed to load");
@@ -162,12 +172,12 @@
   }
 
   // Mount the right viewer; returns the resolved format string.
-  function mount(slot, asset) {
+  function mount(slot, asset, onFlag) {
     slot.innerHTML = ""; // tear down any previous viewer
     slot._viewerGen = (slot._viewerGen || 0) + 1; // invalidate any in-flight mount
     const fmt = (asset.format || "glb").toLowerCase();
-    if (MOL.has(fmt)) mountMolecular(slot, asset, fmt);
-    else if (MESH.has(fmt)) mountMesh(slot, asset);
+    if (MOL.has(fmt)) mountMolecular(slot, asset, fmt, onFlag);
+    else if (MESH.has(fmt)) mountMesh(slot, asset, onFlag);
     else failed(slot, "Unsupported format: " + fmt);
     return fmt;
   }
@@ -181,9 +191,13 @@
     const b = slotB && slotB.querySelector("model-viewer");
     if (!a || !b) return;
     function copyCam(src, dst) {
-      dst.cameraOrbit = src.getCameraOrbit().toString();
-      dst.cameraTarget = src.getCameraTarget().toString();
-      dst.fieldOfView = src.getFieldOfView() + "deg";
+      // Sync ONLY the orbital angles (theta/phi) — the "same viewing angle" intent.
+      // Leave radius + target on each viewer's own "auto" so it frames its OWN
+      // bounding box: the two models can differ wildly in scale/center (a whole
+      // plant vs an isolated organ), and copying one's absolute radius+target onto
+      // the other aims the camera off its model and throws it out of view.
+      const o = src.getCameraOrbit();
+      dst.cameraOrbit = o.theta + "rad " + o.phi + "rad auto";
       dst.jumpCameraToGoal();
     }
     a.addEventListener("camera-change", (e) => {

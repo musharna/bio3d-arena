@@ -140,22 +140,26 @@ def record_gold_outcome(db: Session, session_id: str, passed: bool) -> VoterSess
     return vs
 
 
+def voted_pairs_for(db: Session, session_id: str, criterion_id: int) -> set[frozenset[int]]:
+    """All (unordered) output pairs this session has cast a decided vote on, for a criterion.
+
+    This is the exclusion set matchmaking must honor: the vote endpoint 409s a re-vote of any
+    of these pairings, so pick_task/pick_pair must never re-serve one (else a session dead-ends
+    on 'already voted' instead of ending cleanly or getting a fresh pair)."""
+    rows = db.execute(
+        select(Comparison.output_a_id, Comparison.output_b_id)
+        .join(Vote, Vote.comparison_id == Comparison.id)
+        .where(
+            Comparison.session_id == session_id,
+            Comparison.criterion_id == criterion_id,
+            Comparison.is_gold.is_(False),
+        )
+    ).all()
+    return {frozenset((a, b)) for a, b in rows}
+
+
 def already_voted_pair(
     db: Session, session_id: str, output_a_id: int, output_b_id: int, criterion_id: int
 ) -> bool:
     """True if this session already cast a decided vote on the same (unordered) pair."""
-    pair = {output_a_id, output_b_id}
-    rows = (
-        db.execute(
-            select(Comparison)
-            .join(Vote, Vote.comparison_id == Comparison.id)
-            .where(
-                Comparison.session_id == session_id,
-                Comparison.criterion_id == criterion_id,
-                Comparison.is_gold.is_(False),
-            )
-        )
-        .scalars()
-        .all()
-    )
-    return any({c.output_a_id, c.output_b_id} == pair for c in rows)
+    return frozenset((output_a_id, output_b_id)) in voted_pairs_for(db, session_id, criterion_id)

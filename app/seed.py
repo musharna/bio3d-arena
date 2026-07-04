@@ -17,21 +17,67 @@ from . import config
 from .assets_gen import build_asset, build_degenerate
 from .database import SessionLocal, init_db
 from .models import (
+    Admissibility,
+    CalibrationPair,
     Category,
     Comparison,
+    Completeness,
+    CommissionAttempt,
     Criterion,
+    Critique,
+    DGenIteration,
     Generator,
     GoldPair,
+    JudgeVote,
     Metric,
     ModelOutput,
+    ModelScope,
+    OrganMetric,
+    OutputFlag,
     Rating,
     ReconTask,
     Submission,
     Task,
+    TraitScore,
+    TraitVerdict,
     Vote,
     VoterSession,
 )
 from .storage import get_storage
+
+# All models that must be wiped, in child-before-parent order, when seed_all(force=True)
+# does a full reseed. Every model with a ForeignKey("model_output.id") MUST be listed here
+# (before ModelOutput) or a force reseed orphans it: SQLite reuses the deleted ModelOutput
+# rowids, so the next insert into an orphaned unique-FK child throws UNIQUE constraint
+# failed. See tests/test_seed_force_cascade.py, which asserts this list stays in sync with
+# the schema.
+_FORCE_DELETE_MODELS = (
+    Vote,
+    Comparison,
+    GoldPair,
+    Submission,
+    Rating,
+    Metric,  # child of ModelOutput — delete before it
+    Completeness,  # child of ModelOutput — delete before it
+    OutputFlag,  # child of ModelOutput — delete before it
+    Critique,  # child of ModelOutput — delete before it
+    OrganMetric,  # child of ModelOutput — delete before it
+    TraitScore,  # child of ModelOutput — delete before it
+    ModelScope,  # child of ModelOutput — delete before it
+    TraitVerdict,  # child of ModelOutput — delete before it
+    DGenIteration,  # child of ModelOutput — delete before it
+    JudgeVote,  # child of ModelOutput — delete before it
+    CalibrationPair,  # child of ModelOutput — delete before it
+    CommissionAttempt,  # child of ModelOutput — delete before it
+    Admissibility,  # child of ModelOutput — delete before it
+    VoterSession,
+    ModelOutput,
+    ReconTask,  # child of Task — delete before it
+    Task,
+    Generator,
+    Criterion,
+    Category,
+)
 
 
 def _publish(rel: Path) -> None:
@@ -350,21 +396,7 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
             return {"status": "already-seeded"}
         if force:
             # Delete children before parents to respect FKs.
-            for model in (
-                Vote,
-                Comparison,
-                GoldPair,
-                Submission,
-                Rating,
-                Metric,  # child of ModelOutput — delete before it
-                VoterSession,
-                ModelOutput,
-                ReconTask,  # child of Task — delete before it
-                Task,
-                Generator,
-                Criterion,
-                Category,
-            ):
+            for model in _FORCE_DELETE_MODELS:
                 db.query(model).delete()
             db.commit()
 

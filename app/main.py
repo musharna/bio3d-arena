@@ -47,13 +47,15 @@ from .models import (
     Generator,
     JudgeRating,
     ModelOutput,
+    OutputFlag,
     Rating,
     Task,
     User,
     Vote,
     VoterSession,
 )
-from .schemas import CategoryIn, GeneratorIn, TaskIn, VoteIn
+from .models import _utcnow as _models_utcnow
+from .schemas import CategoryIn, FlagIn, GeneratorIn, TaskIn, VoteIn
 from .storage import get_storage
 
 logger = logging.getLogger(__name__)
@@ -199,8 +201,16 @@ def _serialize(
         "comparison_id": comparison.id,
         "task": {"title": task.title, "prompt": task.prompt, "category": task.category.name},
         "criterion": {"slug": crit.slug, "name": crit.name},
-        "a": {"url": storage.url_for(out_a.asset_path), "format": out_a.asset_format},
-        "b": {"url": storage.url_for(out_b.asset_path), "format": out_b.asset_format},
+        "a": {
+            "url": storage.url_for(out_a.asset_path),
+            "format": out_a.asset_format,
+            "output_id": out_a.id,
+        },
+        "b": {
+            "url": storage.url_for(out_b.asset_path),
+            "format": out_b.asset_format,
+            "output_id": out_b.id,
+        },
     }
 
 
@@ -259,21 +269,41 @@ def _build_comparison(
             return gold
 
     from .sourcing import is_reference_scan, is_untextured_output
+    from . import admissibility
 
     category_id = _resolve_category_id(db, category_slug)
+
+    # Precompute the gated output ids ONCE (per-output exclude_fn stays O(1)): the
+    # admissibility composer unions structural ∪ completeness (∪ semantic when
+    # SEMANTIC_ADMISSIBILITY_MODE=gate) behind one call.
+    _gated = admissibility.non_admitted_output_ids(db)  # structural ∪ completeness ∪ semantic(gate)
 
     # Exclude from the perceptual vote pool: raw-scan reference outputs (render as ugly
     # point clouds, confound metric↔vote agreement) AND geometry-only outputs (flat grey
     # blobs that lose votes for lack of texture, not shape). Both stay in the Mode-B board.
+    # Also exclude outputs auto-hidden (flag threshold) or D-Complete classified into a bad
+    # completeness category (config.POOL_EXCLUDED_COMPLETENESS_CATEGORIES).
     # Same predicate for task AND pair selection so pick_task never returns a task whose
     # only outputs pick_pair then excludes (which caused intermittent /api/next 404s).
     def _vote_excluded(o):
-        return is_reference_scan(o.source) or is_untextured_output(o)
+        return (
+            is_reference_scan(o.source)
+            or is_untextured_output(o)
+            or o.hidden_at is not None
+            or o.id in _gated
+        )
 
-    task = matchmaking.pick_task(db, category_id=category_id, exclude_fn=_vote_excluded)
+    # Pairings this session already voted on: the /api/vote guard 409s a re-vote of any of
+    # them, so exclude them from BOTH task and pair selection (same set for both, mirroring
+    # the _vote_excluded parity) — else a session dead-ends re-served an already-voted pair.
+    voted_pairs = integrity.voted_pairs_for(db, session_id, crit.id)
+
+    task = matchmaking.pick_task(
+        db, category_id=category_id, exclude_fn=_vote_excluded, voted_pairs=voted_pairs
+    )
     if task is None:
         return None
-    pair = matchmaking.pick_pair(db, task, exclude_fn=_vote_excluded)
+    pair = matchmaking.pick_pair(db, task, exclude_fn=_vote_excluded, voted_pairs=voted_pairs)
     if pair is None:
         return None
     out_a, out_b = pair
@@ -437,6 +467,24 @@ def api_vote(
     # Keep the same criterion/category filter for the follow-up comparison.
     nxt = _build_comparison(db, sid, criterion, category)
     return {"status": "ok", "next": nxt}
+
+
+@app.post("/api/flag")
+def api_flag(flag_in: FlagIn, request: Request, db: Session = Depends(get_db)):
+    """Report an output as not-a-plant / failed. Rate-limited; one flag per session per output;
+    auto-hides the output at FLAG_HIDE_THRESHOLD distinct sessions. Not a vote — never advances."""
+    from . import flags
+
+    sid = request.state.session_id
+    if not integrity.check_rate_limit(sid):
+        raise HTTPException(429, "Rate limit exceeded — slow down")
+    if db.get(ModelOutput, flag_in.output_id) is None:
+        raise HTTPException(404, "Unknown output")
+    hidden, count = flags.record_flag(
+        db, flag_in.output_id, sid, flag_in.reason, config.FLAG_HIDE_THRESHOLD
+    )
+    db.commit()
+    return {"status": "ok", "hidden": hidden, "flags": count}
 
 
 # ------------------------------------------------------------------ leaderboard
@@ -1395,7 +1443,29 @@ def moderation_page(request: Request, db: Session = Depends(get_db)):
                 "format": s.asset_format,
             }
         )
-    return templates.TemplateResponse(request, "moderation.html", {"pending": rows})
+
+    from . import flags as _flags
+
+    flagged_outputs = (
+        db.query(ModelOutput)
+        .join(OutputFlag, OutputFlag.output_id == ModelOutput.id)
+        .distinct()
+        .all()
+    )
+    flagged = []
+    for o in flagged_outputs:
+        flagged.append(
+            {
+                "id": o.id,
+                "asset_url": storage.url_for(o.asset_path),
+                "task": o.task.title if o.task else f"#{o.task_id}",
+                "flags": _flags.distinct_flag_count(db, o.id),
+                "hidden": o.hidden_at is not None,
+            }
+        )
+    return templates.TemplateResponse(
+        request, "moderation.html", {"pending": rows, "flagged": flagged}
+    )
 
 
 @app.post("/admin/submissions/{submission_id}/approve")
@@ -1429,6 +1499,29 @@ def admin_reject(
         raise HTTPException(400, str(exc)) from exc
     db.commit()
     # Carry the token so the redirect lands on the now token-gated moderation page.
+    return RedirectResponse(f"/admin/moderation?token={quote(token)}", status_code=303)
+
+
+@app.post("/admin/outputs/{output_id}/hide")
+def admin_hide_output(output_id: int, token: str = Form(...), db: Session = Depends(get_db)):
+    _require_admin(token)
+    out = db.get(ModelOutput, output_id)
+    if out is None:
+        raise HTTPException(404, "Unknown output")
+    if out.hidden_at is None:
+        out.hidden_at = _models_utcnow()
+    db.commit()
+    return RedirectResponse(f"/admin/moderation?token={quote(token)}", status_code=303)
+
+
+@app.post("/admin/outputs/{output_id}/restore")
+def admin_restore_output(output_id: int, token: str = Form(...), db: Session = Depends(get_db)):
+    _require_admin(token)
+    out = db.get(ModelOutput, output_id)
+    if out is None:
+        raise HTTPException(404, "Unknown output")
+    out.hidden_at = None
+    db.commit()
     return RedirectResponse(f"/admin/moderation?token={quote(token)}", status_code=303)
 
 

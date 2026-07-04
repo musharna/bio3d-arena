@@ -56,9 +56,13 @@ def test_double_vote_rejected():
 
 
 def test_leaderboard_and_recompute():
-    # Cast a batch of votes to populate the win record.
+    # Cast a batch of votes to populate the win record. A session may vote each pairing only
+    # once (the /api/vote 409 guard); once its fresh pairs are exhausted /api/next returns 404,
+    # so stop rather than KeyError — the votes cast so far are enough to populate the board.
     for _ in range(30):
         nxt = client.get("/api/next").json()
+        if "comparison_id" not in nxt:
+            break
         client.post("/api/vote", json={"comparison_id": nxt["comparison_id"], "winner": "a"})
 
     # Admin recompute requires the token.
