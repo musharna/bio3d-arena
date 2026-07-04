@@ -1,7 +1,12 @@
 # tests/test_backfill_licenses.py
 import json
+import sys
 import uuid
-from scripts.backfill_licenses import CC0, backfill_licenses
+
+import pytest
+
+import scripts.backfill_licenses as backfill_mod
+from scripts.backfill_licenses import CC0, backfill_licenses, main
 from app.database import SessionLocal, init_db
 from app.models import Generator, ModelOutput, Task
 
@@ -82,3 +87,13 @@ def test_idempotent():
         backfill_licenses(db, objaverse_license_for=lambda uid: None)
         assert o.license == first
         db.rollback()
+
+
+def test_main_refuses_unsafe_db(monkeypatch):
+    """main()'s DB-safety guard must refuse a real-looking (non-copy) DB target."""
+    monkeypatch.setattr(
+        backfill_mod.config, "DATABASE_URL", "sqlite:////srv/bio3d/data/arena-prod.db"
+    )
+    monkeypatch.setattr(sys, "argv", ["backfill_licenses.py"])
+    with pytest.raises(SystemExit):
+        main()

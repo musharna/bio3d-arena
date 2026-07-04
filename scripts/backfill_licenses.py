@@ -22,7 +22,6 @@ from sqlalchemy import select  # noqa: E402
 
 CC0 = "CC0-1.0"
 HARD_EXCLUDE_SOURCES = {"found:xfrog", "procedural:demeter", "procedural:agrigen"}
-_OWN_CC0_PREFIXES = ("bio3d-arena", "commissioned", "agentic:", "procedural:", "infinigen")
 
 
 def _is_own_cc0(source: str | None) -> bool:
@@ -89,8 +88,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Backfill model_output.license on a DB COPY.")
     ap.add_argument("--commit", action="store_true", help="persist changes (default: dry-run)")
     args = ap.parse_args()
-    if "study" in (config.DATABASE_URL or "").lower():
-        raise SystemExit("refusing to run against a 'study' DB — use a copy")
+    if not config.is_safe_test_db_target(config.DATABASE_URL):
+        raise SystemExit(
+            "refusing to run against a non-copy DB — is_safe_test_db_target False; use a copy"
+        )
     with SessionLocal() as db:
         uids = {
             json.loads(o.meta_json or "{}").get("objaverse_uid")
