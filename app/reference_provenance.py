@@ -49,7 +49,13 @@ def cleared_reference_taxa() -> set[str]:
             data = json.loads(meta.read_text())
         except Exception:
             continue
-        if _REQUIRED <= set(data) and normalize_license(data.get("license")) in _CC_OK:
+        if (
+            _REQUIRED <= set(data)
+            and all(
+                str(data.get(k, "")).strip() for k in ("author", "attribution", "title", "subject")
+            )
+            and normalize_license(data.get("license")) in _CC_OK
+        ):
             taxon = meta.name[: -len("_ref.json")]
             ok.add(taxon)
     return ok
@@ -71,7 +77,12 @@ def assert_recon_photos_cleared(db: Session, output_ids: set[int]) -> None:
             continue
         img = (json.loads(o.meta_json or "{}")).get("input_image")
         taxon = _taxon_of(img)
-        if taxon is not None and taxon not in cleared:
+        if taxon is None:
+            raise ReferenceProvenanceError(
+                f"output {oid}: recon input '{img}' has no identifiable reference-photo taxon —"
+                " cannot verify provenance"
+            )
+        if taxon not in cleared:
             raise ReferenceProvenanceError(
                 f"output {oid}: recon input '{img}' (taxon {taxon!r}) has no cleared CC provenance sidecar"
             )

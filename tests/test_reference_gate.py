@@ -36,3 +36,19 @@ def test_raises_when_reference_sidecar_missing():
         with pytest.raises(ReferenceProvenanceError):
             assert_recon_photos_cleared(db, {o.id})
         db.rollback()
+
+
+def test_raises_when_input_image_missing():
+    with SessionLocal() as db:
+        o = _recon(db, None)  # no input_image at all -> unidentifiable taxon
+        with pytest.raises(ReferenceProvenanceError):
+            assert_recon_photos_cleared(db, {o.id})
+        db.rollback()
+
+
+def test_raises_when_input_image_unparseable():
+    with SessionLocal() as db:
+        o = _recon(db, "reference/nomatch.jpg")  # no '<taxon>_ref' match
+        with pytest.raises(ReferenceProvenanceError):
+            assert_recon_photos_cleared(db, {o.id})
+        db.rollback()
