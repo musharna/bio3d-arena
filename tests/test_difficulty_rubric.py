@@ -55,6 +55,11 @@ def test_rubric_complete_and_scored():
         "cucurbita_pepo": "easy",
         "lycoperdon_perlatum": "easy",
         "hericium_erinaceus": "hard",
+        # Fungi expansion wave-2
+        "boletus_edulis": "easy",
+        "amanita_muscaria": "moderate",
+        "morchella_esculenta": "moderate",
+        "trametes_versicolor": "hard",
     }
     assert set(dr.RUBRIC) == set(expected)
     for slug, entry in dr.RUBRIC.items():

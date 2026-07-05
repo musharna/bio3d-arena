@@ -49,6 +49,23 @@ CROPS = {
         "task_title": "Hericium erinaceus — single-image → 3D reconstruction",
         "image": "data/assets/reference/hericium_ref.jpg",
     },
+    # Fungi expansion wave-2 (real-specimen CC photos: bolete/amanita CC-BY-3.0, morel/turkey-tail CC0)
+    "bolete": {
+        "task_title": "Boletus edulis — single-image → 3D reconstruction",
+        "image": "data/assets/reference/bolete_ref.jpg",
+    },
+    "amanita": {
+        "task_title": "Amanita muscaria — single-image → 3D reconstruction",
+        "image": "data/assets/reference/amanita_ref.jpg",
+    },
+    "morel": {
+        "task_title": "Morchella esculenta — single-image → 3D reconstruction",
+        "image": "data/assets/reference/morel_ref.jpg",
+    },
+    "turkeytail": {
+        "task_title": "Trametes versicolor — single-image → 3D reconstruction",
+        "image": "data/assets/reference/turkeytail_ref.jpg",
+    },
 }
 
 

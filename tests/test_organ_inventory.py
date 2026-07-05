@@ -10,7 +10,15 @@ PLANT_TAXA = {
     "Arabidopsis thaliana",
 }
 # Single-body-plan organisms: fungal fruiting bodies + a depicted fruit (see _body_inv).
-BODY_PLAN_TAXA = {"Lycoperdon perlatum", "Cucurbita pepo", "Hericium erinaceus"}
+BODY_PLAN_TAXA = {
+    "Lycoperdon perlatum",
+    "Cucurbita pepo",
+    "Hericium erinaceus",
+    "Boletus edulis",
+    "Amanita muscaria",
+    "Morchella esculenta",
+    "Trametes versicolor",
+}
 
 
 def test_expected_taxa_present():

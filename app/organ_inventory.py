@@ -118,6 +118,35 @@ ORGAN_INVENTORY: dict[str, TaxonInventory] = {
         ("spines", "dense cascading icicle-like spines/teeth hanging from the mass"),
         ("substrate", "attachment to a piece of wood or bark"),
     ),
+    # Fungi expansion wave-2 — classic cap-and-stalk + bracket body plans.
+    "Boletus edulis": _body_inv(
+        "Boletus edulis",
+        "fruiting_body",
+        "a rounded brown convex cap on a thick swollen pale stalk",
+        ("stipe", "a thick bulbous pale stalk beneath the cap"),
+        ("pore_surface", "a spongy pale pore layer on the cap underside"),
+    ),
+    "Amanita muscaria": _body_inv(
+        "Amanita muscaria",
+        "fruiting_body",
+        "a red/orange convex-to-flat cap on a white stalk",
+        ("warts", "white wart flecks scattered across the red cap"),
+        ("stipe_ring", "a white stalk with a skirt-like ring and a bulbous base"),
+    ),
+    "Morchella esculenta": _body_inv(
+        "Morchella esculenta",
+        "fruiting_body",
+        "a conical cap covered in a honeycomb of ridges and pits, on a pale stalk",
+        ("stipe", "a pale hollow stalk beneath the cap"),
+        ("pitting", "a network of ridges and deep pits over the cap surface"),
+    ),
+    "Trametes versicolor": _body_inv(
+        "Trametes versicolor",
+        "fruiting_body",
+        "a fan- or shelf-shaped bracket, or a rosette of overlapping brackets",
+        ("zonation", "concentric coloured bands across the bracket surface"),
+        ("substrate", "attachment to wood, a log, or a stump"),
+    ),
 }
 
 

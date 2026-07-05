@@ -208,6 +208,71 @@ RUBRIC: dict[str, dict] = {
             "thin_structure": "cascading spines are the definitional thin structure",
         },
     },
+    # --- Fungi expansion wave-2 (bolete/fly-agaric/morel/turkey-tail) ---
+    "boletus_edulis": {  # sum 2 → easy
+        "scores": {
+            "fine_detail": 1,
+            "self_occlusion": 1,
+            "non_rigidity": 0,
+            "topology": 0,
+            "thin_structure": 0,
+        },
+        "rationale": {
+            "fine_detail": "smooth cap with a faint pore surface, little repeated detail",
+            "self_occlusion": "the cap slightly overhangs the stalk",
+            "non_rigidity": "firm rigid cap and thick stalk",
+            "topology": "one solid cap-on-stalk body, no holes",
+            "thin_structure": "thick swollen stalk, no thin parts",
+        },
+    },
+    "amanita_muscaria": {  # sum 4 → moderate
+        "scores": {
+            "fine_detail": 1,
+            "self_occlusion": 1,
+            "non_rigidity": 1,
+            "topology": 0,
+            "thin_structure": 1,
+        },
+        "rationale": {
+            "fine_detail": "scattered wart flecks on the cap",
+            "self_occlusion": "cap overhangs the stalk; gills hidden beneath",
+            "non_rigidity": "cap flattens with age; skirt-ring flexes",
+            "topology": "one cap-on-stalk body, no holes",
+            "thin_structure": "thin skirt ring and cap margin over a thick stalk",
+        },
+    },
+    "morchella_esculenta": {  # sum 6 → moderate
+        "scores": {
+            "fine_detail": 2,
+            "self_occlusion": 2,
+            "non_rigidity": 0,
+            "topology": 1,
+            "thin_structure": 1,
+        },
+        "rationale": {
+            "fine_detail": "dense honeycomb network of ridges and pits",
+            "self_occlusion": "deep pits occlude their own recesses",
+            "non_rigidity": "firm rigid fruiting body",
+            "topology": "pitted hollow cap — recesses and a hollow interior raise genus",
+            "thin_structure": "narrow ridge walls between the pits",
+        },
+    },
+    "trametes_versicolor": {  # sum 7 → hard
+        "scores": {
+            "fine_detail": 2,
+            "self_occlusion": 2,
+            "non_rigidity": 0,
+            "topology": 1,
+            "thin_structure": 2,
+        },
+        "rationale": {
+            "fine_detail": "fine concentric colour bands across every bracket",
+            "self_occlusion": "overlapping shelves in a rosette occlude each other",
+            "non_rigidity": "stiff leathery brackets",
+            "topology": "many overlapping brackets fused at a base",
+            "thin_structure": "wafer-thin bracket edges are the definitional thin structure",
+        },
+    },
 }
 
 

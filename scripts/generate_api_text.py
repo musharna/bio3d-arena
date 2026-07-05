@@ -72,6 +72,27 @@ TAXA: list[tuple[str, str]] = [
         "A lion's mane mushroom, Hericium erinaceus: a rounded white fungal mass on wood covered "
         "in dense cascading icicle-like spines.",
     ),
+    # Fungi expansion wave-2
+    (
+        "Boletus edulis — single-image → 3D reconstruction",
+        "A porcini mushroom, Boletus edulis: a single large rounded red-brown convex cap on a "
+        "thick swollen pale stalk, with a spongy pale pore surface underneath.",
+    ),
+    (
+        "Amanita muscaria — single-image → 3D reconstruction",
+        "A fly agaric mushroom, Amanita muscaria: a bright red convex cap covered in white wart "
+        "flecks, on a white stalk with a skirt-like ring and a bulbous base.",
+    ),
+    (
+        "Morchella esculenta — single-image → 3D reconstruction",
+        "A yellow morel, Morchella esculenta: a conical cap covered in a honeycomb network of "
+        "ridges and deep pits, on a pale hollow stalk.",
+    ),
+    (
+        "Trametes versicolor — single-image → 3D reconstruction",
+        "A turkey tail fungus, Trametes versicolor: thin fan-shaped bracket shelves with "
+        "concentric coloured bands, growing in overlapping rosettes on wood.",
+    ),
 ]
 
 
