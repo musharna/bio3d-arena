@@ -3,6 +3,7 @@ from app.database import SessionLocal, init_db
 from app.difficulty import paradigm_tier_scorecard, set_task_difficulty, tier_scorecard
 from app.models import (
     Category,
+    Completeness,
     Generator,
     Metric,
     ModelOutput,
@@ -118,6 +119,43 @@ def test_error_status_metric_not_counted_as_scored():
         assert row["n_outputs"] == 2  # both outputs present
         assert row["n_scored"] == 1  # only the ok metric is a score
         assert abs(row["mean_chamfer"] - 0.2) < 1e-9
+
+
+def test_paradigm_grid_includes_reference_free_completeness():
+    # Completeness is reference-free: it populates even where chamfer is null (no GT mesh) — the
+    # whole point for fungi. Two recon outputs (one complete, one fragment), NO Metric rows.
+    with SessionLocal() as db:
+        _clean(db)
+        cat = Category(slug="pts-cat", name="C")
+        g = Generator(slug="pts-recon", name="Recon", paradigm="image_recon")
+        db.add_all([cat, g])
+        db.flush()
+        hard = Task(category_id=cat.id, title="pts-hard", prompt="p")
+        db.add(hard)
+        db.flush()
+        o1 = ModelOutput(task_id=hard.id, generator_id=g.id, asset_path="pts/1.glb")
+        o2 = ModelOutput(task_id=hard.id, generator_id=g.id, asset_path="pts/2.glb")
+        db.add_all([o1, o2])
+        db.flush()
+        db.add_all(
+            [
+                Completeness(output_id=o1.id, category="complete", score=1.0),
+                Completeness(output_id=o2.id, category="fragment", score=0.0),
+            ]
+        )
+        set_task_difficulty(db, hard.id, "hard", "occlusion", commit=False)
+        db.commit()
+
+        card = paradigm_tier_scorecard(db)
+        row = {r["paradigm"]: r for r in next(b for b in card if b["tier"] == "hard")["rows"]}[
+            "image_recon"
+        ]
+        assert row["n_scored"] == 0  # no Metric rows → the objective/chamfer path is empty
+        assert row["mean_chamfer"] is None
+        # ...but the reference-free completeness dimension is populated
+        assert row["completeness_n"] == 2
+        assert abs(row["mean_completeness"] - 0.5) < 1e-9
+        assert abs(row["pct_complete"] - 0.5) < 1e-9  # 1 of 2 is 'complete'
 
 
 def test_tier_scorecard_shape_regression():

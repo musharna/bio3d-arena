@@ -183,7 +183,7 @@ def paradigm_tier_scorecard(db) -> list[dict]:
     canonical tier order + 'untiered' bucket; empty-paradigm generators bucket under
     'unspecified'. Never recomputes Bradley-Terry; the human path is untouched."""
     from . import paradigms
-    from .models import Generator, Metric, ModelOutput, OrganMetric
+    from .models import Completeness, Generator, Metric, ModelOutput, OrganMetric
 
     tier_by_task = {td.task_id: td.tier for td in db.execute(select(TaskDifficulty)).scalars()}
     paradigm_by_gen = {g.id: (g.paradigm or "") for g in db.execute(select(Generator)).scalars()}
@@ -200,6 +200,12 @@ def paradigm_tier_scorecard(db) -> list[dict]:
     structural_by_out = {
         om.output_id: om.botanical_fidelity for om in db.execute(select(OrganMetric)).scalars()
     }
+    # Reference-free completeness (VLM organ-presence). Unlike chamfer it needs NO GT, so it
+    # populates for GT-less taxa (all fungi) where the objective columns are null — the point
+    # of surfacing it here. (category, score) per output.
+    completeness_by_out = {
+        c.output_id: (c.category, c.score) for c in db.execute(select(Completeness)).scalars()
+    }
 
     acc: dict[tuple[str, str], dict] = {}
     for out in db.execute(select(ModelOutput).where(ModelOutput.is_gold.is_(False))).scalars():
@@ -214,6 +220,8 @@ def paradigm_tier_scorecard(db) -> list[dict]:
                 "fscore": [],
                 "structural": [],
                 "verdicts": [],
+                "completeness": [],
+                "complete_cats": [],
             },
         )
         a["n_outputs"] += 1
@@ -227,6 +235,11 @@ def paradigm_tier_scorecard(db) -> list[dict]:
                 a["verdicts"].append(verdict_by_out[out.id])
         if structural_by_out.get(out.id) is not None:
             a["structural"].append(structural_by_out[out.id])
+        if out.id in completeness_by_out:
+            cat, score = completeness_by_out[out.id]
+            a["complete_cats"].append(cat)
+            if score is not None:
+                a["completeness"].append(score)
 
     pgm_order = list(paradigms.PARADIGMS) + ["unspecified"]
     card = []
@@ -240,6 +253,8 @@ def paradigm_tier_scorecard(db) -> list[dict]:
             pass_rate = (
                 sum(1 for v in verdicts if v == "PASS") / len(verdicts) if verdicts else None
             )
+            cats = a["complete_cats"]
+            pct_complete = sum(1 for c in cats if c == "complete") / len(cats) if cats else None
             rows.append(
                 {
                     "paradigm": pgm,
@@ -250,6 +265,9 @@ def paradigm_tier_scorecard(db) -> list[dict]:
                     "mean_fscore": _mean(a["fscore"]),
                     "mean_structural": _mean(a["structural"]),
                     "species_pass_rate": pass_rate,
+                    "completeness_n": len(cats),
+                    "mean_completeness": _mean(a["completeness"]),
+                    "pct_complete": pct_complete,
                 }
             )
         card.append({"tier": tier, "rows": rows})
