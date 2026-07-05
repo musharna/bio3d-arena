@@ -102,6 +102,34 @@
   </table>
   {% endif %} {% endfor %} {% endif %}
 
+  {% if reliability %}
+  <h3>Reference / capture-quality triage
+    <span class="subtle">— image→3D recon completeness vs text→3D, per taxon</span>
+  </h3>
+  <p class="subtle">
+    text→3D shares a task's subject but not its reference photo, so a taxon whose recon
+    completeness sits far below its text→3D completeness has a suspect recon <i>input</i>
+    (reference photo / capture geometry) — worth inspecting. ⚑ is triage, not a verdict: a
+    genuinely hard taxon can also trip it.
+  </p>
+  <table class="ranktable compact">
+    <thead>
+      <tr><th>Taxon</th><th>recon ↑</th><th>text ↑</th><th>text − recon</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in reliability %}
+      <tr>
+        <td class="gen">{% if r.flag %}⚑ {% endif %}{{ r.taxon }}</td>
+        <td class="num">{{ '%.2f'|format(r.recon_mean) }}<span class="subtle"> ({{ r.n_recon }})</span></td>
+        <td class="num">{{ '%.2f'|format(r.text_mean) }}<span class="subtle"> ({{ r.n_text }})</span></td>
+        <td class="num strong">{{ '%.2f'|format(r.gap) }}</td>
+        <td class="num">{% if r.flag %}inspect{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
   {% if perceptual %}
   <h3>Perceptual ranking by tier <span class="subtle">— VLM-judge Bradley-Terry, top methods per tier</span></h3>
   <p class="subtle">

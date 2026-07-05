@@ -1143,6 +1143,11 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
     perceptual = service.tier_perceptual_ranking(db)
     trait_tiers = service.tier_trait_accuracy(db)
     paradigm_grid = difficulty.paradigm_tier_scorecard(db)
+    # Reference/capture-quality triage: taxa where recon completeness is far below text (the
+    # recon INPUT is suspect). Sorted by gap desc; flagged ones shown first.
+    from .completeness import recon_reliability_flags
+
+    reliability = recon_reliability_flags(db)
 
     return templates.TemplateResponse(
         request,
@@ -1156,16 +1161,21 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
             "trait_tiers": trait_tiers,
             "paradigm_grid": paradigm_grid,
             "paradigm_display_names": paradigms.DISPLAY_NAMES,
+            "reliability": reliability,
         },
     )
 
 
 @app.get("/api/difficulty.json")
 def api_difficulty(db: Session = Depends(get_db)):
-    """Per-tier objective scorecard (× generator and × paradigm) over existing metrics."""
+    """Per-tier objective scorecard (× generator and × paradigm) over existing metrics, plus the
+    recon-reliability triage flags (taxa whose recon completeness is far below text→3D)."""
+    from .completeness import recon_reliability_flags
+
     return {
         "scorecard": difficulty.tier_scorecard(db),
         "paradigm_grid": difficulty.paradigm_tier_scorecard(db),
+        "recon_reliability": recon_reliability_flags(db),
     }
 
 
