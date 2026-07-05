@@ -68,9 +68,7 @@ def _filtered_rows(db, inc: public_export.IncludeSet) -> dict[str, list[dict]]:
     included_comparison_ids = {
         c.id
         for c in db.execute(select(Comparison)).scalars()
-        if c.task_id in inc.task_ids
-        and c.output_a_id in all_out
-        and c.output_b_id in all_out
+        if c.task_id in inc.task_ids and c.output_a_id in all_out and c.output_b_id in all_out
     }
     # Referential completeness: gold decoy outputs belong to the "calibration" generator,
     # which a curator's generator_slugs allowlist won't include (resolve_include_ids adds
@@ -78,9 +76,7 @@ def _filtered_rows(db, inc: public_export.IncludeSet) -> dict[str, list[dict]]:
     # generator actually referenced by an included output must ship too, or the output's
     # generator_id dangles on import.
     gen_keep = set(inc.generator_ids) | {
-        o.generator_id
-        for o in db.execute(select(ModelOutput)).scalars()
-        if o.id in all_out
+        o.generator_id for o in db.execute(select(ModelOutput)).scalars() if o.id in all_out
     }
     tables: dict[str, list[dict]] = {}
     for model in EXPORT_MODELS:
@@ -97,7 +93,10 @@ def _filtered_rows(db, inc: public_export.IncludeSet) -> dict[str, list[dict]]:
                 continue
             if name == "vote" and r.comparison_id not in included_comparison_ids:
                 continue
-            if name in ("recon_task", "task_difficulty") and getattr(r, "task_id", None) not in inc.task_ids:
+            if (
+                name in ("recon_task", "task_difficulty")
+                and getattr(r, "task_id", None) not in inc.task_ids
+            ):
                 continue
             if name == "metric" and getattr(r, "output_id", None) not in all_out:
                 continue
@@ -182,6 +181,24 @@ def main() -> int:
             out_dir=a.out,
             dry_run=a.dry_run,
         )
+        # Advisory (non-blocking, NOT a gate): flag exported taxa whose recon completeness sits
+        # far below text→3D — a suspect reference/capture the operator should inspect before
+        # publishing (this is the signal that caught the Cucurbita reference bug).
+        from app.completeness import recon_reliability_flags
+
+        exported_titles = a.tasks.split(",")
+        flagged = [
+            f["taxon"]
+            for f in recon_reliability_flags(db)
+            if f["flag"] and any(f["taxon"] in title for title in exported_titles)
+        ]
+        if flagged:
+            print(
+                f"⚠ recon-reliability advisory: {len(flagged)} exported taxon(s) have recon "
+                f"completeness far below text→3D (suspect reference/capture) — inspect before "
+                f"publishing: {', '.join(flagged)}",
+                file=sys.stderr,
+            )
     finally:
         db.close()
     print(json.dumps(m, indent=2))
