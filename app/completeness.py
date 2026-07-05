@@ -190,3 +190,55 @@ def score_outputs(db, work, *, client, sheet_for, scorer_version: str) -> dict:
         "errors": errors,
         "failures": failures,
     }
+
+
+def recon_reliability_flags(db, *, gap_threshold: float = 0.4) -> list[dict]:
+    """Input/capture-quality triage: per taxon, compare mean organism-completeness of image_recon
+    outputs vs text_native outputs. text→3D shares a task's SUBJECT (the prompt) but NOT its
+    reference photo, so when recon completeness is far below text completeness the recon *input*
+    (reference photo / capture geometry) is suspect — the signal that would have auto-caught the
+    Cucurbita reference-photo bug (recon 0.13 vs text 1.00). A flag is TRIAGE ("inspect this
+    taxon's reference/capture"), not a diagnosis: a genuinely hard taxon can also trip it, and the
+    right response either way is to look. Only taxa with ≥1 completeness-scored output in BOTH
+    paradigms are comparable; others are omitted (can't compare). Read-only."""
+    import collections
+
+    from app.models import Completeness, Generator, ModelOutput, TraitRubric
+
+    taxon_by_task = {r.task_id: r.taxon for r in db.query(TraitRubric).all()}
+    paradigm_by_gen = {g.id: (g.paradigm or "") for g in db.query(Generator).all()}
+    scores: dict[tuple[str, str], list[float]] = collections.defaultdict(list)
+    for c in db.query(Completeness).all():
+        if c.score is None:
+            continue
+        out = db.get(ModelOutput, c.output_id)
+        if out is None:
+            continue
+        taxon = taxon_by_task.get(out.task_id)
+        pgm = paradigm_by_gen.get(out.generator_id)
+        if taxon is None or pgm not in ("image_recon", "text_native"):
+            continue
+        scores[(taxon, pgm)].append(c.score)
+
+    flags = []
+    for taxon in {t for (t, _p) in scores}:
+        recon = scores.get((taxon, "image_recon"), [])
+        text = scores.get((taxon, "text_native"), [])
+        if not recon or not text:
+            continue  # need both paradigms to compare
+        recon_mean = sum(recon) / len(recon)
+        text_mean = sum(text) / len(text)
+        gap = text_mean - recon_mean
+        flags.append(
+            {
+                "taxon": taxon,
+                "recon_mean": recon_mean,
+                "n_recon": len(recon),
+                "text_mean": text_mean,
+                "n_text": len(text),
+                "gap": gap,
+                "flag": gap >= gap_threshold,
+            }
+        )
+    flags.sort(key=lambda r: r["gap"], reverse=True)
+    return flags
