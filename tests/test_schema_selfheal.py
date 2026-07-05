@@ -41,3 +41,26 @@ def test_ensure_columns_adds_hidden_at_to_preexisting_model_output_table():
         assert "hidden_at" in cols_after
 
         engine.dispose()
+
+
+def test_sessionlocal_self_heals_schema_once(monkeypatch):
+    """A standalone script that only calls SessionLocal() (never init_db()) still gets a healed
+    schema: the FIRST session triggers init_db() exactly once, later sessions don't re-run it.
+    This is the causal fix for the recurring generate_*-script schema-lag bug — no per-script
+    init_db() call needed."""
+    import app.database as database
+
+    calls = {"n": 0}
+    real_init = database.init_db
+
+    def spy():
+        calls["n"] += 1
+        real_init()
+
+    monkeypatch.setattr(database, "init_db", spy)
+    monkeypatch.setattr(database, "_schema_ready", False)
+
+    database.SessionLocal().close()
+    assert calls["n"] == 1  # first session healed the schema
+    database.SessionLocal().close()
+    assert calls["n"] == 1  # subsequent sessions do not re-run init_db (idempotent guard)

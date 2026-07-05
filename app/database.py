@@ -45,7 +45,31 @@ if config.DATABASE_URL.startswith("sqlite"):
         cur.close()
 
 
-SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
+_session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
+
+_schema_ready = False
+
+
+def _ensure_schema_once() -> None:
+    """Self-heal the schema the first time ANY session is opened — app boot, a standalone
+    script, or a test — so no entry point has to remember to call init_db(). The recurring,
+    money-losing failure this prevents: a generate_* script runs paid image→3D API calls and
+    then dies at the DB write because the study DB predated a new column (create_all never adds
+    columns to existing tables). Runs init_db() once per process; idempotent. The flag is set
+    only AFTER init_db() succeeds so a transient failure retries on the next session."""
+    global _schema_ready
+    if _schema_ready:
+        return
+    init_db()
+    _schema_ready = True
+
+
+def SessionLocal(*args, **kwargs) -> Session:
+    """Session factory that self-heals the schema on first use (see _ensure_schema_once).
+    Callable-compatible drop-in for the underlying sessionmaker; `SessionLocal()` and
+    `with SessionLocal() as db:` both work exactly as before."""
+    _ensure_schema_once()
+    return _session_factory(*args, **kwargs)
 
 
 class Base(DeclarativeBase):
