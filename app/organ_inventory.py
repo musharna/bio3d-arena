@@ -41,6 +41,18 @@ def _inv(taxon: str, axis: str, foliage: str, repro_key: str, repro: str) -> Tax
     )
 
 
+def _body_inv(taxon: str, body_key: str, body: str, *optional: tuple[str, str]) -> TaxonInventory:
+    """Body-plan inventory for organisms whose whole body is a single unit — fungal fruiting
+    bodies and a depicted fruit (the arena's Cucurbita reference shows the pumpkin fruit, not
+    the vine). The body is the SOLE required organ (approved 'body required, features optional'
+    completeness model, 2026-07-04); diagnostic surface features and basal attachment are
+    optional, so their absence in a render makes an output 'partial', not incomplete. This is an
+    UNCALIBRATED cross-kingdom extension of the plant-calibrated (κ=0.64) completeness metric."""
+    organs = [Organ(body_key, body, True)]
+    organs += [Organ(k, v, False) for k, v in optional]
+    return TaxonInventory(taxon=taxon, organs=tuple(organs))
+
+
 ORGAN_INVENTORY: dict[str, TaxonInventory] = {
     "Solanum lycopersicum": _inv(
         "Solanum lycopersicum",
@@ -83,6 +95,28 @@ ORGAN_INVENTORY: dict[str, TaxonInventory] = {
         "green leaves (a rosette or leaves on the stem)",
         "reproductive_silique",
         "thin elongated upright siliques along the stem",
+    ),
+    # Kingdom Fungi + a depicted fruit — single-body-plan organisms (see _body_inv).
+    "Lycoperdon perlatum": _body_inv(
+        "Lycoperdon perlatum",
+        "fruiting_body",
+        "a rounded pear-/globe-shaped pale fungal fruiting body",
+        ("sterile_base", "a short tapered stalk-like base beneath the body"),
+        ("surface_ornament", "fine conical warts or granular spines on the surface"),
+    ),
+    "Cucurbita pepo": _body_inv(
+        "Cucurbita pepo",
+        "fruit_body",
+        "a single rounded gourd/pumpkin fruit",
+        ("peduncle", "a short woody stem attached to the fruit"),
+        ("surface_ribbing", "vertical ribs or furrows running down the fruit"),
+    ),
+    "Hericium erinaceus": _body_inv(
+        "Hericium erinaceus",
+        "fruiting_body",
+        "a rounded compact whitish fungal mass",
+        ("spines", "dense cascading icicle-like spines/teeth hanging from the mass"),
+        ("substrate", "attachment to a piece of wood or bark"),
     ),
 }
 

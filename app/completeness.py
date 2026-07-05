@@ -23,12 +23,17 @@ def derive(inventory: TaxonInventory, organs_present: list[dict]) -> tuple[str, 
     score = req_present / len(required) if required else 0.0
     present_count = sum(1 for o in inventory.organs if status.get(o.key) == "present")
 
+    # 'complete' (all required organs present) is checked BEFORE the present_count==1
+    # 'isolated-organ' branch so a single-required-organ body plan — a fungal fruiting body
+    # that IS the whole organism — reads as complete, not a lone detached fragment. For the
+    # 2-required plant inventories this reorder is behavior-identical: present_count==1 can
+    # never satisfy req_present==len(required)==2, so plants never reach 'complete' here.
     if present_count == 0:
         category = "fragment"
-    elif present_count == 1:
-        category = "isolated-organ"
     elif req_present == len(required):
         category = "complete"
+    elif present_count == 1:
+        category = "isolated-organ"
     else:
         category = "partial-organism"
     return category, score

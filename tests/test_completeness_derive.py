@@ -47,6 +47,34 @@ def test_uncertain_never_upgrades():
     assert score == 0.5
 
 
+FUNGAL = inventory_for("Lycoperdon perlatum")  # required: fruiting_body (only); optional x2
+
+
+def _pf(*present_keys):
+    keys = ["fruiting_body", "sterile_base", "surface_ornament"]
+    return [{"key": k, "status": "present" if k in present_keys else "absent"} for k in keys]
+
+
+def test_fungal_lone_body_is_complete_not_isolated():
+    # A single-required-organ body plan: the fruiting body IS the whole organism, so a render
+    # showing only it must be 'complete' (score 1.0), NOT 'isolated-organ'. This is the case
+    # the derive() reorder fixes; the plant tests above prove the reorder left plants unchanged.
+    assert derive(FUNGAL, _pf("fruiting_body")) == ("complete", 1.0)
+    assert derive(FUNGAL, _pf("fruiting_body", "surface_ornament")) == ("complete", 1.0)
+
+
+def test_fungal_body_absent_is_incomplete():
+    assert derive(FUNGAL, _pf()) == ("fragment", 0.0)
+    # only an optional feature, no body -> one organ present but not the required one
+    assert derive(FUNGAL, _pf("surface_ornament")) == ("isolated-organ", 0.0)
+
+
+def test_fungal_inventory_has_single_required_body():
+    req = [o for o in FUNGAL.organs if o.required]
+    assert [o.key for o in req] == ["fruiting_body"]
+    assert all(inventory_for(t) is not None for t in ("Cucurbita pepo", "Hericium erinaceus"))
+
+
 def test_extraneous_present_key_does_not_inflate_count():
     # VLM hallucinates an extra organ not in the inventory, marked present.
     organs = [
