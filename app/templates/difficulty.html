@@ -165,6 +165,8 @@
       <tr>
         <th>Method</th><th>n</th><th>scored</th><th>Chamfer ↓</th>
         <th>F-score ↑</th><th>Structural ↑</th><th>Species pass-rate</th>
+        <th title="VLM organism-completeness — reference-free, so it covers GT-less taxa (all fungi) where Chamfer/F-score are blank">Complete ↑</th>
+        <th title="Share of outputs judged a complete organism (vs partial / isolated-organ / fragment)">% complete</th>
       </tr>
     </thead>
     <tbody>
@@ -177,6 +179,8 @@
         <td class="num">{{ '%.3f'|format(r.mean_fscore) if r.mean_fscore is not none else '—' }}</td>
         <td class="num">{{ '%.2f'|format(r.mean_structural) if r.mean_structural is not none else '—' }}</td>
         <td class="num">{{ '%.0f%%'|format(r.species_pass_rate * 100) if r.species_pass_rate is not none else '—' }}</td>
+        <td class="num strong">{{ '%.2f'|format(r.mean_completeness) if r.mean_completeness is not none else '—' }}</td>
+        <td class="num">{{ '%.0f%%'|format(r.pct_complete * 100) if r.pct_complete is not none else '—' }}{% if r.completeness_n %}<span class="subtle"> ({{ r.completeness_n }})</span>{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>

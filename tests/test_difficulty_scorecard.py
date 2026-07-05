@@ -4,6 +4,7 @@ from app.database import SessionLocal, init_db
 from app.difficulty import set_task_difficulty, tier_scorecard
 from app.models import (
     Category,
+    Completeness,
     Generator,
     Metric,
     ModelOutput,
@@ -22,6 +23,14 @@ def _clean(db):
     db.query(TaskDifficulty).delete()
     db.query(Metric).filter(Metric.detail == "td3").delete(synchronize_session=False)
     db.query(OrganMetric).filter(OrganMetric.detail == "td3").delete(synchronize_session=False)
+    # Completeness.output_id is unique with no ON DELETE cascade; SQLite reuses deleted rowids,
+    # so orphaned rows here would collide with a later test's reused output id. Clear them first.
+    td3_out_ids = (
+        db.query(ModelOutput.id).filter(ModelOutput.asset_path.like("td3/%.glb")).scalar_subquery()
+    )
+    db.query(Completeness).filter(Completeness.output_id.in_(td3_out_ids)).delete(
+        synchronize_session=False
+    )
     db.query(ModelOutput).filter(ModelOutput.asset_path.like("td3/%.glb")).delete(
         synchronize_session=False
     )
@@ -132,3 +141,40 @@ def test_error_status_metric_not_counted_as_scored():
         assert r["n_outputs"] == 2
         assert r["n_scored"] == 1
         assert abs(r["mean_chamfer"] - 0.2) < 1e-9
+
+
+def test_generator_grid_includes_reference_free_completeness():
+    # Same reference-free completeness dimension as the paradigm grid: it populates even where
+    # chamfer is null (no GT), which is the point for fungi. Two outputs, no Metric rows.
+    with SessionLocal() as db:
+        _clean(db)
+        cat = Category(slug="td3-cat", name="C")
+        gen = Generator(slug="td3-g", name="Gen")
+        db.add_all([cat, gen])
+        db.flush()
+        hard = Task(category_id=cat.id, title="td3-hard", prompt="p")
+        db.add(hard)
+        db.flush()
+        o1 = ModelOutput(task_id=hard.id, generator_id=gen.id, asset_path="td3/1.glb")
+        o2 = ModelOutput(task_id=hard.id, generator_id=gen.id, asset_path="td3/2.glb")
+        db.add_all([o1, o2])
+        db.flush()
+        db.add_all(
+            [
+                Completeness(output_id=o1.id, category="complete", score=1.0),
+                Completeness(output_id=o2.id, category="fragment", score=0.0),
+            ]
+        )
+        set_task_difficulty(db, hard.id, "hard", "occlusion", commit=False)
+        db.commit()
+
+        r = next(
+            row
+            for row in {c["tier"]: c for c in tier_scorecard(db)}["hard"]["rows"]
+            if row["generator"] == "Gen"
+        )
+        assert r["n_scored"] == 0 and r["mean_chamfer"] is None  # objective path empty
+        assert r["completeness_n"] == 2
+        assert abs(r["mean_completeness"] - 0.5) < 1e-9
+        assert abs(r["pct_complete"] - 0.5) < 1e-9
+        _clean(db)

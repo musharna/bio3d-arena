@@ -97,7 +97,7 @@ def tier_scorecard(db) -> list[dict]:
     """
     from sqlalchemy import select
 
-    from .models import Metric, ModelOutput, OrganMetric
+    from .models import Completeness, Metric, ModelOutput, OrganMetric
     from .service import generator_display_names
 
     tier_by_task = {td.task_id: td.tier for td in db.execute(select(TaskDifficulty)).scalars()}
@@ -119,6 +119,11 @@ def tier_scorecard(db) -> list[dict]:
     structural_by_out = {
         om.output_id: om.botanical_fidelity for om in db.execute(select(OrganMetric)).scalars()
     }
+    # Reference-free completeness — populates the GT-less cells the objective columns can't
+    # (all fungi). Same (category, score) plumbing as the paradigm grid.
+    completeness_by_out = {
+        c.output_id: (c.category, c.score) for c in db.execute(select(Completeness)).scalars()
+    }
 
     # acc[(tier, gen_id)] = dict of running lists/counters
     acc: dict[tuple[str, int], dict] = {}
@@ -134,6 +139,8 @@ def tier_scorecard(db) -> list[dict]:
                 "fscore": [],
                 "structural": [],
                 "verdicts": [],
+                "completeness": [],
+                "complete_cats": [],
             },
         )
         a["n_outputs"] += 1
@@ -148,6 +155,11 @@ def tier_scorecard(db) -> list[dict]:
                 a["verdicts"].append(verdict_by_out[out.id])
         if structural_by_out.get(out.id) is not None:
             a["structural"].append(structural_by_out[out.id])
+        if out.id in completeness_by_out:
+            ccat, cscore = completeness_by_out[out.id]
+            a["complete_cats"].append(ccat)
+            if cscore is not None:
+                a["completeness"].append(cscore)
 
     out_tiers = list(TIERS) + ["untiered"]
     card = []
@@ -160,6 +172,8 @@ def tier_scorecard(db) -> list[dict]:
             pass_rate = (
                 sum(1 for v in verdicts if v == "PASS") / len(verdicts) if verdicts else None
             )
+            gcats = a["complete_cats"]
+            gpct_complete = sum(1 for c in gcats if c == "complete") / len(gcats) if gcats else None
             rows.append(
                 {
                     "generator": gen_name.get(gid, f"#{gid}"),
@@ -169,6 +183,9 @@ def tier_scorecard(db) -> list[dict]:
                     "mean_fscore": _mean(a["fscore"]),
                     "mean_structural": _mean(a["structural"]),
                     "species_pass_rate": pass_rate,
+                    "completeness_n": len(gcats),
+                    "mean_completeness": _mean(a["completeness"]),
+                    "pct_complete": gpct_complete,
                 }
             )
         rows.sort(key=lambda r: r["generator"])

@@ -20,6 +20,14 @@ def _clean(db):
     # paradigm_tier_scorecard reads global TaskDifficulty → this test must own tier state fully.
     db.query(TaskDifficulty).delete()
     db.query(Metric).filter(Metric.detail == "pts").delete(synchronize_session=False)
+    # Completeness.output_id is unique with no ON DELETE cascade + SQLite reuses deleted rowids;
+    # clear these rows before the outputs so a later test's reused id can't collide.
+    pts_out_ids = (
+        db.query(ModelOutput.id).filter(ModelOutput.asset_path.like("pts/%.glb")).scalar_subquery()
+    )
+    db.query(Completeness).filter(Completeness.output_id.in_(pts_out_ids)).delete(
+        synchronize_session=False
+    )
     db.query(ModelOutput).filter(ModelOutput.asset_path.like("pts/%.glb")).delete(
         synchronize_session=False
     )
