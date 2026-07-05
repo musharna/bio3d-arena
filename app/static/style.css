@@ -1130,11 +1130,34 @@ details.group[open] > summary.group-title::before {
   border-color: rgba(176, 122, 0, 0.35);
 }
 
-/* Reference photo panel in the vote UI — "what the organism should look like" */
-.reference-panel { margin: 0.5rem 0 0.75rem; text-align: center; }
-.reference-img {
-  max-width: 240px; max-height: 240px; width: auto; height: auto;
-  object-fit: contain; border-radius: 8px; border: 1px solid rgba(128,128,128,0.35);
-  background: rgba(128,128,128,0.08); box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+/* Reference gallery panel in the vote UI — "what the organism should look like" */
+.reference-panel {
+  margin: 0.5rem 0 0.75rem;
+  text-align: center;
 }
-.reference-cap { font-size: 0.8rem; opacity: 0.72; margin: 0.3rem 0 0; }
+.reference-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  align-items: center;
+}
+.reference-img {
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  background: rgba(128, 128, 128, 0.08);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  cursor: zoom-in;
+  transition: transform 0.12s ease;
+}
+.reference-img:hover {
+  transform: scale(1.03);
+}
+.reference-cap {
+  font-size: 0.8rem;
+  opacity: 0.72;
+  margin: 0.4rem 0 0;
+}

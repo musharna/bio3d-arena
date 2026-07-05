@@ -3,7 +3,7 @@ import json
 
 from app.database import SessionLocal, init_db
 from app.models import Category, Generator, ModelOutput, Task
-from app.service import reference_image_for_task
+from app.service import reference_images_for_task
 from app.storage import get_storage
 
 
@@ -25,7 +25,8 @@ def _task_with_outputs(db, meta_list):
     g = Generator(slug="refimg-g", name="G")
     db.add_all([cat, g])
     db.flush()
-    t = Task(category_id=cat.id, title="refimg-t", prompt="p")
+    # title has no gallery dir on disk → references == just the input photo(s)
+    t = Task(category_id=cat.id, title="refimg-Nonesuch fictus — recon", prompt="p")
     db.add(t)
     db.flush()
     for i, meta in enumerate(meta_list):
@@ -38,33 +39,40 @@ def _task_with_outputs(db, meta_list):
     return t
 
 
-def test_reference_url_from_output_input_image():
+def test_reference_list_includes_input_photo_with_credit():
     with SessionLocal() as db:
         _clean(db)
-        # a text output (no input image) + a recon output that recorded its input photo
         t = _task_with_outputs(
             db,
             ['{"modality": "text"}', json.dumps({"input_image": "reference/puffball_ref.jpg"})],
         )
-        url = reference_image_for_task(db, t)
-        assert url == get_storage().url_for("reference/puffball_ref.jpg")
+        refs = reference_images_for_task(db, t)
+        assert refs == [
+            {"url": get_storage().url_for("reference/puffball_ref.jpg"), "credit": "reconstruction input photo"}
+        ]
         _clean(db)
 
 
-def test_reference_none_when_no_input_image():
+def test_reference_empty_when_no_input_image_and_no_gallery():
     with SessionLocal() as db:
         _clean(db)
         t = _task_with_outputs(db, ["{}", '{"provider": "x"}'])
-        assert reference_image_for_task(db, t) is None
+        assert reference_images_for_task(db, t) == []
         _clean(db)
 
 
-def test_reference_survives_bad_meta_json():
+def test_reference_dedups_and_survives_bad_meta_json():
     with SessionLocal() as db:
         _clean(db)
-        # a malformed meta row must not crash the lookup; the good one still resolves
+        # a malformed meta row must not crash; the same input twice appears once (dedup)
         t = _task_with_outputs(
-            db, ["not-json", json.dumps({"input_image": "reference/rose_ref.jpg"})]
+            db,
+            [
+                "not-json",
+                json.dumps({"input_image": "reference/rose_ref.jpg"}),
+                json.dumps({"input_image": "reference/rose_ref.jpg"}),
+            ],
         )
-        assert reference_image_for_task(db, t) == get_storage().url_for("reference/rose_ref.jpg")
+        refs = reference_images_for_task(db, t)
+        assert [r["url"] for r in refs] == [get_storage().url_for("reference/rose_ref.jpg")]
         _clean(db)

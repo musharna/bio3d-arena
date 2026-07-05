@@ -119,15 +119,20 @@ function render(data) {
   // Reference photo (what the organism should look like) — shown so voters can judge fidelity,
   // not just aesthetics. Hidden when a task has no reference on record.
   const refPanel = el("reference-panel");
-  const refImg = el("reference-img");
-  if (refPanel && refImg) {
-    if (data.task.reference) {
-      refImg.src = data.task.reference;
-      refPanel.hidden = false;
-    } else {
-      refImg.removeAttribute("src");
-      refPanel.hidden = true;
+  const refGallery = el("reference-gallery");
+  if (refPanel && refGallery) {
+    const refs = (data.task.references || []).filter((r) => r && r.url);
+    refGallery.textContent = "";
+    for (const r of refs) {
+      const img = document.createElement("img");
+      img.className = "reference-img";
+      img.src = r.url;
+      img.loading = "lazy";
+      img.alt = "Reference photo of this organism";
+      if (r.credit) img.title = r.credit; // CC attribution / "reconstruction input photo"
+      refGallery.appendChild(img);
     }
+    refPanel.hidden = refs.length === 0;
   }
   // Shared viewer registry (viewer.js) picks model-viewer vs 3Dmol by format.
   el("fmt-a").textContent = window.Bio3DViewer.mount(

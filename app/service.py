@@ -1077,23 +1077,45 @@ def dgen_trajectory(db, run_id: int | None = None) -> list[dict]:
     return out
 
 
-def reference_image_for_task(db: Session, task) -> str | None:
-    """URL of the reference photo for a task — the input image its image→3D outputs were
-    reconstructed from (recorded in ModelOutput.meta_json['input_image']), served from the asset
-    store. Shown beside the candidates at vote time so people can judge fidelity to the actual
-    specimen — essential for unfamiliar taxa (you can't rate a puffball reconstruction without
-    seeing a puffball). Task-scoped, so it applies to every paradigm's outputs of that subject.
-    Returns None if no output recorded an input image."""
+def _gallery_slug(title: str) -> str:
+    """'Lycoperdon perlatum — single-image → …' -> 'lycoperdon_perlatum' (gallery dir name)."""
+    return title.split("—")[0].strip().lower().replace(" ", "_")
+
+
+def reference_images_for_task(db: Session, task) -> list[dict]:
+    """Ordered reference images for a task, each {url, credit}: the recon INPUT photo(s) first
+    (what the image→3D models were actually given, from meta.input_image), then a small CC
+    species gallery (data/assets/reference/gallery/<slug>/, sourced from iNaturalist) so voters
+    see the organism from several angles/specimens — one photo underspecifies an unfamiliar
+    organism. Task-scoped, applies to every paradigm's outputs. Empty list if nothing is on
+    record. cc-by gallery photos carry their required attribution in `credit`."""
     import json
 
+    from . import config
     from .models import ModelOutput
     from .storage import get_storage
 
+    st = get_storage()
+    out: list[dict] = []
+    seen: set[str] = set()
     for o in db.execute(select(ModelOutput).where(ModelOutput.task_id == task.id)).scalars():
         try:
             img = (json.loads(o.meta_json or "{}") or {}).get("input_image")
         except (ValueError, TypeError):
             continue
-        if img:
-            return get_storage().url_for(img)
-    return None
+        if img and img not in seen:
+            seen.add(img)
+            out.append({"url": st.url_for(img), "credit": "reconstruction input photo"})
+
+    gdir = config.ASSET_DIR / "reference" / "gallery" / _gallery_slug(task.title)
+    manifest = gdir / "manifest.json"
+    if manifest.exists():
+        try:
+            for item in json.loads(manifest.read_text()):
+                rel = f"reference/gallery/{_gallery_slug(task.title)}/{item['file']}"
+                out.append(
+                    {"url": st.url_for(rel), "credit": item.get("attribution", "iNaturalist")}
+                )
+        except (ValueError, KeyError, OSError):
+            pass
+    return out
