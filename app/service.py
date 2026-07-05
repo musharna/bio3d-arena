@@ -1075,3 +1075,25 @@ def dgen_trajectory(db, run_id: int | None = None) -> list[dict]:
             }
         )
     return out
+
+
+def reference_image_for_task(db: Session, task) -> str | None:
+    """URL of the reference photo for a task — the input image its image→3D outputs were
+    reconstructed from (recorded in ModelOutput.meta_json['input_image']), served from the asset
+    store. Shown beside the candidates at vote time so people can judge fidelity to the actual
+    specimen — essential for unfamiliar taxa (you can't rate a puffball reconstruction without
+    seeing a puffball). Task-scoped, so it applies to every paradigm's outputs of that subject.
+    Returns None if no output recorded an input image."""
+    import json
+
+    from .models import ModelOutput
+    from .storage import get_storage
+
+    for o in db.execute(select(ModelOutput).where(ModelOutput.task_id == task.id)).scalars():
+        try:
+            img = (json.loads(o.meta_json or "{}") or {}).get("input_image")
+        except (ValueError, TypeError):
+            continue
+        if img:
+            return get_storage().url_for(img)
+    return None

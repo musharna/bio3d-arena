@@ -37,6 +37,16 @@ block content %}
     <span class="cat-chip" id="task-cat">…</span>
     <h2 id="task-title">Loading a comparison…</h2>
     <p id="task-prompt" class="prompt"></p>
+    <figure id="reference-panel" class="reference-panel" hidden>
+      <img
+        id="reference-img"
+        class="reference-img"
+        alt="Reference photo of the organism this comparison should reconstruct"
+      />
+      <figcaption class="reference-cap">
+        Reference — what this organism should look like. Judge each model's fidelity to it.
+      </figcaption>
+    </figure>
     <p class="criterion">
       Vote on: <strong id="criterion-name">overall</strong> — rotate, zoom, and
       pan each model, then pick the better one.

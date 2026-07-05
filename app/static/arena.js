@@ -116,6 +116,19 @@ function render(data) {
   el("task-title").textContent = data.task.title;
   el("task-prompt").textContent = data.task.prompt;
   el("criterion-name").textContent = data.criterion.name;
+  // Reference photo (what the organism should look like) — shown so voters can judge fidelity,
+  // not just aesthetics. Hidden when a task has no reference on record.
+  const refPanel = el("reference-panel");
+  const refImg = el("reference-img");
+  if (refPanel && refImg) {
+    if (data.task.reference) {
+      refImg.src = data.task.reference;
+      refPanel.hidden = false;
+    } else {
+      refImg.removeAttribute("src");
+      refPanel.hidden = true;
+    }
+  }
   // Shared viewer registry (viewer.js) picks model-viewer vs 3Dmol by format.
   el("fmt-a").textContent = window.Bio3DViewer.mount(
     el("slot-a"),

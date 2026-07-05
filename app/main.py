@@ -194,12 +194,24 @@ def _resolve_category_id(db: Session, category_slug: str | None) -> int | None:
 
 
 def _serialize(
-    comparison: Comparison, task: Task, crit: Criterion, out_a: ModelOutput, out_b: ModelOutput
+    comparison: Comparison,
+    task: Task,
+    crit: Criterion,
+    out_a: ModelOutput,
+    out_b: ModelOutput,
+    reference_url: str | None = None,
 ) -> dict:
-    """Anonymized arena payload — never leaks generator identity or gold status."""
+    """Anonymized arena payload — never leaks generator identity or gold status. `reference_url`
+    is the subject's reference photo (what the organism should look like), shown so voters can
+    judge fidelity — not identity-revealing (it's the shared input, same for both candidates)."""
     return {
         "comparison_id": comparison.id,
-        "task": {"title": task.title, "prompt": task.prompt, "category": task.category.name},
+        "task": {
+            "title": task.title,
+            "prompt": task.prompt,
+            "category": task.category.name,
+            "reference": reference_url,
+        },
         "criterion": {"slug": crit.slug, "name": crit.name},
         "a": {
             "url": storage.url_for(out_a.asset_path),
@@ -244,7 +256,9 @@ def _build_gold_comparison(db: Session, session_id: str, crit: Criterion) -> dic
     )
     db.add(comparison)
     db.commit()
-    return _serialize(comparison, task, crit, out_a, out_b)
+    return _serialize(
+        comparison, task, crit, out_a, out_b, service.reference_image_for_task(db, task)
+    )
 
 
 def _build_comparison(
@@ -316,7 +330,9 @@ def _build_comparison(
     )
     db.add(comparison)
     db.commit()
-    return _serialize(comparison, task, crit, out_a, out_b)
+    return _serialize(
+        comparison, task, crit, out_a, out_b, service.reference_image_for_task(db, task)
+    )
 
 
 def _build_calibration_comparison(db: Session, session_id: str) -> dict | None:
@@ -362,7 +378,9 @@ def _build_calibration_comparison(db: Session, session_id: str) -> dict | None:
     )
     db.add(comparison)
     db.commit()
-    payload = _serialize(comparison, task, crit, out_a, out_b)
+    payload = _serialize(
+        comparison, task, crit, out_a, out_b, service.reference_image_for_task(db, task)
+    )
     payload["set"] = "calibration"
     payload["progress"] = progress
     return payload
