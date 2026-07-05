@@ -418,6 +418,12 @@ def recompute_judge_all(db: Session, view_condition: str = "multi4") -> dict:
     return {"status": "ok", "view_condition": view_condition, "criteria": len(criteria)}
 
 
+# Memoized tier_perceptual_ranking output, keyed by (criterion, condition) → (vote_signature,
+# result). The board's bootstrapped BT is the /difficulty page's dominant cost and only changes
+# when the relevant judge votes change, so a repeat load is served from here.
+_perceptual_cache: dict[tuple[str, str], tuple[tuple, list[dict]]] = {}
+
+
 def tier_perceptual_ranking(
     db: Session, criterion_slug: str = "overall", view_condition: str = "multi4"
 ) -> list[dict]:
@@ -436,9 +442,27 @@ def tier_perceptual_ranking(
     if crit is None:
         return empty
 
+    # Cache signature: the ranking only changes when the relevant judge votes change. Cheap to
+    # compute (count + max id), so a repeat load returns the memoized result instantly.
+    sig = tuple(
+        db.execute(
+            select(func.count(JudgeVote.id), func.max(JudgeVote.id)).where(
+                JudgeVote.criterion_id == crit.id, JudgeVote.view_condition == view_condition
+            )
+        ).one()
+    )
+    ckey = (criterion_slug, view_condition)
+    hit = _perceptual_cache.get(ckey)
+    if hit is not None and hit[0] == sig:
+        return hit[1]
+
     tier_by_task = {td.task_id: td.tier for td in db.execute(select(TaskDifficulty)).scalars()}
     excluded = mode_a_excluded_generator_ids(db)
     names = generator_display_names(db)
+    # Batch what was an N+1 over every judge vote (~4 db.get each): output→generator and
+    # generator→paradigm, one query apiece.
+    gen_by_out = dict(db.execute(select(ModelOutput.id, ModelOutput.generator_id)).all())
+    paradigm_by_gen = {g.id: g.paradigm for g in db.execute(select(Generator)).scalars()}
 
     matches_by_tier: dict[str, list[tuple[int, int]]] = defaultdict(list)
     jvs = db.execute(
@@ -452,15 +476,13 @@ def tier_perceptual_ranking(
         tier = tier_by_task.get(jv.task_id)
         if tier is None:
             continue
-        out_a = db.get(ModelOutput, jv.output_a_id)
-        out_b = db.get(ModelOutput, jv.output_b_id)
-        if out_a is None or out_b is None:
+        gen_a = gen_by_out.get(jv.output_a_id)
+        gen_b = gen_by_out.get(jv.output_b_id)
+        if gen_a is None or gen_b is None:
             continue  # dangling vote (output deleted) — not a valid comparison
-        gen_a = out_a.generator_id
-        gen_b = out_b.generator_id
         if gen_a in excluded or gen_b in excluded:
             continue
-        if not same_paradigm(db.get(Generator, gen_a).paradigm, db.get(Generator, gen_b).paradigm):
+        if not same_paradigm(paradigm_by_gen.get(gen_a), paradigm_by_gen.get(gen_b)):
             continue  # never rank across paradigms
         if jv.winner == "a":
             matches_by_tier[tier].append((gen_a, gen_b))
@@ -476,11 +498,14 @@ def tier_perceptual_ranking(
         players = sorted({p for m in matches for p in m})
         rows = []
         if players:
-            result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP)
+            # bootstrap=0: this board renders only bt_score + n_games (no CI columns), so the
+            # 200-resample bootstrap — the dominant cost, ~24s cold across all tiers — is pure
+            # waste here. The point estimate (result.scores) is bootstrap-independent.
+            result = ranking.bradley_terry(players, matches, bootstrap=0)
             rows = [
                 {
                     "generator": names.get(p, str(p)),
-                    "paradigm": db.get(Generator, p).paradigm,
+                    "paradigm": paradigm_by_gen.get(p),
                     "bt_score": round(result.scores.get(p, ranking.BT_BASE), 1),
                     "n_games": int(result.n_games.get(p, 0)),
                 }
@@ -495,6 +520,7 @@ def tier_perceptual_ranking(
                 rank_counters[r["paradigm"]] = rank_counters.get(r["paradigm"], 0) + 1
                 r["rank"] = rank_counters[r["paradigm"]]
         out.append({"tier": tier, "rows": rows, "n_matches": len(matches)})
+    _perceptual_cache[ckey] = (sig, out)
     return out
 
 
