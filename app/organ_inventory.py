@@ -1,10 +1,13 @@
 # app/organ_inventory.py
 """Authored per-taxon expected-organ inventories for the organism-level completeness metric.
 
-Required organs = the vegetative body (a plant is "complete" if it has an axis + foliage).
-The reproductive organ is OPTIONAL so a lone fruit/cone/pod registers as an isolated organ,
-not a complete plant. Visual descriptors are image-judgeable phrases for the VLM checklist.
-Taxon keys MUST match app.trait_morphology.MORPHOLOGY_TRAITS (== TraitRubric.taxon).
+For plants, required organs = the vegetative body (an axis + foliage), with the reproductive
+organ OPTIONAL so a lone fruit/cone/pod registers as an isolated organ, not a complete plant.
+For single-body-plan organisms (fungi, a depicted fruit) the body is the sole required organ
+(see _body_inv). Visual descriptors are image-judgeable phrases for the VLM checklist.
+Taxon keys equal TraitRubric.taxon (the completeness scorer gates on a TraitRubric existing +
+inventory_for(taxon); it does NOT require the taxon to be in MORPHOLOGY_TRAITS — the fungi are
+completeness-scored but carry no Mode-C morphology rubric).
 
 FOLIAGE descriptors ask leaf PRESENCE, not leaf morphology: an earlier version baked in leaf
 shape ("trifoliate", "strap-like", "pinnate serrated"), which made the VLM hedge "uncertain" on
