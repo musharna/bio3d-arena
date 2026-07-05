@@ -92,3 +92,43 @@ def test_scorecard_groups_by_tier_and_generator():
         assert unt_rows[0]["species_pass_rate"] is None  # no verdicts for o3
         # Robust: assert no "Gen" row in easy (guards against unrelated rows from other tests).
         assert all(r["generator"] != "Gen" for r in by_tier["easy"]["rows"])
+
+
+def test_error_status_metric_not_counted_as_scored():
+    # status='error' metrics (failed scoring, null chamfer) count toward n_outputs but not
+    # n_scored — same rule as the paradigm grid. Regression for the GT-less expansion taxa.
+    with SessionLocal() as db:
+        _clean(db)
+        cat = Category(slug="td3-cat", name="C")
+        gen = Generator(slug="td3-g", name="Gen")
+        db.add_all([cat, gen])
+        db.flush()
+        hard = Task(category_id=cat.id, title="td3-hard", prompt="p")
+        db.add(hard)
+        db.flush()
+        o_ok = ModelOutput(task_id=hard.id, generator_id=gen.id, asset_path="td3/ok.glb")
+        o_err = ModelOutput(task_id=hard.id, generator_id=gen.id, asset_path="td3/err.glb")
+        db.add_all([o_ok, o_err])
+        db.flush()
+        db.add_all(
+            [
+                Metric(
+                    output_id=o_ok.id,
+                    chamfer=0.2,
+                    fscore=0.6,
+                    species_verdict="PASS",
+                    status="ok",
+                    detail="td3",
+                ),
+                Metric(output_id=o_err.id, status="error", detail="td3"),  # null chamfer/fscore
+            ]
+        )
+        set_task_difficulty(db, hard.id, "hard", "occlusion", commit=False)
+        db.commit()
+
+        card = tier_scorecard(db)
+        by_tier = {c["tier"]: c for c in card}
+        r = next(r for r in by_tier["hard"]["rows"] if r["generator"] == "Gen")
+        assert r["n_outputs"] == 2
+        assert r["n_scored"] == 1
+        assert abs(r["mean_chamfer"] - 0.2) < 1e-9

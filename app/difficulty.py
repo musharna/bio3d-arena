@@ -108,6 +108,11 @@ def tier_scorecard(db) -> list[dict]:
     fscore_by_out = {}
     verdict_by_out = {}
     for m in db.execute(select(Metric)).scalars():
+        # Only successfully-scored metrics count. status='error' rows (e.g. a taxon with no GT
+        # mesh) carry a null chamfer and are failed attempts, not scores — excluding them here
+        # keeps n_scored honest (a row's mere existence is not a score).
+        if m.status != "ok":
+            continue
         chamfer_by_out[m.output_id] = m.chamfer
         fscore_by_out[m.output_id] = m.fscore
         verdict_by_out[m.output_id] = m.species_verdict
@@ -184,6 +189,11 @@ def paradigm_tier_scorecard(db) -> list[dict]:
     paradigm_by_gen = {g.id: (g.paradigm or "") for g in db.execute(select(Generator)).scalars()}
     chamfer_by_out, fscore_by_out, verdict_by_out = {}, {}, {}
     for m in db.execute(select(Metric)).scalars():
+        # Only successfully-scored metrics count. status='error' rows (e.g. a taxon with no GT
+        # mesh) carry a null chamfer and are failed attempts, not scores — excluding them here
+        # keeps n_scored honest (a row's mere existence is not a score).
+        if m.status != "ok":
+            continue
         chamfer_by_out[m.output_id] = m.chamfer
         fscore_by_out[m.output_id] = m.fscore
         verdict_by_out[m.output_id] = m.species_verdict

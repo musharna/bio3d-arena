@@ -79,6 +79,47 @@ def test_paradigm_grid_groups_by_paradigm_and_tier():
         assert rows["unspecified"]["mean_chamfer"] is None  # unscored → None, never zero
 
 
+def test_error_status_metric_not_counted_as_scored():
+    # A metric row with status='error' (failed scoring, e.g. a taxon with no GT mesh) leaves
+    # chamfer NULL. It must count toward n_outputs but NOT n_scored — a failed attempt is not
+    # a score. Regression for the expansion wave, which produced 24 GT-less error metrics.
+    with SessionLocal() as db:
+        _clean(db)
+        cat = Category(slug="pts-cat", name="C")
+        g_recon = Generator(slug="pts-recon", name="Recon", paradigm="image_recon")
+        db.add_all([cat, g_recon])
+        db.flush()
+        hard = Task(category_id=cat.id, title="pts-hard", prompt="p")
+        db.add(hard)
+        db.flush()
+        o_ok = ModelOutput(task_id=hard.id, generator_id=g_recon.id, asset_path="pts/ok.glb")
+        o_err = ModelOutput(task_id=hard.id, generator_id=g_recon.id, asset_path="pts/err.glb")
+        db.add_all([o_ok, o_err])
+        db.flush()
+        db.add_all(
+            [
+                Metric(
+                    output_id=o_ok.id,
+                    chamfer=0.2,
+                    fscore=0.6,
+                    species_verdict="PASS",
+                    status="ok",
+                    detail="pts",
+                ),
+                Metric(output_id=o_err.id, status="error", detail="pts"),  # null chamfer/fscore
+            ]
+        )
+        set_task_difficulty(db, hard.id, "hard", "occlusion", commit=False)
+        db.commit()
+
+        card = paradigm_tier_scorecard(db)
+        hard_b = next(b for b in card if b["tier"] == "hard")
+        row = {r["paradigm"]: r for r in hard_b["rows"]}["image_recon"]
+        assert row["n_outputs"] == 2  # both outputs present
+        assert row["n_scored"] == 1  # only the ok metric is a score
+        assert abs(row["mean_chamfer"] - 0.2) < 1e-9
+
+
 def test_tier_scorecard_shape_regression():
     # the generator-level scorecard must still return the documented shape
     with SessionLocal() as db:
