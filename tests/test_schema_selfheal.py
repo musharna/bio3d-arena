@@ -43,6 +43,28 @@ def test_ensure_columns_adds_hidden_at_to_preexisting_model_output_table():
         engine.dispose()
 
 
+def test_ensure_columns_is_model_driven_heals_voter_session_user_id():
+    """Regression for the recurring drift class: a voter_session predating the user_id column
+    must self-heal WITHOUT a hardcoded rule (the model-driven diff finds it). This exact column
+    broke voting on a stale DB."""
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = Path(tmp) / "drift.db"
+        engine = create_engine(f"sqlite:///{db_path}", future=True)
+        with engine.begin() as conn:
+            conn.exec_driver_sql(
+                "CREATE TABLE voter_session (session_id VARCHAR(64) PRIMARY KEY, n_votes INTEGER)"
+            )
+            cols_before = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(voter_session)")}
+        assert "user_id" not in cols_before
+
+        _ensure_columns(engine)
+
+        with engine.begin() as conn:
+            cols_after = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(voter_session)")}
+        assert "user_id" in cols_after
+        engine.dispose()
+
+
 def test_sessionlocal_self_heals_schema_once(monkeypatch):
     """A standalone script that only calls SessionLocal() (never init_db()) still gets a healed
     schema: the FIRST session triggers init_db() exactly once, later sessions don't re-run it.

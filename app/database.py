@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from . import config
+
+logger = logging.getLogger(__name__)
 
 config.ensure_dirs()
 
@@ -86,17 +89,49 @@ def get_db() -> Iterator[Session]:
 
 
 def _ensure_columns(engine) -> None:  # noqa: ANN001
-    """create_all does not add columns to existing tables; add any missing additive columns
-    here so pre-existing / restored SQLite DBs self-heal on boot."""
+    """create_all does not add columns to existing tables; diff EVERY model table against the DB
+    and ADD any missing additive column so a pre-existing / restored SQLite DB self-heals on boot.
+
+    Model-driven (not a hardcoded list) — the hardcoded version drifted from the models and let
+    voter_session.user_id (and hidden_at, generator.paradigm before it) break the app on a stale
+    DB. Only columns that can be added safely are healed: a NULLABLE column, or one with a scalar
+    Python default (embedded as a literal DEFAULT so a NOT NULL column is fillable). A NOT NULL
+    column with only a callable/no default needs a real migration and is logged, not force-added."""
+    from . import models  # noqa: F401  (registers tables on Base.metadata)
 
     with engine.begin() as conn:
-        cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(generator)")]
-        if "generator" and cols and "paradigm" not in cols:
-            conn.exec_driver_sql("ALTER TABLE generator ADD COLUMN paradigm VARCHAR(32) DEFAULT ''")
-
-        cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(model_output)")]
-        if cols and "hidden_at" not in cols:
-            conn.exec_driver_sql("ALTER TABLE model_output ADD COLUMN hidden_at DATETIME")
+        db_tables = {
+            r[0] for r in conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        for table in Base.metadata.tables.values():
+            if table.name not in db_tables:
+                continue  # a wholly-missing table is create_all's job, not ours
+            have = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table.name})")}
+            for col in table.columns:
+                if col.name in have:
+                    continue
+                coltype = col.type.compile(engine.dialect)
+                dflt = getattr(col.default, "arg", None)
+                if isinstance(dflt, bool):
+                    default_sql = f" DEFAULT {1 if dflt else 0}"
+                elif isinstance(dflt, (int, float)):
+                    default_sql = f" DEFAULT {dflt}"
+                elif isinstance(dflt, str):
+                    default_sql = f" DEFAULT {dflt!r}"
+                elif col.nullable:
+                    default_sql = ""
+                else:
+                    logger.warning(
+                        "schema drift: %s.%s is NOT NULL with no scalar default — needs a "
+                        "migration, skipping self-heal",
+                        table.name,
+                        col.name,
+                    )
+                    continue
+                conn.exec_driver_sql(
+                    f"ALTER TABLE {table.name} ADD COLUMN {col.name} {coltype}{default_sql}"
+                )
+                logger.info("self-healed missing column %s.%s", table.name, col.name)
 
 
 def init_db() -> None:
