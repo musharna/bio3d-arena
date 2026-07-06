@@ -99,3 +99,32 @@ def test_refuses_overwrite_without_force(tmp_path):
     with pytest.raises(FileExistsError):
         write_reference_photo(**kw)
     write_reference_photo(**kw, force=True)  # ok with force
+
+
+def test_refuses_to_clobber_existing_sidecar_without_force(tmp_path):
+    # A curated original {taxon}_ref.json may exist even when no _ref_clean.jpg does — writing
+    # unconditionally would destroy its provenance. Must refuse without force.
+    src = _img(tmp_path / "in.jpg")
+    dest = tmp_path / "reference"
+    dest.mkdir()
+    (dest / "morel_ref.json").write_text('{"pre-existing": "curated provenance"}')
+    # note: no morel_ref_clean.jpg exists — the old guard (jpg-only) would NOT fire here
+    kw = dict(
+        taxon="morel",
+        image_path=src,
+        author="x",
+        license_="CC0-1.0",
+        source_url="https://x",
+        download_url="https://x.jpg",
+        subject="s",
+        title="t",
+        note="n",
+        dest_dirs=[dest],
+    )
+    with pytest.raises(FileExistsError):
+        write_reference_photo(**kw)
+    # the curated sidecar is untouched
+    assert json.loads((dest / "morel_ref.json").read_text()) == {
+        "pre-existing": "curated provenance"
+    }
+    write_reference_photo(**kw, force=True)  # force overwrites intentionally

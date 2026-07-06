@@ -61,13 +61,21 @@ def write_reference_photo(
     for d in dest_dirs:
         d.mkdir(parents=True, exist_ok=True)
         jpg = d / f"{taxon}_ref_clean.jpg"
-        if jpg.exists() and not force:
-            raise FileExistsError(f"{jpg} exists (use force=True to overwrite)")
-        shutil.copyfile(image_path, jpg)
         # Sidecar MUST be {taxon}_ref.json (not _ref_clean.json) so cleared_reference_taxa()'s
         # `*_ref.json` glob scans it and derives taxon={taxon}. The `file` field still points at
         # the actual {taxon}_ref_clean.jpg image.
-        (d / f"{taxon}_ref.json").write_text(json.dumps(sidecar, indent=2))
+        sidecar_path = d / f"{taxon}_ref.json"
+        # Guard the SIDECAR path too (not just the image): a taxon may already have a curated
+        # original {taxon}_ref.json (e.g. morel_ref.json = Philip Precey/iNat/CC0) even when no
+        # _ref_clean.jpg exists yet — writing unconditionally would silently destroy that
+        # provenance record. Refuse without force if EITHER target exists.
+        if not force and (jpg.exists() or sidecar_path.exists()):
+            raise FileExistsError(
+                f"{jpg} or {sidecar_path} exists — use force=True to overwrite (this can replace a "
+                f"curated original {taxon}_ref.json provenance record)"
+            )
+        shutil.copyfile(image_path, jpg)
+        sidecar_path.write_text(json.dumps(sidecar, indent=2))
         first_jpg = first_jpg or jpg
     assert first_jpg is not None
     return first_jpg
