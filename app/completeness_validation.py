@@ -77,7 +77,13 @@ def map_note_to_category(human_verdict: str, note: str) -> str | None:
     return None  # trait-quibble / ambiguous -> drop from the eval set
 
 
-_SEVERITY = {"fragment": 0, "isolated-organ": 1, "partial-organism": 2, "complete": 3}
+_SEVERITY = {
+    "fragment": 0,
+    "isolated-organ": 1,
+    "partial-organism": 2,
+    "malformed": 3,
+    "complete": 4,
+}
 
 
 def gt_by_output(rows: list[dict]) -> dict[int, str]:
