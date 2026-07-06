@@ -12,9 +12,13 @@ def setup_module(_m):
 
 
 def _clean(db):
-    ids = db.query(Task.id).filter(Task.title.like("refimg-%")).scalar_subquery()
-    db.query(ModelOutput).filter(ModelOutput.task_id.in_(ids)).delete(synchronize_session=False)
-    db.query(Task).filter(Task.title.like("refimg-%")).delete(synchronize_session=False)
+    # Key cleanup off the stable category/generator slugs, not the task title — these tests use a
+    # barley-exempt task title (see below) so title-prefix matching no longer identifies them.
+    cat = db.query(Category).filter_by(slug="refimg-cat").first()
+    if cat is not None:
+        ids = db.query(Task.id).filter(Task.category_id == cat.id).scalar_subquery()
+        db.query(ModelOutput).filter(ModelOutput.task_id.in_(ids)).delete(synchronize_session=False)
+        db.query(Task).filter(Task.category_id == cat.id).delete(synchronize_session=False)
     db.query(Generator).filter(Generator.slug.like("refimg-%")).delete(synchronize_session=False)
     db.query(Category).filter_by(slug="refimg-cat").delete(synchronize_session=False)
     db.commit()
@@ -25,8 +29,11 @@ def _task_with_outputs(db, meta_list):
     g = Generator(slug="refimg-g", name="G")
     db.add_all([cat, g])
     db.flush()
-    # title has no gallery dir on disk → references == just the input photo(s)
-    t = Task(category_id=cat.id, title="refimg-Nonesuch fictus — recon", prompt="p")
+    # Recon INPUT photos are surfaced as references ONLY for INPUT_REFERENCE_EXEMPT_SLUGS
+    # (barley-MRI). Non-exempt tasks exclude the input entirely (that path is covered by
+    # tests/test_reference_exclusion.py). Use the barley-exempt slug here so the input-photo
+    # logic (cleared-taxa filter, hidden_at exclusion, dedup, bad-meta survival) is still exercised.
+    t = Task(category_id=cat.id, title="Hordeum vulgare — refimg recon", prompt="p")
     db.add(t)
     db.flush()
     for i, meta in enumerate(meta_list):
