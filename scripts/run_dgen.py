@@ -11,6 +11,11 @@ import functools
 import os
 import sys
 
+# bootstrap: allow `python scripts/<name>.py` without PYTHONPATH (repo root on sys.path)
+import sys as _sys
+import pathlib as _pl
+_sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent))
+
 from app.database import SessionLocal, init_db
 from app.commission import SPECIES_COMMON, openrouter_complete, run_bpy
 from app.dgen import refine_loop, score_glb
