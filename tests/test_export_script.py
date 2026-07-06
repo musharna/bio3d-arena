@@ -261,15 +261,20 @@ def test_export_nulls_reference_asset_id_to_excluded_output(db_session, tmp_path
 def test_display_allows_uncleared_input_recon(db_session, tmp_path):
     # A commercial-model recon whose reference photo has NO cleared sidecar must still export
     # in the DISPLAY posture (mesh shows; photo suppressed elsewhere). Previously this raised.
+    # Unique slug/title: db_session rolls back its OWN writes but still READS committed rows from
+    # sibling tests on the shared engine, so fixed slugs/titles collide (UNIQUE constraint).
+    import uuid
+
     from app.models import Category, Generator, ModelOutput, Task
 
-    cat = Category(slug="plants", name="Plants")
-    g = Generator(slug="fal-trellis", name="TRELLIS", kind="model", paradigm="image_recon")
+    tag = uuid.uuid4().hex[:8]
+    title = f"Rosa recon display {tag}"
+    gslug = f"fal-trellis-{tag}"
+    cat = Category(slug=f"plants-{tag}", name="Plants")
+    g = Generator(slug=gslug, name="TRELLIS", kind="model", paradigm="image_recon")
     db_session.add_all([cat, g])
     db_session.flush()
-    t = Task(
-        category_id=cat.id, title="Rosa — single-image → 3D reconstruction", prompt="p", active=True
-    )
+    t = Task(category_id=cat.id, title=title, prompt="p", active=True)
     db_session.add(t)
     db_session.flush()
     o = ModelOutput(
@@ -287,8 +292,8 @@ def test_display_allows_uncleared_input_recon(db_session, tmp_path):
     manifest = export_bundle(
         db_session,
         store,
-        task_titles=["Rosa — single-image → 3D reconstruction"],
-        generator_slugs=["fal-trellis"],
+        task_titles=[title],
+        generator_slugs=[gslug],
         out_dir=str(tmp_path / "out"),
         posture="display",
         dry_run=True,

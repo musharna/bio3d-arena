@@ -14,17 +14,18 @@ def setup_module(_m):
 
 
 def test_plan_unhides_original_input_recon_and_hides_clean_swap():
+    # Unique title/slugs + injected taxa: the shared test engine persists any committing test,
+    # so using the real production title would collide with seed/sibling rows (assert 20 in []).
+    import uuid
+
+    tag = uuid.uuid4().hex[:8]
+    title = f"Rosa recon test {tag}"
     with SessionLocal() as db:
-        cat = Category(slug="plants-d", name="P")
-        g = Generator(slug="d-recon", name="r", kind="model", paradigm="image_recon")
+        cat = Category(slug=f"plants-d-{tag}", name="P")
+        g = Generator(slug=f"d-recon-{tag}", name="r", kind="model", paradigm="image_recon")
         db.add_all([cat, g])
         db.flush()
-        t = Task(
-            category_id=cat.id,
-            title="Rosa — single-image → 3D reconstruction",
-            prompt="p",
-            active=True,
-        )
+        t = Task(category_id=cat.id, title=title, prompt="p", active=True)
         db.add(t)
         db.flush()
 
@@ -46,24 +47,23 @@ def test_plan_unhides_original_input_recon_and_hides_clean_swap():
         db.add_all([good, weak])
         db.flush()
 
-        plan = plan_disposition(db)
+        plan = plan_disposition(db, taxa={"rose": (title, "rose")})
         assert good.id in plan["unhide"]
         assert weak.id in plan["hide"]
         db.rollback()
 
 
 def test_apply_disposition_flips_hidden_at():
+    import uuid
+
+    tag = uuid.uuid4().hex[:8]
+    title = f"Rosa recon apply {tag}"
     with SessionLocal() as db:
-        cat = Category(slug="plants-apply", name="P")
-        g = Generator(slug="apply-recon", name="r", kind="model", paradigm="image_recon")
+        cat = Category(slug=f"plants-apply-{tag}", name="P")
+        g = Generator(slug=f"apply-recon-{tag}", name="r", kind="model", paradigm="image_recon")
         db.add_all([cat, g])
         db.flush()
-        t = Task(
-            category_id=cat.id,
-            title="Rosa — single-image → 3D reconstruction",
-            prompt="p",
-            active=True,
-        )
+        t = Task(category_id=cat.id, title=title, prompt="p", active=True)
         db.add(t)
         db.flush()
 
@@ -86,7 +86,7 @@ def test_apply_disposition_flips_hidden_at():
         db.add_all([good, weak])
         db.flush()
 
-        plan = plan_disposition(db)
+        plan = plan_disposition(db, taxa={"rose": (title, "rose")})
         apply_disposition(db, plan)
 
         db.refresh(good)

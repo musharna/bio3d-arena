@@ -32,10 +32,14 @@ def _input_of(o: ModelOutput) -> str | None:
     return parsed.get("input_image")
 
 
-def plan_disposition(db) -> dict:
+def plan_disposition(db, taxa: dict | None = None) -> dict:
+    """Pure (read-only) plan. `taxa` maps key -> (task_title, slug); defaults to the production
+    _TAXA (Rosa/Glycine). Injectable so tests pass unique titles instead of the real ones (the
+    shared test engine persists any committing test, so a real production title would collide)."""
+    taxa = taxa if taxa is not None else _TAXA
     unhide: list[int] = []
     hide: list[int] = []
-    for _key, (title, slug) in _TAXA.items():
+    for _key, (title, slug) in taxa.items():
         t = db.execute(select(Task).where(Task.title == title)).scalars().first()
         if t is None:
             continue
