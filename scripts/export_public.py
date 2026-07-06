@@ -117,12 +117,35 @@ def _filtered_rows(db, inc: public_export.IncludeSet) -> dict[str, list[dict]]:
 
 
 def export_bundle(
-    db, storage: StorageBackend, *, task_titles, generator_slugs, out_dir, dry_run: bool = False
+    db,
+    storage: StorageBackend,
+    *,
+    task_titles,
+    generator_slugs,
+    out_dir,
+    posture: str = "redistribute",
+    dry_run: bool = False,
 ) -> dict:
+    from app import admissibility
+    from app.reference_provenance import (
+        assert_recon_photos_cleared,
+        assert_recon_photos_cleared_for_gold,
+    )
+
     inc = public_export.resolve_include_ids(
         db, task_titles=task_titles, generator_slugs=generator_slugs
     )
-    public_export.check_licenses(db, inc.output_ids)  # fail-loud before writing anything
+    gated = admissibility.non_admitted_output_ids(db)  # structural ∪ completeness ∪ semantic(gate)
+    public_export.filter_include_for_posture(db, inc, posture, gated)
+    public_export.filter_gold_for_posture(db, inc, posture, gated)
+    if posture == "redistribute":
+        public_export.check_licenses(db, inc.output_ids)  # fail-loud: nothing non-CC ships
+    else:  # display
+        assert_recon_photos_cleared(db, inc.output_ids)  # fail-loud: no uncleared reference photo
+        # Gold rows alias a real (possibly recon) asset under decoy source/meta_json -- the
+        # gate above reads each output's OWN source/meta_json and so silently skips every gold
+        # id, whose true reference photo (per the twin it aliases) was never clearance-checked.
+        assert_recon_photos_cleared_for_gold(db, inc.gold_output_ids)
     all_out = inc.output_ids | inc.gold_output_ids
     tables = _filtered_rows(db, inc)
 
@@ -135,6 +158,7 @@ def export_bundle(
         "counts": {k: len(v) for k, v in tables.items()},
         "licenses": licenses,
         "n_outputs": len(all_out),
+        "posture": posture,
     }
     if dry_run:
         manifest["dry_run"] = True
@@ -154,6 +178,9 @@ def export_bundle(
         (out / "assets" / rel).write_bytes(storage.read(rel))
 
     # Baked GT reference GLBs only (never raw .npy). Copy whatever exists under gt/.
+    # INVARIANT: gt/ reference GLBs are bio3d's own held-out meshes / CC-licensed scans -- not
+    # license-gated here; must hold before any redistribute publish (no license/posture check
+    # runs on this loop).
     for d in tables["recon_task"]:
         slug = d.get("species_slug")
         rel = f"{config.GT_ASSET_SUBDIR}/{slug}.glb"
@@ -169,6 +196,7 @@ def main() -> int:
     ap.add_argument("--tasks", required=True, help="comma-separated task titles")
     ap.add_argument("--generators", required=True, help="comma-separated generator slugs")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--posture", default="redistribute", choices=["display", "redistribute"])
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
     db = SessionLocal()
@@ -179,6 +207,7 @@ def main() -> int:
             task_titles=a.tasks.split(","),
             generator_slugs=a.generators.split(","),
             out_dir=a.out,
+            posture=a.posture,
             dry_run=a.dry_run,
         )
         # Advisory (non-blocking, NOT a gate): flag exported taxa whose recon completeness sits

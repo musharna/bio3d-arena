@@ -205,6 +205,8 @@ def _serialize(
     the subject's reference gallery (input photo + CC species photos — what the organism should
     look like), shown so voters can judge fidelity — not identity-revealing (shared across both
     candidates)."""
+    from .public_export import is_commercial_model
+
     return {
         "comparison_id": comparison.id,
         "task": {
@@ -218,11 +220,15 @@ def _serialize(
             "url": storage.url_for(out_a.asset_path),
             "format": out_a.asset_format,
             "output_id": out_a.id,
+            "machine_generated": is_commercial_model(out_a.source),
+            "attribution": out_a.attribution or None,
         },
         "b": {
             "url": storage.url_for(out_b.asset_path),
             "format": out_b.asset_format,
             "output_id": out_b.id,
+            "machine_generated": is_commercial_model(out_b.source),
+            "attribution": out_b.attribution or None,
         },
     }
 

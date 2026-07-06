@@ -151,8 +151,21 @@ function render(data) {
     (btn) => flagOutput(data.b.output_id, btn),
   ).toUpperCase();
   window.Bio3DViewer.syncPair(el("slot-a"), el("slot-b"));
+  setMachineGeneratedBadge("a", data.a);
+  setMachineGeneratedBadge("b", data.b);
   setAB("a"); // each new pair starts on Model A
   setStatus("");
+}
+
+// AUP labeling: badge + attribution tooltip on any output produced by a commercial
+// generation model (never on our own assets or redistributable-license scans).
+function setMachineGeneratedBadge(side, output) {
+  const badge = el(`ai-badge-${side}`);
+  if (!badge) return;
+  badge.hidden = !output.machine_generated;
+  badge.title = output.attribution
+    ? `Machine-generated — ${output.attribution}`
+    : "Machine-generated";
 }
 
 async function vote(winner) {

@@ -443,6 +443,17 @@ main {
   padding: 0 0.4rem;
   vertical-align: middle;
 }
+.ai-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #e6b277;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 0.4rem;
+  vertical-align: middle;
+  margin-left: 0.3rem;
+  cursor: help;
+}
 .vote-bar {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
