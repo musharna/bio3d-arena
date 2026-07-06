@@ -62,8 +62,8 @@
       const flag = document.createElement("button");
       flag.type = "button";
       flag.className = "viewer-ctl";
-      flag.setAttribute("aria-label", "Flag: not a plant / failed");
-      flag.title = "Flag: not a plant / failed";
+      flag.setAttribute("aria-label", "Flag: not the organism / failed");
+      flag.title = "Flag: not the organism / failed";
       flag.textContent = "⚑";
       flag.addEventListener("click", () => onFlag(flag));
       bar.appendChild(flag);

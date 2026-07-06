@@ -17,7 +17,7 @@ class KVoteIn(BaseModel):
 
 class FlagIn(BaseModel):
     output_id: int
-    reason: str = Field(default="not_a_plant", pattern="^(not_a_plant|failed|other)$")
+    reason: str = Field(default="not_the_organism", pattern="^(not_the_organism|failed|other)$")
 
 
 class CategoryIn(BaseModel):

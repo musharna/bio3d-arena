@@ -340,13 +340,13 @@ async function vote(winner) {
 
 async function flagOutput(outputId, btn) {
   if (!outputId || btn.disabled) return;
-  if (!confirm("Flag this model as not a plant / failed?")) return;
+  if (!confirm("Flag this model as not the organism / failed?")) return;
   btn.disabled = true;
   try {
     const res = await fetch("/api/flag", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ output_id: outputId, reason: "not_a_plant" }),
+      body: JSON.stringify({ output_id: outputId, reason: "not_the_organism" }),
     });
     if (!res.ok) {
       btn.disabled = false;
