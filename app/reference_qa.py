@@ -68,7 +68,9 @@ def assess_organ_coverage(client, photo_png: bytes, *, inventory: TaxonInventory
     # (a plant body plan where the reproductive organ is a distinguishable sub-part). For a
     # single-required-organ body plan (_body_inv: fungi, gourd) the fruit/body IS the whole
     # organism, so organ-coverage cannot tell a fruit-only photo from a complete one — defer to
-    # the CLIP composition mechanism by returning fruit_only=None.
+    # the direct VLM composition check `assess_composition` by returning fruit_only=None.
+    # (The 2026-07-06 probe showed CLIP composition, binary or multi-class, cannot do this —
+    # whole-vs-part is a reasoning judgment, which is the VLM's strength, not CLIP zero-shot's.)
     fruit_only = (category == "isolated-organ") if n_required >= 2 else None
     return {
         "category": category,
@@ -79,21 +81,94 @@ def assess_organ_coverage(client, photo_png: bytes, *, inventory: TaxonInventory
     }
 
 
-SPECIES_REP_MIN = 0.5  # probe-tuned (Task 5)
+def species_matches(
+    bundle, photo_png: bytes, *, claimed_taxon: str, panel: list[str], min_margin: float = 0.0
+) -> dict:
+    """Multi-class species check (2026-07-06 probe: 13/13). `panel` is the candidate taxa
+    (MUST include `claimed_taxon`). Returns {"ok", "top", "prob", "margin"}: ok iff BioCLIP's
+    top-1 IS the claimed taxon (and, if min_margin>0, wins by at least that margin). This
+    replaces the retired binary species_rep_score."""
+    from .species_id import classify_species
+
+    if claimed_taxon not in panel:
+        panel = [claimed_taxon, *panel]
+    r = classify_species(bundle, photo_png, panel)
+    ok = (r["top"] == claimed_taxon) and (r["margin"] >= min_margin)
+    return {"ok": ok, "top": r["top"], "prob": r["prob"], "margin": r["margin"]}
 
 
-def assess_species_rep(bundle, photo_png: bytes, *, common: str, taxon: str) -> float:
-    from .species_id import species_rep_score
+COMPOSITION_TOOL = {
+    "name": "record_composition",
+    "description": "Record whether a reference photo shows the whole organism or only an isolated part.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "shows": {"type": "string", "enum": ["whole_organism", "isolated_part"]},
+            "note": {"type": "string"},
+        },
+        "required": ["shows", "note"],
+    },
+}
 
-    return species_rep_score(bundle, photo_png, common=common, taxon=taxon)
+
+def assess_composition(client, photo_png: bytes, *, taxon: str, common: str) -> dict:
+    """Direct VLM composition judgment for BODY-PLAN taxa (gourd/fungi) where organ-coverage
+    cannot tell fruit-only from complete. Asks whether the photo shows the whole living organism
+    in context vs only an isolated/harvested part. Returns {"isolated": bool, "note": str}."""
+    import base64
+
+    b64 = base64.b64encode(photo_png).decode("ascii")
+    text = (
+        f"This is a reference photograph of {common} ({taxon}). Judge its COMPOSITION only. "
+        "Does it show the WHOLE living organism in its natural or growing context — a plant with "
+        "stems/leaves/roots, or a whole intact fungus on its substrate — or does it show ONLY an "
+        "ISOLATED, detached, or harvested part, e.g. a single picked fruit/gourd sitting on a "
+        "table or a lone cut mushroom with no body/context? Call record_composition with "
+        "'whole_organism' or 'isolated_part'."
+    )
+    resp = client.messages.create(
+        model=JUDGE_MODEL,
+        max_tokens=300,
+        tools=[COMPOSITION_TOOL],
+        tool_choice={"type": "tool", "name": "record_composition"},
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": _sniff_media_type(photo_png),
+                            "data": b64,
+                        },
+                    },
+                    {"type": "text", "text": text},
+                ],
+            }
+        ],
+    )
+    block = next(b for b in resp.content if getattr(b, "type", None) == "tool_use")
+    return {
+        "isolated": block.input.get("shows") == "isolated_part",
+        "note": block.input.get("note", ""),
+    }
 
 
-def qa_reference_image(*, organ: dict, species_rep: float | None) -> dict:
+def qa_reference_image(
+    *, organ: dict, composition: dict | None = None, species: dict | None = None
+) -> dict:
+    """Combine the QA signals into a pass/fail verdict. `organ` = assess_organ_coverage output
+    (plant-taxa fruit-only via fruit_only=True); `composition` = assess_composition output
+    (body-plan fruit-only via isolated=True); `species` = species_matches output (mismatch via
+    ok=False). Any triggered signal fails the image."""
     reasons: list[str] = []
     if organ.get("fruit_only"):
-        reasons.append("fruit-only / isolated-organ reference")
+        reasons.append("fruit-only / isolated-organ reference (organ-coverage)")
     if organ.get("category") == "fragment":
         reasons.append("fragment — no expected organ visible")
-    if species_rep is not None and species_rep < SPECIES_REP_MIN:
-        reasons.append(f"low species-representativeness ({species_rep:.2f} < {SPECIES_REP_MIN})")
+    if composition is not None and composition.get("isolated"):
+        reasons.append("isolated part, not the whole organism (VLM composition)")
+    if species is not None and not species.get("ok", True):
+        reasons.append(f"species mismatch — reads as {species.get('top')!r}, not the claimed taxon")
     return {"passed": not reasons, "reasons": reasons}

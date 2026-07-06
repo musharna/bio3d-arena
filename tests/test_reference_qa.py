@@ -66,20 +66,85 @@ from app import reference_qa as rq
 
 
 def test_qa_combiner_fails_fruit_only():
-    r = rq.qa_reference_image(
-        organ={"fruit_only": True, "category": "isolated-organ"}, species_rep=0.9
-    )
+    r = rq.qa_reference_image(organ={"fruit_only": True, "category": "isolated-organ"})
     assert r["passed"] is False and any("fruit" in x for x in r["reasons"])
 
 
-def test_qa_combiner_fails_low_species_rep():
-    r = rq.qa_reference_image(organ={"fruit_only": False, "category": "complete"}, species_rep=0.1)
-    assert r["passed"] is False and any("species" in x for x in r["reasons"])
+def test_qa_combiner_fails_species_mismatch():
+    r = rq.qa_reference_image(
+        organ={"fruit_only": False, "category": "complete"},
+        species={"ok": False, "top": "Zea mays"},
+    )
+    assert r["passed"] is False and any("species mismatch" in x for x in r["reasons"])
+
+
+def test_qa_combiner_fails_isolated_composition():
+    r = rq.qa_reference_image(
+        organ={"fruit_only": None, "category": "complete"},  # body-plan: organ can't tell
+        composition={"isolated": True, "note": "lone gourd on a table"},
+    )
+    assert r["passed"] is False and any("isolated part" in x for x in r["reasons"])
 
 
 def test_qa_combiner_passes_good():
-    r = rq.qa_reference_image(organ={"fruit_only": False, "category": "complete"}, species_rep=0.9)
+    r = rq.qa_reference_image(
+        organ={"fruit_only": False, "category": "complete"},
+        composition={"isolated": False},
+        species={"ok": True, "top": "Solanum lycopersicum"},
+    )
     assert r["passed"] is True and r["reasons"] == []
+
+
+def test_species_matches_flags_mismatch(monkeypatch):
+    # BioCLIP top-1 is Zea mays but the claim is tomato -> mismatch.
+    monkeypatch.setattr(
+        "app.species_id.classify_species",
+        lambda bundle, png, panel, **kw: {
+            "top": "Zea mays",
+            "prob": 0.9,
+            "margin": 0.8,
+            "ranked": [("Zea mays", 0.9)],
+        },
+    )
+    r = rq.species_matches(
+        object(),
+        b"x",
+        claimed_taxon="Solanum lycopersicum",
+        panel=["Solanum lycopersicum", "Zea mays"],
+    )
+    assert r["ok"] is False and r["top"] == "Zea mays"
+
+
+def test_species_matches_ok_when_top_is_claimed(monkeypatch):
+    monkeypatch.setattr(
+        "app.species_id.classify_species",
+        lambda bundle, png, panel, **kw: {
+            "top": "Solanum lycopersicum",
+            "prob": 0.9,
+            "margin": 0.8,
+            "ranked": [],
+        },
+    )
+    r = rq.species_matches(object(), b"x", claimed_taxon="Solanum lycopersicum", panel=["Zea mays"])
+    assert r["ok"] is True
+
+
+def test_assess_composition_parses_isolated():
+    class _B:
+        type = "tool_use"
+        input = {"shows": "isolated_part", "note": "just a picked gourd"}
+
+    class _R:
+        content = [_B()]
+
+    class _C:
+        messages = property(lambda self: self)
+
+        def create(self, **kw):
+            return _R()
+
+    res = rq.assess_composition(_C(), b"\xff\xd8\xff jpeg", taxon="Cucurbita pepo", common="gourd")
+    assert res["isolated"] is True and "gourd" in res["note"]
 
 
 def test_sniff_media_type_from_magic_bytes():
