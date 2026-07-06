@@ -13,25 +13,37 @@ from app.organ_inventory import TaxonInventory
 
 
 def derive(inventory: TaxonInventory, organs_present: list[dict]) -> tuple[str, float]:
-    """Map a per-organ present/absent/uncertain checklist to (category, score).
-
-    Required organs = the vegetative body; score = required-present / required-total.
-    Categories are total + mutually exclusive over present_count in {0, 1, >=2}."""
-    status = {o["key"]: o.get("status") for o in organs_present}
-    required = [o.key for o in inventory.organs if o.required]
-    req_present = sum(1 for k in required if status.get(k) == "present")
+    """Map a per-part present/absent/uncertain checklist (with optional `complement` status for
+    multi-part organs) to (category, score). Categories: fragment / isolated-organ /
+    partial-organism / malformed / complete. `malformed` = every required part-TYPE present but a
+    part's expected complement is not `full` (a 3-legged dog); the anatomical-completeness signal
+    geometry misses. score = required part-type coverage (a malformed output still scores 1.0)."""
+    by_key = {o["key"]: o for o in organs_present}
+    required = [o for o in inventory.organs if o.required]
+    req_present = sum(1 for o in required if by_key.get(o.key, {}).get("status") == "present")
     score = req_present / len(required) if required else 0.0
-    present_count = sum(1 for o in inventory.organs if status.get(o.key) == "present")
+    present_count = sum(
+        1 for o in inventory.organs if by_key.get(o.key, {}).get("status") == "present"
+    )
 
-    # 'complete' (all required organs present) is checked BEFORE the present_count==1
-    # 'isolated-organ' branch so a single-required-organ body plan — a fungal fruiting body
-    # that IS the whole organism — reads as complete, not a lone detached fragment. For the
-    # 2-required plant inventories this reorder is behavior-identical: present_count==1 can
-    # never satisfy req_present==len(required)==2, so plants never reach 'complete' here.
+    def _complement_ok(o) -> bool:
+        # A part with expected complement <= 1 (all plants/fungi, singular animal parts) is
+        # trivially satisfied; a multi-part organ must report complement `full`.
+        if o.complement <= 1:
+            return True
+        return by_key.get(o.key, {}).get("complement", "full") == "full"
+
+    all_required_present = req_present == len(required)
+    complements_full = all(
+        _complement_ok(o) for o in required if by_key.get(o.key, {}).get("status") == "present"
+    )
+
     if present_count == 0:
         category = "fragment"
-    elif req_present == len(required):
+    elif all_required_present and complements_full:
         category = "complete"
+    elif all_required_present:  # every part-type present but a limb/wing complement is off
+        category = "malformed"
     elif present_count == 1:
         category = "isolated-organ"
     else:
