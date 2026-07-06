@@ -1,6 +1,9 @@
 """Quality-assessment for reference images. Reuses the completeness VLM machinery: a reference
-photo of a single organ (e.g. a lone gourd fruit) maps to `derive`'s 'isolated-organ' category
-== fruit_only. Uses a PHOTO-framed prompt, not the 3D-render-sheet framing."""
+photo of a single organ (e.g. a lone tomato fruit) maps to `derive`'s 'isolated-organ' category
+== fruit_only. `fruit_only` is `bool | None`: for a single-required-organ body plan (fungi,
+gourd — the fruit/body IS the whole organism) organ-coverage cannot distinguish fruit-only from
+complete, so it is `None` (undeterminable; deferred to the CLIP composition mechanism). Uses a
+PHOTO-framed prompt, not the 3D-render-sheet framing."""
 
 from __future__ import annotations
 
@@ -45,10 +48,17 @@ def assess_organ_coverage(client, photo_png: bytes, *, inventory: TaxonInventory
     )
     parsed = _parse(resp)  # {"organs_present": [...], "note": str}
     category, score = derive(inventory, parsed["organs_present"])
+    n_required = sum(1 for o in inventory.organs if o.required)
+    # derive's 'isolated-organ' only separates from 'complete' when >=2 organs are required
+    # (a plant body plan where the reproductive organ is a distinguishable sub-part). For a
+    # single-required-organ body plan (_body_inv: fungi, gourd) the fruit/body IS the whole
+    # organism, so organ-coverage cannot tell a fruit-only photo from a complete one — defer to
+    # the CLIP composition mechanism by returning fruit_only=None.
+    fruit_only = (category == "isolated-organ") if n_required >= 2 else None
     return {
         "category": category,
         "score": score,
         "organs_present": parsed["organs_present"],
         "note": parsed["note"],
-        "fruit_only": category == "isolated-organ",
+        "fruit_only": fruit_only,
     }
