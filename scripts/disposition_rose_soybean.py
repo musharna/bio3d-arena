@@ -8,13 +8,13 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
-import os
 import sys
 
 from sqlalchemy import select
 
+from app import config
 from app.database import SessionLocal
-from app.models import ModelOutput, Task
+from app.models import Generator, ModelOutput, Task
 
 _TAXA = {
     "rose": ("Rosa — single-image → 3D reconstruction", "rose"),
@@ -24,9 +24,12 @@ _TAXA = {
 
 def _input_of(o: ModelOutput) -> str | None:
     try:
-        return (json.loads(o.meta_json or "{}") or {}).get("input_image")
+        parsed = json.loads(o.meta_json or "{}")
     except (ValueError, TypeError):
         return None
+    if not isinstance(parsed, dict):
+        return None
+    return parsed.get("input_image")
 
 
 def plan_disposition(db) -> dict:
@@ -36,7 +39,12 @@ def plan_disposition(db) -> dict:
         t = db.execute(select(Task).where(Task.title == title)).scalars().first()
         if t is None:
             continue
-        for o in db.execute(select(ModelOutput).where(ModelOutput.task_id == t.id)).scalars():
+        q = (
+            select(ModelOutput)
+            .join(Generator, ModelOutput.generator_id == Generator.id)
+            .where(ModelOutput.task_id == t.id, Generator.paradigm == "image_recon")
+        )
+        for o in db.execute(q).scalars():
             img = _input_of(o)
             if img is None:
                 continue
@@ -61,17 +69,17 @@ def apply_disposition(db, plan: dict) -> None:
 
 
 def main() -> int:
+    if not config.is_safe_test_db_target(config.DATABASE_URL):
+        raise SystemExit(
+            "refusing to run against a non-copy DB — is_safe_test_db_target False; use a copy"
+        )
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true", help="apply (default: dry-run print)")
-    ap.parse_args()
-    url = os.environ.get("BIO3D_DATABASE_URL", "")
-    if "arena-study.db" in url and "PRE-" not in url and "copy" not in url:
-        print("refusing to run against the study DB directly — copy it first", file=sys.stderr)
-        return 2
+    args = ap.parse_args()
     db = SessionLocal()
     plan = plan_disposition(db)
     print(json.dumps(plan, indent=2))
-    if "--apply" in sys.argv:
+    if args.apply:
         apply_disposition(db, plan)
         print(f"APPLIED: un-hid {len(plan['unhide'])}, hid {len(plan['hide'])}")
     return 0
