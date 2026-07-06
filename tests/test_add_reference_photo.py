@@ -26,12 +26,38 @@ def test_writes_sidecar_that_clears(tmp_path):
         dest_dirs=[dest],
     )
     assert out == dest / "basil_ref_clean.jpg"
-    meta = json.loads((dest / "basil_ref_clean.json").read_text())
+    # Sidecar is {taxon}_ref.json (glob-scannable), not _ref_clean.json.
+    meta = json.loads((dest / "basil_ref.json").read_text())
     from app.reference_provenance import _REQUIRED
 
     assert _REQUIRED <= set(meta)
     assert meta["file"] == "basil_ref_clean.jpg"
     assert meta["license"] == "CC0-1.0"
+    assert not (dest / "basil_ref_clean.json").exists()  # must NOT use the un-scanned name
+
+
+def test_ingested_sidecar_actually_clears_the_taxon(tmp_path, monkeypatch):
+    # The load-bearing behavior: after ingestion, cleared_reference_taxa() must report the taxon.
+    # (The original tests only checked the sidecar's fields, not that the gate scans it.)
+    from app import reference_provenance
+
+    src = _img(tmp_path / "in.jpg")
+    dest = tmp_path / "reference"
+    dest.mkdir()
+    monkeypatch.setattr(reference_provenance, "_ref_dir", lambda: dest)
+    write_reference_photo(
+        taxon="basil",
+        image_path=src,
+        author="Jaret Arnold",
+        license_="CC0-1.0",
+        source_url="https://example.com/basil",
+        download_url="https://example.com/basil.jpg",
+        subject="Ocimum basilicum (whole plant)",
+        title="Basil plant",
+        note="Owner-shot nursery photo.",
+        dest_dirs=[dest],
+    )
+    assert "basil" in reference_provenance.cleared_reference_taxa()
 
 
 def test_rejects_non_cc_license(tmp_path):

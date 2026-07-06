@@ -1,7 +1,10 @@
 # scripts/add_reference_photo.py
 """Ingest an OWNED / CC-licensed reference photo as a recon input: copy it to
-{taxon}_ref_clean.jpg and write a provenance sidecar that clears reference_provenance's gate.
-Does NOT touch the DB or call any paid regen — after this, run:
+{taxon}_ref_clean.jpg and write the provenance sidecar as {taxon}_ref.json — the sidecar name
+MUST end in `_ref.json` because reference_provenance.cleared_reference_taxa() globs `*_ref.json`
+and derives the cleared taxon from that filename (a `_ref_clean.json` sidecar would be silently
+skipped, so the taxon would never clear). Does NOT touch the DB or call any paid regen — after
+this, run:
   scripts/generate_api_recon.py --crop {taxon} --force   (then completeness scoring)
 and point CROPS[{taxon}] at {taxon}_ref_clean.jpg if not already."""
 
@@ -61,7 +64,10 @@ def write_reference_photo(
         if jpg.exists() and not force:
             raise FileExistsError(f"{jpg} exists (use force=True to overwrite)")
         shutil.copyfile(image_path, jpg)
-        (d / f"{taxon}_ref_clean.json").write_text(json.dumps(sidecar, indent=2))
+        # Sidecar MUST be {taxon}_ref.json (not _ref_clean.json) so cleared_reference_taxa()'s
+        # `*_ref.json` glob scans it and derives taxon={taxon}. The `file` field still points at
+        # the actual {taxon}_ref_clean.jpg image.
+        (d / f"{taxon}_ref.json").write_text(json.dumps(sidecar, indent=2))
         first_jpg = first_jpg or jpg
     assert first_jpg is not None
     return first_jpg
