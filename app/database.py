@@ -133,10 +133,6 @@ def _ensure_columns(engine) -> None:  # noqa: ANN001
                 )
                 logger.info("self-healed missing column %s.%s", table.name, col.name)
 
-        cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(comparison)")]
-        if cols and "ballot_id" not in cols:
-            conn.exec_driver_sql("ALTER TABLE comparison ADD COLUMN ballot_id INTEGER")
-
 
 def init_db() -> None:
     """Create all tables, then self-heal any additive columns missing from a pre-existing
