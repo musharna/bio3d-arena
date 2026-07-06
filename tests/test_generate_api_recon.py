@@ -115,6 +115,57 @@ def test_generate_api_recon_scoring_failure_keeps_hosted_object():
         db.close()
 
 
+def test_generate_api_recon_skip_existing_is_a_cache():
+    """skip_existing must NOT re-call a provider whose output the task already holds — the point
+    is to avoid re-paying (FAL/Replicate don't dedup identical inputs)."""
+    db = SessionLocal()
+    try:
+        _tomato_task(db)
+        glb = _box_glb()
+        calls = []
+
+        def fn(image_bytes, *, api_key):
+            calls.append(1)
+            return glb
+
+        providers = {"cachedp": (fn, "K", "CachedP")}
+        r1 = generate_api_recon(db, b"img", providers=providers, env={"K": "k"})
+        assert r1["generated"] == 1 and len(calls) == 1
+        r2 = generate_api_recon(db, b"img", providers=providers, env={"K": "k"}, skip_existing=True)
+        assert r2["skipped_exists"] == 1
+        assert r2["generated"] == 0
+        assert len(calls) == 1  # provider never re-called → no re-pay
+    finally:
+        db.close()
+
+
+def test_generate_api_recon_runs_providers_concurrently():
+    """The barrier only releases if all three provider calls are in flight at once — so a passing
+    'generated == 3' proves the providers run concurrently, not sequentially."""
+    import threading
+
+    db = SessionLocal()
+    try:
+        _tomato_task(db)
+        barrier = threading.Barrier(3, timeout=6)
+
+        def make(i):
+            mesh = trimesh.creation.box(extents=[1, 1, 1 + 0.1 * i]).export(file_type="glb")
+
+            def fn(image_bytes, *, api_key):
+                barrier.wait()  # returns only when all 3 are running simultaneously
+                return mesh
+
+            return fn
+
+        providers = {f"ccp{i}": (make(i), "K", f"CCP{i}") for i in range(3)}
+        report = generate_api_recon(db, b"img", providers=providers, env={"K": "k"})
+        assert report["generated"] == 3  # sequential would time out the barrier → errors, not 3
+        assert report["errors"] == 0
+    finally:
+        db.close()
+
+
 def test_provenance_by_slug_prefix():
     from scripts.generate_api_recon import _provenance
 

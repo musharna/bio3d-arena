@@ -39,6 +39,97 @@
   <p class="subtle">A "degrades ↑" trend (chamfer rises with tier) is the expected, validating pattern.</p>
   {% endif %}
 
+  {% if paradigm_grid %}
+  <h3>
+    Paradigm × difficulty
+    <span class="subtle"
+      >— which approach wins at each hardness level (objective metrics)</span
+    >
+  </h3>
+  <p class="subtle">
+    The headline grid: mean objective metrics per <b>paradigm</b> per tier.
+    Reconstruction is expected to degrade easy → hard while procedural code-gen
+    holds or improves — the cross-paradigm gradient no other benchmark reports.
+  </p>
+  {% for block in paradigm_grid %} {% if block.tier in tiers and block.rows %}
+  <h4>{{ block.tier | capitalize }} tier</h4>
+  <table class="ranktable compact">
+    <thead>
+      <tr>
+        <th>Paradigm</th>
+        <th>n</th>
+        <th>scored</th>
+        <th>Chamfer ↓</th>
+        <th>F-score ↑</th>
+        <th>Structural ↑</th>
+        <th>Species pass-rate</th>
+        <th title="VLM organism-completeness — reference-free, so it covers GT-less taxa (all fungi) where Chamfer/F-score are blank">Complete ↑</th>
+        <th title="Share of outputs judged a complete organism (vs partial / isolated-organ / fragment)">% complete</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in block.rows %}
+      <tr>
+        <td class="gen">{{ r.paradigm_display }}</td>
+        <td class="num">{{ r.n_outputs }}</td>
+        <td class="num">{{ r.n_scored }}</td>
+        <td class="num strong">
+          {{ '%.4f'|format(r.mean_chamfer) if r.mean_chamfer is not none else '—'
+          }}
+        </td>
+        <td class="num">
+          {{ '%.3f'|format(r.mean_fscore) if r.mean_fscore is not none else '—' }}
+        </td>
+        <td class="num">
+          {{ '%.2f'|format(r.mean_structural) if r.mean_structural is not none
+          else '—' }}
+        </td>
+        <td class="num">
+          {{ '%.0f%%'|format(r.species_pass_rate * 100) if r.species_pass_rate is
+          not none else '—' }}
+        </td>
+        <td class="num strong">
+          {{ '%.2f'|format(r.mean_completeness) if r.mean_completeness is not none
+          else '—' }}
+        </td>
+        <td class="num">
+          {{ '%.0f%%'|format(r.pct_complete * 100) if r.pct_complete is not none
+          else '—' }}{% if r.completeness_n %}<span class="subtle"> ({{ r.completeness_n }})</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %} {% endfor %} {% endif %}
+
+  {% if reliability %}
+  <h3>Reference / capture-quality triage
+    <span class="subtle">— image→3D recon completeness vs text→3D, per taxon</span>
+  </h3>
+  <p class="subtle">
+    text→3D shares a task's subject but not its reference photo, so a taxon whose recon
+    completeness sits far below its text→3D completeness has a suspect recon <i>input</i>
+    (reference photo / capture geometry) — worth inspecting. ⚑ is triage, not a verdict: a
+    genuinely hard taxon can also trip it.
+  </p>
+  <table class="ranktable compact">
+    <thead>
+      <tr><th>Taxon</th><th>recon ↑</th><th>text ↑</th><th>text − recon</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in reliability %}
+      <tr>
+        <td class="gen">{% if r.flag %}⚑ {% endif %}{{ r.taxon }}</td>
+        <td class="num">{{ '%.2f'|format(r.recon_mean) }}<span class="subtle"> ({{ r.n_recon }})</span></td>
+        <td class="num">{{ '%.2f'|format(r.text_mean) }}<span class="subtle"> ({{ r.n_text }})</span></td>
+        <td class="num strong">{{ '%.2f'|format(r.gap) }}</td>
+        <td class="num">{% if r.flag %}inspect{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
   {% if perceptual %}
   <h3>Perceptual ranking by tier <span class="subtle">— VLM-judge Bradley-Terry, top methods per tier</span></h3>
   <p class="subtle">
@@ -102,6 +193,8 @@
       <tr>
         <th>Method</th><th>n</th><th>scored</th><th>Chamfer ↓</th>
         <th>F-score ↑</th><th>Structural ↑</th><th>Species pass-rate</th>
+        <th title="VLM organism-completeness — reference-free, so it covers GT-less taxa (all fungi) where Chamfer/F-score are blank">Complete ↑</th>
+        <th title="Share of outputs judged a complete organism (vs partial / isolated-organ / fragment)">% complete</th>
       </tr>
     </thead>
     <tbody>
@@ -114,6 +207,8 @@
         <td class="num">{{ '%.3f'|format(r.mean_fscore) if r.mean_fscore is not none else '—' }}</td>
         <td class="num">{{ '%.2f'|format(r.mean_structural) if r.mean_structural is not none else '—' }}</td>
         <td class="num">{{ '%.0f%%'|format(r.species_pass_rate * 100) if r.species_pass_rate is not none else '—' }}</td>
+        <td class="num strong">{{ '%.2f'|format(r.mean_completeness) if r.mean_completeness is not none else '—' }}</td>
+        <td class="num">{{ '%.0f%%'|format(r.pct_complete * 100) if r.pct_complete is not none else '—' }}{% if r.completeness_n %}<span class="subtle"> ({{ r.completeness_n }})</span>{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>

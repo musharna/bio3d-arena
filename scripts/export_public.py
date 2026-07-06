@@ -210,6 +210,24 @@ def main() -> int:
             posture=a.posture,
             dry_run=a.dry_run,
         )
+        # Advisory (non-blocking, NOT a gate): flag exported taxa whose recon completeness sits
+        # far below text→3D — a suspect reference/capture the operator should inspect before
+        # publishing (this is the signal that caught the Cucurbita reference bug).
+        from app.completeness import recon_reliability_flags
+
+        exported_titles = a.tasks.split(",")
+        flagged = [
+            f["taxon"]
+            for f in recon_reliability_flags(db)
+            if f["flag"] and any(f["taxon"] in title for title in exported_titles)
+        ]
+        if flagged:
+            print(
+                f"⚠ recon-reliability advisory: {len(flagged)} exported taxon(s) have recon "
+                f"completeness far below text→3D (suspect reference/capture) — inspect before "
+                f"publishing: {', '.join(flagged)}",
+                file=sys.stderr,
+            )
     finally:
         db.close()
     print(json.dumps(m, indent=2))
