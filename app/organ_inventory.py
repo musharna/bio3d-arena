@@ -33,13 +33,24 @@ class TaxonInventory:
     organs: tuple[Organ, ...]
 
 
-def _inv(taxon: str, axis: str, foliage: str, repro_key: str, repro: str) -> TaxonInventory:
+def _inv(
+    taxon: str,
+    axis: str,
+    foliage: str,
+    repro_key: str,
+    repro: str,
+    repro_required: bool = False,
+) -> TaxonInventory:
+    """repro_required=True for taxa whose reproductive organ is DEFINING, so a leaves+stem
+    body without it is incomplete (e.g. Rosa — "rose" evokes the flower). Default False keeps
+    the reproductive organ optional (a lone fruit/pod reads as isolated-organ, not complete),
+    which fits taxa recognizable from vegetative parts alone (soybean = trifoliate leaves)."""
     return TaxonInventory(
         taxon=taxon,
         organs=(
             Organ("vegetative_axis", axis, True),
             Organ("foliage", foliage, True),
-            Organ(repro_key, repro, False),
+            Organ(repro_key, repro, repro_required),
         ),
     )
 
@@ -84,6 +95,7 @@ ORGAN_INVENTORY: dict[str, TaxonInventory] = {
         "green leaves on the stem",
         "reproductive_flower_hip",
         "a flower and/or a rounded fleshy rose hip",
+        repro_required=True,  # a rose is flower-defining: leaves+stem without the bloom is incomplete
     ),
     "Glycine max": _inv(
         "Glycine max",

@@ -30,14 +30,23 @@ def test_every_taxon_has_required_and_optional_organs_with_visuals():
     for taxon, inv in ORGAN_INVENTORY.items():
         req = {o.key for o in inv.organs if o.required}
         assert req, taxon  # at least one required organ
-        assert any(not o.required for o in inv.organs), taxon  # at least one optional organ
+        # Most inventories keep the reproductive organ optional; Rosa is the deliberate
+        # exception (flower-defining → all three organs required), so it has no optional organ.
+        if taxon != "Rosa":
+            assert any(not o.required for o in inv.organs), taxon
         assert all(o.visual.strip() for o in inv.organs), taxon  # visual descriptors (VLM read)
 
 
 def test_plant_taxa_require_vegetative_axis_and_foliage():
     for taxon in PLANT_TAXA:
         req = {o.key for o in ORGAN_INVENTORY[taxon].organs if o.required}
-        assert req == {"vegetative_axis", "foliage"}, taxon
+        # Every plant requires the vegetative body (axis + foliage)...
+        assert {"vegetative_axis", "foliage"} <= req, taxon
+        # ...and only Rosa additionally requires its reproductive organ (the bloom).
+        if taxon == "Rosa":
+            assert req == {"vegetative_axis", "foliage", "reproductive_flower_hip"}
+        else:
+            assert req == {"vegetative_axis", "foliage"}, taxon
 
 
 def test_body_plan_taxa_have_single_required_body_organ():
