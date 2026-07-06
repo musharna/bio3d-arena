@@ -1,6 +1,6 @@
 # app/completeness.py
 """Organism-level biological completeness metric: VLM organ-presence read of a generated
-plant's rendered views against its taxon's expected-organ inventory, plus category/score
+organism's rendered views against its taxon's expected-organ inventory, plus category/score
 derivation. Reference-free (no GT). Mirrors the app.input_grade VLM tool-use pattern."""
 
 from __future__ import annotations

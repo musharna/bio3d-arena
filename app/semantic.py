@@ -1,7 +1,8 @@
 # app/semantic.py
 """Semantic-admissibility predicate: one VLM tool-use call over an output's turntable contact
-sheet judging whether it is a single, whole, valid plant specimen. Rejects cardinality/kind
-failures (multiple plants, a detached organ, a non-plant) that structural geometry cannot see.
+sheet judging whether it is a single, whole, valid ORGANISM specimen (admissibility only — NOT a
+fidelity/species check). Rejects cardinality/kind failures (multiple organisms, a detached part,
+junk that is not a plausible organism) that structural geometry cannot see.
 Precision-first: uncertain (and any unmapped code) -> admit. Clones
 app.completeness's VLM-judge shape; persistence reuses app.structural.upsert_verdict
 (predicate='semantic', no schema change)."""
