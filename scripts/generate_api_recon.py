@@ -26,10 +26,10 @@ PINE_TITLE = "Pinus sylvestris — single-image → 3D reconstruction"
 CROPS = {
     "tomato": {"task_title": TOMATO_TITLE, "image": "data/assets/reference/tomato_ref_clean.jpg"},
     "maize": {"task_title": MAIZE_TITLE, "image": "data/assets/reference/maize_ref.jpg"},
-    "rose": {"task_title": ROSE_TITLE, "image": "data/assets/reference/rose_ref.jpg"},
+    "rose": {"task_title": ROSE_TITLE, "image": "data/assets/reference/rose_ref_clean.jpg"},
     "soybean": {
         "task_title": "Glycine max — single-image → 3D reconstruction",
-        "image": "data/assets/reference/soybean_ref.jpg",
+        "image": "data/assets/reference/soybean_ref_clean.jpg",
     },
     "arabidopsis": {
         "task_title": ARABIDOPSIS_TITLE,
