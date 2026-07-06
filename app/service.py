@@ -1119,11 +1119,13 @@ def reference_images_for_task(db: Session, task) -> list[dict]:
 
     from . import config
     from .models import ModelOutput
+    from .reference_provenance import _taxon_of, cleared_reference_taxa
     from .storage import get_storage
 
     st = get_storage()
     out: list[dict] = []
     seen: set[str] = set()
+    cleared_taxa = cleared_reference_taxa()
     # Only VISIBLE outputs contribute their input photo: a withdrawn output (hidden_at set) may
     # have been generated from a since-replaced or non-redistributable input (e.g. a non-CC
     # product shot), which must not surface in the vote UI as a "reconstruction input photo".
@@ -1134,7 +1136,7 @@ def reference_images_for_task(db: Session, task) -> list[dict]:
             img = (json.loads(o.meta_json or "{}") or {}).get("input_image")
         except (ValueError, TypeError):
             continue
-        if img and img not in seen:
+        if img and img not in seen and _taxon_of(img) in cleared_taxa:
             seen.add(img)
             out.append({"url": st.url_for(img), "credit": "reconstruction input photo"})
 

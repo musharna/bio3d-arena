@@ -140,12 +140,14 @@ def export_bundle(
     public_export.filter_gold_for_posture(db, inc, posture, gated)
     if posture == "redistribute":
         public_export.check_licenses(db, inc.output_ids)  # fail-loud: nothing non-CC ships
-    else:  # display
-        assert_recon_photos_cleared(db, inc.output_ids)  # fail-loud: no uncleared reference photo
-        # Gold rows alias a real (possibly recon) asset under decoy source/meta_json -- the
-        # gate above reads each output's OWN source/meta_json and so silently skips every gold
-        # id, whose true reference photo (per the twin it aliases) was never clearance-checked.
+        # Input-photo (derivative) clearance is a REDISTRIBUTION gate: a redistributed recon mesh
+        # is a derivative of its input photo, so that photo must be CC-cleared. Displaying the
+        # mesh (no download, AI-labeled) does not redistribute the photo, so display is exempt —
+        # the un-cleared input photo is instead suppressed from the vote UI
+        # (service.reference_images_for_task). "Show the mesh, never the photo."
+        assert_recon_photos_cleared(db, inc.output_ids)
         assert_recon_photos_cleared_for_gold(db, inc.gold_output_ids)
+    # else display: no input-photo gate.
     all_out = inc.output_ids | inc.gold_output_ids
     tables = _filtered_rows(db, inc)
 
