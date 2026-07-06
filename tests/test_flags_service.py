@@ -59,13 +59,13 @@ def test_record_flag_dedup_and_autohide():
     with SessionLocal() as db:
         o = _output(db)
         db.commit()
-        hidden, n = flags.record_flag(db, o.id, "s1", "not_a_plant", threshold=3)
+        hidden, n = flags.record_flag(db, o.id, "s1", "not_the_organism", threshold=3)
         assert (hidden, n) == (False, 1)
         # same session again → no double count
-        hidden, n = flags.record_flag(db, o.id, "s1", "not_a_plant", threshold=3)
+        hidden, n = flags.record_flag(db, o.id, "s1", "not_the_organism", threshold=3)
         assert (hidden, n) == (False, 1)
         flags.record_flag(db, o.id, "s2", "failed", threshold=3)
-        hidden, n = flags.record_flag(db, o.id, "s3", "not_a_plant", threshold=3)
+        hidden, n = flags.record_flag(db, o.id, "s3", "not_the_organism", threshold=3)
         db.commit()
         assert (hidden, n) == (True, 3)
         assert db.get(ModelOutput, o.id).hidden_at is not None

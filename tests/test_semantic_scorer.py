@@ -33,7 +33,7 @@ class _FakeClient:
 
 
 def test_reject_codes_map_to_non_admit_with_reason():
-    for code in ["multiple", "sub_part", "not_a_plant"]:
+    for code in ["multiple", "sub_part", "not_the_organism"]:
         v = verdict_from_code(code, "because")
         assert v.admit is False
         assert v.reason == code
@@ -58,7 +58,7 @@ def test_dropped_wrong_species_code_now_admits():
 
 
 def test_reject_codes_constant_is_the_three_semantic_failures():
-    assert REJECT_CODES == {"multiple", "sub_part", "not_a_plant"}
+    assert REJECT_CODES == {"multiple", "sub_part", "not_the_organism"}
 
 
 def test_build_messages_includes_taxon_framing_when_present():
@@ -73,7 +73,7 @@ def test_build_messages_lists_reject_codes_and_image_block():
     msgs = _build_messages(b"\x89PNG", taxon=None)
     text = msgs[0]["content"][0]["text"]
     # the three taxon-agnostic reject codes are named + an image block is attached
-    assert "multiple" in text and "sub_part" in text and "not_a_plant" in text
+    assert "multiple" in text and "sub_part" in text and "not_the_organism" in text
     assert msgs[0]["content"][1]["type"] == "image"
 
 

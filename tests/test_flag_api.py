@@ -30,10 +30,10 @@ def _output():
 def test_flag_records_and_dedups():
     integrity.reset_rate_limits()
     oid = _output()
-    r = client.post("/api/flag", json={"output_id": oid, "reason": "not_a_plant"})
+    r = client.post("/api/flag", json={"output_id": oid, "reason": "not_the_organism"})
     assert r.status_code == 200 and r.json() == {"status": "ok", "hidden": False, "flags": 1}
     # same session (same TestClient cookie) again → no double count
-    r = client.post("/api/flag", json={"output_id": oid, "reason": "not_a_plant"})
+    r = client.post("/api/flag", json={"output_id": oid, "reason": "not_the_organism"})
     assert r.json()["flags"] == 1
 
 
@@ -60,7 +60,7 @@ def test_flag_autohide_at_threshold():
         flags.record_flag(db, oid, "other-2", "failed", threshold=99)
         db.commit()
     # third flag from THIS client session crosses the default K=3
-    r = client.post("/api/flag", json={"output_id": oid, "reason": "not_a_plant"})
+    r = client.post("/api/flag", json={"output_id": oid, "reason": "not_the_organism"})
     assert r.json() == {"status": "ok", "hidden": True, "flags": 3}
     with SessionLocal() as db:
         assert db.get(ModelOutput, oid).hidden_at is not None

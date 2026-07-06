@@ -30,7 +30,7 @@ def _flagged_output(hidden=False):
         )
         db.add(o)
         db.flush()
-        db.add(OutputFlag(output_id=o.id, session_id="s1", reason="not_a_plant"))
+        db.add(OutputFlag(output_id=o.id, session_id="s1", reason="not_the_organism"))
         db.commit()
         return o.id
 

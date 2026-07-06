@@ -668,7 +668,7 @@ class CommissionAttempt(Base):
 
 
 class OutputFlag(Base):
-    """A human report that an output is not a plant / failed. Distinct-session count of these
+    """A human report that an output is not the organism / failed. Distinct-session count of these
     on one output drives auto-hide; the rows are also a human-labeled failure dataset."""
 
     __tablename__ = "output_flag"
@@ -676,7 +676,7 @@ class OutputFlag(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"), index=True)
     session_id: Mapped[str] = mapped_column(String(64), index=True)
-    reason: Mapped[str] = mapped_column(String(32), default="not_a_plant")
+    reason: Mapped[str] = mapped_column(String(32), default="not_the_organism")
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
 

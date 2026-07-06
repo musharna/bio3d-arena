@@ -609,7 +609,7 @@ def api_kvote(
 
 @app.post("/api/flag")
 def api_flag(flag_in: FlagIn, request: Request, db: Session = Depends(get_db)):
-    """Report an output as not-a-plant / failed. Rate-limited; one flag per session per output;
+    """Report an output as not the organism / failed. Rate-limited; one flag per session per output;
     auto-hides the output at FLAG_HIDE_THRESHOLD distinct sessions. Not a vote — never advances."""
     from . import flags
 

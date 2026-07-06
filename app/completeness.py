@@ -1,6 +1,6 @@
 # app/completeness.py
 """Organism-level biological completeness metric: VLM organ-presence read of a generated
-plant's rendered views against its taxon's expected-organ inventory, plus category/score
+organism's rendered views against its taxon's expected-organ inventory, plus category/score
 derivation. Reference-free (no GT). Mirrors the app.input_grade VLM tool-use pattern."""
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ def derive(inventory: TaxonInventory, organs_present: list[dict]) -> tuple[str, 
 
 COMPLETENESS_TOOL = {
     "name": "record_completeness",
-    "description": "Record which expected organs are visible in the rendered plant model.",
+    "description": "Record which expected organs are visible in the rendered model.",
     "input_schema": {
         "type": "object",
         "properties": {
@@ -71,7 +71,7 @@ def _img_block(png: bytes) -> dict:
 def _build_messages(png: bytes, inventory: TaxonInventory) -> list[dict]:
     lines = "\n".join(f"- {o.key}: {o.visual}" for o in inventory.organs)
     text = (
-        f"This is a contact sheet of a generated 3D model of the plant {inventory.taxon}, "
+        f"This is a contact sheet of a generated 3D model of {inventory.taxon}, "
         "rendered from several angles. For EACH expected organ below, mark whether it is "
         "visibly present in the model (present / absent / uncertain). Judge only what you can "
         "see; a rendering of a single detached organ should mark the others absent.\n\n"
