@@ -24,7 +24,7 @@ PINE_TITLE = "Pinus sylvestris — single-image → 3D reconstruction"
 # Per-crop: subject task + its CC reference photo. The API recon path attaches api:<provider>
 # outputs to the subject by title (no GT/ReconTask needed); key-gated per provider.
 CROPS = {
-    "tomato": {"task_title": TOMATO_TITLE, "image": "data/assets/reference/tomato_ref.jpg"},
+    "tomato": {"task_title": TOMATO_TITLE, "image": "data/assets/reference/tomato_ref_clean.jpg"},
     "maize": {"task_title": MAIZE_TITLE, "image": "data/assets/reference/maize_ref.jpg"},
     "rose": {"task_title": ROSE_TITLE, "image": "data/assets/reference/rose_ref.jpg"},
     "soybean": {

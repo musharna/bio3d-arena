@@ -48,7 +48,10 @@ def test_reference_list_includes_input_photo_with_credit():
         )
         refs = reference_images_for_task(db, t)
         assert refs == [
-            {"url": get_storage().url_for("reference/puffball_ref.jpg"), "credit": "reconstruction input photo"}
+            {
+                "url": get_storage().url_for("reference/puffball_ref.jpg"),
+                "credit": "reconstruction input photo",
+            }
         ]
         _clean(db)
 
@@ -58,6 +61,33 @@ def test_reference_empty_when_no_input_image_and_no_gallery():
         _clean(db)
         t = _task_with_outputs(db, ["{}", '{"provider": "x"}'])
         assert reference_images_for_task(db, t) == []
+        _clean(db)
+
+
+def test_reference_excludes_hidden_output_input_photo():
+    """A withdrawn (hidden_at) output must not surface its input photo — it may be a
+    since-replaced or non-redistributable (non-CC) source that must not appear in the UI."""
+    import datetime as dt
+
+    with SessionLocal() as db:
+        _clean(db)
+        t = _task_with_outputs(
+            db,
+            [
+                json.dumps({"input_image": "reference/tomato_ref_clean.jpg"}),
+                json.dumps({"input_image": "reference/tomato_ref_roma.jpg"}),  # non-CC, to hide
+            ],
+        )
+        outs = (
+            db.query(ModelOutput).filter(ModelOutput.task_id == t.id).order_by(ModelOutput.id).all()
+        )
+        outs[1].hidden_at = dt.datetime(2026, 7, 5, tzinfo=dt.timezone.utc)
+        db.commit()
+
+        refs = reference_images_for_task(db, t)
+        urls = [r["url"] for r in refs]
+        assert get_storage().url_for("reference/tomato_ref_clean.jpg") in urls
+        assert get_storage().url_for("reference/tomato_ref_roma.jpg") not in urls
         _clean(db)
 
 

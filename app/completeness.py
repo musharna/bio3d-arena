@@ -212,8 +212,8 @@ def recon_reliability_flags(db, *, gap_threshold: float = 0.4) -> list[dict]:
         if c.score is None:
             continue
         out = db.get(ModelOutput, c.output_id)
-        if out is None:
-            continue
+        if out is None or out.hidden_at is not None:
+            continue  # withdrawn output: not served, and may be from a since-replaced input photo
         taxon = taxon_by_task.get(out.task_id)
         pgm = paradigm_by_gen.get(out.generator_id)
         if taxon is None or pgm not in ("image_recon", "text_native"):

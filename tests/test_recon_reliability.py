@@ -58,6 +58,39 @@ def _taxon(db, cat, name, recon_scores, text_scores):
     return t
 
 
+def test_recon_reliability_excludes_hidden_outputs():
+    """Outputs withdrawn from the arena (hidden_at set) — e.g. recon from a since-replaced input
+    photo — must not drag the taxon's recon mean. Hiding the bad-input batch + regenerating from a
+    clean input should let the flag clear."""
+    import datetime as dt
+
+    with SessionLocal() as db:
+        _clean(db)
+        cat = Category(slug="rr-cat", name="C")
+        db.add(cat)
+        db.flush()
+        # recon = two hidden zeros (old cluttered-input batch) + two visible ones (clean regen)
+        t = _taxon(db, cat, "tom", recon_scores=[0.0, 0.0, 1.0, 1.0], text_scores=[1.0, 1.0])
+        recon_outs = (
+            db.query(ModelOutput)
+            .join(Generator, ModelOutput.generator_id == Generator.id)
+            .filter(ModelOutput.task_id == t.id, Generator.paradigm == "image_recon")
+            .order_by(ModelOutput.id)
+            .all()
+        )
+        # withdraw the two zero-scoring outputs
+        for o in recon_outs[:2]:
+            o.hidden_at = dt.datetime(2026, 7, 5, tzinfo=dt.timezone.utc)
+        db.commit()
+
+        flags = {f["taxon"]: f for f in recon_reliability_flags(db, gap_threshold=0.4)}
+        # with the two hidden zeros excluded, visible recon = [1.0, 1.0] → mean 1.0, no gap
+        assert flags["RR tom"]["recon_mean"] == 1.0
+        assert flags["RR tom"]["n_recon"] == 2
+        assert flags["RR tom"]["flag"] is False
+        _clean(db)
+
+
 def test_recon_reliability_flags_bad_reference_not_hard_taxon():
     with SessionLocal() as db:
         _clean(db)

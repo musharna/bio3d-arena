@@ -1124,7 +1124,12 @@ def reference_images_for_task(db: Session, task) -> list[dict]:
     st = get_storage()
     out: list[dict] = []
     seen: set[str] = set()
-    for o in db.execute(select(ModelOutput).where(ModelOutput.task_id == task.id)).scalars():
+    # Only VISIBLE outputs contribute their input photo: a withdrawn output (hidden_at set) may
+    # have been generated from a since-replaced or non-redistributable input (e.g. a non-CC
+    # product shot), which must not surface in the vote UI as a "reconstruction input photo".
+    for o in db.execute(
+        select(ModelOutput).where(ModelOutput.task_id == task.id, ModelOutput.hidden_at.is_(None))
+    ).scalars():
         try:
             img = (json.loads(o.meta_json or "{}") or {}).get("input_image")
         except (ValueError, TypeError):
