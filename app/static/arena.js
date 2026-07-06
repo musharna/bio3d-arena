@@ -207,6 +207,17 @@ function renderKwise(data) {
     const fmtChip = document.createElement("span");
     fmtChip.className = "fmt-chip";
     label.appendChild(fmtChip);
+    // AUP labeling is display-posture-wide: a commercial-model output must carry the
+    // machine-generated badge in the 4-up grid exactly as it does in the 2-up pair view.
+    if (o.machine_generated) {
+      const badge = document.createElement("span");
+      badge.className = "ai-badge";
+      badge.textContent = "🤖 AI-generated";
+      badge.title = o.attribution
+        ? `Machine-generated — ${o.attribution}`
+        : "Machine-generated";
+      label.appendChild(badge);
+    }
     const slot = document.createElement("div");
     slot.className = "viewer-slot";
     const pickBtn = document.createElement("button");

@@ -236,11 +236,18 @@ def _serialize(
 
 def _serialize_output(o: ModelOutput) -> dict:
     """Anonymized per-output payload for the 4-up K-wise ballot — the SAME fields `_serialize`
-    exposes for a single output (url/format/output_id). Never leaks generator identity."""
+    exposes for a single output (url/format/output_id + the AUP machine-generated label). Never
+    leaks generator identity. machine_generated/attribution carry the mandatory AI-provenance
+    label so a commercial-model output shows the same badge in the K-wise grid as in the pair
+    view — the labeling requirement is display-posture-wide, not pair-only."""
+    from .public_export import is_commercial_model
+
     return {
         "output_id": o.id,
         "url": storage.url_for(o.asset_path),
         "format": o.asset_format,
+        "machine_generated": is_commercial_model(o.source),
+        "attribution": o.attribution or None,
     }
 
 
