@@ -66,7 +66,13 @@ def _sheet_provider():
 def _build_client():
     import anthropic
 
-    return anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    # Per-request timeout + retries: a stalled VLM connection was observed blocking the batch
+    # forever in poll() (the SDK's 600s default is too long). 90s + retries recovers on a fresh
+    # connection; a persistent failure raises and evaluate_outputs records it as a per-output error.
+    return anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"], timeout=90.0, max_retries=3)
+
+
+_CHUNK = 25  # commit every N outputs -> durable + resumable (a kill loses at most one chunk)
 
 
 def main() -> int:
@@ -74,18 +80,28 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=0, help="score at most N outputs (0 = all)")
     args = ap.parse_args()
     init_db()
+    total = {"scored": 0, "errors": 0, "flagged": 0}
     with SessionLocal() as db:
         work = enumerate_semantic_work(db)
         if args.limit:
             work = work[: args.limit]
         emit_flags = config.SEMANTIC_ADMISSIBILITY_MODE == "advisory"
         sheet_for = _sheet_provider()
-        summary = evaluate_outputs(
-            db, work, client=_build_client(), sheet_for=sheet_for, emit_flags=emit_flags
-        )
-        db.commit()
-    print({"mode": config.SEMANTIC_ADMISSIBILITY_MODE, **summary})
-    return 0 if summary["errors"] == 0 else 1
+        client = _build_client()
+        for i in range(0, len(work), _CHUNK):
+            summary = evaluate_outputs(
+                db, work[i : i + _CHUNK], client=client, sheet_for=sheet_for, emit_flags=emit_flags
+            )
+            db.commit()  # durable per chunk: progress survives a kill, run is resumable
+            for k in total:
+                total[k] += summary[k]
+            print(
+                f"chunk {i // _CHUNK + 1}: +{summary['scored']} scored, +{summary['errors']} err "
+                f"(cum {total['scored']}/{len(work)})",
+                flush=True,
+            )
+    print({"mode": config.SEMANTIC_ADMISSIBILITY_MODE, **total})
+    return 0 if total["errors"] == 0 else 1
 
 
 if __name__ == "__main__":
