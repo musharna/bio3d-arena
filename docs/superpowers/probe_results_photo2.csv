@@ -1,0 +1,7 @@
+mechanism,defect,tp,fp,tn,fn
+bioclip,fruit_only,0,0,12,1
+bioclip,wrong_species,0,0,10,3
+clip,fruit_only,1,11,1,0
+clip,wrong_species,0,0,10,3
+vlm,fruit_only,0,1,11,1
+vlm,wrong_species,0,0,10,3
