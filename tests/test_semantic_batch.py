@@ -158,7 +158,7 @@ def test_emit_flags_false_upserts_but_does_not_flag():
         evaluate_outputs(
             db,
             [{"output_id": oid, "taxon": None}],
-            client=_FakeClient("not_a_plant"),
+            client=_FakeClient("not_the_organism"),
             sheet_for=lambda o: b"\x89PNG",
             emit_flags=False,
         )
