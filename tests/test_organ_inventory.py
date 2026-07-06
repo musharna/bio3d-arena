@@ -19,10 +19,21 @@ BODY_PLAN_TAXA = {
     "Morchella esculenta",
     "Trametes versicolor",
 }
+# Bilaterian animal body plans (see _animal_inv): several required parts, each with an expected
+# complement. Every part is required, so — like Rosa — an animal inventory has no optional organ.
+ANIMAL_TAXA = {
+    "Canis lupus familiaris",
+    "Anas platyrhynchos",
+    "Danaus plexippus",
+    "Carassius auratus",
+}
+# Inventories whose body plan is wholly required, so the "has an optional organ" invariant below
+# does not apply: Rosa (flower-defining) plus every animal (all body parts required).
+ALL_REQUIRED_TAXA = {"Rosa"} | ANIMAL_TAXA
 
 
 def test_expected_taxa_present():
-    assert set(ORGAN_INVENTORY) == PLANT_TAXA | BODY_PLAN_TAXA
+    assert set(ORGAN_INVENTORY) == PLANT_TAXA | BODY_PLAN_TAXA | ANIMAL_TAXA
 
 
 def test_every_taxon_has_required_and_optional_organs_with_visuals():
@@ -30,9 +41,10 @@ def test_every_taxon_has_required_and_optional_organs_with_visuals():
     for taxon, inv in ORGAN_INVENTORY.items():
         req = {o.key for o in inv.organs if o.required}
         assert req, taxon  # at least one required organ
-        # Most inventories keep the reproductive organ optional; Rosa is the deliberate
-        # exception (flower-defining → all three organs required), so it has no optional organ.
-        if taxon != "Rosa":
+        # Most inventories keep the reproductive organ optional; the exceptions are Rosa
+        # (flower-defining → all three organs required) and the animals (every body part
+        # required), which by design have no optional organ.
+        if taxon not in ALL_REQUIRED_TAXA:
             assert any(not o.required for o in inv.organs), taxon
         assert all(o.visual.strip() for o in inv.organs), taxon  # visual descriptors (VLM read)
 
