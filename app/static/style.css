@@ -1135,14 +1135,27 @@ details.group[open] > summary.group-title::before {
   margin: 0.5rem 0 0.75rem;
   text-align: center;
 }
+/* Arena-only: override the spotlight `.reference-panel` flex-row (shared class) so the arena
+   panel stacks gallery-over-caption. Targeted by #id to beat the class rule without touching
+   /spotlight. */
+#reference-panel {
+  display: block;
+}
+/* Fixed-footprint strip: a constant width + single row (no wrap, scroll on overflow) so the
+   panel occupies the SAME space for 1 image or 5 — the vote UI below never shifts with ref count. */
 .reference-gallery {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.5rem;
   justify-content: center;
   align-items: center;
+  width: min(100%, 480px);
+  margin: 0 auto;
+  min-height: 158px;
+  overflow-x: auto;
 }
 .reference-img {
+  flex: 0 0 150px;
   width: 150px;
   height: 150px;
   object-fit: cover;

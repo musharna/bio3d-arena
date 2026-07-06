@@ -25,6 +25,12 @@ REDISTRIBUTABLE_LICENSES = frozenset(
     }
 )
 
+# Generators never promoted to the public instance, regardless of the curator's --generators
+# allowlist. Demeter + Helios are internal procedural_expert testers (agrigen) whose outputs are
+# inconsistent on the public arena (some render untextured/colorless); kept internal-only. A
+# deny-list here makes the exclusion durable — an operator can't accidentally publish them.
+PUBLIC_EXCLUDED_GENERATORS = frozenset({"demeter", "helios"})
+
 
 class LicenseError(RuntimeError):
     def __init__(self, output_id: int, license_: str | None):
@@ -45,9 +51,11 @@ def resolve_include_ids(
     db: Session, *, task_titles: list[str], generator_slugs: list[str]
 ) -> IncludeSet:
     inc = IncludeSet()
+    allowed = [s for s in generator_slugs if s not in PUBLIC_EXCLUDED_GENERATORS]
     inc.generator_ids = {
         g.id
-        for g in db.execute(select(Generator).where(Generator.slug.in_(generator_slugs))).scalars()
+        for g in db.execute(select(Generator).where(Generator.slug.in_(allowed))).scalars()
+        if g.slug not in PUBLIC_EXCLUDED_GENERATORS
     }
     inc.task_ids = {
         t.id
