@@ -80,3 +80,17 @@ def test_qa_combiner_fails_low_species_rep():
 def test_qa_combiner_passes_good():
     r = rq.qa_reference_image(organ={"fruit_only": False, "category": "complete"}, species_rep=0.9)
     assert r["passed"] is True and r["reasons"] == []
+
+
+def test_sniff_media_type_from_magic_bytes():
+    assert reference_qa._sniff_media_type(b"\xff\xd8\xff\xe0\x00\x10JFIF") == "image/jpeg"
+    assert reference_qa._sniff_media_type(b"\x89PNG\r\n\x1a\n....") == "image/png"
+    assert reference_qa._sniff_media_type(b"RIFF\x00\x00\x00\x00WEBPVP8 ") == "image/webp"
+
+
+def test_photo_messages_declares_jpeg_for_jpeg_bytes():
+    # Regression for the Anthropic 400 "media type png but bytes are jpeg" bug: reference photos
+    # are JPEG, so the declared media_type must match the actual bytes, not a hardcoded png.
+    inv = inventory_for("Solanum lycopersicum")
+    msgs = reference_qa._photo_messages(b"\xff\xd8\xff\xe0 jpeg-bytes", inv)
+    assert msgs[0]["content"][0]["source"]["media_type"] == "image/jpeg"

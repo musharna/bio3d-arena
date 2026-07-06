@@ -12,11 +12,26 @@ from .judge import JUDGE_MODEL
 from .organ_inventory import TaxonInventory
 
 
+def _sniff_media_type(data: bytes) -> str:
+    """Declare the Anthropic image media_type from the actual bytes — reference photos are JPEG,
+    not PNG, and the API rejects a declared type that doesn't match the bytes (recurring bug)."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    return "image/jpeg"  # sensible default: reference photos are overwhelmingly JPEG
+
+
 def _photo_messages(png: bytes, inventory: TaxonInventory) -> list[dict]:
     import base64
 
     lines = "\n".join(f"- {o.key}: {o.visual}" for o in inventory.organs)
     b64 = base64.b64encode(png).decode("ascii")
+    media_type = _sniff_media_type(png)
     text = (
         f"This is a REAL PHOTOGRAPH intended as a reference for the organism {inventory.taxon}. "
         "For EACH expected organ below, mark whether it is visibly present in THIS photo "
@@ -30,7 +45,7 @@ def _photo_messages(png: bytes, inventory: TaxonInventory) -> list[dict]:
             "content": [
                 {
                     "type": "image",
-                    "source": {"type": "base64", "media_type": "image/png", "data": b64},
+                    "source": {"type": "base64", "media_type": media_type, "data": b64},
                 },
                 {"type": "text", "text": text},
             ],
