@@ -3,6 +3,9 @@
 > Draft results section for the P-A paper, computed 2026-07-01 on the internal study data
 > (`data/study/arena-study.db` + the human trait-calibration labels). Numbers are reproducible via
 > `scripts/`-style analysis over 397 human trait-labelings, 175 Chamfer-scored outputs, 138 votes.
+> The reference-free completeness section (2026-07-05) adds 39 fungal-kingdom outputs scored with
+> the organism-completeness metric (`scripts/score_completeness.py`); a second fungal wave is in
+> flight and will extend it.
 > **Scale caveat:** this is the internal evaluation phase — small n, single calibration round; all
 > figures are provisional and reported with that framing.
 
@@ -58,6 +61,49 @@ ground-truth scan therefore catches some, but misses a substantial fraction of, 
 failure. This is the concrete case against ranking generative plant models by geometric distance
 alone (cf. the static single-metric plant benchmarks), and the motivation for coupling objective
 metrics with human + trait-grounded morphological evaluation.
+
+## Reference-free completeness scales where geometry cannot — extending to a second kingdom
+
+The previous section shows Chamfer is a _weak_ proxy where a ground-truth scan exists. But the
+sharper problem is that **for most organisms a ground-truth mesh does not exist at all**. To test
+whether the evaluation generalizes past the six calibration plants, we added a second kingdom —
+Fungi (common puffball, lion's mane, and a Cucurbita fruit) — for which the arena holds **no
+ground-truth mesh**. The consequence for geometry is absolute, not gradual: **0 of 24 fungal
+reconstruction outputs receive a Chamfer score** (all 24 objective-metric rows resolve to
+`status=error`, null distance). Any leaderboard ranked on geometric distance simply _omits these
+taxa_ — the failure is silent, because a null is not a low score.
+
+The organism-level **completeness** metric is reference-free by construction: a VLM reads a
+turntable contact sheet of the generated model and checks each expected organ (from an authored
+per-taxon organ inventory) as present / absent / uncertain — no GT required. It therefore covers
+exactly the cells geometry leaves blank: **all 39 fungal outputs scored, 0 errors**, and the result
+is a clean cross-paradigm split (score = required-organs-present / required; "complete" = whole
+organism):
+
+| taxon (tier)       | image→3D recon complete | text→3D complete |
+| ------------------ | ----------------------- | ---------------- |
+| puffball (easy)    | 8/8 (mean 1.00)         | 5/5 (1.00)       |
+| lion's mane (hard) | 5/8 (0.63)              | 4/4 (1.00)       |
+| Cucurbita (fruit)  | **1/8 (0.13)**          | 6/6 (1.00)       |
+
+**text→3D produced a complete, recognizable body in 15/15 cases**, while single-image recon was
+highly variable (14/24), degrading with both geometric difficulty (puffball 8/8 → lion's mane 5/8)
+and — decisively — input quality.
+
+**The metric doubles as a data-quality auditor.** The Cucurbita recons collapse (1/8 complete) not
+because the generators failed but because the reference photo depicts the vegetative _plant_ (leaves,
+vine, a blossom), not the _fruit_ the task asks to reconstruct; the recons faithfully rebuilt
+foliage. The completeness metric's per-output notes surfaced this directly ("shows a vegetative
+Cucurbita plant … no fruit body visible"), a diagnosis no geometric distance to a (nonexistent)
+scan could have produced. This is the same reference-free signal catching a silent _input_ bug that
+it was built to catch in _outputs_.
+
+**Caveat (uncalibrated cross-kingdom extension).** The completeness metric was validated on plants
+at binary κ=0.64; the fungal body-plan inventories (fruiting body required, surface features
+optional) are authored, not yet human-calibrated. These fungal figures are therefore reported as
+_reference-free coverage_ plus qualitative agreement (spot-checked against the VLM's own rationales),
+not as a calibrated score. A second fungal wave (four further taxa: bolete, fly agaric, morel,
+turkey tail) is in flight and will extend this table.
 
 ## Difficulty is strongly taxon-dependent
 

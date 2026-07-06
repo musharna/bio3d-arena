@@ -1,13 +1,13 @@
-"""Bulk-assign difficulty tiers to recon tasks (idempotent upsert).
+"""Seed TaxonDifficulty from difficulty_rubric.RUBRIC, then materialize per-task
+TaskDifficulty rows. Idempotent. Refuses to run against a non-copy (study/prod) DB, and
+fail-loud if any task's species has no rubric coverage.
 
-DIFFICULTY_MAP is keyed by ReconTask.species_slug → (tier, rationale). Slugs with no
-ReconTask are skipped and logged (non-fatal). Verify slugs against the live DB:
-    select(ReconTask.species_slug)
-
-Usage: .venv/bin/python scripts/assign_difficulty.py"""
+Usage: .venv/bin/python scripts/assign_difficulty.py
+"""
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -15,39 +15,61 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select  # noqa: E402
 
-from app.database import SessionLocal  # noqa: E402
-from app.difficulty import set_task_difficulty  # noqa: E402
-from app.models import ReconTask  # noqa: E402
-
-# Editable starting curation, keyed by the live ReconTask.species_slug values.
-# Tiers reflect reconstruction difficulty of the subject's geometry.
-DIFFICULTY_MAP: dict[str, tuple[str, str]] = {
-    "solanum_lycopersicum": ("easy", "compact bushy form, large leaves/fruit — forgiving geometry"),
-    "zea_mays": ("moderate", "tall blade leaves, thin tassel/silk detail"),
-    "arabidopsis_thaliana": ("hard", "fine rosette + bolting inflorescence, thin stems"),
-    "pinus_sylvestris": ("hard", "dense fine needles + branch self-occlusion"),
-}
+from app import config, difficulty  # noqa: E402
+from app.database import SessionLocal, init_db  # noqa: E402
+from app.difficulty_rubric import RUBRIC, tier_for_scores  # noqa: E402
+from app.models import TaxonDifficulty  # noqa: E402
 
 
-def assign_all(db, mapping: dict[str, tuple[str, str]] = DIFFICULTY_MAP) -> dict:
-    slug_to_task = {rt.species_slug: rt.task_id for rt in db.execute(select(ReconTask)).scalars()}
-    assigned = 0
-    skipped: list[str] = []
-    for slug, (tier, rationale) in mapping.items():
-        task_id = slug_to_task.get(slug)
-        if task_id is None:
-            skipped.append(slug)
-            continue
-        set_task_difficulty(db, task_id, tier, rationale, commit=False)
-        assigned += 1
-    db.commit()
-    return {"assigned": assigned, "skipped": skipped}
+def seed_taxon_difficulty(db, rubric: dict | None = None, commit: bool = True) -> dict:
+    """Upsert one TaxonDifficulty row per taxon in the rubric. Fail-loud on bad scores
+    (via tier_for_scores). Idempotent (upsert by species_slug). commit=False for tests."""
+    rubric = RUBRIC if rubric is None else rubric
+    seeded = 0
+    for slug, entry in rubric.items():
+        tier = tier_for_scores(entry["scores"])
+        row = (
+            db.execute(select(TaxonDifficulty).where(TaxonDifficulty.species_slug == slug))
+            .scalars()
+            .first()
+        )
+        if row is None:
+            row = TaxonDifficulty(species_slug=slug)
+            db.add(row)
+        row.tier = tier
+        row.axis_scores = json.dumps(entry["scores"])
+        row.rationale = json.dumps(entry["rationale"])
+        seeded += 1
+    # Explicit flush (SessionLocal is autoflush=False — see app/difficulty.py:
+    # materialize_task_difficulty for the same pattern): makes the rows added above visible
+    # to callers querying TaxonDifficulty in this same uncommitted session/transaction
+    # (tests with commit=False; a re-run for idempotency), without ending the transaction
+    # the way an actual commit would.
+    db.flush()
+    if commit:
+        db.commit()
+    return {"seeded": seeded}
 
 
 def main() -> int:
+    if not config.is_safe_test_db_target(config.DATABASE_URL):
+        # Seeding mutates TaxonDifficulty/TaskDifficulty. Never run against the real study DB;
+        # point BIO3D_DATABASE_URL at a copy.
+        raise SystemExit(
+            "refusing to run against a non-copy DB — is_safe_test_db_target False; use a copy"
+        )
+    # Ensure the schema exists: a pre-existing DB copy predates the taxon_difficulty table,
+    # and create_all only adds missing tables (never drops/wipes). Mirrors app boot.
+    init_db()
     with SessionLocal() as db:
-        res = assign_all(db)
-    print(res)
+        seed = seed_taxon_difficulty(db)
+        result = difficulty.materialize_task_difficulty(db)
+    if result["skipped"]:
+        # fail-loud at the operational boundary: a task with no rubric coverage.
+        raise SystemExit(
+            f"uncovered tasks (no TaxonDifficulty for their species): {result['skipped']}"
+        )
+    print({**seed, "materialized": result["materialized"], "taxa": result["taxa"]})
     return 0
 
 

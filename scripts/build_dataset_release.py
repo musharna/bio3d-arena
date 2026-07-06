@@ -47,6 +47,7 @@ def build_release(
         task_titles=task_titles,
         generator_slugs=generator_slugs,
         out_dir=out / "bundle",
+        posture="redistribute",
     )
     rows = json.loads((out / "bundle" / "rows.json").read_text())
     rollup = dataset.license_rollup(rows.get("model_output", []))

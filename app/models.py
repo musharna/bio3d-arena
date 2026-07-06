@@ -534,6 +534,23 @@ class TaskDifficulty(Base):
     updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
+class TaxonDifficulty(Base):
+    """Per-taxon geometric-difficulty tier — the source of truth that TaskDifficulty is
+    materialized from. Separate table (not a Task/ReconTask column) to honor the
+    create_all-only schema — mirrors TaskDifficulty/PlantMorphology. axis_scores and
+    rationale are JSON text keyed by difficulty_rubric.AXES; tier ∈ difficulty.TIERS."""
+
+    __tablename__ = "taxon_difficulty"
+    __table_args__ = (UniqueConstraint("species_slug", name="uq_taxon_difficulty_species"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    species_slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    tier: Mapped[str] = mapped_column(String(16))
+    axis_scores: Mapped[str] = mapped_column(Text, default="{}")
+    rationale: Mapped[str] = mapped_column(Text, default="{}")
+    updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
 class PlantMorphology(Base):
     """Hand-curated growth-form classification per recon subject. Separate table (not a
     Task/ReconTask column) to honor the create_all-only schema — mirrors TaskDifficulty.

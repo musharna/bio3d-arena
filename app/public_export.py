@@ -6,12 +6,15 @@ Pure DB reads; no filesystem, no serialization (that's scripts/export_public.py)
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import Generator, GoldPair, ModelOutput, Task
+
+logger = logging.getLogger(__name__)
 
 REDISTRIBUTABLE_LICENSES = frozenset(
     {
@@ -24,6 +27,40 @@ REDISTRIBUTABLE_LICENSES = frozenset(
         "ODbL-1.0",
     }
 )
+
+# Generators never promoted to the public instance, regardless of the curator's --generators
+# allowlist. Demeter + Helios are internal procedural_expert testers (agrigen) whose outputs are
+# inconsistent on the public arena (some render untextured/colorless); kept internal-only. A
+# deny-list here makes the exclusion durable — an operator can't accidentally publish them.
+PUBLIC_EXCLUDED_GENERATORS = frozenset({"demeter", "helios"})
+
+
+HARD_EXCLUDE_SOURCES = frozenset({"found:xfrog", "procedural:demeter", "procedural:agrigen"})
+_COMMERCIAL_MODEL_PREFIXES = ("api:", "recon:", "frontier:")
+
+
+def is_commercial_model(source: str | None) -> bool:
+    return (source or "").startswith(_COMMERCIAL_MODEL_PREFIXES)
+
+
+def effective_provenance(db: Session, o: ModelOutput) -> tuple[str | None, str | None]:
+    """True (source, license) for gating: for a gold output, that of the non-gold
+    ModelOutput sharing its asset_path (the real asset it silently aliases) if one
+    exists, else its own; for a non-gold output, always its own."""
+    if o.is_gold:
+        alias = (
+            db.execute(
+                select(ModelOutput).where(
+                    ModelOutput.asset_path == o.asset_path,
+                    ModelOutput.is_gold.is_(False),
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if alias is not None:
+            return alias.source, alias.license
+    return o.source, o.license
 
 
 class LicenseError(RuntimeError):
@@ -45,9 +82,11 @@ def resolve_include_ids(
     db: Session, *, task_titles: list[str], generator_slugs: list[str]
 ) -> IncludeSet:
     inc = IncludeSet()
+    allowed = [s for s in generator_slugs if s not in PUBLIC_EXCLUDED_GENERATORS]
     inc.generator_ids = {
         g.id
-        for g in db.execute(select(Generator).where(Generator.slug.in_(generator_slugs))).scalars()
+        for g in db.execute(select(Generator).where(Generator.slug.in_(allowed))).scalars()
+        if g.slug not in PUBLIC_EXCLUDED_GENERATORS
     }
     inc.task_ids = {
         t.id
@@ -76,12 +115,83 @@ def resolve_include_ids(
     return inc
 
 
+def filter_include_for_posture(
+    db: Session, inc: "IncludeSet", posture: str, gated: set[int]
+) -> None:
+    """Narrow inc.output_ids in place per posture. redistribute = strict redistributable, no
+    commercial-model. display = redistributable OR commercial-model recon. Both drop the hard-
+    excludes and admissibility-gated. Attribution/labeling is carried by the row export."""
+    from .licensing import normalize_license
+
+    keep: set[int] = set()
+    for oid in inc.output_ids:
+        if oid in gated:
+            continue
+        o = db.get(ModelOutput, oid)
+        if o is None or o.source in HARD_EXCLUDE_SOURCES:
+            continue
+        redistributable = (
+            o.source == "bio3d-arena" or normalize_license(o.license) in REDISTRIBUTABLE_LICENSES
+        )
+        if posture == "redistribute":
+            if redistributable and not is_commercial_model(o.source):
+                keep.add(oid)
+        elif posture == "display":
+            if redistributable or is_commercial_model(o.source):
+                keep.add(oid)
+        else:
+            raise ValueError(f"unknown posture {posture!r}")
+    dropped = inc.output_ids - keep
+    if dropped:
+        logger.info("posture %s dropped %d output ids: %s", posture, len(dropped), sorted(dropped))
+    inc.output_ids = keep
+
+
+def filter_gold_for_posture(db: Session, inc: "IncludeSet", posture: str, gated: set[int]) -> None:
+    """Narrow inc.gold_output_ids in place per posture, using the SAME predicate as
+    filter_include_for_posture but evaluated against the underlying asset's true
+    (effective_provenance) source/license -- a gold output's own source/license is a
+    calibration-generator decoy value and must never gate itself."""
+    from .licensing import normalize_license
+
+    keep: set[int] = set()
+    for oid in inc.gold_output_ids:
+        if oid in gated:
+            continue
+        o = db.get(ModelOutput, oid)
+        if o is None:
+            continue
+        eff_source, eff_license = effective_provenance(db, o)
+        if eff_source in HARD_EXCLUDE_SOURCES:
+            continue
+        redistributable = (
+            eff_source == "bio3d-arena"
+            or normalize_license(eff_license) in REDISTRIBUTABLE_LICENSES
+        )
+        if posture == "redistribute":
+            if redistributable and not is_commercial_model(eff_source):
+                keep.add(oid)
+        elif posture == "display":
+            if redistributable or is_commercial_model(eff_source):
+                keep.add(oid)
+        else:
+            raise ValueError(f"unknown posture {posture!r}")
+    dropped = inc.gold_output_ids - keep
+    if dropped:
+        logger.info(
+            "posture %s dropped %d gold output ids: %s", posture, len(dropped), sorted(dropped)
+        )
+    inc.gold_output_ids = keep
+
+
 def check_licenses(db: Session, output_ids: set[int]) -> None:
+    from .licensing import normalize_license
+
     for oid in sorted(output_ids):
         o = db.get(ModelOutput, oid)
         if o is None:
             continue
         if o.source == "bio3d-arena":  # our own asset — exempt
             continue
-        if o.license not in REDISTRIBUTABLE_LICENSES:
+        if normalize_license(o.license) not in REDISTRIBUTABLE_LICENSES:
             raise LicenseError(oid, o.license)

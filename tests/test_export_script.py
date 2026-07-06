@@ -33,7 +33,9 @@ def test_export_writes_bundle_and_no_agrigen_leak(db_session, tmp_path):
     store = LocalStorageBackend(tmp_path / "src_assets")
     store.save("a.glb", b"GLBDATA-a")
     store.save("b.glb", b"GLBDATA-b")
-    store.save("c.glb", b"GLBDATA-c")  # o_bad's asset_path; included now that its license is set above
+    store.save(
+        "c.glb", b"GLBDATA-c"
+    )  # o_bad's asset_path; included now that its license is set above
     out = tmp_path / "bundle"
     manifest = export_bundle(
         db_session, store, task_titles=["maize-a"], generator_slugs=["lpy"], out_dir=out
@@ -53,7 +55,7 @@ def test_gold_pair_of_non_included_task_excluded(db_session, tmp_path):
     bundle -- its id, and its gold outputs, must be absent from rows.json (otherwise
     Task 4's importer sees a gold_pair.task_id / good_output_id / bad_output_id that
     doesn't resolve to any row it received)."""
-    from app.models import Category, Generator, GoldPair, ModelOutput, Task
+    from app.models import GoldPair, ModelOutput, Task
 
     e = _mk(db_session)
     e["o_bad"].license = "CC-BY-4.0"
@@ -90,9 +92,7 @@ def test_gold_pair_of_non_included_task_excluded(db_session, tmp_path):
     store.save("b.glb", b"GLBDATA-b")
     store.save("c.glb", b"GLBDATA-c")
     out = tmp_path / "bundle"
-    export_bundle(
-        db_session, store, task_titles=["maize-a"], generator_slugs=["lpy"], out_dir=out
-    )
+    export_bundle(db_session, store, task_titles=["maize-a"], generator_slugs=["lpy"], out_dir=out)
     rows = json.loads((out / "rows.json").read_text())
 
     gold_pair_ids = {r["id"] for r in rows["gold_pair"]}
@@ -150,9 +150,7 @@ def test_vote_of_excluded_comparison_excluded(db_session, tmp_path):
     store.save("b.glb", b"GLBDATA-b")
     store.save("c.glb", b"GLBDATA-c")
     out = tmp_path / "bundle"
-    export_bundle(
-        db_session, store, task_titles=["maize-a"], generator_slugs=["lpy"], out_dir=out
-    )
+    export_bundle(db_session, store, task_titles=["maize-a"], generator_slugs=["lpy"], out_dir=out)
     rows = json.loads((out / "rows.json").read_text())
 
     comparison_ids = {r["id"] for r in rows["comparison"]}
@@ -160,6 +158,8 @@ def test_vote_of_excluded_comparison_excluded(db_session, tmp_path):
 
     vote_ids = {r["id"] for r in rows["vote"]}
     assert vote.id not in vote_ids
+
+
 def test_export_ships_gold_calibration_generator_not_in_allowlist(db_session, tmp_path):
     """FIX 1: gold decoy outputs belong to the "calibration" generator (app/seed.py's
     _seed_gold), which a curator's generator_slugs allowlist will never include --
@@ -173,7 +173,9 @@ def test_export_ships_gold_calibration_generator_not_in_allowlist(db_session, tm
     e = _mk(db_session)
     e["o_bad"].license = "CC-BY-4.0"
 
-    calib = Generator(slug="calibration", name="Calibration (gold)", kind="decoy", is_anonymous=True)
+    calib = Generator(
+        slug="calibration", name="Calibration (gold)", kind="decoy", is_anonymous=True
+    )
     db_session.add(calib)
     db_session.flush()
     o_good = ModelOutput(
@@ -206,9 +208,7 @@ def test_export_ships_gold_calibration_generator_not_in_allowlist(db_session, tm
     store.save("gold-bad.glb", b"GLBDATA-gold-bad")
     out = tmp_path / "bundle"
     # generator_slugs allowlist deliberately excludes "calibration".
-    export_bundle(
-        db_session, store, task_titles=["maize-a"], generator_slugs=["lpy"], out_dir=out
-    )
+    export_bundle(db_session, store, task_titles=["maize-a"], generator_slugs=["lpy"], out_dir=out)
     rows = json.loads((out / "rows.json").read_text())
 
     generator_ids = {r["id"] for r in rows["generator"]}
@@ -248,9 +248,7 @@ def test_export_nulls_reference_asset_id_to_excluded_output(db_session, tmp_path
     store.save("b.glb", b"GLBDATA-b")
     store.save("c.glb", b"GLBDATA-c")
     out = tmp_path / "bundle"
-    export_bundle(
-        db_session, store, task_titles=["maize-a"], generator_slugs=["lpy"], out_dir=out
-    )
+    export_bundle(db_session, store, task_titles=["maize-a"], generator_slugs=["lpy"], out_dir=out)
     rows = json.loads((out / "rows.json").read_text())
 
     output_ids = {r["id"] for r in rows["model_output"]}
@@ -258,3 +256,47 @@ def test_export_nulls_reference_asset_id_to_excluded_output(db_session, tmp_path
 
     t_rows = {r["id"]: r for r in rows["task"]}
     assert t_rows[e["t_pub"].id]["reference_asset_id"] is None
+
+
+def test_display_allows_uncleared_input_recon(db_session, tmp_path):
+    # A commercial-model recon whose reference photo has NO cleared sidecar must still export
+    # in the DISPLAY posture (mesh shows; photo suppressed elsewhere). Previously this raised.
+    # Unique slug/title: db_session rolls back its OWN writes but still READS committed rows from
+    # sibling tests on the shared engine, so fixed slugs/titles collide (UNIQUE constraint).
+    import uuid
+
+    from app.models import Category, Generator, ModelOutput, Task
+
+    tag = uuid.uuid4().hex[:8]
+    title = f"Rosa recon display {tag}"
+    gslug = f"fal-trellis-{tag}"
+    cat = Category(slug=f"plants-{tag}", name="Plants")
+    g = Generator(slug=gslug, name="TRELLIS", kind="model", paradigm="image_recon")
+    db_session.add_all([cat, g])
+    db_session.flush()
+    t = Task(category_id=cat.id, title=title, prompt="p", active=True)
+    db_session.add(t)
+    db_session.flush()
+    o = ModelOutput(
+        task_id=t.id,
+        generator_id=g.id,
+        asset_path="r.glb",
+        asset_format="glb",
+        source="api:fal:trellis",
+        license="TRELLIS (fal) generated-asset terms",
+        meta_json=json.dumps({"input_image": "reference/rose_ref.jpg"}),  # NO cleared sidecar
+    )
+    db_session.add(o)
+    db_session.flush()
+    store = LocalStorageBackend(tmp_path / "src_assets")
+    manifest = export_bundle(
+        db_session,
+        store,
+        task_titles=[title],
+        generator_slugs=[gslug],
+        out_dir=str(tmp_path / "out"),
+        posture="display",
+        dry_run=True,
+    )
+    assert manifest["posture"] == "display"
+    assert manifest["counts"]["model_output"] == 1  # the uncleared-input recon is INCLUDED

@@ -462,6 +462,12 @@ def recompute_judge_all(db: Session, view_condition: str = "multi4") -> dict:
     return {"status": "ok", "view_condition": view_condition, "criteria": len(criteria)}
 
 
+# Memoized tier_perceptual_ranking output, keyed by (criterion, condition) → (vote_signature,
+# result). The board's bootstrapped BT is the /difficulty page's dominant cost and only changes
+# when the relevant judge votes change, so a repeat load is served from here.
+_perceptual_cache: dict[tuple[str, str], tuple[tuple, list[dict]]] = {}
+
+
 def tier_perceptual_ranking(
     db: Session, criterion_slug: str = "overall", view_condition: str = "multi4"
 ) -> list[dict]:
@@ -480,9 +486,27 @@ def tier_perceptual_ranking(
     if crit is None:
         return empty
 
+    # Cache signature: the ranking only changes when the relevant judge votes change. Cheap to
+    # compute (count + max id), so a repeat load returns the memoized result instantly.
+    sig = tuple(
+        db.execute(
+            select(func.count(JudgeVote.id), func.max(JudgeVote.id)).where(
+                JudgeVote.criterion_id == crit.id, JudgeVote.view_condition == view_condition
+            )
+        ).one()
+    )
+    ckey = (criterion_slug, view_condition)
+    hit = _perceptual_cache.get(ckey)
+    if hit is not None and hit[0] == sig:
+        return hit[1]
+
     tier_by_task = {td.task_id: td.tier for td in db.execute(select(TaskDifficulty)).scalars()}
     excluded = mode_a_excluded_generator_ids(db)
     names = generator_display_names(db)
+    # Batch what was an N+1 over every judge vote (~4 db.get each): output→generator and
+    # generator→paradigm, one query apiece.
+    gen_by_out = dict(db.execute(select(ModelOutput.id, ModelOutput.generator_id)).all())
+    paradigm_by_gen = {g.id: g.paradigm for g in db.execute(select(Generator)).scalars()}
 
     matches_by_tier: dict[str, list[tuple[int, int]]] = defaultdict(list)
     jvs = db.execute(
@@ -496,15 +520,13 @@ def tier_perceptual_ranking(
         tier = tier_by_task.get(jv.task_id)
         if tier is None:
             continue
-        out_a = db.get(ModelOutput, jv.output_a_id)
-        out_b = db.get(ModelOutput, jv.output_b_id)
-        if out_a is None or out_b is None:
+        gen_a = gen_by_out.get(jv.output_a_id)
+        gen_b = gen_by_out.get(jv.output_b_id)
+        if gen_a is None or gen_b is None:
             continue  # dangling vote (output deleted) — not a valid comparison
-        gen_a = out_a.generator_id
-        gen_b = out_b.generator_id
         if gen_a in excluded or gen_b in excluded:
             continue
-        if not same_paradigm(db.get(Generator, gen_a).paradigm, db.get(Generator, gen_b).paradigm):
+        if not same_paradigm(paradigm_by_gen.get(gen_a), paradigm_by_gen.get(gen_b)):
             continue  # never rank across paradigms
         if jv.winner == "a":
             matches_by_tier[tier].append((gen_a, gen_b))
@@ -520,11 +542,14 @@ def tier_perceptual_ranking(
         players = sorted({p for m in matches for p in m})
         rows = []
         if players:
-            result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP)
+            # bootstrap=0: this board renders only bt_score + n_games (no CI columns), so the
+            # 200-resample bootstrap — the dominant cost, ~24s cold across all tiers — is pure
+            # waste here. The point estimate (result.scores) is bootstrap-independent.
+            result = ranking.bradley_terry(players, matches, bootstrap=0)
             rows = [
                 {
                     "generator": names.get(p, str(p)),
-                    "paradigm": db.get(Generator, p).paradigm,
+                    "paradigm": paradigm_by_gen.get(p),
                     "bt_score": round(result.scores.get(p, ranking.BT_BASE), 1),
                     "n_games": int(result.n_games.get(p, 0)),
                 }
@@ -539,6 +564,7 @@ def tier_perceptual_ranking(
                 rank_counters[r["paradigm"]] = rank_counters.get(r["paradigm"], 0) + 1
                 r["rank"] = rank_counters[r["paradigm"]]
         out.append({"tier": tier, "rows": rows, "n_matches": len(matches)})
+    _perceptual_cache[ckey] = (sig, out)
     return out
 
 
@@ -1120,4 +1146,55 @@ def dgen_trajectory(db, run_id: int | None = None) -> list[dict]:
                 "lift": lift,
             }
         )
+    return out
+
+
+def _gallery_slug(title: str) -> str:
+    """'Lycoperdon perlatum — single-image → …' -> 'lycoperdon_perlatum' (gallery dir name)."""
+    return title.split("—")[0].strip().lower().replace(" ", "_")
+
+
+def reference_images_for_task(db: Session, task) -> list[dict]:
+    """Ordered reference images for a task, each {url, credit}: the recon INPUT photo(s) first
+    (what the image→3D models were actually given, from meta.input_image), then a small CC
+    species gallery (data/assets/reference/gallery/<slug>/, sourced from iNaturalist) so voters
+    see the organism from several angles/specimens — one photo underspecifies an unfamiliar
+    organism. Task-scoped, applies to every paradigm's outputs. Empty list if nothing is on
+    record. cc-by gallery photos carry their required attribution in `credit`."""
+    import json
+
+    from . import config
+    from .models import ModelOutput
+    from .reference_provenance import _taxon_of, cleared_reference_taxa
+    from .storage import get_storage
+
+    st = get_storage()
+    out: list[dict] = []
+    seen: set[str] = set()
+    cleared_taxa = cleared_reference_taxa()
+    # Only VISIBLE outputs contribute their input photo: a withdrawn output (hidden_at set) may
+    # have been generated from a since-replaced or non-redistributable input (e.g. a non-CC
+    # product shot), which must not surface in the vote UI as a "reconstruction input photo".
+    for o in db.execute(
+        select(ModelOutput).where(ModelOutput.task_id == task.id, ModelOutput.hidden_at.is_(None))
+    ).scalars():
+        try:
+            img = (json.loads(o.meta_json or "{}") or {}).get("input_image")
+        except (ValueError, TypeError):
+            continue
+        if img and img not in seen and _taxon_of(img) in cleared_taxa:
+            seen.add(img)
+            out.append({"url": st.url_for(img), "credit": "reconstruction input photo"})
+
+    gdir = config.ASSET_DIR / "reference" / "gallery" / _gallery_slug(task.title)
+    manifest = gdir / "manifest.json"
+    if manifest.exists():
+        try:
+            for item in json.loads(manifest.read_text()):
+                rel = f"reference/gallery/{_gallery_slug(task.title)}/{item['file']}"
+                out.append(
+                    {"url": st.url_for(rel), "credit": item.get("attribution", "iNaturalist")}
+                )
+        except (ValueError, KeyError, OSError):
+            pass
     return out

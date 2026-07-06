@@ -195,22 +195,41 @@ def _resolve_category_id(db: Session, category_slug: str | None) -> int | None:
 
 
 def _serialize(
-    comparison: Comparison, task: Task, crit: Criterion, out_a: ModelOutput, out_b: ModelOutput
+    comparison: Comparison,
+    task: Task,
+    crit: Criterion,
+    out_a: ModelOutput,
+    out_b: ModelOutput,
+    references: list[dict] | None = None,
 ) -> dict:
-    """Anonymized arena payload — never leaks generator identity or gold status."""
+    """Anonymized arena payload — never leaks generator identity or gold status. `references` is
+    the subject's reference gallery (input photo + CC species photos — what the organism should
+    look like), shown so voters can judge fidelity — not identity-revealing (shared across both
+    candidates)."""
+    from .public_export import is_commercial_model
+
     return {
         "comparison_id": comparison.id,
-        "task": {"title": task.title, "prompt": task.prompt, "category": task.category.name},
+        "task": {
+            "title": task.title,
+            "prompt": task.prompt,
+            "category": task.category.name,
+            "references": references or [],
+        },
         "criterion": {"slug": crit.slug, "name": crit.name},
         "a": {
             "url": storage.url_for(out_a.asset_path),
             "format": out_a.asset_format,
             "output_id": out_a.id,
+            "machine_generated": is_commercial_model(out_a.source),
+            "attribution": out_a.attribution or None,
         },
         "b": {
             "url": storage.url_for(out_b.asset_path),
             "format": out_b.asset_format,
             "output_id": out_b.id,
+            "machine_generated": is_commercial_model(out_b.source),
+            "attribution": out_b.attribution or None,
         },
     }
 
@@ -255,7 +274,9 @@ def _build_gold_comparison(db: Session, session_id: str, crit: Criterion) -> dic
     )
     db.add(comparison)
     db.commit()
-    return _serialize(comparison, task, crit, out_a, out_b)
+    return _serialize(
+        comparison, task, crit, out_a, out_b, service.reference_images_for_task(db, task)
+    )
 
 
 def _build_comparison(
@@ -327,7 +348,9 @@ def _build_comparison(
     )
     db.add(comparison)
     db.commit()
-    return _serialize(comparison, task, crit, out_a, out_b)
+    return _serialize(
+        comparison, task, crit, out_a, out_b, service.reference_images_for_task(db, task)
+    )
 
 
 def _build_kwise_comparison(
@@ -435,7 +458,9 @@ def _build_calibration_comparison(db: Session, session_id: str) -> dict | None:
     )
     db.add(comparison)
     db.commit()
-    payload = _serialize(comparison, task, crit, out_a, out_b)
+    payload = _serialize(
+        comparison, task, crit, out_a, out_b, service.reference_images_for_task(db, task)
+    )
     payload["set"] = "calibration"
     payload["progress"] = progress
     return payload
@@ -1248,6 +1273,12 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
 
     perceptual = service.tier_perceptual_ranking(db)
     trait_tiers = service.tier_trait_accuracy(db)
+    paradigm_grid = difficulty.paradigm_tier_scorecard(db)
+    # Reference/capture-quality triage: taxa where recon completeness is far below text (the
+    # recon INPUT is suspect). Sorted by gap desc; flagged ones shown first.
+    from .completeness import recon_reliability_flags
+
+    reliability = recon_reliability_flags(db)
 
     return templates.TemplateResponse(
         request,
@@ -1259,15 +1290,24 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
             "gradient": gradient,
             "perceptual": perceptual,
             "trait_tiers": trait_tiers,
+            "paradigm_grid": paradigm_grid,
             "paradigm_display_names": paradigms.DISPLAY_NAMES,
+            "reliability": reliability,
         },
     )
 
 
 @app.get("/api/difficulty.json")
 def api_difficulty(db: Session = Depends(get_db)):
-    """Per-(difficulty-tier × generator) objective scorecard over existing metrics."""
-    return {"scorecard": difficulty.tier_scorecard(db)}
+    """Per-tier objective scorecard (× generator and × paradigm) over existing metrics, plus the
+    recon-reliability triage flags (taxa whose recon completeness is far below text→3D)."""
+    from .completeness import recon_reliability_flags
+
+    return {
+        "scorecard": difficulty.tier_scorecard(db),
+        "paradigm_grid": difficulty.paradigm_tier_scorecard(db),
+        "recon_reliability": recon_reliability_flags(db),
+    }
 
 
 # ----------------------------------------------------------- Mode-C trait scoring
