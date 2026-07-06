@@ -74,9 +74,17 @@ def assert_recon_photos_cleared(db: Session, output_ids: set[int]) -> None:
     cleared = cleared_reference_taxa()
     for oid in sorted(output_ids):
         o = db.get(ModelOutput, oid)
-        if o is None or not (o.source or "").startswith(_COMMERCIAL_MODEL_PREFIXES):
+        if o is None:
             continue
         img = (json.loads(o.meta_json or "{}")).get("input_image")
+        is_commercial = (o.source or "").startswith(_COMMERCIAL_MODEL_PREFIXES)
+        # A recon derives from its input photo regardless of who ran it. Commercial-model recon
+        # is always a recon; a bio3d-arena output is a recon iff it recorded an input_image (a
+        # held-out GT mesh / scan has none) — those internal recons must ALSO be input-cleared to
+        # ship in the dataset, else an internal recon from a non-CC photo would slip through.
+        is_internal_recon = (o.source == "bio3d-arena") and (img is not None)
+        if not (is_commercial or is_internal_recon):
+            continue
         taxon = _taxon_of(img)
         if taxon is None:
             raise ReferenceProvenanceError(

@@ -34,3 +34,46 @@ def test_reference_has_image_and_valid_provenance(slug):
     assert d["source_url"].startswith("http") and d["download_url"].startswith("http")
     for k in ("author", "attribution", "title", "subject"):
         assert d.get(k, "").strip(), k
+
+
+def test_bio3darena_recon_gated_on_redistribute(monkeypatch):
+    import json
+    from app import reference_provenance as rp
+    from app.database import SessionLocal
+    from app.models import Category, Generator, ModelOutput, Task
+
+    monkeypatch.setattr(rp, "cleared_reference_taxa", lambda: {"tomato"})  # rose NOT cleared
+
+    with SessionLocal() as db:
+        cat = Category(slug="plants2", name="P")
+        g = Generator(slug="internal-recon", name="internal", kind="model", paradigm="image_recon")
+        db.add_all([cat, g])
+        db.flush()
+        t = Task(category_id=cat.id, title="rp-rose", prompt="p", active=True)
+        db.add(t)
+        db.flush()
+        # bio3d-arena recon from an UN-cleared photo → must raise
+        bad = ModelOutput(
+            task_id=t.id,
+            generator_id=g.id,
+            asset_path="a.glb",
+            source="bio3d-arena",
+            meta_json=json.dumps({"input_image": "reference/rose_ref.jpg"}),
+        )
+        # bio3d-arena GT mesh (no input_image) → exempt
+        gt = ModelOutput(
+            task_id=t.id,
+            generator_id=g.id,
+            asset_path="gt.glb",
+            source="bio3d-arena",
+            meta_json="{}",
+        )
+        db.add_all([bad, gt])
+        db.flush()
+
+        import pytest
+
+        with pytest.raises(rp.ReferenceProvenanceError):
+            rp.assert_recon_photos_cleared(db, {bad.id})
+        rp.assert_recon_photos_cleared(db, {gt.id})  # no raise — no input_image
+        db.rollback()
