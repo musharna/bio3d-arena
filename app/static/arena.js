@@ -130,6 +130,11 @@ function render(data) {
       img.loading = "lazy";
       img.alt = "Reference photo of this organism";
       if (r.credit) img.title = r.credit; // CC attribution / "reconstruction input photo"
+      // Click to zoom: the thumbnail is cropped (object-fit:cover); the lightbox shows the
+      // full uncropped photo so a voter can actually inspect the organism.
+      img.addEventListener("click", () =>
+        openReferenceLightbox(r.url, r.credit),
+      );
       refGallery.appendChild(img);
     }
     refPanel.hidden = refs.length === 0;
@@ -232,6 +237,38 @@ function flash(msg) {
   s.classList.add("flash");
   setTimeout(() => s.classList.remove("flash"), 700);
 }
+
+// Reference-image lightbox: open on thumbnail click, close on overlay click or Escape.
+function openReferenceLightbox(url, credit) {
+  const box = el("reference-lightbox");
+  const img = el("reference-lightbox-img");
+  const cred = el("reference-lightbox-credit");
+  if (!box || !img) return;
+  img.src = url;
+  if (cred) {
+    cred.textContent = credit || "";
+    cred.hidden = !credit;
+  }
+  box.hidden = false;
+}
+
+function closeReferenceLightbox() {
+  const box = el("reference-lightbox");
+  const img = el("reference-lightbox-img");
+  if (!box) return;
+  box.hidden = true;
+  if (img) img.removeAttribute("src"); // stop holding the full-size image in memory
+}
+
+(function initReferenceLightbox() {
+  const box = el("reference-lightbox");
+  if (!box) return;
+  // Click anywhere on the overlay (including the image) closes it.
+  box.addEventListener("click", closeReferenceLightbox);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !box.hidden) closeReferenceLightbox();
+  });
+})();
 
 document.querySelectorAll(".vote-btn").forEach((btn) => {
   btn.addEventListener("click", () => vote(btn.dataset.winner));

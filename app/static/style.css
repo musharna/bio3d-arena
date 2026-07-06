@@ -1154,10 +1154,48 @@ details.group[open] > summary.group-title::before {
   transition: transform 0.12s ease;
 }
 .reference-img:hover {
-  transform: scale(1.03);
+  transform: scale(1.08);
+  border-color: rgba(128, 128, 128, 0.7);
 }
 .reference-cap {
   font-size: 0.8rem;
   opacity: 0.72;
   margin: 0.4rem 0 0;
+}
+
+/* Click-to-zoom lightbox for reference images: thumbnails are object-fit:cover (cropped),
+   so a full-size contain view is what actually lets a voter inspect the organism. */
+.reference-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.82);
+  cursor: zoom-out;
+  padding: 2rem;
+}
+.reference-lightbox[hidden] {
+  display: none;
+}
+.reference-lightbox img {
+  max-width: 95vw;
+  max-height: 92vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.55);
+}
+.reference-lightbox .rl-credit {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #eee;
+  font-size: 0.85rem;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+  max-width: 90vw;
+  text-align: center;
 }

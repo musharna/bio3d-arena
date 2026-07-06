@@ -93,5 +93,16 @@ block content %}
   </div>
   <p id="status-line" class="status-line"></p>
 </section>
+<div
+  id="reference-lightbox"
+  class="reference-lightbox"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Reference photo, full size"
+  hidden
+>
+  <img id="reference-lightbox-img" alt="Reference photo (full size)" />
+  <div class="rl-credit" id="reference-lightbox-credit"></div>
+</div>
 <script src="/static/arena.js"></script>
 {% endblock %}
