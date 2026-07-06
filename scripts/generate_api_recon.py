@@ -66,6 +66,23 @@ CROPS = {
         "task_title": "Trametes versicolor — single-image → 3D reconstruction",
         "image": "data/assets/reference/turkeytail_ref.jpg",
     },
+    # Kingdom Animalia (SP3) — CC-clean reference photos (dog CC-BY, mallard/monarch CC-BY-SA, goldfish CC0)
+    "dog": {
+        "task_title": "Canis lupus familiaris — single-image → 3D reconstruction",
+        "image": "data/assets/reference/dog_ref_clean.jpg",
+    },
+    "mallard": {
+        "task_title": "Anas platyrhynchos — single-image → 3D reconstruction",
+        "image": "data/assets/reference/mallard_ref_clean.jpg",
+    },
+    "monarch": {
+        "task_title": "Danaus plexippus — single-image → 3D reconstruction",
+        "image": "data/assets/reference/monarch_ref_clean.jpg",
+    },
+    "goldfish": {
+        "task_title": "Carassius auratus — single-image → 3D reconstruction",
+        "image": "data/assets/reference/goldfish_ref_clean.jpg",
+    },
 }
 
 

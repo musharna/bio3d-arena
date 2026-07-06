@@ -60,6 +60,11 @@ def test_rubric_complete_and_scored():
         "amanita_muscaria": "moderate",
         "morchella_esculenta": "moderate",
         "trametes_versicolor": "hard",
+        # Kingdom Animalia (SP3)
+        "canis_lupus_familiaris": "hard",
+        "anas_platyrhynchos": "hard",
+        "danaus_plexippus": "hard",
+        "carassius_auratus": "moderate",
     }
     assert set(dr.RUBRIC) == set(expected)
     for slug, entry in dr.RUBRIC.items():

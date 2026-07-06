@@ -273,6 +273,71 @@ RUBRIC: dict[str, dict] = {
             "thin_structure": "wafer-thin bracket edges are the definitional thin structure",
         },
     },
+    # Kingdom Animalia (SP3) — bilaterian body plans skew hard (non-rigid, thin limbs, self-occluding)
+    "canis_lupus_familiaris": {  # sum 7 → hard
+        "scores": {
+            "fine_detail": 1,
+            "self_occlusion": 2,
+            "non_rigidity": 2,
+            "topology": 1,
+            "thin_structure": 1,
+        },
+        "rationale": {
+            "fine_detail": "fur texture and face carry detail but broad body dominates",
+            "self_occlusion": "four legs, body, and tail heavily occlude one another from most views",
+            "non_rigidity": "highly articulated pose — legs, tail, and neck flex freely",
+            "topology": "gaps between the legs and under the body add through-holes",
+            "thin_structure": "legs, tail, and ears are moderately thin appendages",
+        },
+    },
+    "anas_platyrhynchos": {  # sum 7 → hard
+        "scores": {
+            "fine_detail": 2,
+            "self_occlusion": 1,
+            "non_rigidity": 2,
+            "topology": 1,
+            "thin_structure": 1,
+        },
+        "rationale": {
+            "fine_detail": "feather plumage, bill, and eye carry dense fine detail",
+            "self_occlusion": "compact body with folded wings occludes moderately",
+            "non_rigidity": "flexible neck and wings; posture varies widely",
+            "topology": "legs, feet, and the gap under folded wings add complexity",
+            "thin_structure": "thin legs, webbed feet, and bill",
+        },
+    },
+    "danaus_plexippus": {  # sum 9 → hard
+        "scores": {
+            "fine_detail": 2,
+            "self_occlusion": 1,
+            "non_rigidity": 2,
+            "topology": 2,
+            "thin_structure": 2,
+        },
+        "rationale": {
+            "fine_detail": "intricate wing venation and pattern plus fine antennae",
+            "self_occlusion": "flat spread wings occlude little, but body sits behind them",
+            "non_rigidity": "wings, six legs, and antennae all flex independently",
+            "topology": "six thin legs, two antennae, and wing edges make a high-genus filigree",
+            "thin_structure": "legs, antennae, and wafer-thin wing membranes are all fine filaments",
+        },
+    },
+    "carassius_auratus": {  # sum 5 → moderate
+        "scores": {
+            "fine_detail": 1,
+            "self_occlusion": 0,
+            "non_rigidity": 1,
+            "topology": 1,
+            "thin_structure": 2,
+        },
+        "rationale": {
+            "fine_detail": "scales and fin rays are moderate; smooth body dominates",
+            "self_occlusion": "streamlined body with splayed fins is mostly visible from a side view",
+            "non_rigidity": "body arches and fins flex, but less than a limbed animal",
+            "topology": "thin fin membranes and their gaps add modest complexity",
+            "thin_structure": "caudal, pectoral, and dorsal fins are thin membranes",
+        },
+    },
 }
 
 

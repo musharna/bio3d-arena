@@ -322,6 +322,56 @@ def seed_volumetric_subjects(db: Session) -> dict:
     return {"subjects": n}
 
 
+# Animal-kingdom subjects (SP3). Plain subject Tasks under the 'animals' category (no ReconTask —
+# animals have no held-out GT, so recon-GT scoring isn't attempted). The first animal Task flips
+# the 'animals' category from its coming-soon placeholder to live. Titles match CROPS/TAXA and the
+# organ_inventory taxa exactly so recon/text generation + completeness scoring reach them.
+ANIMAL_SUBJECTS: list[tuple[str, str]] = [
+    (
+        "Canis lupus familiaris — single-image → 3D reconstruction",
+        "Reconstruct a 3D model of a whole domestic dog (Canis lupus familiaris) from a single RGB image.",
+    ),
+    (
+        "Anas platyrhynchos — single-image → 3D reconstruction",
+        "Reconstruct a 3D model of a whole mallard duck (Anas platyrhynchos) from a single RGB image.",
+    ),
+    (
+        "Danaus plexippus — single-image → 3D reconstruction",
+        "Reconstruct a 3D model of a whole monarch butterfly (Danaus plexippus) from a single RGB image.",
+    ),
+    (
+        "Carassius auratus — single-image → 3D reconstruction",
+        "Reconstruct a 3D model of a whole goldfish (Carassius auratus) from a single RGB image.",
+    ),
+]
+
+
+def seed_animal_subjects(db: Session) -> dict:
+    """Idempotent: ensure the 'animals' category + each animal subject Task exists. Mirrors
+    seed_volumetric_subjects. Returns {'subjects': n_created}."""
+    cat = db.execute(select(Category).where(Category.slug == "animals")).scalars().first()
+    if cat is None:
+        cat = Category(
+            slug="animals",
+            name="Animals",
+            description="Animals — anatomy and whole organisms.",
+        )
+        db.add(cat)
+        db.flush()
+    n = 0
+    for title, prompt in ANIMAL_SUBJECTS:
+        task = (
+            db.execute(select(Task).where(Task.title == title, Task.category_id == cat.id))
+            .scalars()
+            .first()
+        )
+        if task is None:
+            db.add(Task(category_id=cat.id, title=title, prompt=prompt))
+            n += 1
+    db.flush()
+    return {"subjects": n}
+
+
 # (slug, name, description)
 # Top-level taxonomy is the tree of life (one consistent axis). Plants is the flagship
 # active domain (AgriGen's focus); the rest are visible "coming soon" placeholders — a
