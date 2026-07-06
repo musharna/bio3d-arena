@@ -59,6 +59,35 @@ def test_check_licenses_exempts_self_authored(db_session):
     pe.check_licenses(db_session, {e["o_self"].id})  # bio3d-arena source, no raise
 
 
+def test_excluded_generators_never_promoted_even_if_passed(db_session):
+    """Demeter/Helios are deny-listed: even if a curator lists them in --generators, their
+    outputs must not enter the public include set."""
+    cat = Category(slug="plant", name="Plant")
+    g_demeter = Generator(
+        slug="demeter", name="Demeter", kind="model", paradigm="procedural_expert"
+    )
+    db_session.add_all([cat, g_demeter])
+    db_session.flush()
+    t = Task(category_id=cat.id, title="maize-a", prompt="maize", active=True)
+    db_session.add(t)
+    db_session.flush()
+    o = ModelOutput(
+        task_id=t.id,
+        generator_id=g_demeter.id,
+        asset_path="d.glb",
+        source="external",
+        license="CC-BY-4.0",
+    )
+    db_session.add(o)
+    db_session.flush()
+    inc = pe.resolve_include_ids(
+        db_session, task_titles=["maize-a"], generator_slugs=["demeter", "helios"]
+    )
+    assert g_demeter.id not in inc.generator_ids
+    assert o.id not in inc.output_ids
+    assert "demeter" in pe.PUBLIC_EXCLUDED_GENERATORS and "helios" in pe.PUBLIC_EXCLUDED_GENERATORS
+
+
 def test_resolve_propagates_gold_pair_decoys(db_session):
     """The GoldPair loop in resolve_include_ids is the only real-world path that
     populates IncludeSet.gold_output_ids. A gold pair's good/bad outputs must

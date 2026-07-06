@@ -116,6 +116,29 @@ function render(data) {
   el("task-title").textContent = data.task.title;
   el("task-prompt").textContent = data.task.prompt;
   el("criterion-name").textContent = data.criterion.name;
+  // Reference photo (what the organism should look like) — shown so voters can judge fidelity,
+  // not just aesthetics. Hidden when a task has no reference on record.
+  const refPanel = el("reference-panel");
+  const refGallery = el("reference-gallery");
+  if (refPanel && refGallery) {
+    const refs = (data.task.references || []).filter((r) => r && r.url);
+    refGallery.textContent = "";
+    for (const r of refs) {
+      const img = document.createElement("img");
+      img.className = "reference-img";
+      img.src = r.url;
+      img.loading = "lazy";
+      img.alt = "Reference photo of this organism";
+      if (r.credit) img.title = r.credit; // CC attribution / "reconstruction input photo"
+      // Click to zoom: the thumbnail is cropped (object-fit:cover); the lightbox shows the
+      // full uncropped photo so a voter can actually inspect the organism.
+      img.addEventListener("click", () =>
+        openReferenceLightbox(r.url, r.credit),
+      );
+      refGallery.appendChild(img);
+    }
+    refPanel.hidden = refs.length === 0;
+  }
   // Shared viewer registry (viewer.js) picks model-viewer vs 3Dmol by format.
   el("fmt-a").textContent = window.Bio3DViewer.mount(
     el("slot-a"),
@@ -128,8 +151,21 @@ function render(data) {
     (btn) => flagOutput(data.b.output_id, btn),
   ).toUpperCase();
   window.Bio3DViewer.syncPair(el("slot-a"), el("slot-b"));
+  setMachineGeneratedBadge("a", data.a);
+  setMachineGeneratedBadge("b", data.b);
   setAB("a"); // each new pair starts on Model A
   setStatus("");
+}
+
+// AUP labeling: badge + attribution tooltip on any output produced by a commercial
+// generation model (never on our own assets or redistributable-license scans).
+function setMachineGeneratedBadge(side, output) {
+  const badge = el(`ai-badge-${side}`);
+  if (!badge) return;
+  badge.hidden = !output.machine_generated;
+  badge.title = output.attribution
+    ? `Machine-generated — ${output.attribution}`
+    : "Machine-generated";
 }
 
 async function vote(winner) {
@@ -214,6 +250,38 @@ function flash(msg) {
   s.classList.add("flash");
   setTimeout(() => s.classList.remove("flash"), 700);
 }
+
+// Reference-image lightbox: open on thumbnail click, close on overlay click or Escape.
+function openReferenceLightbox(url, credit) {
+  const box = el("reference-lightbox");
+  const img = el("reference-lightbox-img");
+  const cred = el("reference-lightbox-credit");
+  if (!box || !img) return;
+  img.src = url;
+  if (cred) {
+    cred.textContent = credit || "";
+    cred.hidden = !credit;
+  }
+  box.hidden = false;
+}
+
+function closeReferenceLightbox() {
+  const box = el("reference-lightbox");
+  const img = el("reference-lightbox-img");
+  if (!box) return;
+  box.hidden = true;
+  if (img) img.removeAttribute("src"); // stop holding the full-size image in memory
+}
+
+(function initReferenceLightbox() {
+  const box = el("reference-lightbox");
+  if (!box) return;
+  // Click anywhere on the overlay (including the image) closes it.
+  box.addEventListener("click", closeReferenceLightbox);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !box.hidden) closeReferenceLightbox();
+  });
+})();
 
 document.querySelectorAll(".vote-btn").forEach((btn) => {
   btn.addEventListener("click", () => vote(btn.dataset.winner));

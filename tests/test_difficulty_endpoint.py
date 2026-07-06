@@ -20,3 +20,6 @@ def test_difficulty_endpoint_returns_scorecard_shape():
     assert tiers == ["easy", "moderate", "hard", "untiered"]
     for c in body["scorecard"]:
         assert isinstance(c["rows"], list)
+    # paradigm grid + recon-reliability triage flags are part of the contract
+    assert "paradigm_grid" in body
+    assert isinstance(body.get("recon_reliability"), list)

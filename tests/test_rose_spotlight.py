@@ -58,7 +58,9 @@ def test_rose_recon_ready():
 
     rose_title = "Rosa — single-image → 3D reconstruction"
     assert RECON_CROPS["rose"]["task_title"] == rose_title
-    assert RECON_CROPS["rose"]["image"].endswith("rose_ref.jpg")
+    # Recon input was swapped to the CC-clean flowering-bush photo (rose_ref_clean.jpg) during the
+    # publish-safety CC re-sourcing; the prior rose_ref.jpg was an untraceable product shot.
+    assert RECON_CROPS["rose"]["image"].endswith("rose_ref_clean.jpg")
 
 
 def test_seed_rose_subject_idempotent_and_buildable():

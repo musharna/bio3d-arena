@@ -1,10 +1,13 @@
 # app/organ_inventory.py
 """Authored per-taxon expected-organ inventories for the organism-level completeness metric.
 
-Required organs = the vegetative body (a plant is "complete" if it has an axis + foliage).
-The reproductive organ is OPTIONAL so a lone fruit/cone/pod registers as an isolated organ,
-not a complete plant. Visual descriptors are image-judgeable phrases for the VLM checklist.
-Taxon keys MUST match app.trait_morphology.MORPHOLOGY_TRAITS (== TraitRubric.taxon).
+For plants, required organs = the vegetative body (an axis + foliage), with the reproductive
+organ OPTIONAL so a lone fruit/cone/pod registers as an isolated organ, not a complete plant.
+For single-body-plan organisms (fungi, a depicted fruit) the body is the sole required organ
+(see _body_inv). Visual descriptors are image-judgeable phrases for the VLM checklist.
+Taxon keys equal TraitRubric.taxon (the completeness scorer gates on a TraitRubric existing +
+inventory_for(taxon); it does NOT require the taxon to be in MORPHOLOGY_TRAITS — the fungi are
+completeness-scored but carry no Mode-C morphology rubric).
 
 FOLIAGE descriptors ask leaf PRESENCE, not leaf morphology: an earlier version baked in leaf
 shape ("trifoliate", "strap-like", "pinnate serrated"), which made the VLM hedge "uncertain" on
@@ -30,15 +33,38 @@ class TaxonInventory:
     organs: tuple[Organ, ...]
 
 
-def _inv(taxon: str, axis: str, foliage: str, repro_key: str, repro: str) -> TaxonInventory:
+def _inv(
+    taxon: str,
+    axis: str,
+    foliage: str,
+    repro_key: str,
+    repro: str,
+    repro_required: bool = False,
+) -> TaxonInventory:
+    """repro_required=True for taxa whose reproductive organ is DEFINING, so a leaves+stem
+    body without it is incomplete (e.g. Rosa — "rose" evokes the flower). Default False keeps
+    the reproductive organ optional (a lone fruit/pod reads as isolated-organ, not complete),
+    which fits taxa recognizable from vegetative parts alone (soybean = trifoliate leaves)."""
     return TaxonInventory(
         taxon=taxon,
         organs=(
             Organ("vegetative_axis", axis, True),
             Organ("foliage", foliage, True),
-            Organ(repro_key, repro, False),
+            Organ(repro_key, repro, repro_required),
         ),
     )
+
+
+def _body_inv(taxon: str, body_key: str, body: str, *optional: tuple[str, str]) -> TaxonInventory:
+    """Body-plan inventory for organisms whose whole body is a single unit — fungal fruiting
+    bodies and a depicted fruit (the arena's Cucurbita reference shows the pumpkin fruit, not
+    the vine). The body is the SOLE required organ (approved 'body required, features optional'
+    completeness model, 2026-07-04); diagnostic surface features and basal attachment are
+    optional, so their absence in a render makes an output 'partial', not incomplete. This is an
+    UNCALIBRATED cross-kingdom extension of the plant-calibrated (κ=0.64) completeness metric."""
+    organs = [Organ(body_key, body, True)]
+    organs += [Organ(k, v, False) for k, v in optional]
+    return TaxonInventory(taxon=taxon, organs=tuple(organs))
 
 
 ORGAN_INVENTORY: dict[str, TaxonInventory] = {
@@ -69,6 +95,7 @@ ORGAN_INVENTORY: dict[str, TaxonInventory] = {
         "green leaves on the stem",
         "reproductive_flower_hip",
         "a flower and/or a rounded fleshy rose hip",
+        repro_required=True,  # a rose is flower-defining: leaves+stem without the bloom is incomplete
     ),
     "Glycine max": _inv(
         "Glycine max",
@@ -83,6 +110,57 @@ ORGAN_INVENTORY: dict[str, TaxonInventory] = {
         "green leaves (a rosette or leaves on the stem)",
         "reproductive_silique",
         "thin elongated upright siliques along the stem",
+    ),
+    # Kingdom Fungi + a depicted fruit — single-body-plan organisms (see _body_inv).
+    "Lycoperdon perlatum": _body_inv(
+        "Lycoperdon perlatum",
+        "fruiting_body",
+        "a rounded pear-/globe-shaped pale fungal fruiting body",
+        ("sterile_base", "a short tapered stalk-like base beneath the body"),
+        ("surface_ornament", "fine conical warts or granular spines on the surface"),
+    ),
+    "Cucurbita pepo": _body_inv(
+        "Cucurbita pepo",
+        "fruit_body",
+        "a single rounded gourd/pumpkin fruit",
+        ("peduncle", "a short woody stem attached to the fruit"),
+        ("surface_ribbing", "vertical ribs or furrows running down the fruit"),
+    ),
+    "Hericium erinaceus": _body_inv(
+        "Hericium erinaceus",
+        "fruiting_body",
+        "a rounded compact whitish fungal mass",
+        ("spines", "dense cascading icicle-like spines/teeth hanging from the mass"),
+        ("substrate", "attachment to a piece of wood or bark"),
+    ),
+    # Fungi expansion wave-2 — classic cap-and-stalk + bracket body plans.
+    "Boletus edulis": _body_inv(
+        "Boletus edulis",
+        "fruiting_body",
+        "a rounded brown convex cap on a thick swollen pale stalk",
+        ("stipe", "a thick bulbous pale stalk beneath the cap"),
+        ("pore_surface", "a spongy pale pore layer on the cap underside"),
+    ),
+    "Amanita muscaria": _body_inv(
+        "Amanita muscaria",
+        "fruiting_body",
+        "a red/orange convex-to-flat cap on a white stalk",
+        ("warts", "white wart flecks scattered across the red cap"),
+        ("stipe_ring", "a white stalk with a skirt-like ring and a bulbous base"),
+    ),
+    "Morchella esculenta": _body_inv(
+        "Morchella esculenta",
+        "fruiting_body",
+        "a conical cap covered in a honeycomb of ridges and pits, on a pale stalk",
+        ("stipe", "a pale hollow stalk beneath the cap"),
+        ("pitting", "a network of ridges and deep pits over the cap surface"),
+    ),
+    "Trametes versicolor": _body_inv(
+        "Trametes versicolor",
+        "fruiting_body",
+        "a fan- or shelf-shaped bracket, or a rosette of overlapping brackets",
+        ("zonation", "concentric coloured bands across the bracket surface"),
+        ("substrate", "attachment to wood, a log, or a stump"),
     ),
 }
 

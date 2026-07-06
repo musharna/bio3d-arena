@@ -443,6 +443,17 @@ main {
   padding: 0 0.4rem;
   vertical-align: middle;
 }
+.ai-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #e6b277;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 0.4rem;
+  vertical-align: middle;
+  margin-left: 0.3rem;
+  cursor: help;
+}
 .vote-bar {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1128,4 +1139,87 @@ details.group[open] > summary.group-title::before {
   color: #b07a00;
   background: rgba(176, 122, 0, 0.14);
   border-color: rgba(176, 122, 0, 0.35);
+}
+
+/* Reference gallery panel in the vote UI — "what the organism should look like" */
+.reference-panel {
+  margin: 0.5rem 0 0.75rem;
+  text-align: center;
+}
+/* Arena-only: override the spotlight `.reference-panel` flex-row (shared class) so the arena
+   panel stacks gallery-over-caption. Targeted by #id to beat the class rule without touching
+   /spotlight. */
+#reference-panel {
+  display: block;
+}
+/* Fixed-footprint strip: a constant width + single row (no wrap, scroll on overflow) so the
+   panel occupies the SAME space for 1 image or 5 — the vote UI below never shifts with ref count. */
+.reference-gallery {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  justify-content: center;
+  align-items: center;
+  width: min(100%, 480px);
+  margin: 0 auto;
+  min-height: 158px;
+  overflow-x: auto;
+}
+.reference-img {
+  flex: 0 0 150px;
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  background: rgba(128, 128, 128, 0.08);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  cursor: zoom-in;
+  transition: transform 0.12s ease;
+}
+.reference-img:hover {
+  transform: scale(1.08);
+  border-color: rgba(128, 128, 128, 0.7);
+}
+.reference-cap {
+  font-size: 0.8rem;
+  opacity: 0.72;
+  margin: 0.4rem 0 0;
+}
+
+/* Click-to-zoom lightbox for reference images: thumbnails are object-fit:cover (cropped),
+   so a full-size contain view is what actually lets a voter inspect the organism. */
+.reference-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.82);
+  cursor: zoom-out;
+  padding: 2rem;
+}
+.reference-lightbox[hidden] {
+  display: none;
+}
+.reference-lightbox img {
+  max-width: 95vw;
+  max-height: 92vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.55);
+}
+.reference-lightbox .rl-credit {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #eee;
+  font-size: 0.85rem;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+  max-width: 90vw;
+  text-align: center;
 }

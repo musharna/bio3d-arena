@@ -37,6 +37,12 @@ block content %}
     <span class="cat-chip" id="task-cat">…</span>
     <h2 id="task-title">Loading a comparison…</h2>
     <p id="task-prompt" class="prompt"></p>
+    <figure id="reference-panel" class="reference-panel" hidden>
+      <div id="reference-gallery" class="reference-gallery"></div>
+      <figcaption class="reference-cap">
+        Reference — what this organism should look like. Judge each model's fidelity to it.
+      </figcaption>
+    </figure>
     <p class="criterion">
       Vote on: <strong id="criterion-name">overall</strong> — rotate, zoom, and
       pan each model, then pick the better one.
@@ -66,11 +72,21 @@ block content %}
 
   <div class="pair">
     <div class="model-col is-active">
-      <div class="model-label">Model A <span class="fmt-chip" id="fmt-a"></span></div>
+      <div class="model-label">
+        Model A <span class="fmt-chip" id="fmt-a"></span>
+        <span class="ai-badge" id="ai-badge-a" hidden title="Machine-generated"
+          >🤖 AI-generated</span
+        >
+      </div>
       <div class="viewer-slot" id="slot-a"></div>
     </div>
     <div class="model-col">
-      <div class="model-label">Model B <span class="fmt-chip" id="fmt-b"></span></div>
+      <div class="model-label">
+        Model B <span class="fmt-chip" id="fmt-b"></span>
+        <span class="ai-badge" id="ai-badge-b" hidden title="Machine-generated"
+          >🤖 AI-generated</span
+        >
+      </div>
       <div class="viewer-slot" id="slot-b"></div>
     </div>
   </div>
@@ -87,5 +103,16 @@ block content %}
   </div>
   <p id="status-line" class="status-line"></p>
 </section>
+<div
+  id="reference-lightbox"
+  class="reference-lightbox"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Reference photo, full size"
+  hidden
+>
+  <img id="reference-lightbox-img" alt="Reference photo (full size)" />
+  <div class="rl-credit" id="reference-lightbox-credit"></div>
+</div>
 <script src="/static/arena.js"></script>
 {% endblock %}

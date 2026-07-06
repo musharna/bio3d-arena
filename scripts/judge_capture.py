@@ -65,15 +65,29 @@ def browser_capture_multi_factory():
     browser = pw.chromium.launch()
 
     def capture_multi(glb_abs: str, azimuths: list[int], elev: int) -> list[bytes]:
+        # Load the GLB ONCE, then re-aim the camera per azimuth via cameraOrbit +
+        # jumpCameraToGoal() (no page reload). The previous new-page-per-azimuth loop re-fetched
+        # and re-parsed the mesh for every view — for the large (30-40MB) recon GLBs that meant
+        # 8× the load cost and blew the load timeout. One load per output; the wait timeout is
+        # generous (120s) so a big mesh finishes parsing. Output is unchanged: one PNG per azimuth.
         _state["glb_rel"] = str(Path(glb_abs).relative_to(config.ASSET_DIR)).replace("\\", "/")
         _state["elev"] = elev
-        pngs: list[bytes] = []
-        for az in azimuths:
-            _state["az"] = az
-            page = browser.new_page(viewport={"width": 512, "height": 512})
-            page.goto(f"http://127.0.0.1:{port}/_render.html?az={az}")
-            page.wait_for_function("document.querySelector('#mv')?.loaded === true", timeout=30000)
-            pngs.append(page.locator("#mv").screenshot())
+        _state["az"] = azimuths[0] if azimuths else 30
+        page = browser.new_page(viewport={"width": 512, "height": 512})
+        try:
+            page.goto(f"http://127.0.0.1:{port}/_render.html")
+            page.wait_for_function("document.querySelector('#mv')?.loaded === true", timeout=120000)
+            pngs: list[bytes] = []
+            for az in azimuths:
+                # Snap (not animate) the camera to this azimuth, then let one frame render.
+                page.eval_on_selector(
+                    "#mv",
+                    "(mv, o) => { mv.cameraOrbit = o; mv.jumpCameraToGoal(); }",
+                    f"{az}deg {elev}deg auto",
+                )
+                page.wait_for_timeout(200)
+                pngs.append(page.locator("#mv").screenshot())
+        finally:
             page.close()
         return pngs
 
