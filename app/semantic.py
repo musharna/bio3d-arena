@@ -25,7 +25,12 @@ VERSION = "semantic-v2"
 # code all admit (precision-first; a false-reject silently biases the ranking). wrong_species
 # was dropped after the acceptance run (0 flags caught, 3 of 4 true FPs); a stale model that
 # still emits it now falls through to admit.
-REJECT_CODES = {"multiple", "sub_part", "not_a_plant"}
+REJECT_CODES = {"multiple", "sub_part", "not_the_organism"}
+
+# Taxa whose natural unit is a cluster/colony (modular organisms: bracket/shelf fungi; future
+# coral / colonial animals). For these a same-species cluster is ONE valid subject — the gate must
+# not flag it `multiple`. Unitary organisms (a discrete individual) are not listed.
+COLONIAL_TAXA = frozenset({"Trametes versicolor"})
 
 # Advisory flags use one synthetic session id (record_flag is idempotent per (output, session_id)
 # and requires a non-null id) and a sentinel threshold so an advisory flag NEVER auto-hides the
@@ -35,13 +40,13 @@ ADVISORY_NO_HIDE_THRESHOLD = 10**9
 
 SEMANTIC_TOOL = {
     "name": "record_admissibility",
-    "description": "Judge whether the rendered model is a single, whole, valid plant specimen.",
+    "description": "Judge whether the rendered model is a single, whole, valid specimen of the target organism.",
     "input_schema": {
         "type": "object",
         "properties": {
             "verdict": {
                 "type": "string",
-                "enum": ["ok", "multiple", "sub_part", "not_a_plant", "uncertain"],
+                "enum": ["ok", "multiple", "sub_part", "not_the_organism", "uncertain"],
             },
             "note": {"type": "string"},
         },
@@ -65,13 +70,22 @@ def _img_block(png: bytes) -> dict:
 
 
 def _build_messages(png: bytes, taxon: str | None) -> list[dict]:
+    subject = taxon if taxon else "the organism"
     of_taxon = f" of {taxon}" if taxon else ""
+    colonial_clause = (
+        " A natural cluster of the SAME species (e.g. shelf/bracket fungi that grow in overlapping "
+        "rosettes) is a SINGLE valid subject — do NOT call that `multiple`."
+        if taxon in COLONIAL_TAXA
+        else ""
+    )
     text = (
         f"This is a contact sheet of a generated 3D model{of_taxon}, rendered from several angles "
-        "on a neutral gray background. Judge whether it is a SINGLE, WHOLE, VALID plant specimen. "
-        "Reject as: `multiple` (more than one distinct plant, or a scene/cluster); "
-        "`sub_part` (only a detached organ — a single fruit, leaf, or flower — not a whole plant); "
-        "`not_a_plant` (not a recognizable plant at all — a blob or non-plant object)"
+        f"on a neutral gray background. Judge whether it is a SINGLE, WHOLE, VALID specimen of "
+        f"{subject}. "
+        "Reject as: `multiple` (more than one DISTINCT organism, or a cluttered scene with "
+        f"distractors);{colonial_clause} "
+        "`sub_part` (only a detached part — a single organ or appendage — not a whole organism); "
+        f"`not_the_organism` (not a recognizable {subject} at all — a blob or unrelated object)"
         ". Otherwise answer `ok`. If you genuinely cannot tell, answer `uncertain`. "
         "Reject ONLY when clearly inadmissible; when in doubt, prefer `ok` or `uncertain`. "
         "Then call record_admissibility."
