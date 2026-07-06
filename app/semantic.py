@@ -70,23 +70,28 @@ def _img_block(png: bytes) -> dict:
 
 
 def _build_messages(png: bytes, taxon: str | None) -> list[dict]:
-    subject = taxon if taxon else "the organism"
-    of_taxon = f" of {taxon}" if taxon else ""
+    of_taxon = f", intended to be {taxon}," if taxon else ""
     colonial_clause = (
-        " A natural cluster of the SAME species (e.g. shelf/bracket fungi that grow in overlapping "
-        "rosettes) is a SINGLE valid subject — do NOT call that `multiple`."
+        " NOTE: this organism naturally grows in clusters/colonies (overlapping shelf/bracket "
+        "fungi) — a cluster of the same species is its natural form and is a SINGLE valid subject; "
+        "do NOT call that `multiple`."
         if taxon in COLONIAL_TAXA
         else ""
     )
     text = (
-        f"This is a contact sheet of a generated 3D model{of_taxon}, rendered from several angles "
-        f"on a neutral gray background. Judge whether it is a SINGLE, WHOLE, VALID specimen of "
-        f"{subject}. "
-        "Reject as: `multiple` (more than one DISTINCT organism, or a cluttered scene with "
-        f"distractors);{colonial_clause} "
-        "`sub_part` (only a detached part — a single organ or appendage — not a whole organism); "
-        f"`not_the_organism` (not a recognizable {subject} at all — a blob or unrelated object)"
-        ". Otherwise answer `ok`. If you genuinely cannot tell, answer `uncertain`. "
+        f"This is a contact sheet of a generated 3D model{of_taxon} rendered from several angles on "
+        "a neutral gray background. This is an ADMISSIBILITY check ONLY — judge whether the model is "
+        "a SINGLE, WHOLE organism suitable to vote on. It is NOT a quality or fidelity check: a "
+        "low-fidelity, crude, or inaccurate rendering that is still recognizably a single whole "
+        "living thing is ADMISSIBLE (`ok`) — voters judge fidelity, not you. "
+        "Reject ONLY as: `multiple` (clearly more than one DISTINCT organism, or a cluttered scene "
+        f"with unrelated distractor objects);{colonial_clause} "
+        "`sub_part` (only a detached part — a single organ or appendage on its own — not a whole "
+        "organism); "
+        "`not_the_organism` (NOT a plausible whole organism at all — junk or broken geometry, a "
+        "featureless blob, or an unrelated everyday object; do NOT use this merely because the shape "
+        "is a poor or inaccurate depiction of the intended organism). "
+        "Otherwise answer `ok`. If you genuinely cannot tell, answer `uncertain`. "
         "Reject ONLY when clearly inadmissible; when in doubt, prefer `ok` or `uncertain`. "
         "Then call record_admissibility."
     )

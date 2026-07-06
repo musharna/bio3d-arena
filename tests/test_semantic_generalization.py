@@ -32,3 +32,16 @@ def test_prompt_colonial_clause_only_for_colonial_taxa():
 def test_verdict_not_the_organism_rejects():
     v = semantic.verdict_from_code("not_the_organism", "a blob")
     assert v.admit is False and v.reason == "not_the_organism"
+
+
+def test_prompt_is_admissibility_not_fidelity():
+    # The gate must NOT re-do the dropped wrong_species / fidelity judgment: a low-fidelity but
+    # recognizable organism is admissible; not_the_organism is for junk/blobs, not poor renders.
+    text = semantic._build_messages(b"\x89PNG", "Hericium erinaceus")[0]["content"][0]["text"]
+    low = text.lower()
+    assert "admissibility" in low
+    assert "voters judge fidelity" in low
+    assert "low-fidelity" in low and "admissible" in low
+    # not_the_organism must be framed as junk, and explicitly NOT a poor/inaccurate depiction
+    assert "junk" in low or "blob" in low
+    assert "poor or inaccurate depiction" in low
