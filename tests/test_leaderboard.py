@@ -60,15 +60,18 @@ def test_tie_is_split_into_both_directions_for_bt():
             .first()
         )
         comp = Comparison(
-            task_id=a.task_id, output_a_id=a.id, output_b_id=b.id,
-            criterion_id=crit.id, session_id="tie-sess",
+            task_id=a.task_id,
+            output_a_id=a.id,
+            output_b_id=b.id,
+            criterion_id=crit.id,
+            session_id="tie-sess",
         )
         db.add(comp)
         db.flush()
         db.add(Vote(comparison_id=comp.id, winner="tie", session_id="tie-sess"))
         db.commit()
 
-        matches = service._matches_for_scope(db, crit.id, None)
+        matches, _groups = service._matches_for_scope(db, crit.id, None)
         ga, gb = a.generator_id, b.generator_id
     # The single tie contributes BOTH orderings -- split credit, not dropped.
     assert (ga, gb) in matches
@@ -91,14 +94,17 @@ def test_bad_vote_excluded_from_matches():
             .first()
         )
         comp = Comparison(
-            task_id=a.task_id, output_a_id=a.id, output_b_id=b.id,
-            criterion_id=crit.id, session_id="bad-sess",
+            task_id=a.task_id,
+            output_a_id=a.id,
+            output_b_id=b.id,
+            criterion_id=crit.id,
+            session_id="bad-sess",
         )
         db.add(comp)
         db.flush()
         db.add(Vote(comparison_id=comp.id, winner="bad", session_id="bad-sess"))
         db.commit()
-        matches = service._matches_for_scope(db, crit.id, None)
+        matches, _groups = service._matches_for_scope(db, crit.id, None)
     assert matches == []  # 'bad' contributes nothing
 
 

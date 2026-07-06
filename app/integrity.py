@@ -158,6 +158,20 @@ def voted_pairs_for(db: Session, session_id: str, criterion_id: int) -> set[froz
     return {frozenset((a, b)) for a, b in rows}
 
 
+def seen_quads_for(db: Session, session_id: str, criterion_id: int) -> set[frozenset[int]]:
+    """Frozensets of the 4 output ids for every KBallot this session already saw for the criterion."""
+    import json as _json
+
+    from .models import KBallot
+
+    rows = (
+        db.query(KBallot.output_ids_json)
+        .filter(KBallot.session_id == session_id, KBallot.criterion_id == criterion_id)
+        .all()
+    )
+    return {frozenset(_json.loads(r[0])) for r in rows}
+
+
 def already_voted_pair(
     db: Session, session_id: str, output_a_id: int, output_b_id: int, criterion_id: int
 ) -> bool:

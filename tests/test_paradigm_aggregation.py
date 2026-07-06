@@ -64,7 +64,7 @@ def test_cross_paradigm_comparison_excluded_from_matches():
             db.add(Vote(comparison_id=comp.id, winner="a", session_id=key))
             db.flush()
         db.commit()
-        matches = service._matches_for_scope(db, crit.id, None)
+        matches, _groups = service._matches_for_scope(db, crit.id, None)
         pairs = set(matches)
         assert (g1.id, g3.id) in pairs  # within-paradigm kept
         assert (g1.id, g2.id) not in pairs  # cross-paradigm dropped

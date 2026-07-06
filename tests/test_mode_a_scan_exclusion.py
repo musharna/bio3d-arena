@@ -96,7 +96,7 @@ def test_matches_exclude_scan_generator():
     db = SessionLocal()
     try:
         crit, cat, g_ai1, g_ai2, g_scan = _seed(db)
-        matches = service._matches_for_scope(db, crit.id, cat.id)
+        matches, _groups = service._matches_for_scope(db, crit.id, cat.id)
         flat = {p for m in matches for p in m}
         assert g_scan.id not in flat  # scan never appears as winner or loser
         assert g_ai1.id in flat and g_ai2.id in flat  # the ai-vs-ai match survives

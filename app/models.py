@@ -140,6 +140,9 @@ class Comparison(Base):
     # (gold_expected ∈ {'a','b'} = the slot holding the good asset).
     is_gold: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     gold_expected: Mapped[str | None] = mapped_column(String(1), nullable=True)
+    ballot_id: Mapped[int | None] = mapped_column(
+        ForeignKey("kballot.id"), nullable=True, index=True
+    )
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
     vote: Mapped["Vote | None"] = relationship(back_populates="comparison", uselist=False)
@@ -157,6 +160,23 @@ class Vote(Base):
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
     comparison: Mapped["Comparison"] = relationship(back_populates="vote")
+
+
+class KBallot(Base):
+    """A simultaneous K-up ballot: K=4 outputs shown, voter picks the single best.
+    Resolves into K-1 pairwise Comparison+Vote rows (best beats each other), all sharing
+    ballot_id=this.id. best_output_id NULL after resolution = 'can't tell / all bad' (0 relations)."""
+
+    __tablename__ = "kballot"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("task.id"), index=True)
+    criterion_id: Mapped[int] = mapped_column(ForeignKey("criterion.id"))
+    session_id: Mapped[str] = mapped_column(String(64), index=True)
+    output_ids_json: Mapped[str] = mapped_column(Text, default="[]")  # the 4 output ids shown
+    best_output_id: Mapped[int | None] = mapped_column(ForeignKey("model_output.id"), nullable=True)
+    resolved: Mapped[bool] = mapped_column(Boolean, default=False)
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
 
 class Rating(Base):

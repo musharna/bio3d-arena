@@ -91,6 +91,12 @@ block content %}
     </div>
   </div>
 
+  <!-- 4-up K-wise ballot: hidden by default (2-up pairwise is the default view); arena.js
+       shows this instead of .pair when /api/next?set=kwise returns a kind:"kwise" payload,
+       injecting 4 clickable model-col cards. Falls back to the 2-up above transparently
+       when the server has no admitted same-paradigm quad for a task. -->
+  <div id="kwise-grid" class="kwise-grid" hidden></div>
+
   <div class="vote-bar">
     <button class="vote-btn win" data-winner="a">
       👈 A is better <kbd>←</kbd>
@@ -101,6 +107,14 @@ block content %}
       B is better 👉 <kbd>→</kbd>
     </button>
   </div>
+  <button
+    type="button"
+    id="kwise-allbad"
+    class="vote-btn bad"
+    hidden
+  >
+    🤷 Can't tell / all bad
+  </button>
   <p id="status-line" class="status-line"></p>
 </section>
 <div

@@ -124,7 +124,7 @@ def test_low_trust_votes_excluded_from_ranking():
         cast("lo-trust", "b", 0.1)  # B beats A  (should be excluded)
         db.commit()
 
-        matches = service._matches_for_scope(db, cid, None)
+        matches, _groups = service._matches_for_scope(db, cid, None)
     assert (gen_a, gen_b) in matches  # high-trust vote present
     assert (gen_b, gen_a) not in matches  # low-trust vote excluded
 
