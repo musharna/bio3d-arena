@@ -156,16 +156,20 @@ def assess_composition(client, photo_png: bytes, *, taxon: str, common: str) -> 
 
 
 def qa_reference_image(
-    *, organ: dict, composition: dict | None = None, species: dict | None = None
+    *, organ: dict | None = None, composition: dict | None = None, species: dict | None = None
 ) -> dict:
-    """Combine the QA signals into a pass/fail verdict. `organ` = assess_organ_coverage output
-    (plant-taxa fruit-only via fruit_only=True); `composition` = assess_composition output
-    (body-plan fruit-only via isolated=True); `species` = species_matches output (mismatch via
-    ok=False). Any triggered signal fails the image."""
+    """Combine QA signals into a pass/fail verdict. `composition` = assess_composition output
+    (isolated=True → a detached/harvested part, not the whole organism) is the calibrated
+    fruit-only signal for ALL taxa; `species` = species_matches output (mismatch via ok=False).
+    `organ` = assess_organ_coverage output is OPTIONAL and NOT used for reference QA: its
+    'isolated-organ' category over-fires on legitimate single-organ views (e.g. an iconic
+    Arabidopsis rosette with the bolt out of frame reads as isolated-organ but is a fine
+    reference). It is accepted only for callers that explicitly want the organ-coverage signal;
+    the gallery QA passes composition+species. Any triggered signal fails the image."""
     reasons: list[str] = []
-    if organ.get("fruit_only"):
+    if organ is not None and organ.get("fruit_only"):
         reasons.append("fruit-only / isolated-organ reference (organ-coverage)")
-    if organ.get("category") == "fragment":
+    if organ is not None and organ.get("category") == "fragment":
         reasons.append("fragment — no expected organ visible")
     if composition is not None and composition.get("isolated"):
         reasons.append("isolated part, not the whole organism (VLM composition)")

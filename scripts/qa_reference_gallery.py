@@ -23,7 +23,6 @@ from app.judge import JUDGE_MODEL  # noqa: E402
 from app.organ_inventory import ORGAN_INVENTORY, inventory_for  # noqa: E402
 from app.reference_qa import (  # noqa: E402
     assess_composition,
-    assess_organ_coverage,
     qa_reference_image,
     species_matches,
 )
@@ -61,25 +60,17 @@ def qa_gallery(slug: str, *, client, bundle) -> dict:
     if not mpath.exists():
         return {"slug": slug, "error": "no manifest"}
 
-    n_required = sum(1 for o in inv.organs if o.required)
-    is_plant = n_required >= 2
     panel = list(ORGAN_INVENTORY)
     items = json.loads(mpath.read_text())
     passed = 0
     for item in items:
         png = (mdir / item["file"]).read_bytes()
-        organ = (
-            assess_organ_coverage(client, png, inventory=inv)
-            if is_plant
-            else {"fruit_only": None, "category": None}
-        )
-        composition = (
-            None
-            if is_plant
-            else assess_composition(client, png, taxon=taxon, common=_common(taxon))
-        )
+        # Calibrated reference QA (2026-07-06): the VLM composition question is the fruit-only /
+        # isolation signal for ALL taxa — organ-coverage's 'isolated-organ' over-fires on good
+        # single-organ views (e.g. an Arabidopsis rosette). Species check via multi-class BioCLIP.
+        composition = assess_composition(client, png, taxon=taxon, common=_common(taxon))
         species = species_matches(bundle, png, claimed_taxon=taxon, panel=panel) if bundle else None
-        verdict = qa_reference_image(organ=organ, composition=composition, species=species)
+        verdict = qa_reference_image(composition=composition, species=species)
         item["passed_qa"] = verdict["passed"]
         item["qa_reasons"] = verdict["reasons"]
         passed += verdict["passed"]
