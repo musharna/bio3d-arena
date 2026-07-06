@@ -26,6 +26,20 @@ def test_species_rep_score_is_first_label_prob(monkeypatch):
     assert 0.9 < s <= 1.0
 
 
+def test_classify_species_ranks_top_and_margin(monkeypatch):
+    # panel of 3 taxa; logits favor index 1 -> that taxon is top, with a positive margin.
+    monkeypatch.setattr(
+        species_id, "_logits", lambda bundle, png, labels: np.array([0.0, 4.0, 1.0])
+    )
+    out = species_id.classify_species(
+        _FakeBundle(), b"\x89PNG", ["Zea mays", "Rosa", "Pinus sylvestris"]
+    )
+    assert out["top"] == "Rosa"
+    assert out["prob"] > out["ranked"][1][1]  # top beats runner-up
+    assert out["margin"] > 0
+    assert [t for t, _ in out["ranked"]] == ["Rosa", "Pinus sylvestris", "Zea mays"]
+
+
 def test_real_forward_pass_if_available():
     if not species_id.available():
         pytest.skip("open_clip not installed")
