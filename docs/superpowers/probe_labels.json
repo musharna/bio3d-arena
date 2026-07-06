@@ -1,0 +1,30 @@
+[
+  {
+    "path": "reference/gallery/zea_mays/2.jpg",
+    "taxon": "Zea mays",
+    "common": "maize (corn)",
+    "domain": "photo",
+    "label": "good"
+  },
+  {
+    "path": "reference/gallery/glycine_max/2.jpg",
+    "taxon": "Glycine max",
+    "common": "soybean",
+    "domain": "photo",
+    "label": "good"
+  },
+  {
+    "path": "reference/gallery/lycoperdon_perlatum/1.jpg",
+    "taxon": "Lycoperdon perlatum",
+    "common": "puffball",
+    "domain": "photo",
+    "label": "good"
+  },
+  {
+    "path": "reference/gallery/amanita_muscaria/1.jpg",
+    "taxon": "Amanita muscaria",
+    "common": "fly agaric",
+    "domain": "photo",
+    "label": "good"
+  }
+]
