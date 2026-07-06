@@ -11,27 +11,52 @@ from __future__ import annotations
 
 import argparse
 import os
+import signal
+import subprocess
 import sys
+from pathlib import Path
 
 # bootstrap: allow `python scripts/<name>.py` without PYTHONPATH (repo root on sys.path)
-import sys as _sys
-import pathlib as _pl
-_sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app import config
-from app.database import SessionLocal, init_db
-from app.judge_render import contact_sheet_path, render_contact_sheets
-from app.semantic import enumerate_semantic_work, evaluate_outputs
+from app import config  # noqa: E402
+from app.database import SessionLocal, init_db  # noqa: E402
+from app.judge_render import contact_sheet_path  # noqa: E402
+from app.semantic import enumerate_semantic_work, evaluate_outputs  # noqa: E402
 
 CONDITION = "turntable"  # same as completeness -> cached sheets are reused
+_RENDER_ONE = str(Path(__file__).resolve().parent / "render_one_sheet.py")
+# A pathological GLB can WEDGE the model-viewer/chromium renderer with no exception + no page-timeout
+# recovery, stalling the whole batch (observed: 8 min hung on one big recon mesh). So render each
+# output in an ISOLATED subprocess (own process group) with a hard OS timeout; a wedge is force-
+# killed (whole group, incl. chromium) and the output skipped instead of hanging the run.
+_RENDER_TIMEOUT_S = int(os.environ.get("BIO3D_RENDER_TIMEOUT_S", "180"))
 
 
-def _sheet_provider(db, capture_multi):
-    """Render (idempotently) then read the turntable contact-sheet PNG bytes for an output."""
+def _sheet_provider():
+    """Read the turntable contact-sheet PNG bytes for an output, rendering it first (idempotently)
+    in a timeout-guarded subprocess if not already cached. Raises on render timeout/failure so
+    evaluate_outputs records the output as an error and moves on."""
 
     def sheet_for(output_id: int) -> bytes:
-        render_contact_sheets(db, [output_id], CONDITION, capture_multi=capture_multi)
         path = os.path.join(config.ASSET_DIR, contact_sheet_path(output_id, CONDITION))
+        if not (os.path.exists(path) and os.path.getsize(path) > 0):
+            proc = subprocess.Popen(
+                [sys.executable, _RENDER_ONE, str(output_id), CONDITION],
+                start_new_session=True,  # own process group so we can kill chromium grandchildren
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            try:
+                rc = proc.wait(timeout=_RENDER_TIMEOUT_S)
+            except subprocess.TimeoutExpired:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                proc.wait()
+                raise RuntimeError(
+                    f"render wedged (> {_RENDER_TIMEOUT_S}s) for output {output_id} — killed + skipped"
+                ) from None
+            if rc != 0:
+                raise RuntimeError(f"render failed (exit {rc}) for output {output_id}")
         with open(path, "rb") as f:
             return f.read()
 
@@ -44,12 +69,6 @@ def _build_client():
     return anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
 
-def _capture_multi():
-    from scripts.judge_capture import browser_capture_multi_factory
-
-    return browser_capture_multi_factory()
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description="Batch-score semantic admissibility.")
     ap.add_argument("--limit", type=int, default=0, help="score at most N outputs (0 = all)")
@@ -60,7 +79,7 @@ def main() -> int:
         if args.limit:
             work = work[: args.limit]
         emit_flags = config.SEMANTIC_ADMISSIBILITY_MODE == "advisory"
-        sheet_for = _sheet_provider(db, _capture_multi())
+        sheet_for = _sheet_provider()
         summary = evaluate_outputs(
             db, work, client=_build_client(), sheet_for=sheet_for, emit_flags=emit_flags
         )
