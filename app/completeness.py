@@ -52,6 +52,10 @@ COMPLETENESS_TOOL = {
                     "properties": {
                         "key": {"type": "string"},
                         "status": {"type": "string", "enum": ["present", "absent", "uncertain"]},
+                        "complement": {
+                            "type": "string",
+                            "enum": ["full", "missing_some", "extra", "uncertain"],
+                        },
                     },
                     "required": ["key", "status"],
                 },
@@ -69,13 +73,19 @@ def _img_block(png: bytes) -> dict:
 
 
 def _build_messages(png: bytes, inventory: TaxonInventory) -> list[dict]:
-    lines = "\n".join(f"- {o.key}: {o.visual}" for o in inventory.organs)
+    lines = "\n".join(
+        f"- {o.key}: {o.visual}" + (f" (expect {o.complement})" if o.complement > 1 else "")
+        for o in inventory.organs
+    )
     text = (
         f"This is a contact sheet of a generated 3D model of {inventory.taxon}, "
-        "rendered from several angles. For EACH expected organ below, mark whether it is "
-        "visibly present in the model (present / absent / uncertain). Judge only what you can "
-        "see; a rendering of a single detached organ should mark the others absent.\n\n"
-        f"Expected organs:\n{lines}\n\nThen call record_completeness."
+        "rendered from several angles. For EACH expected part below, mark whether it is visibly "
+        "present in the model (present / absent / uncertain). For any part with an expected count "
+        "(e.g. 'expect 4'), ALSO set `complement`: `full` if the whole set is present, "
+        "`missing_some` if one or more are clearly missing, `extra` if there are clearly more than "
+        "expected, or `uncertain`. Do NOT count exactly — judge whether the full set is there. "
+        "Judge only what you can see; a rendering of a single detached part should mark the others "
+        f"absent.\n\nExpected parts:\n{lines}\n\nThen call record_completeness."
     )
     return [{"role": "user", "content": [{"type": "text", "text": text}, _img_block(png)]}]
 
