@@ -1,0 +1,100 @@
+[
+  {
+    "path": "reference/gourd_ref_plant_old.jpg",
+    "taxon": "Cucurbita pepo",
+    "common": "pumpkin / squash plant",
+    "domain": "photo",
+    "label": "good",
+    "note": "whole Cucurbita plant: lobed leaves, vine, yellow squash flower"
+  },
+  {
+    "path": "reference/tomato_ref_clean.jpg",
+    "taxon": "Solanum lycopersicum",
+    "common": "tomato plant",
+    "domain": "photo",
+    "label": "good",
+    "note": "potted tomato plant with stem, leaves, green+orange fruits"
+  },
+  {
+    "path": "reference/gallery/zea_mays/1.jpg",
+    "taxon": "Zea mays",
+    "common": "maize (corn) plant",
+    "domain": "photo",
+    "label": "good"
+  },
+  {
+    "path": "reference/gallery/glycine_max/1.jpg",
+    "taxon": "Glycine max",
+    "common": "soybean plant",
+    "domain": "photo",
+    "label": "good"
+  },
+  {
+    "path": "reference/gallery/arabidopsis_thaliana/1.jpg",
+    "taxon": "Arabidopsis thaliana",
+    "common": "thale cress (Arabidopsis) plant",
+    "domain": "photo",
+    "label": "good"
+  },
+  {
+    "path": "reference/gallery/pinus_sylvestris/1.jpg",
+    "taxon": "Pinus sylvestris",
+    "common": "Scots pine tree",
+    "domain": "photo",
+    "label": "good"
+  },
+  {
+    "path": "reference/gallery/boletus_edulis/1.jpg",
+    "taxon": "Boletus edulis",
+    "common": "porcini / cep mushroom",
+    "domain": "photo",
+    "label": "good",
+    "note": "fungal fruiting body IS the whole organism — CLIP composition must NOT flag this as fruit_only"
+  },
+  {
+    "path": "reference/gallery/amanita_muscaria/1.jpg",
+    "taxon": "Amanita muscaria",
+    "common": "fly agaric mushroom",
+    "domain": "photo",
+    "label": "good"
+  },
+  {
+    "path": "reference/gallery/lycoperdon_perlatum/1.jpg",
+    "taxon": "Lycoperdon perlatum",
+    "common": "common puffball mushroom",
+    "domain": "photo",
+    "label": "good"
+  },
+  {
+    "path": "reference/gourd_ref.jpg",
+    "taxon": "Cucurbita pepo",
+    "common": "pumpkin / gourd",
+    "domain": "photo",
+    "label": "fruit_only",
+    "note": "a lone harvested pumpkin FRUIT on a table, no vine/leaves — the user's motivating case; VLM organ-coverage cannot flag it (Cucurbita is _body_inv), CLIP composition should"
+  },
+  {
+    "path": "reference/gallery/zea_mays/2.jpg",
+    "taxon": "Solanum lycopersicum",
+    "common": "tomato plant",
+    "domain": "photo",
+    "label": "wrong_species",
+    "note": "REAL maize photo CLAIMED as tomato — BioCLIP species-rep for 'tomato' should score LOW (mismatch)"
+  },
+  {
+    "path": "reference/gallery/amanita_muscaria/2.jpg",
+    "taxon": "Rosa",
+    "common": "rose plant",
+    "domain": "photo",
+    "label": "wrong_species",
+    "note": "REAL fly-agaric photo CLAIMED as rose — species-rep for 'rose' should score LOW"
+  },
+  {
+    "path": "reference/gallery/glycine_max/2.jpg",
+    "taxon": "Pinus sylvestris",
+    "common": "Scots pine tree",
+    "domain": "photo",
+    "label": "wrong_species",
+    "note": "REAL soybean photo CLAIMED as pine — species-rep for 'pine' should score LOW"
+  }
+]

@@ -1155,12 +1155,14 @@ def _gallery_slug(title: str) -> str:
 
 
 def reference_images_for_task(db: Session, task) -> list[dict]:
-    """Ordered reference images for a task, each {url, credit}: the recon INPUT photo(s) first
-    (what the image→3D models were actually given, from meta.input_image), then a small CC
-    species gallery (data/assets/reference/gallery/<slug>/, sourced from iNaturalist) so voters
-    see the organism from several angles/specimens — one photo underspecifies an unfamiliar
-    organism. Task-scoped, applies to every paradigm's outputs. Empty list if nothing is on
-    record. cc-by gallery photos carry their required attribution in `credit`."""
+    """Ordered reference images for a task, each {url, credit}: an independent CC species gallery
+    (data/assets/reference/gallery/<slug>/, sourced from iNaturalist) so voters judge fidelity
+    against the organism, not against a recon's own input photo. The recon INPUT photo is NOT a
+    reference (showing it is circular/biased — a recon that reproduces its input reads as faithful
+    even if biologically wrong); it is suppressed EXCEPT for tasks whose gallery-slug is in
+    config.INPUT_REFERENCE_EXEMPT_SLUGS (barley-MRI: a root stand-in with no whole-plant gallery).
+    Only QA-passed gallery images are shown. Task-scoped; empty list if nothing is on record.
+    cc-by gallery photos carry their required attribution in `credit`."""
     import json
 
     from . import config
@@ -1171,27 +1173,36 @@ def reference_images_for_task(db: Session, task) -> list[dict]:
     st = get_storage()
     out: list[dict] = []
     seen: set[str] = set()
-    cleared_taxa = cleared_reference_taxa()
-    # Only VISIBLE outputs contribute their input photo: a withdrawn output (hidden_at set) may
-    # have been generated from a since-replaced or non-redistributable input (e.g. a non-CC
-    # product shot), which must not surface in the vote UI as a "reconstruction input photo".
-    for o in db.execute(
-        select(ModelOutput).where(ModelOutput.task_id == task.id, ModelOutput.hidden_at.is_(None))
-    ).scalars():
-        try:
-            img = (json.loads(o.meta_json or "{}") or {}).get("input_image")
-        except (ValueError, TypeError):
-            continue
-        if img and img not in seen and _taxon_of(img) in cleared_taxa:
-            seen.add(img)
-            out.append({"url": st.url_for(img), "credit": "reconstruction input photo"})
+    slug = _gallery_slug(task.title)
 
-    gdir = config.ASSET_DIR / "reference" / "gallery" / _gallery_slug(task.title)
+    # Recon input photos are shown ONLY for exempt tasks (barley-MRI). For everyone else the input
+    # is not a reference — the independent gallery below is the anchor. Text→3D never contributed
+    # an image input, so this is paradigm-agnostic. Visible-only + cleared-taxon still apply.
+    if slug in config.INPUT_REFERENCE_EXEMPT_SLUGS:
+        cleared_taxa = cleared_reference_taxa()
+        for o in db.execute(
+            select(ModelOutput).where(
+                ModelOutput.task_id == task.id, ModelOutput.hidden_at.is_(None)
+            )
+        ).scalars():
+            try:
+                img = (json.loads(o.meta_json or "{}") or {}).get("input_image")
+            except (ValueError, TypeError):
+                continue
+            if img and img not in seen and _taxon_of(img) in cleared_taxa:
+                seen.add(img)
+                out.append({"url": st.url_for(img), "credit": "reconstruction input photo"})
+
+    gdir = config.ASSET_DIR / "reference" / "gallery" / slug
     manifest = gdir / "manifest.json"
     if manifest.exists():
         try:
             for item in json.loads(manifest.read_text()):
-                rel = f"reference/gallery/{_gallery_slug(task.title)}/{item['file']}"
+                # QA-failed reference images (fruit-only / isolated / species mismatch) are not
+                # shown. Default-true so un-scored legacy manifests are unaffected until scored.
+                if not item.get("passed_qa", True):
+                    continue
+                rel = f"reference/gallery/{slug}/{item['file']}"
                 out.append(
                     {"url": st.url_for(rel), "credit": item.get("attribution", "iNaturalist")}
                 )

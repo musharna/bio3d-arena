@@ -116,6 +116,11 @@ GT_ASSET_SUBDIR = "gt"
 # Directory holding built dataset releases (each a <version>/ subdir with VERSION + DATASHEET).
 RELEASES_DIR = DATA_DIR / "releases"
 
+# Gallery slugs exempt from the "exclude recon input from the vote UI" rule (reference_images_for_task).
+# barley-MRI is a root-system stand-in with no meaningful whole-plant CC gallery, so it keeps
+# showing its input as the reference rather than being left with no anchor at all.
+INPUT_REFERENCE_EXEMPT_SLUGS = {"hordeum_vulgare"}
+
 
 def is_safe_test_db_target(value: str | None) -> bool:
     """True if a DB URL/path is a throwaway that's safe for the test suite to drop/recreate.

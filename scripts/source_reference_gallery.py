@@ -59,28 +59,67 @@ def _resolve_taxon_id(binomial: str) -> int | None:
     return res[0]["id"] if res else None
 
 
+def _photo_row(ph: dict) -> dict | None:
+    lic = ph.get("license_code") or ""
+    if lic not in OK_LICENSES:
+        return None
+    url = (ph.get("url") or "").replace("square", "medium")
+    if not url:
+        return None
+    return {
+        "photo_id": ph.get("id"),
+        "license": lic,
+        "attribution": ph.get("attribution") or "",
+        "url": url,
+    }
+
+
+def _cc_photos_from_observations(taxon_id: int, n: int) -> list[dict]:
+    """Fallback: the curated taxon_photos are only ~7-12 and for some taxa are all NC-licensed
+    (e.g. Cucurbita pepo). The full research-grade observation pool has thousands, many cc0/cc-by
+    — query it with a photo-license filter, most-faved first."""
+    url = "https://api.inaturalist.org/v1/observations?" + urllib.parse.urlencode(
+        {
+            "taxon_id": taxon_id,
+            "photo_license": "cc0,cc-by",
+            "quality_grade": "research",
+            "photos": "true",
+            "per_page": max(n * 3, 12),
+            "order_by": "votes",
+            "order": "desc",
+        }
+    )
+    out: list[dict] = []
+    seen: set = set()
+    for obs in _get(url).get("results", []):
+        for ph in obs.get("photos", []):
+            row = _photo_row(ph)
+            if row and row["photo_id"] not in seen:
+                seen.add(row["photo_id"])
+                out.append(row)
+                if len(out) >= n:
+                    return out
+    return out
+
+
 def _cc_photos(taxon_id: int, n: int) -> list[dict]:
     res = _get(f"https://api.inaturalist.org/v1/taxa/{taxon_id}").get("results", [])
     photos = res[0].get("taxon_photos", []) if res else []
-    out = []
+    out: list[dict] = []
+    seen: set = set()
     for tp in photos:
-        ph = tp.get("photo", {})
-        lic = ph.get("license_code") or ""
-        if lic not in OK_LICENSES:
-            continue
-        url = (ph.get("url") or "").replace("square", "medium")
-        if not url:
-            continue
-        out.append(
-            {
-                "photo_id": ph.get("id"),
-                "license": lic,
-                "attribution": ph.get("attribution") or "",
-                "url": url,
-            }
-        )
-        if len(out) >= n:
-            break
+        row = _photo_row(tp.get("photo", {}))
+        if row and row["photo_id"] not in seen:
+            seen.add(row["photo_id"])
+            out.append(row)
+            if len(out) >= n:
+                return out
+    # Top up from the observation pool when the curated taxon_photos have too few CC photos.
+    if len(out) < n:
+        for row in _cc_photos_from_observations(taxon_id, n - len(out)):
+            if row["photo_id"] not in seen:
+                seen.add(row["photo_id"])
+                out.append(row)
     return out
 
 
