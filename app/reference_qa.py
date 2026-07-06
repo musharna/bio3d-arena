@@ -62,3 +62,23 @@ def assess_organ_coverage(client, photo_png: bytes, *, inventory: TaxonInventory
         "note": parsed["note"],
         "fruit_only": fruit_only,
     }
+
+
+SPECIES_REP_MIN = 0.5  # probe-tuned (Task 5)
+
+
+def assess_species_rep(bundle, photo_png: bytes, *, common: str, taxon: str) -> float:
+    from .species_id import species_rep_score
+
+    return species_rep_score(bundle, photo_png, common=common, taxon=taxon)
+
+
+def qa_reference_image(*, organ: dict, species_rep: float | None) -> dict:
+    reasons: list[str] = []
+    if organ.get("fruit_only"):
+        reasons.append("fruit-only / isolated-organ reference")
+    if organ.get("category") == "fragment":
+        reasons.append("fragment — no expected organ visible")
+    if species_rep is not None and species_rep < SPECIES_REP_MIN:
+        reasons.append(f"low species-representativeness ({species_rep:.2f} < {SPECIES_REP_MIN})")
+    return {"passed": not reasons, "reasons": reasons}

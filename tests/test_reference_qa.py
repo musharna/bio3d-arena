@@ -60,3 +60,23 @@ def test_whole_plant_reference_not_flagged():
     client = _FakeClient({"organs_present": present, "note": "whole plant"})
     res = reference_qa.assess_organ_coverage(client, b"\x89PNG", inventory=inv)
     assert res["fruit_only"] is False
+
+
+from app import reference_qa as rq
+
+
+def test_qa_combiner_fails_fruit_only():
+    r = rq.qa_reference_image(
+        organ={"fruit_only": True, "category": "isolated-organ"}, species_rep=0.9
+    )
+    assert r["passed"] is False and any("fruit" in x for x in r["reasons"])
+
+
+def test_qa_combiner_fails_low_species_rep():
+    r = rq.qa_reference_image(organ={"fruit_only": False, "category": "complete"}, species_rep=0.1)
+    assert r["passed"] is False and any("species" in x for x in r["reasons"])
+
+
+def test_qa_combiner_passes_good():
+    r = rq.qa_reference_image(organ={"fruit_only": False, "category": "complete"}, species_rep=0.9)
+    assert r["passed"] is True and r["reasons"] == []
