@@ -124,9 +124,14 @@ def assert_recon_photos_cleared_for_gold(db: Session, gold_output_ids: set[int])
             .first()
         )
         asset = twin if twin is not None else o
-        if not (asset.source or "").startswith(_COMMERCIAL_MODEL_PREFIXES):
-            continue
         img = (json.loads(asset.meta_json or "{}")).get("input_image")
+        # Same recon-to-verify test as assert_recon_photos_cleared: a commercial-model asset OR a
+        # bio3d-arena internal recon (identified by a recorded input_image; a GT mesh/scan has
+        # none). A gold row aliasing a non-CC bio3d-arena recon twin must not slip past unchecked.
+        is_commercial = (asset.source or "").startswith(_COMMERCIAL_MODEL_PREFIXES)
+        is_internal_recon = (asset.source == "bio3d-arena") and (img is not None)
+        if not (is_commercial or is_internal_recon):
+            continue
         taxon = _taxon_of(img)
         if taxon is None:
             raise ReferenceProvenanceError(
