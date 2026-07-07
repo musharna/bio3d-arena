@@ -207,6 +207,19 @@ def _resolve_category_id(db: Session, category_slug: str | None) -> int | None:
     return cat.id if cat else None
 
 
+def _effective_category_ids(k_ids: set[int] | None, category_id: int | None) -> set[int] | None:
+    """Intersect an explicit `?category=` selector with the active kingdom's category set (a
+    chosen category is always within a kingdom in normal use — /api/meta only ever offers
+    in-kingdom categories — but this keeps the pool correct even for a stale/out-of-kingdom
+    selector). None means 'no restriction'; pick_task's `category_ids` kwarg takes precedence
+    over its `category_id` kwarg, so a single combined set is what must be passed."""
+    if k_ids is None:
+        return {category_id} if category_id is not None else None
+    if category_id is None:
+        return k_ids
+    return {category_id} if category_id in k_ids else set()
+
+
 def _serialize(
     comparison: Comparison,
     task: Task,
@@ -304,6 +317,7 @@ def _build_comparison(
     session_id: str,
     criterion_slug: str | None = None,
     category_slug: str | None = None,
+    kingdom: str = "all",
 ) -> dict | None:
     """Pick a task + pair (or inject a gold check), persist it, return anon payload."""
     crit = None
@@ -350,8 +364,15 @@ def _build_comparison(
     # the _vote_excluded parity) — else a session dead-ends re-served an already-voted pair.
     voted_pairs = integrity.voted_pairs_for(db, session_id, crit.id)
 
+    # Kingdom scoping: an explicit ?category= is always within a kingdom, so both filters apply
+    # together — pick_task's category_ids kwarg takes precedence over category_id, so intersect
+    # them into one set here rather than pass both.
+    k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
     task = matchmaking.pick_task(
-        db, category_id=category_id, exclude_fn=_vote_excluded, voted_pairs=voted_pairs
+        db,
+        category_ids=_effective_category_ids(k_ids, category_id),
+        exclude_fn=_vote_excluded,
+        voted_pairs=voted_pairs,
     )
     if task is None:
         return None
@@ -378,6 +399,7 @@ def _build_kwise_comparison(
     session_id: str,
     criterion_slug: str | None = None,
     category_slug: str | None = None,
+    kingdom: str = "all",
 ) -> dict | None:
     """Serve a 4-up K-ballot (no gold in kwise). Falls back to a pairwise comparison when no task
     has >=4 admitted same-paradigm fresh outputs."""
@@ -410,6 +432,9 @@ def _build_kwise_comparison(
     stmt = select(Task).where(Task.active.is_(True))
     if category_id is not None:
         stmt = stmt.where(Task.category_id == category_id)
+    k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
+    if k_ids is not None:
+        stmt = stmt.where(Task.category_id.in_(k_ids))
     tasks = list(db.execute(stmt).scalars().all())
     _random.shuffle(tasks)
     for task in tasks:
@@ -432,7 +457,7 @@ def _build_kwise_comparison(
             "outputs": [_serialize_output(o) for o in quad],
         }
     # No quad anywhere → transparent pairwise fallback.
-    return _build_comparison(db, session_id, criterion_slug, category_slug)
+    return _build_comparison(db, session_id, criterion_slug, category_slug, kingdom=kingdom)
 
 
 def _build_calibration_comparison(db: Session, session_id: str) -> dict | None:
@@ -512,10 +537,15 @@ def index(request: Request):
 
 
 @app.get("/api/meta")
-def api_meta(db: Session = Depends(get_db)):
+def api_meta(request: Request, db: Session = Depends(get_db)):
     """Categories + criteria for populating arena/leaderboard selectors."""
     cats = db.execute(select(Category)).scalars().all()
     crits = db.execute(select(Criterion)).scalars().all()
+    # Scope the category selector to the active kingdom so it never offers a category the
+    # arena pool wouldn't actually serve (kingdom=all -> k_ids is None -> no filtering).
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    if k_ids is not None:
+        cats = [c for c in cats if c.id in k_ids]
     # `coming_soon`: a category with no tasks is a roadmap placeholder (e.g. Fungi/Animals/
     # Microbes) — it self-activates the moment its first task is added. No schema flag.
     return {
@@ -535,9 +565,13 @@ def api_next(
     if mode == "calibration":
         payload = _build_calibration_comparison(db, request.state.session_id)
     elif mode == "kwise":
-        payload = _build_kwise_comparison(db, request.state.session_id, criterion, category)
+        payload = _build_kwise_comparison(
+            db, request.state.session_id, criterion, category, kingdom=request.state.kingdom
+        )
     else:
-        payload = _build_comparison(db, request.state.session_id, criterion, category)
+        payload = _build_comparison(
+            db, request.state.session_id, criterion, category, kingdom=request.state.kingdom
+        )
     if payload is None:
         return JSONResponse({"error": "no-comparisons-available"}, status_code=404)
     return payload
@@ -584,8 +618,8 @@ def api_vote(
     else:
         service.apply_vote(db, vote)
     db.commit()
-    # Keep the same criterion/category filter for the follow-up comparison.
-    nxt = _build_comparison(db, sid, criterion, category)
+    # Keep the same criterion/category filter (+ active kingdom) for the follow-up comparison.
+    nxt = _build_comparison(db, sid, criterion, category, kingdom=request.state.kingdom)
     return {"status": "ok", "next": nxt}
 
 
@@ -616,7 +650,7 @@ def api_kvote(
     service.resolve_kballot(db, ballot, kvote_in.best_output_id, sid)
     integrity.note_vote(db, sid)  # ONE rate-accounting per ballot, not per derived vote
     db.commit()
-    nxt = _build_kwise_comparison(db, sid, criterion, category)
+    nxt = _build_kwise_comparison(db, sid, criterion, category, kingdom=request.state.kingdom)
     return {"status": "ok", "next": nxt}
 
 
