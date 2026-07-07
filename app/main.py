@@ -107,6 +107,18 @@ async def ensure_session(request: Request, call_next):
         _kq if _kq is not None else request.cookies.get("bio3d_kingdom")
     )
     request.state.kingdom = _kingdom
+    # Kingdom-scoped stats strip (`.b3d-kstats`) — HTML pages only, never /api (matchmaking's
+    # /api/next must stay fast) or static/asset/health/auth routes. try/except + None default
+    # so a stats failure can never 500 a page.
+    request.state.kingdom_stats = None
+    if not request.url.path.startswith(("/api", "/static", "/assets", "/healthz", "/auth")):
+        try:
+            from .database import SessionLocal
+
+            with SessionLocal() as _stats_db:
+                request.state.kingdom_stats = service.kingdom_scope_stats(_stats_db, _kingdom)
+        except Exception:  # noqa: BLE001 — never let stats computation break a page
+            request.state.kingdom_stats = None
     response = await call_next(request)
     if is_new:
         response.set_cookie(

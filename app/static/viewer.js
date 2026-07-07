@@ -103,6 +103,7 @@
     mv.setAttribute("touch-action", "pan-y");
     mv.setAttribute("shadow-intensity", "1");
     mv.setAttribute("exposure", "1.0");
+    mv.setAttribute("loading", "eager");
     mv.setAttribute("src", asset.url);
     mv.style.width = "100%";
     mv.style.height = "100%";

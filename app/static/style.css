@@ -217,6 +217,11 @@ kbd,
   height: auto;
   display: block;
   min-width: 560px;
+  /* Draw-on doesn't apply cleanly here: rows are discrete whisker/dot primitives
+     per generator (not a single continuous polyline), so dasharray sizing would
+     need per-row math for little payoff. Fall back to a whole-chart fade-in per
+     the brief's fiddly-SVG escape hatch. */
+  animation: b3d-fade-in 0.4s ease-out both;
 }
 .forest-name {
   font-size: 12.5px;
@@ -837,6 +842,77 @@ textarea:focus-visible,
     transform: none;
   }
 }
+
+/* === Motion quick-wins (Task A) — entrance/bar-grow/pop/draw-on/medal keyframes.
+   All are short (0.3-0.6s), one-shot ("both"/"forwards", never infinite), and
+   automatically neutralized by the blanket prefers-reduced-motion rule above
+   (:376) which forces animation-duration to ~0 — final "to" state still holds
+   via fill-mode, so content lands correctly with no visible motion. === */
+@keyframes b3d-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes b3d-rise-sm {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes b3d-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes b3d-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes b3d-draw {
+  from {
+    stroke-dashoffset: 1200;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes b3d-medal-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes b3d-medal-shine {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
 .onboard-banner:not([hidden]) {
   display: flex;
   align-items: center;
@@ -979,10 +1055,14 @@ kbd {
 .ci-range {
   position: absolute;
   top: 50%;
-  transform: translateY(-50%);
+  /* Vertical centering via margin (not transform) so `transform` is free for the
+     b3d-grow-x scaleX animation below without clobbering the offset. */
+  margin-top: -3px;
   height: 6px;
   background: color-mix(in oklch, var(--accent) 45%, transparent);
   border-radius: 999px;
+  transform-origin: left center;
+  animation: b3d-grow-x 0.4s ease-out both;
 }
 .ci-dot {
   position: absolute;
@@ -1986,6 +2066,26 @@ details.group[open] > summary.group-title::before {
   text-transform: uppercase;
   color: var(--faint);
 }
+.b3d-kbar-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.b3d-kstats {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+@media (max-width: 1120px) {
+  .b3d-kstats {
+    display: none;
+  }
+}
 .b3d-scope-pill {
   display: inline-flex;
   align-items: center;
@@ -2662,6 +2762,10 @@ details.group[open] > summary.group-title::before {
 /* === Leaderboard v2 (Task 11) — generic page-head is reused by later data pages === */
 .b3d-page-head {
   margin-bottom: 1.1rem;
+  /* ONE tasteful page-content entrance (Task A): the shared header block used by
+     every data page (leaderboard/significance/difficulty/dataset/...), not every
+     element on the page. */
+  animation: b3d-rise 0.4s ease-out both;
 }
 .b3d-page-head h1 {
   display: flex;
@@ -2676,6 +2780,8 @@ details.group[open] > summary.group-title::before {
   font-size: 0.95rem;
   max-width: 760px;
   margin: 0;
+  /* Small staggered second beat of the page-head entrance (parent uses b3d-rise). */
+  animation: b3d-rise-sm 0.35s ease-out 0.08s both;
 }
 .lb-votecount {
   color: var(--faint);
@@ -2836,10 +2942,14 @@ details.group[open] > summary.group-title::before {
   font-family: "IBM Plex Mono", monospace;
   font-size: 0.78rem;
   font-weight: 700;
+  animation: b3d-medal-drop 0.4s ease-out both;
 }
 .lb-medal-gold {
   color: oklch(0.28 0.05 90);
   background: oklch(0.82 0.15 90);
+  animation:
+    b3d-medal-drop 0.4s ease-out both,
+    b3d-medal-shine 0.6s ease-out 0.4s both;
 }
 .lb-medal-silver {
   color: oklch(0.28 0.01 258);
@@ -3044,6 +3154,11 @@ details.group[open] > summary.group-title::before {
   stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
+  /* Draw-on: dasharray is set well beyond any realistic polyline length in this
+     chart (points span ~450x190px, at most a few tiers) so the whole line is one
+     dash that un-hides via dashoffset. */
+  stroke-dasharray: 1200;
+  animation: b3d-draw 0.6s ease-out both;
 }
 .diff-line-faint {
   stroke: var(--faint);
@@ -3123,6 +3238,7 @@ details.group[open] > summary.group-title::before {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  animation: b3d-pop 0.35s ease-out both;
 }
 .cov-stat-num {
   font-size: 2rem;
@@ -3172,6 +3288,7 @@ details.group[open] > summary.group-title::before {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  animation: b3d-pop 0.35s ease-out both;
 }
 .ds-stat-num {
   font-size: 2rem;
@@ -3207,6 +3324,8 @@ details.group[open] > summary.group-title::before {
 .ds-bar-seg {
   height: 100%;
   min-width: 2px;
+  transform-origin: left center;
+  animation: b3d-grow-x 0.5s ease-out both;
 }
 .ds-bar-seg:not(:last-child) {
   border-right: 1px solid var(--panel);
@@ -3288,6 +3407,7 @@ details.group[open] > summary.group-title::before {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  animation: b3d-pop 0.35s ease-out both;
 }
 .tk-stat-num {
   font-size: 2rem;
