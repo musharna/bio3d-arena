@@ -680,40 +680,52 @@ def _leaderboard_rows(
     criterion_slug: str = "overall",
     category_slug: str | None = None,
     paradigm: str | None = None,
+    kingdom: str = "all",
 ) -> list[dict]:
     crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
     if crit is None:
         return []
     category_id = _resolve_category_id(db, category_slug)
-    scope = (
-        Rating.category_id.is_(None) if category_id is None else Rating.category_id == category_id
-    )
-    ratings = (
-        db.execute(select(Rating).where(Rating.criterion_id == crit.id, scope)).scalars().all()
-    )
     ref_gens = service.mode_a_excluded_generator_ids(db)
     names = service.generator_display_names(db)
-    rows = []
-    for r in ratings:
-        if r.generator_id in ref_gens:
-            continue  # GT/reference scans don't compete in the Mode-A perceptual board
-        gen = db.get(Generator, r.generator_id)
-        if gen is None:
-            continue  # stale rating row (generator deleted); skip rather than crash
-        if paradigm and gen.paradigm != paradigm:
-            continue
-        rows.append(
-            {
-                "generator": names.get(r.generator_id, gen.name),
-                "kind": gen.kind,
-                "paradigm": gen.paradigm,
-                "elo": round(r.elo, 1),
-                "bt_score": round(r.bt_score, 1),
-                "bt_lower": round(r.bt_lower, 1),
-                "bt_upper": round(r.bt_upper, 1),
-                "n_games": r.n_games,
-            }
+    k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
+    if k_ids is not None:
+        # A kingdom (≠ "all") is active: the cached `Rating` table is keyed by a single
+        # category_id and cannot represent a SET of categories, so compute live instead
+        # (mirrors verified_leaderboard_rows's on-demand-BT path — see kingdom_leaderboard_rows).
+        ids = _effective_category_ids(k_ids, category_id)
+        rows = service.kingdom_leaderboard_rows(db, criterion_slug, ids)
+        rows = [r for r in rows if not paradigm or r["paradigm"] == paradigm]
+    else:
+        scope = (
+            Rating.category_id.is_(None)
+            if category_id is None
+            else Rating.category_id == category_id
         )
+        ratings = (
+            db.execute(select(Rating).where(Rating.criterion_id == crit.id, scope)).scalars().all()
+        )
+        rows = []
+        for r in ratings:
+            if r.generator_id in ref_gens:
+                continue  # GT/reference scans don't compete in the Mode-A perceptual board
+            gen = db.get(Generator, r.generator_id)
+            if gen is None:
+                continue  # stale rating row (generator deleted); skip rather than crash
+            if paradigm and gen.paradigm != paradigm:
+                continue
+            rows.append(
+                {
+                    "generator": names.get(r.generator_id, gen.name),
+                    "kind": gen.kind,
+                    "paradigm": gen.paradigm,
+                    "elo": round(r.elo, 1),
+                    "bt_score": round(r.bt_score, 1),
+                    "bt_lower": round(r.bt_lower, 1),
+                    "bt_upper": round(r.bt_upper, 1),
+                    "n_games": r.n_games,
+                }
+            )
     # Rank + CI-bar geometry are computed WITHIN each paradigm group, never across
     # paradigms — cross-paradigm BT comparisons are the confound this project removes
     # (spec §D). When a single paradigm filter is active there is exactly one group,
@@ -800,11 +812,17 @@ def leaderboard(
     verified: bool = False,
 ):
     paradigm = paradigm or None  # "" (unset <select>) and None both mean "no filter"
-    rows = (
-        service.verified_leaderboard_rows(db, criterion, category)
-        if verified
-        else _leaderboard_rows(db, criterion, category, paradigm)
-    )
+    kingdom = request.state.kingdom
+    k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
+    if verified:
+        cat_ids = (
+            _effective_category_ids(k_ids, _resolve_category_id(db, category))
+            if k_ids is not None
+            else None
+        )
+        rows = service.verified_leaderboard_rows(db, criterion, category, category_ids=cat_ids)
+    else:
+        rows = _leaderboard_rows(db, criterion, category, paradigm, kingdom)
     total = matchmaking.total_votes(db)
     cats = db.execute(select(Category)).scalars().all()
     crits = db.execute(select(Criterion)).scalars().all()
@@ -846,7 +864,12 @@ def leaderboard(
             "bias": service.compute_bias(db),
             "sel_criterion": criterion,
             "sel_category": category,
-            "judge_rows": _judge_leaderboard_rows(db, criterion, "multi4"),
+            # VLM judge board is global-only (JudgeRating.category_id.is_(None) — no
+            # kingdom-scoped judge ranking yet); hide it rather than show an unscoped board
+            # under an active kingdom filter (deferred — see task-6 report).
+            "judge_rows": []
+            if k_ids is not None
+            else _judge_leaderboard_rows(db, criterion, "multi4"),
             "verified": verified,
         },
     )
@@ -1000,7 +1023,14 @@ def significance_page(
     criterion: str = "overall",
     category: str = "all",
 ):
-    sig = service.compute_significance(db, criterion, _resolve_category_id(db, category))
+    category_id = _resolve_category_id(db, category)
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    if k_ids is not None:
+        sig = service.compute_significance(
+            db, criterion, category_ids=_effective_category_ids(k_ids, category_id)
+        )
+    else:
+        sig = service.compute_significance(db, criterion, category_id)
     cats = db.execute(select(Category)).scalars().all()
     crits = db.execute(select(Criterion)).scalars().all()
     category_options = [

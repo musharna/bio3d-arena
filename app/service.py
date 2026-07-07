@@ -174,9 +174,11 @@ def generator_display_names(db: Session) -> dict[int, str]:
 def _matches_for_scope(
     db: Session,
     criterion_id: int,
-    category_id: int | None,
+    category_id: int | None = None,
     include_ties: bool = True,
     verified_only: bool = False,
+    *,
+    category_ids: set[int] | None = None,
 ) -> tuple[list[tuple[int, int]], list[int]]:
     """Decisive (winner_gen, loser_gen) pairs for a (criterion, category) scope, plus a
     parallel ballot-group key list (same length as matches) for ballot-level bootstrap
@@ -185,6 +187,9 @@ def _matches_for_scope(
     A 'tie' is credited as a split — one win in each direction — so ties inform
     Bradley-Terry without a separate tie parameter. 'bad' votes are excluded.
     category_id=None means the global scope (all categories).
+    category_ids, when given (a SET of category ids — a "kingdom"), takes precedence over
+    category_id and filters to any of those categories (an empty set yields no matches, not
+    "all categories" — a kingdom with zero mapped categories must be inert, not a fallback).
     verified_only=True further restricts to votes from a session with a linked
     User (VoterSession.user_id set) — the "verified-only" leaderboard scope.
     """
@@ -202,7 +207,11 @@ def _matches_for_scope(
     )
     if verified_only:
         stmt = stmt.where(VoterSession.user_id.is_not(None))
-    if category_id is not None:
+    if category_ids is not None:
+        stmt = stmt.join(Task, Comparison.task_id == Task.id).where(
+            Task.category_id.in_(category_ids)
+        )
+    elif category_id is not None:
         stmt = stmt.join(Task, Comparison.task_id == Task.id).where(Task.category_id == category_id)
 
     ref_gens = mode_a_excluded_generator_ids(db)
@@ -239,10 +248,18 @@ def _matches_for_scope(
     return matches, groups
 
 
-def _players_for_scope(db: Session, category_id: int | None) -> list[int]:
-    """Generators eligible for a scope's leaderboard (gold/decoy outputs excluded)."""
+def _players_for_scope(
+    db: Session, category_id: int | None = None, *, category_ids: set[int] | None = None
+) -> list[int]:
+    """Generators eligible for a scope's leaderboard (gold/decoy outputs excluded).
+
+    category_ids, when given, takes precedence over category_id (see _matches_for_scope)."""
     stmt = select(ModelOutput.generator_id).where(ModelOutput.is_gold.is_(False))
-    if category_id is not None:
+    if category_ids is not None:
+        stmt = stmt.join(Task, ModelOutput.task_id == Task.id).where(
+            Task.category_id.in_(category_ids)
+        )
+    elif category_id is not None:
         stmt = stmt.join(Task, ModelOutput.task_id == Task.id).where(
             Task.category_id == category_id
         )
@@ -273,9 +290,17 @@ def finalize_rows(rows: list[dict]) -> list[dict]:
 
 
 def verified_leaderboard_rows(
-    db: Session, criterion_slug: str = "overall", category: str = "all"
+    db: Session,
+    criterion_slug: str = "overall",
+    category: str = "all",
+    *,
+    category_ids: set[int] | None = None,
 ) -> list[dict]:
-    """On-demand Bradley-Terry over VERIFIED votes only (session.user_id set). Not cached."""
+    """On-demand Bradley-Terry over VERIFIED votes only (session.user_id set). Not cached.
+
+    category_ids, when given (a kingdom's category-id set), takes precedence over the resolved
+    `category` slug — same convention as _matches_for_scope/_players_for_scope — so the
+    "Verified" scope toggle stays kingdom-scoped too."""
     crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
     if crit is None:
         return []
@@ -283,8 +308,10 @@ def verified_leaderboard_rows(
     if category != "all":
         cat = db.execute(select(Category).where(Category.slug == category)).scalars().first()
         category_id = cat.id if cat else None
-    players = _players_for_scope(db, category_id)
-    matches, groups = _matches_for_scope(db, crit.id, category_id, verified_only=True)
+    players = _players_for_scope(db, category_id, category_ids=category_ids)
+    matches, groups = _matches_for_scope(
+        db, crit.id, category_id, verified_only=True, category_ids=category_ids
+    )
     result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP, groups=groups)
     names = generator_display_names(db)
     rows = []
@@ -306,6 +333,40 @@ def verified_leaderboard_rows(
     if not rows:
         return []
     return finalize_rows(rows)
+
+
+def kingdom_leaderboard_rows(
+    db: Session, criterion_slug: str, category_ids: set[int]
+) -> list[dict]:
+    """On-the-fly (uncached) Bradley-Terry rows for a kingdom scope — a SET of category ids,
+    which the cached `Rating` table (keyed by a single category_id) cannot represent. Mirrors
+    `verified_leaderboard_rows`'s on-demand-BT shape (including the n_games>0 inclusion rule)
+    but scopes by kingdom membership rather than vote verification. Caller (main._leaderboard_rows)
+    still owns paradigm filtering + per-paradigm rank/CI grouping, matching the cached path."""
+    crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+    if crit is None:
+        return []
+    players = _players_for_scope(db, category_ids=category_ids)
+    matches, groups = _matches_for_scope(db, crit.id, category_ids=category_ids)
+    result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP, groups=groups)
+    names = generator_display_names(db)
+    rows = []
+    for gid in players:
+        if result.n_games.get(gid, 0) <= 0:
+            continue  # only generators with an actual game in this kingdom appear
+        gen = db.get(Generator, gid)
+        rows.append(
+            {
+                "generator": names.get(gid, gen.name if gen else str(gid)),
+                "kind": gen.kind if gen else "model",
+                "paradigm": gen.paradigm if gen else None,
+                "bt_score": round(result.scores.get(gid, 0.0), 1),
+                "bt_lower": round(result.lower.get(gid, 0.0), 1),
+                "bt_upper": round(result.upper.get(gid, 0.0), 1),
+                "n_games": result.n_games.get(gid, 0),
+            }
+        )
+    return rows
 
 
 def recompute_scope(
@@ -569,16 +630,26 @@ def tier_perceptual_ranking(
 
 
 def compute_significance(
-    db: Session, criterion_slug: str = "overall", category_id: int | None = None
+    db: Session,
+    criterion_slug: str = "overall",
+    category_id: int | None = None,
+    *,
+    category_ids: set[int] | None = None,
 ) -> dict:
-    """Pairwise P(A ranks above B) for a scope — "is A *meaningfully* ahead of B?"."""
+    """Pairwise P(A ranks above B) for a scope — "is A *meaningfully* ahead of B?".
+
+    category_ids, when given (a kingdom's category-id set), takes precedence over category_id —
+    same convention as _matches_for_scope/_players_for_scope."""
     criterion = (
         db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
     )
     if criterion is None:
         return {"status": "no-such-criterion"}
-    matches, groups = _matches_for_scope(db, criterion.id, category_id)
-    players = sorted(set(_players_for_scope(db, category_id)) | {p for m in matches for p in m})
+    matches, groups = _matches_for_scope(db, criterion.id, category_id, category_ids=category_ids)
+    players = sorted(
+        set(_players_for_scope(db, category_id, category_ids=category_ids))
+        | {p for m in matches for p in m}
+    )
     result = ranking.significance_matrix(
         players, matches, bootstrap=config.BT_BOOTSTRAP, groups=groups
     )
@@ -623,12 +694,16 @@ def compute_bias(db: Session) -> dict:
     rows = db.execute(
         select(Vote, Comparison).join(Comparison, Vote.comparison_id == Comparison.id)
     ).all()
-    a = b = tie = bad = cross_format = 0
+    a = b = tie = bad = cross_format = n = 0
     fmt_wins: dict[str, int] = defaultdict(int)
     fmt_games: dict[str, int] = defaultdict(int)
     for vote, comp in rows:
         out_a = db.get(ModelOutput, comp.output_a_id)
         out_b = db.get(ModelOutput, comp.output_b_id)
+        if out_a is None or out_b is None:
+            continue  # dangling vote (output deleted) — not a valid comparison, mirrors the
+            # identical guard in _matches_for_scope
+        n += 1
         is_cross = out_a.asset_format != out_b.asset_format
         if is_cross:
             cross_format += 1
@@ -645,7 +720,6 @@ def compute_bias(db: Session) -> dict:
             fmt_wins[win_out.asset_format] += 1
             fmt_games[win_out.asset_format] += 1
             fmt_games[lose_out.asset_format] += 1
-    n = len(rows)
     decisive = a + b
 
     # Gold attention-check + trust stats.
