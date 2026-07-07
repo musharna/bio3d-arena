@@ -4,10 +4,9 @@ from app.main import app
 
 
 def test_arena_page_has_kwise_scaffold():
-    # NOTE: the arena page is served at "/" (see app.main:index) — the brief's illustrative
-    # test used "/arena", which is not a real route here.
+    # The arena moved to "/arena" (Task 9 of the design refresh); "/" is now the landing page.
     c = TestClient(app)
-    r = c.get("/")
+    r = c.get("/arena")
     assert r.status_code == 200
     assert "kwise-grid" in r.text  # the 4-up container the JS toggles
     assert "kwise-allbad" in r.text  # the all-bad button

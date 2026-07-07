@@ -570,7 +570,63 @@ def require_admin_query(token: str | None = None) -> None:
 
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, db: Session = Depends(get_db)):
+def home(request: Request, db: Session = Depends(get_db)):
+    """Marketing/landing page. Never kingdom-gated (see `_roadmap_or_none` docstring) —
+    it's the one screen every visitor should be able to load regardless of scope."""
+    from sqlalchemy import func
+
+    total_votes = matchmaking.total_votes(db)
+    models_count = db.execute(
+        select(func.count(func.distinct(Generator.id))).where(Generator.kind == "model")
+    ).scalar_one()
+    tasks_count = db.execute(select(func.count(Task.id)).where(Task.active.is_(True))).scalar_one()
+    kingdoms_live = sum(1 for k in kingdoms.KINGDOMS if _kingdom_is_live(db, k))
+
+    # "Choose a kingdom" cards below the hero — live/task-count are real per-kingdom queries
+    # (not the top-level `kingdoms_live`/`tasks_count`, which are the all-kingdoms totals).
+    kingdom_blurbs = {
+        "plants": "Flowers, crops, and foliage — the founding kingdom of the benchmark.",
+        "fungi": "Mushrooms and fruiting bodies — complement-aware completeness beyond plants.",
+        "animals": "Vertebrates and invertebrates — arriving as tasks are seeded.",
+    }
+    kingdom_cards = []
+    for k in kingdoms.KINGDOMS:
+        k_ids = kingdoms.category_ids_for_kingdom(db, k)
+        k_task_count = (
+            db.execute(
+                select(func.count(Task.id)).where(
+                    Task.category_id.in_(k_ids), Task.active.is_(True)
+                )
+            ).scalar_one()
+            if k_ids
+            else 0
+        )
+        kingdom_cards.append(
+            {
+                "slug": k,
+                "emoji": kingdoms.KINGDOM_EMOJI[k],
+                "name": kingdoms.KINGDOM_LABEL[k],
+                "live": _kingdom_is_live(db, k),
+                "blurb": kingdom_blurbs[k],
+                "task_count": k_task_count,
+            }
+        )
+
+    return templates.TemplateResponse(
+        request,
+        "home.html",
+        {
+            "total_votes": total_votes,
+            "models_count": models_count,
+            "tasks_count": tasks_count,
+            "kingdoms_live": kingdoms_live,
+            "kingdom_cards": kingdom_cards,
+        },
+    )
+
+
+@app.get("/arena", response_class=HTMLResponse)
+def arena_page(request: Request, db: Session = Depends(get_db)):
     roadmap = _roadmap_or_none(request, db)
     if roadmap is not None:
         return roadmap

@@ -1766,4 +1766,395 @@ details.group[open] > summary.group-title::before {
   .b3d-collapse-btn {
     transition: none !important;
   }
+  .b3d-live-dot,
+  .b3d-hero-viz-ring-dashed {
+    animation: none !important;
+  }
+}
+
+/* ============================================================
+   Home / Landing (Task 9)
+   ============================================================ */
+.b3d-hero {
+  position: relative;
+  padding: 2.1rem 0.25rem 2rem;
+}
+.b3d-hero-rings-bg {
+  position: absolute;
+  top: -34%;
+  right: -6%;
+  width: 520px;
+  height: 520px;
+  background: repeating-radial-gradient(
+    circle at 50% 50%,
+    transparent 0 26px,
+    color-mix(in oklch, var(--accent2) 8%, transparent) 26px 27px
+  );
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000, transparent 66%);
+  mask-image: radial-gradient(circle at 50% 50%, #000, transparent 66%);
+  pointer-events: none;
+}
+.b3d-hero-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.02fr 0.98fr;
+  gap: 2.25rem;
+  align-items: center;
+}
+.b3d-hero-eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--accent2);
+}
+.b3d-hero-h1 {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 52px;
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  margin: 1.1rem 0 0;
+  color: var(--text);
+}
+.b3d-hero-accent2 {
+  color: var(--accent2);
+}
+.b3d-hero-accent3d {
+  position: relative;
+  display: inline-block;
+  color: var(--accent);
+  text-shadow:
+    1px 1px 0 color-mix(in oklch, var(--accent) 62%, #05121a),
+    2px 2px 0 color-mix(in oklch, var(--accent) 54%, #05121a),
+    3px 3px 0 color-mix(in oklch, var(--accent) 46%, #05121a),
+    4px 4px 0 color-mix(in oklch, var(--accent) 38%, #05121a),
+    5px 5px 0 color-mix(in oklch, var(--accent) 30%, #05121a),
+    7px 8px 14px rgba(0, 0, 0, 0.32);
+}
+.b3d-hero-lede {
+  color: var(--muted);
+  font-size: 16.5px;
+  line-height: 1.62;
+  max-width: 520px;
+  margin: 1.1rem 0 0;
+}
+.b3d-hero-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 1.7rem;
+}
+.b3d-btn-primary,
+.b3d-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  border-radius: 11px;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 0.8rem 1.4rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    filter 0.12s,
+    transform 0.06s,
+    border-color 0.12s;
+}
+.b3d-btn-primary {
+  background: var(--accent);
+  border: none;
+  color: oklch(0.99 0.01 258);
+}
+.b3d-btn-primary:hover {
+  filter: brightness(1.09);
+}
+.b3d-btn-primary:active {
+  filter: brightness(0.94);
+  transform: translateY(1px);
+}
+.b3d-btn-secondary {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.b3d-btn-secondary:hover {
+  border-color: color-mix(in oklch, var(--accent) 50%, var(--border));
+}
+
+.b3d-hero-stats {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.75rem;
+  padding: 1.1rem 0.25rem 0;
+  margin-top: 1.9rem;
+  border-top: 1px solid var(--border);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+.b3d-hero-stats strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+.b3d-live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--win);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--win) 20%, transparent);
+  animation: b3d-breathe 2.4s ease-in-out infinite;
+}
+.b3d-hero-generators {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem 1.1rem;
+  flex-wrap: wrap;
+  padding: 0.8rem 0.25rem 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+}
+.b3d-hero-generators-label {
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.b3d-hero-generators-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  color: var(--muted);
+}
+
+.b3d-hero-viz {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+.b3d-hero-viz-ring-wrap {
+  position: relative;
+  width: 300px;
+  height: 300px;
+}
+.b3d-hero-viz-ring-outer {
+  position: absolute;
+  inset: 5%;
+  border-radius: 50%;
+  border: 1px solid color-mix(in oklch, var(--accent) 22%, transparent);
+  box-shadow: inset 0 0 60px color-mix(in oklch, var(--accent) 8%, transparent);
+}
+.b3d-hero-viz-ring-dashed {
+  position: absolute;
+  inset: 15%;
+  border-radius: 50%;
+  border: 1px dashed color-mix(in oklch, var(--accent2) 26%, transparent);
+  animation: b3d-spin 46s linear infinite;
+}
+.b3d-hero-viz-glow {
+  position: absolute;
+  inset: 11%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 42%,
+    color-mix(in oklch, var(--accent) 22%, transparent),
+    transparent 70%
+  );
+  filter: blur(13px);
+}
+.b3d-hero-viz-mark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 64px;
+}
+.b3d-hero-viz-caption {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+.b3d-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin: 2.5rem 0 0.95rem;
+  flex-wrap: wrap;
+}
+.b3d-section-head h2 {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 21px;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  margin: 0;
+}
+.b3d-section-head-note {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.b3d-kgrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+.b3d-kcard {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadowCard);
+  padding: 1.25rem;
+  text-decoration: none;
+  display: block;
+  transition:
+    border-color 0.14s,
+    transform 0.06s;
+}
+.b3d-kcard:hover {
+  border-color: color-mix(in oklch, var(--accent) 55%, var(--border));
+  transform: translateY(-2px);
+}
+.b3d-kcard-top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.b3d-kcard-icon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: radial-gradient(
+    circle at 50% 40%,
+    color-mix(in oklch, var(--accent) 13%, var(--panel2)),
+    var(--panel)
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 25px;
+  line-height: 1;
+}
+.b3d-kcard-badge {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.b3d-kcard-badge.is-live {
+  color: var(--win);
+  background: color-mix(in oklch, var(--win) 15%, transparent);
+  border: 1px solid color-mix(in oklch, var(--win) 40%, transparent);
+}
+.b3d-kcard-badge.is-soon {
+  color: var(--amber);
+  background: color-mix(in oklch, var(--amber) 15%, transparent);
+  border: 1px solid color-mix(in oklch, var(--amber) 40%, transparent);
+}
+.b3d-kcard-name {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin: 1rem 0 0.05rem;
+}
+.b3d-kcard-blurb {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.55;
+  margin: 0 0 0.9rem;
+  min-height: 42px;
+}
+.b3d-kcard-stat {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11.5px;
+  color: var(--faint);
+  border-top: 1px solid var(--border);
+  padding-top: 0.7rem;
+}
+
+.b3d-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+.b3d-step-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadowCard);
+  padding: 1.35rem;
+}
+.b3d-step-num {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  border: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
+  border-radius: 999px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.b3d-step-card h3 {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text);
+  margin: 0.9rem 0 0.35rem;
+}
+.b3d-step-card p {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .b3d-hero-grid {
+    grid-template-columns: 1fr;
+  }
+  .b3d-hero-viz {
+    order: -1;
+  }
+  .b3d-kgrid,
+  .b3d-steps-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@keyframes b3d-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes b3d-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }

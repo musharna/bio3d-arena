@@ -4,6 +4,7 @@ from app.main import app
 
 PUBLIC_PATHS = [
     "/",
+    "/arena",
     "/leaderboard",
     "/significance",
     "/benchmark",
