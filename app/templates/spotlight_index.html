@@ -1,18 +1,39 @@
-{% extends "base.html" %} {% block title %}Spotlight · Bio 3D Arena{% endblock
-%} {% block content %}
-<section class="board">
-  <h2>Subject Spotlight <span class="subtle">(internal)</span></h2>
-  <p class="subtle">
-    Per-subject deep dive: every model side-by-side, all metrics, failure flags.
-  </p>
-  <ul class="spotlight-list">
+{% extends "base.html" %}
+{% block title %}Spotlight · Bio 3D Arena{% endblock %}
+{% block content %}
+<section class="board sp-idx">
+  <header class="b3d-page-head">
+    <h1>Subject spotlight {% include "_scope_pill.html" %}</h1>
+    <p class="b3d-page-lede">
+      Per-taxon deep dives: every model side by side against the reference, all
+      metrics, and logged failure modes.
+    </p>
+  </header>
+
+  {% if subjects %}
+  <div class="sp-idx-grid">
+    {% set kingdom_emoji = {"plants": "\U0001F33F", "fungi": "\U0001F344", "animals": "\U0001F43E"} %}
     {% for s in subjects %}
-    <li>
-      <a href="/spotlight/{{ s.slug }}">{{ s.task_title }}</a> {% if s.featured
-      %}<span class="cat-chip">featured</span>{% endif %}
-      <div class="subtle">{{ s.blurb }}</div>
-    </li>
+    {# task_title is a single curated string, e.g. "Solanum lycopersicum — single-image →
+       3D reconstruction" — split it for display (name / task descriptor) without inventing
+       new data; SPOTLIGHTS carries no separate latin/common-name or lineage fields. #}
+    {% set parts = s.task_title.split(' — ', 1) %}
+    <a href="/spotlight/{{ s.slug }}" class="sp-idx-card">
+      <div class="sp-idx-stage">
+        {% if s.featured %}<span class="sp-idx-featured"><span class="cat-chip">featured</span></span>{% endif %}
+        <span class="sp-idx-emoji" aria-hidden="true">{{ kingdom_emoji.get(s.kingdom, '\U0001F9EC') }}</span>
+      </div>
+      <div class="sp-idx-body">
+        {% if s.kingdom %}<span class="sp-idx-breadcrumb">{{ s.kingdom | capitalize }}</span>{% endif %}
+        <span class="sp-idx-name">{{ parts[0] }}</span>
+        {% if parts | length > 1 %}<span class="sp-idx-sub">{{ parts[1] }}</span>{% endif %}
+        <p class="sp-idx-blurb">{{ s.blurb }}</p>
+      </div>
+    </a>
     {% endfor %}
-  </ul>
+  </div>
+  {% else %}
+  <p class="subtle">No spotlights curated yet.</p>
+  {% endif %}
 </section>
 {% endblock %}

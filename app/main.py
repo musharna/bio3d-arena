@@ -28,10 +28,12 @@ from sqlalchemy.orm import Session
 
 from . import (
     config,
+    dataset,
     difficulty,
     fidelity,
     ingest,
     integrity,
+    kingdoms,
     matchmaking,
     paradigms,
     ranking,
@@ -100,6 +102,11 @@ async def ensure_session(request: Request, call_next):
                 request.state.user = _db.get(User, _vs.user_id)
     except Exception:  # noqa: BLE001 — never let user-resolution break a page
         request.state.user = None
+    _kq = request.query_params.get("kingdom")
+    _kingdom = kingdoms.normalize_kingdom(
+        _kq if _kq is not None else request.cookies.get("bio3d_kingdom")
+    )
+    request.state.kingdom = _kingdom
     response = await call_next(request)
     if is_new:
         response.set_cookie(
@@ -109,6 +116,13 @@ async def ensure_session(request: Request, call_next):
             samesite="lax",
             max_age=60 * 60 * 24 * 365,
             secure=config.COOKIE_SECURE,
+        )
+    if _kq is not None:
+        response.set_cookie(
+            "bio3d_kingdom",
+            _kingdom,
+            max_age=60 * 60 * 24 * 365,
+            samesite="lax",
         )
     return response
 
@@ -192,6 +206,57 @@ def _resolve_category_id(db: Session, category_slug: str | None) -> int | None:
         return None
     cat = db.execute(select(Category).where(Category.slug == category_slug)).scalars().first()
     return cat.id if cat else None
+
+
+def _effective_category_ids(k_ids: set[int] | None, category_id: int | None) -> set[int] | None:
+    """Intersect an explicit `?category=` selector with the active kingdom's category set (a
+    chosen category is always within a kingdom in normal use — /api/meta only ever offers
+    in-kingdom categories — but this keeps the pool correct even for a stale/out-of-kingdom
+    selector). None means 'no restriction'; pick_task's `category_ids` kwarg takes precedence
+    over its `category_id` kwarg, so a single combined set is what must be passed."""
+    if k_ids is None:
+        return {category_id} if category_id is not None else None
+    if category_id is None:
+        return k_ids
+    return {category_id} if category_id in k_ids else set()
+
+
+def _kingdom_is_live(db: Session, kingdom: str) -> bool:
+    """True when `kingdom` has >=1 active Task in its mapped categories. `all` (no scoping)
+    is always live. A kingdom whose categories exist but have zero tasks yet (e.g. Animals —
+    seeded as a category placeholder, self-activates the moment its first task is added, same
+    convention as the `coming_soon` category flag in /api/meta) is NOT live — the data pages
+    route to the roadmap screen instead of rendering an empty board."""
+    kingdom = kingdoms.normalize_kingdom(kingdom)
+    if kingdom == "all":
+        return True
+    k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
+    if not k_ids:
+        return False
+    return (
+        db.execute(select(Task.id).where(Task.category_id.in_(k_ids), Task.active.is_(True)))
+        .scalars()
+        .first()
+        is not None
+    )
+
+
+def _roadmap_or_none(request: Request, db: Session) -> HTMLResponse | None:
+    """Return the coming-soon roadmap page when the request's active kingdom isn't live yet;
+    else None so the caller renders its normal template. Applied at the top of every
+    kingdom-scoped data route (Leaderboard, Arena, Difficulty, Significance, Benchmark,
+    Coverage, Tasks, Dataset) — Home/Methodology/Submit/Spotlight are never gated."""
+    kingdom = request.state.kingdom
+    if kingdom == "all" or _kingdom_is_live(db, kingdom):
+        return None
+    return templates.TemplateResponse(
+        request,
+        "_kingdom_roadmap.html",
+        {
+            "kingdom": kingdom,
+            "kingdom_label": kingdoms.KINGDOM_LABEL.get(kingdom, kingdom.title()),
+        },
+    )
 
 
 def _serialize(
@@ -291,6 +356,7 @@ def _build_comparison(
     session_id: str,
     criterion_slug: str | None = None,
     category_slug: str | None = None,
+    kingdom: str = "all",
 ) -> dict | None:
     """Pick a task + pair (or inject a gold check), persist it, return anon payload."""
     crit = None
@@ -337,8 +403,15 @@ def _build_comparison(
     # the _vote_excluded parity) — else a session dead-ends re-served an already-voted pair.
     voted_pairs = integrity.voted_pairs_for(db, session_id, crit.id)
 
+    # Kingdom scoping: an explicit ?category= is always within a kingdom, so both filters apply
+    # together — pick_task's category_ids kwarg takes precedence over category_id, so intersect
+    # them into one set here rather than pass both.
+    k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
     task = matchmaking.pick_task(
-        db, category_id=category_id, exclude_fn=_vote_excluded, voted_pairs=voted_pairs
+        db,
+        category_ids=_effective_category_ids(k_ids, category_id),
+        exclude_fn=_vote_excluded,
+        voted_pairs=voted_pairs,
     )
     if task is None:
         return None
@@ -365,6 +438,7 @@ def _build_kwise_comparison(
     session_id: str,
     criterion_slug: str | None = None,
     category_slug: str | None = None,
+    kingdom: str = "all",
 ) -> dict | None:
     """Serve a 4-up K-ballot (no gold in kwise). Falls back to a pairwise comparison when no task
     has >=4 admitted same-paradigm fresh outputs."""
@@ -397,6 +471,9 @@ def _build_kwise_comparison(
     stmt = select(Task).where(Task.active.is_(True))
     if category_id is not None:
         stmt = stmt.where(Task.category_id == category_id)
+    k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
+    if k_ids is not None:
+        stmt = stmt.where(Task.category_id.in_(k_ids))
     tasks = list(db.execute(stmt).scalars().all())
     _random.shuffle(tasks)
     for task in tasks:
@@ -419,7 +496,7 @@ def _build_kwise_comparison(
             "outputs": [_serialize_output(o) for o in quad],
         }
     # No quad anywhere → transparent pairwise fallback.
-    return _build_comparison(db, session_id, criterion_slug, category_slug)
+    return _build_comparison(db, session_id, criterion_slug, category_slug, kingdom=kingdom)
 
 
 def _build_calibration_comparison(db: Session, session_id: str) -> dict | None:
@@ -494,15 +571,79 @@ def require_admin_query(token: str | None = None) -> None:
 
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request):
+def home(request: Request, db: Session = Depends(get_db)):
+    """Marketing/landing page. Never kingdom-gated (see `_roadmap_or_none` docstring) —
+    it's the one screen every visitor should be able to load regardless of scope."""
+    from sqlalchemy import func
+
+    total_votes = matchmaking.total_votes(db)
+    models_count = db.execute(
+        select(func.count(func.distinct(Generator.id))).where(Generator.kind == "model")
+    ).scalar_one()
+    tasks_count = db.execute(select(func.count(Task.id)).where(Task.active.is_(True))).scalar_one()
+    kingdoms_live = sum(1 for k in kingdoms.KINGDOMS if _kingdom_is_live(db, k))
+
+    # "Choose a kingdom" cards below the hero — live/task-count are real per-kingdom queries
+    # (not the top-level `kingdoms_live`/`tasks_count`, which are the all-kingdoms totals).
+    kingdom_blurbs = {
+        "plants": "Flowers, crops, and foliage — the founding kingdom of the benchmark.",
+        "fungi": "Mushrooms and fruiting bodies — complement-aware completeness beyond plants.",
+        "animals": "Vertebrates and invertebrates — arriving as tasks are seeded.",
+    }
+    kingdom_cards = []
+    for k in kingdoms.KINGDOMS:
+        k_ids = kingdoms.category_ids_for_kingdom(db, k)
+        k_task_count = (
+            db.execute(
+                select(func.count(Task.id)).where(
+                    Task.category_id.in_(k_ids), Task.active.is_(True)
+                )
+            ).scalar_one()
+            if k_ids
+            else 0
+        )
+        kingdom_cards.append(
+            {
+                "slug": k,
+                "emoji": kingdoms.KINGDOM_EMOJI[k],
+                "name": kingdoms.KINGDOM_LABEL[k],
+                "live": _kingdom_is_live(db, k),
+                "blurb": kingdom_blurbs[k],
+                "task_count": k_task_count,
+            }
+        )
+
+    return templates.TemplateResponse(
+        request,
+        "home.html",
+        {
+            "total_votes": total_votes,
+            "models_count": models_count,
+            "tasks_count": tasks_count,
+            "kingdoms_live": kingdoms_live,
+            "kingdom_cards": kingdom_cards,
+        },
+    )
+
+
+@app.get("/arena", response_class=HTMLResponse)
+def arena_page(request: Request, db: Session = Depends(get_db)):
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
     return templates.TemplateResponse(request, "arena.html")
 
 
 @app.get("/api/meta")
-def api_meta(db: Session = Depends(get_db)):
+def api_meta(request: Request, db: Session = Depends(get_db)):
     """Categories + criteria for populating arena/leaderboard selectors."""
     cats = db.execute(select(Category)).scalars().all()
     crits = db.execute(select(Criterion)).scalars().all()
+    # Scope the category selector to the active kingdom so it never offers a category the
+    # arena pool wouldn't actually serve (kingdom=all -> k_ids is None -> no filtering).
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    if k_ids is not None:
+        cats = [c for c in cats if c.id in k_ids]
     # `coming_soon`: a category with no tasks is a roadmap placeholder (e.g. Fungi/Animals/
     # Microbes) — it self-activates the moment its first task is added. No schema flag.
     return {
@@ -522,9 +663,13 @@ def api_next(
     if mode == "calibration":
         payload = _build_calibration_comparison(db, request.state.session_id)
     elif mode == "kwise":
-        payload = _build_kwise_comparison(db, request.state.session_id, criterion, category)
+        payload = _build_kwise_comparison(
+            db, request.state.session_id, criterion, category, kingdom=request.state.kingdom
+        )
     else:
-        payload = _build_comparison(db, request.state.session_id, criterion, category)
+        payload = _build_comparison(
+            db, request.state.session_id, criterion, category, kingdom=request.state.kingdom
+        )
     if payload is None:
         return JSONResponse({"error": "no-comparisons-available"}, status_code=404)
     return payload
@@ -571,8 +716,8 @@ def api_vote(
     else:
         service.apply_vote(db, vote)
     db.commit()
-    # Keep the same criterion/category filter for the follow-up comparison.
-    nxt = _build_comparison(db, sid, criterion, category)
+    # Keep the same criterion/category filter (+ active kingdom) for the follow-up comparison.
+    nxt = _build_comparison(db, sid, criterion, category, kingdom=request.state.kingdom)
     return {"status": "ok", "next": nxt}
 
 
@@ -603,7 +748,7 @@ def api_kvote(
     service.resolve_kballot(db, ballot, kvote_in.best_output_id, sid)
     integrity.note_vote(db, sid)  # ONE rate-accounting per ballot, not per derived vote
     db.commit()
-    nxt = _build_kwise_comparison(db, sid, criterion, category)
+    nxt = _build_kwise_comparison(db, sid, criterion, category, kingdom=request.state.kingdom)
     return {"status": "ok", "next": nxt}
 
 
@@ -633,40 +778,52 @@ def _leaderboard_rows(
     criterion_slug: str = "overall",
     category_slug: str | None = None,
     paradigm: str | None = None,
+    kingdom: str = "all",
 ) -> list[dict]:
     crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
     if crit is None:
         return []
     category_id = _resolve_category_id(db, category_slug)
-    scope = (
-        Rating.category_id.is_(None) if category_id is None else Rating.category_id == category_id
-    )
-    ratings = (
-        db.execute(select(Rating).where(Rating.criterion_id == crit.id, scope)).scalars().all()
-    )
     ref_gens = service.mode_a_excluded_generator_ids(db)
     names = service.generator_display_names(db)
-    rows = []
-    for r in ratings:
-        if r.generator_id in ref_gens:
-            continue  # GT/reference scans don't compete in the Mode-A perceptual board
-        gen = db.get(Generator, r.generator_id)
-        if gen is None:
-            continue  # stale rating row (generator deleted); skip rather than crash
-        if paradigm and gen.paradigm != paradigm:
-            continue
-        rows.append(
-            {
-                "generator": names.get(r.generator_id, gen.name),
-                "kind": gen.kind,
-                "paradigm": gen.paradigm,
-                "elo": round(r.elo, 1),
-                "bt_score": round(r.bt_score, 1),
-                "bt_lower": round(r.bt_lower, 1),
-                "bt_upper": round(r.bt_upper, 1),
-                "n_games": r.n_games,
-            }
+    k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
+    if k_ids is not None:
+        # A kingdom (≠ "all") is active: the cached `Rating` table is keyed by a single
+        # category_id and cannot represent a SET of categories, so compute live instead
+        # (mirrors verified_leaderboard_rows's on-demand-BT path — see kingdom_leaderboard_rows).
+        ids = _effective_category_ids(k_ids, category_id)
+        rows = service.kingdom_leaderboard_rows(db, criterion_slug, ids)
+        rows = [r for r in rows if not paradigm or r["paradigm"] == paradigm]
+    else:
+        scope = (
+            Rating.category_id.is_(None)
+            if category_id is None
+            else Rating.category_id == category_id
         )
+        ratings = (
+            db.execute(select(Rating).where(Rating.criterion_id == crit.id, scope)).scalars().all()
+        )
+        rows = []
+        for r in ratings:
+            if r.generator_id in ref_gens:
+                continue  # GT/reference scans don't compete in the Mode-A perceptual board
+            gen = db.get(Generator, r.generator_id)
+            if gen is None:
+                continue  # stale rating row (generator deleted); skip rather than crash
+            if paradigm and gen.paradigm != paradigm:
+                continue
+            rows.append(
+                {
+                    "generator": names.get(r.generator_id, gen.name),
+                    "kind": gen.kind,
+                    "paradigm": gen.paradigm,
+                    "elo": round(r.elo, 1),
+                    "bt_score": round(r.bt_score, 1),
+                    "bt_lower": round(r.bt_lower, 1),
+                    "bt_upper": round(r.bt_upper, 1),
+                    "n_games": r.n_games,
+                }
+            )
     # Rank + CI-bar geometry are computed WITHIN each paradigm group, never across
     # paradigms — cross-paradigm BT comparisons are the confound this project removes
     # (spec §D). When a single paradigm filter is active there is exactly one group,
@@ -752,12 +909,21 @@ def leaderboard(
     paradigm: str | None = None,
     verified: bool = False,
 ):
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
     paradigm = paradigm or None  # "" (unset <select>) and None both mean "no filter"
-    rows = (
-        service.verified_leaderboard_rows(db, criterion, category)
-        if verified
-        else _leaderboard_rows(db, criterion, category, paradigm)
-    )
+    kingdom = request.state.kingdom
+    k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
+    if verified:
+        cat_ids = (
+            _effective_category_ids(k_ids, _resolve_category_id(db, category))
+            if k_ids is not None
+            else None
+        )
+        rows = service.verified_leaderboard_rows(db, criterion, category, category_ids=cat_ids)
+    else:
+        rows = _leaderboard_rows(db, criterion, category, paradigm, kingdom)
     total = matchmaking.total_votes(db)
     cats = db.execute(select(Category)).scalars().all()
     crits = db.execute(select(Criterion)).scalars().all()
@@ -799,7 +965,12 @@ def leaderboard(
             "bias": service.compute_bias(db),
             "sel_criterion": criterion,
             "sel_category": category,
-            "judge_rows": _judge_leaderboard_rows(db, criterion, "multi4"),
+            # VLM judge board is global-only (JudgeRating.category_id.is_(None) — no
+            # kingdom-scoped judge ranking yet); hide it rather than show an unscoped board
+            # under an active kingdom filter (deferred — see task-6 report).
+            "judge_rows": []
+            if k_ids is not None
+            else _judge_leaderboard_rows(db, criterion, "multi4"),
             "verified": verified,
         },
     )
@@ -827,8 +998,118 @@ def api_leaderboard(
     }
 
 
+def _model_cards(db: Session, k_ids: set[int] | None) -> list[dict]:
+    """Per-generator directory rows for /models: coverage stats + overall BT score, matched
+    by the same unique display name `coverage_summary`/`_leaderboard_rows` compute internally
+    (both derive it from `service.generator_display_names`, so matching on it is safe). No
+    fabricated org/company field — `Generator` has none (name/kind/paradigm/description only).
+    """
+    names = service.generator_display_names(db)
+    cov_by_name = {
+        r["generator"]: r for r in service.coverage_summary(db, category_ids=k_ids)["generators"]
+    }
+    bt_by_name = {r["generator"]: r for r in _leaderboard_rows(db, "overall", "all", None)}
+
+    cards = []
+    for g in db.execute(select(Generator)).scalars().all():
+        disp_name = names.get(g.id, g.name)
+        cov = cov_by_name.get(disp_name)
+        if cov is None:
+            continue  # gold-only / empty generators don't appear (mirrors coverage_summary)
+        bt = bt_by_name.get(disp_name)
+        cards.append(
+            {
+                "slug": g.slug,
+                "name": disp_name,
+                "kind": g.kind,
+                "paradigm": g.paradigm,
+                "paradigm_display": paradigms.DISPLAY_NAMES.get(g.paradigm, g.paradigm)
+                if g.paradigm
+                else "",
+                "description": g.description,
+                "bt_score": bt["bt_score"] if bt else None,
+                "votes": cov["votes"],
+                "tasks": cov["tasks"],
+                "confidence": cov["confidence"],
+            }
+        )
+    # BT score desc; generators without a score (no overall rating yet) sink to the bottom.
+    cards.sort(key=lambda c: (c["bt_score"] is None, -(c["bt_score"] or 0), c["name"]))
+    return cards
+
+
+@app.get("/models", response_class=HTMLResponse)
+def models_index(request: Request, db: Session = Depends(get_db)):
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    return templates.TemplateResponse(
+        request,
+        "models.html",
+        {"cards": _model_cards(db, k_ids)},
+    )
+
+
+@app.get("/models/{slug}", response_class=HTMLResponse)
+def model_detail(slug: str, request: Request, db: Session = Depends(get_db)):
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
+    gen = db.execute(select(Generator).where(Generator.slug == slug)).scalars().first()
+    if gen is None:
+        raise HTTPException(404, "Unknown generator")
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    cards = _model_cards(db, k_ids)
+    card = next((c for c in cards if c["slug"] == slug), None)
+
+    outs = [o for o in gen.outputs if not o.is_gold and o.hidden_at is None]
+    by_task: dict[int, dict] = {}
+    for o in outs:
+        t = o.task
+        if t is None:
+            continue
+        row = by_task.setdefault(
+            t.id,
+            {
+                "task": t.title,
+                "category": t.category.name if t.category else "",
+                "outputs": 0,
+                "votes": 0,
+            },
+        )
+        row["outputs"] += 1
+        row["votes"] += o.n_comparisons
+    task_rows = sorted(by_task.values(), key=lambda r: (-r["outputs"], r["task"]))
+
+    samples = []
+    for o in outs[:6]:
+        samples.append(
+            {
+                "id": o.id,
+                "title": o.title or (o.task.title if o.task else ""),
+                "asset_url": storage.url_for(o.asset_path),
+                "format": o.asset_format,
+            }
+        )
+
+    return templates.TemplateResponse(
+        request,
+        "model_detail.html",
+        {
+            "gen": gen,
+            "card": card,
+            "task_rows": task_rows,
+            "samples": samples,
+        },
+    )
+
+
 @app.get("/dataset", response_class=HTMLResponse)
-def dataset_page(request: Request):
+def dataset_page(request: Request, db: Session = Depends(get_db)):
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
     releases_dir = config.RELEASES_DIR
     releases = []
     if releases_dir.is_dir():
@@ -836,7 +1117,11 @@ def dataset_page(request: Request):
             vf = d / "VERSION"
             if d.is_dir() and vf.is_file():
                 releases.append({"version": d.name, "version_text": vf.read_text()})
-    return templates.TemplateResponse(request, "dataset.html", {"releases": releases})
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    composition = dataset.dataset_composition(db, k_ids)
+    return templates.TemplateResponse(
+        request, "dataset.html", {"releases": releases, "composition": composition}
+    )
 
 
 @app.get("/methodology", response_class=HTMLResponse)
@@ -874,7 +1159,11 @@ def licenses_page(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/coverage", response_class=HTMLResponse)
 def coverage_page(request: Request, db: Session = Depends(get_db)):
-    summary = service.coverage_summary(db)
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    summary = service.coverage_summary(db, category_ids=k_ids)
     return templates.TemplateResponse(
         request,
         "coverage.html",
@@ -953,7 +1242,26 @@ def significance_page(
     criterion: str = "overall",
     category: str = "all",
 ):
-    sig = service.compute_significance(db, criterion, _resolve_category_id(db, category))
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
+    category_id = _resolve_category_id(db, category)
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    if k_ids is not None:
+        sig = service.compute_significance(
+            db, criterion, category_ids=_effective_category_ids(k_ids, category_id)
+        )
+    else:
+        sig = service.compute_significance(db, criterion, category_id)
+    # Forest-plot CI bounds: REUSE the leaderboard's cached BT confidence interval per
+    # generator (same kingdom scoping the leaderboard route branches on) rather than
+    # computing new stats — bt_lower/bt_upper are absolute values so merging rows across
+    # paradigm groups here is safe even though _leaderboard_rows computes rank/percent
+    # geometry per-paradigm internally. A generator sig.ranked knows about but that has no
+    # leaderboard row (scope mismatch) simply has no entry; the template renders it as a
+    # bare point rather than fabricating an interval.
+    lb_rows = _leaderboard_rows(db, criterion, category, None, request.state.kingdom)
+    ci_map = {r["generator"]: (r["bt_lower"], r["bt_upper"]) for r in lb_rows}
     cats = db.execute(select(Category)).scalars().all()
     crits = db.execute(select(Criterion)).scalars().all()
     category_options = [
@@ -979,6 +1287,7 @@ def significance_page(
             "bias": service.compute_bias(db),
             "category_options": category_options,
             "criterion_options": criterion_options,
+            "ci_map": ci_map,
         },
     )
 
@@ -988,20 +1297,117 @@ def significance_page(
 
 @app.get("/tasks", response_class=HTMLResponse)
 def tasks_page(request: Request, db: Session = Depends(get_db)):
-    tasks = db.execute(select(Task)).scalars().all()
+    from sqlalchemy import func
+
+    from .models import ReconTask, TaskDifficulty
+
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    stmt = select(Task).order_by(Task.id)
+    if k_ids is not None:
+        stmt = stmt.where(Task.category_id.in_(k_ids))
+    tasks = db.execute(stmt).scalars().all()
+    task_ids = [t.id for t in tasks]
+
+    # Real vote totals per task (non-gold decisive votes) — reused for both the per-row
+    # VOTES column and the "votes across tasks" stat card, so the two numbers can never
+    # silently disagree.
+    vote_counts: dict[int, int] = (
+        dict(
+            db.execute(
+                select(Comparison.task_id, func.count(Vote.id))
+                .select_from(Vote)
+                .join(Comparison, Vote.comparison_id == Comparison.id)
+                .where(Comparison.is_gold.is_(False), Comparison.task_id.in_(task_ids))
+                .group_by(Comparison.task_id)
+            ).all()
+        )
+        if task_ids
+        else {}
+    )
+
+    # Difficulty tier, keyed by task — same table/join the /difficulty page reads from.
+    # Tasks without a curated row simply have no tier (shown as "—"), never a guess.
+    tier_by_task: dict[int, str] = (
+        dict(
+            db.execute(
+                select(TaskDifficulty.task_id, TaskDifficulty.tier).where(
+                    TaskDifficulty.task_id.in_(task_ids)
+                )
+            ).all()
+        )
+        if task_ids
+        else {}
+    )
+
+    # Latin binomial, keyed by task — same ReconTask.species_name the /difficulty page's
+    # tier_species header line reads. Tasks with no recon-GT bundle fall back to the title.
+    species_by_task: dict[int, str] = (
+        dict(
+            db.execute(
+                select(ReconTask.task_id, ReconTask.species_name).where(
+                    ReconTask.task_id.in_(task_ids)
+                )
+            ).all()
+        )
+        if task_ids
+        else {}
+    )
+
+    # Distinct paradigms actually exercised by non-gold outputs in scope — the third stat
+    # card. Omitted entirely (not zeroed) if nothing is tagged, so the card never fakes 0.
+    paradigm_stmt = (
+        (
+            select(Generator.paradigm)
+            .distinct()
+            .join(ModelOutput, ModelOutput.generator_id == Generator.id)
+            .where(ModelOutput.is_gold.is_(False), ModelOutput.task_id.in_(task_ids))
+        )
+        if task_ids
+        else None
+    )
+    paradigms_exercised = (
+        {p for p in db.execute(paradigm_stmt).scalars().all() if p}
+        if paradigm_stmt is not None
+        else set()
+    )
+
+    def _paradigm_label(t: Task) -> str:
+        tagged = {o.generator.paradigm for o in t.outputs if not o.is_gold and o.generator.paradigm}
+        if len(tagged) == 1:
+            return paradigms.DISPLAY_NAMES.get(next(iter(tagged)), next(iter(tagged)))
+        if len(tagged) > 1:
+            return "Multiple"
+        return "—"
+
     rows = []
     for t in tasks:
+        cat = t.category
+        kingdom = kingdoms.KINGDOM_OF.get(cat.slug, "all")
+        species_name = species_by_task.get(t.id) or ""
         rows.append(
             {
                 "id": t.id,
                 "title": t.title,
                 "prompt": t.prompt,
-                "category": t.category.name,
+                "category": cat.name,
                 "n_outputs": len(t.outputs),
                 "active": t.active,
+                "kingdom_emoji": kingdoms.KINGDOM_EMOJI.get(kingdom, kingdoms.KINGDOM_EMOJI["all"]),
+                "species_name": species_name,
+                "paradigm": _paradigm_label(t),
+                "tier": tier_by_task.get(t.id),
+                "votes": vote_counts.get(t.id, 0),
             }
         )
-    return templates.TemplateResponse(request, "tasks.html", {"tasks": rows})
+    stats = {
+        "live_tasks": sum(1 for t in tasks if t.active),
+        "votes_total": sum(vote_counts.values()) if vote_counts else None,
+        "n_paradigms": len(paradigms_exercised) if paradigms_exercised else None,
+    }
+    return templates.TemplateResponse(request, "tasks.html", {"tasks": rows, "stats": stats})
 
 
 @app.get("/spotlight", response_class=HTMLResponse)
@@ -1009,6 +1415,9 @@ def spotlight_index(request: Request):
     from . import spotlight
 
     subjects = sorted(spotlight.SPOTLIGHTS, key=lambda s: (not s["featured"], s["order"]))
+    kingdom = kingdoms.normalize_kingdom(request.state.kingdom)
+    if kingdom != "all":
+        subjects = [s for s in subjects if s.get("kingdom") == kingdom]
     return templates.TemplateResponse(request, "spotlight_index.html", {"subjects": subjects})
 
 
@@ -1148,15 +1557,20 @@ def admin_rescore(token: str = Form(...), db: Session = Depends(get_db)):
     return JSONResponse({"status": "rescored", "detail": detail, "organ": organ_detail})
 
 
-def _default_benchmark_task_id(db: Session) -> int | None:
+def _default_benchmark_task_id(db: Session, category_ids: set[int] | None = None) -> int | None:
     """Return the first task_id that has a ReconTask row AND at least one ok Metric.
 
     Falls back to tasks[0].id if no scored task exists yet. Returns None if no tasks.
     Used by benchmark_page to avoid defaulting to an unscored task (P1-3 fix).
+    `category_ids` (when given) restricts candidates to the active kingdom, mirroring the
+    picker list built by benchmark_page.
     """
     from .models import Metric, ReconTask, Task
 
-    tasks = db.execute(select(Task)).scalars().all()
+    stmt = select(Task)
+    if category_ids is not None:
+        stmt = stmt.where(Task.category_id.in_(category_ids))
+    tasks = db.execute(stmt).scalars().all()
     if not tasks:
         return None
     for t in tasks:
@@ -1181,9 +1595,16 @@ def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int
     from . import recon_service
     from .models import Task
 
-    tasks = db.execute(select(Task)).scalars().all()
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    stmt = select(Task)
+    if k_ids is not None:
+        stmt = stmt.where(Task.category_id.in_(k_ids))
+    tasks = db.execute(stmt).scalars().all()
     if task_id is None and tasks:
-        task_id = _default_benchmark_task_id(db)
+        task_id = _default_benchmark_task_id(db, category_ids=k_ids)
     board = recon_service.recon_method_leaderboard(db, task_id) if task_id else []
     confounds = recon_service.recon_confounds(db, task_id) if task_id else None
     agree = (
@@ -1233,14 +1654,15 @@ def api_benchmark(db: Session = Depends(get_db), task_id: int | None = None):
 
 
 @app.get("/api/export.json")
-def export_dataset(db: Session = Depends(get_db)):
+def export_dataset(request: Request, db: Session = Depends(get_db)):
     """Reproducible research export: every decided comparison with full provenance.
 
-    Generators are revealed here (post-hoc), enabling offline ranking studies.
+    Generators are revealed here (post-hoc), enabling offline ranking studies. Scoped by the
+    active kingdom (query param / cookie), matching every other data page (`all` == unfiltered).
     """
     from . import dataset as dataset_mod
 
-    return dataset_mod.build_preference_records(db)
+    return dataset_mod.build_preference_records(db, kingdom=request.state.kingdom)
 
 
 @app.get("/difficulty", response_class=HTMLResponse)
@@ -1248,16 +1670,23 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
     """Render the per-tier objective scorecard + the cross-tier degradation gradient."""
     from .models import ReconTask, Task, TaskDifficulty
 
-    scorecard = difficulty.tier_scorecard(db)
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    scorecard = difficulty.tier_scorecard(db, category_ids=k_ids)
     tiers = list(difficulty.TIERS)
 
     # Species sitting in each tier (for the per-tier header line).
     tier_species: dict[str, list[str]] = {}
-    rows = db.execute(
+    stmt = (
         select(TaskDifficulty, Task, ReconTask)
         .join(Task, Task.id == TaskDifficulty.task_id)
         .join(ReconTask, ReconTask.task_id == TaskDifficulty.task_id, isouter=True)
-    ).all()
+    )
+    if k_ids is not None:
+        stmt = stmt.where(Task.category_id.in_(k_ids))
+    rows = db.execute(stmt).all()
     for td, task, rt in rows:
         name = (rt.species_name if rt else None) or task.title
         tier_species.setdefault(td.tier, []).append(name)
@@ -1278,9 +1707,11 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
     ]
     gradient.sort(key=lambda g: g["generator"].lower())
 
+    # perceptual/trait_tiers/reliability stay global (JudgeVote/TraitScore paths have no
+    # category-scoping wired yet — see report for the explicit scoped-vs-global split).
     perceptual = service.tier_perceptual_ranking(db)
     trait_tiers = service.tier_trait_accuracy(db)
-    paradigm_grid = difficulty.paradigm_tier_scorecard(db)
+    paradigm_grid = difficulty.paradigm_tier_scorecard(db, category_ids=k_ids)
     # Reference/capture-quality triage: taxa where recon completeness is far below text (the
     # recon INPUT is suspect). Sorted by gap desc; flagged ones shown first.
     from .completeness import recon_reliability_flags

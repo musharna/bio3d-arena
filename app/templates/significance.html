@@ -1,8 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Significance · Bio 3D Arena{% endblock %}
 {% block content %}
-<section class="board">
-  <h2>Statistical significance <span class="subtle">— is A meaningfully ahead?</span></h2>
+<section class="board sig">
+  <header class="b3d-page-head">
+    <h1>Statistical significance {% include "_scope_pill.html" %}</h1>
+    <p class="b3d-page-lede">
+      Bradley–Terry ratings carry uncertainty. Two models are only <b>meaningfully</b>
+      ranked apart when their 95% confidence intervals don't overlap.
+    </p>
+  </header>
+
   <form class="filter-row" method="get" action="/significance">
     <label>Category
       <select name="category" onchange="this.form.submit()">
@@ -26,6 +33,100 @@
     <b>significantly</b> ahead of the next rank when it wins ≥95% of resamples.
   </p>
 
+  {# ---- Shared per-row "separation" pass, used by both the sigma callout and the
+        forest plot below. A row counts as "cleanly separated below the leader" only
+        when EVERY step from the leader down to it was itself significant — i.e. the
+        chained `sig_above_next` flags that compute_significance already computed via
+        bootstrap. This keeps color/copy correct even for a generator with no
+        leaderboard CI row (bare-point fallback), since it never depends on ci_map. #}
+  {% set fp_rows = [] %}
+  {% set fp_ns = namespace(chain=true) %}
+  {% for r in sig.ranked %}
+    {% set ci = ci_map.get(r.generator) %}
+    {% if loop.index0 == 0 %}
+      {% set separated = false %}
+    {% else %}
+      {% set separated = fp_ns.chain %}
+    {% endif %}
+    {% set _ = fp_rows.append({'generator': r.generator, 'score': r.score, 'ci': ci, 'separated': separated}) %}
+    {% set fp_ns.chain = fp_ns.chain and r.sig_above_next %}
+  {% endfor %}
+  {% set fp_tied = fp_rows[1:] | rejectattr('separated') | list %}
+
+  <div class="sig-callout">
+    <span class="sig-callout-icon" aria-hidden="true">σ</span>
+    <p>
+      {% if fp_tied %}
+      {{ fp_tied | length }} model{{ 's' if fp_tied | length != 1 else '' }} overlap
+      <b>{{ fp_rows[0].generator }}</b>'s 95% interval, so the gap at the top is not
+      yet statistically significant.
+      {% else %}
+      <b>{{ fp_rows[0].generator }}</b> leads with no overlapping intervals — a
+      statistically clean #1 at this scope.
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="diff-panel">
+    <h2>Rating intervals <span class="subtle">— BT score ± 95% CI</span></h2>
+    <p class="subtle">
+      Dashed line marks the leader. Grey intervals are cleanly separated below it;
+      accent intervals still overlap the leader's rank — not yet distinguishable.
+      A bare dot means no leaderboard confidence interval is available for that
+      generator at this scope.
+    </p>
+    {% set fp_have = [] %}
+    {% for row in fp_rows %}{% if row.ci %}{% set _ = fp_have.append(row.ci[0]) %}{% set _ = fp_have.append(row.ci[1]) %}{% endif %}{% endfor %}
+    {% set fp_scores = fp_rows | map(attribute='score') | list %}
+    {% set fp_all = fp_have + fp_scores %}
+    {% set fp_lo = fp_all | min %}
+    {% set fp_hi = fp_all | max %}
+    {% set fp_pad = ((fp_hi - fp_lo) * 0.05) if (fp_hi - fp_lo) > 0 else 1.0 %}
+    {% set fp_dmin = fp_lo - fp_pad %}
+    {% set fp_dmax = fp_hi + fp_pad %}
+    {% set fp_span = (fp_dmax - fp_dmin) if (fp_dmax - fp_dmin) > 0 else 1.0 %}
+    {% set fp_px0 = 232 %}
+    {% set fp_px1 = 628 %}
+    {% macro fp_x(v, dmin, span, px0, px1) %}{{ (px0 + (v - dmin) / span * (px1 - px0)) | round(1) }}{% endmacro %}
+    {% set fp_rowh = 30 %}
+    {% set fp_top = 36 %}
+    {% set fp_h = fp_top + (fp_rows | length) * fp_rowh + 12 %}
+    {% set fp_leader_x = fp_x(fp_rows[0].score, fp_dmin, fp_span, fp_px0, fp_px1) | float %}
+    <svg
+      class="forest-svg"
+      viewBox="0 0 792 {{ fp_h }}"
+      role="img"
+      aria-label="Bradley-Terry rating intervals with 95% confidence, one row per generator; the dashed line marks the leader's score."
+    >
+      {% for t in range(5) %}
+      {% set tval = fp_dmin + fp_span * t / 4 %}
+      {% set tx = fp_x(tval, fp_dmin, fp_span, fp_px0, fp_px1) %}
+      <line x1="{{ tx }}" x2="{{ tx }}" y1="{{ fp_top - 6 }}" y2="{{ fp_h - 14 }}" class="diff-axis-line" />
+      <text x="{{ tx }}" y="{{ fp_top - 12 }}" text-anchor="middle" class="diff-axis-tick">{{ tval | round | int }}</text>
+      {% endfor %}
+      <line x1="{{ fp_leader_x }}" x2="{{ fp_leader_x }}" y1="{{ fp_top - 6 }}" y2="{{ fp_h - 14 }}" class="forest-leader-line" />
+      {% for row in fp_rows %}
+      {% set y = fp_top + loop.index0 * fp_rowh + fp_rowh / 2 %}
+      {% set row_cls = 'forest-sep' if row.separated else 'forest-lead' %}
+      <text x="14" y="{{ y + 4 }}" class="forest-name{{ ' forest-name-lead' if loop.index0 == 0 else '' }}">{{ row.generator }}</text>
+      {% if row.ci %}
+      {% set xlo = fp_x(row.ci[0], fp_dmin, fp_span, fp_px0, fp_px1) %}
+      {% set xhi = fp_x(row.ci[1], fp_dmin, fp_span, fp_px0, fp_px1) %}
+      {% set xpt = fp_x(row.score, fp_dmin, fp_span, fp_px0, fp_px1) %}
+      <line x1="{{ xlo }}" x2="{{ xhi }}" y1="{{ y }}" y2="{{ y }}" class="{{ row_cls }}-whisker" />
+      <line x1="{{ xlo }}" x2="{{ xlo }}" y1="{{ y - 4 }}" y2="{{ y + 4 }}" class="{{ row_cls }}-whisker" />
+      <line x1="{{ xhi }}" x2="{{ xhi }}" y1="{{ y - 4 }}" y2="{{ y + 4 }}" class="{{ row_cls }}-whisker" />
+      <circle cx="{{ xpt }}" cy="{{ y }}" r="4.5" class="{{ row_cls }}-dot" />
+      <text x="644" y="{{ y + 4 }}" class="forest-value mono">{{ row.score }} ±{{ ((row.ci[1] - row.ci[0]) / 2) | round(1) }}</text>
+      {% else %}
+      {% set xpt = fp_x(row.score, fp_dmin, fp_span, fp_px0, fp_px1) %}
+      <circle cx="{{ xpt }}" cy="{{ y }}" r="4.5" class="forest-bare-dot" />
+      <text x="644" y="{{ y + 4 }}" class="forest-value mono">{{ row.score }}</text>
+      {% endif %}
+      {% endfor %}
+    </svg>
+  </div>
+
   <h3>Ranking with confidence</h3>
   <table class="ranktable">
     <thead><tr><th>#</th><th>Generator</th><th>BT score</th>
@@ -45,33 +146,35 @@
     </tbody>
   </table>
 
-  <h3>Pairwise P(row ranks above column)</h3>
-  <div class="matrix-wrap">
-  <table class="matrix">
-    <thead><tr><th></th>{% for l in sig.labels %}<th>{{ l }}</th>{% endfor %}</tr></thead>
-    <tbody>
-      {% for row in sig.matrix %}
-      {% set ri = loop.index0 %}
-      <tr>
-        <th>{{ sig.labels[ri] }}</th>
-        {% for p in row %}
-        <td class="mc {% if loop.index0 == ri %}mc-self{% elif p >= 0.95 %}mc-hi{% elif p >= 0.75 %}mc-mid{% elif p <= 0.05 %}mc-lo{% elif p <= 0.25 %}mc-lomid{% else %}mc-na{% endif %}">{% if loop.index0 != ri %}{% if p >= 0.75 %}▲ {% elif p <= 0.25 %}▼ {% endif %}{% endif %}{{ '%.2f'|format(p) }}</td>
+  <div class="diff-panel">
+    <h3>Pairwise P(row ranks above column)</h3>
+    <div class="matrix-wrap">
+    <table class="matrix">
+      <thead><tr><th></th>{% for l in sig.labels %}<th>{{ l }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for row in sig.matrix %}
+        {% set ri = loop.index0 %}
+        <tr>
+          <th>{{ sig.labels[ri] }}</th>
+          {% for p in row %}
+          <td class="mc {% if loop.index0 == ri %}mc-self{% elif p >= 0.95 %}mc-hi{% elif p >= 0.75 %}mc-mid{% elif p <= 0.05 %}mc-lo{% elif p <= 0.25 %}mc-lomid{% else %}mc-na{% endif %}">{% if loop.index0 != ri %}{% if p >= 0.75 %}▲ {% elif p <= 0.25 %}▼ {% endif %}{% endif %}{{ '%.2f'|format(p) }}</td>
+          {% endfor %}
+        </tr>
         {% endfor %}
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  <div class="matrix-legend">
-    <span><span class="swatch" style="background:#2f6fed"></span>▲ row clearly ahead (≥0.95)</span>
-    <span><span class="swatch" style="background:#8fb3f4"></span>leans row (≥0.75)</span>
-    <span><span class="swatch" style="background:#2a3548"></span>uncertain (~0.5)</span>
-    <span><span class="swatch" style="background:#e6b277"></span>leans column (≤0.25)</span>
-    <span><span class="swatch" style="background:#c2701a"></span>▼ column clearly ahead (≤0.05)</span>
-    <span class="subtle">Cell = P(row ranks above column).</span>
+      </tbody>
+    </table>
+    </div>
+    <div class="matrix-legend">
+      <span><span class="swatch swatch-hi"></span>▲ row clearly ahead (≥0.95)</span>
+      <span><span class="swatch swatch-mid"></span>leans row (≥0.75)</span>
+      <span><span class="swatch swatch-na"></span>uncertain (~0.5)</span>
+      <span><span class="swatch swatch-lomid"></span>leans column (≤0.25)</span>
+      <span><span class="swatch swatch-lo"></span>▼ column clearly ahead (≤0.05)</span>
+      <span class="subtle">Cell = P(row ranks above column).</span>
+    </div>
   </div>
   {% else %}
-  <p>Not enough data for this slice yet. Cast votes in the <a href="/">Arena</a>.</p>
+  <p>Not enough data for this slice yet. Cast votes in the <a href="/arena">Arena</a>.</p>
   {% endif %}
 
   <h3>Bias audit <span class="subtle">— position &amp; format</span></h3>

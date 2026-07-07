@@ -1,0 +1,2365 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2L20.66 7V17L12 22L3.34 17V7Z' fill='%2310271a' stroke='%233ea564' stroke-width='1.5' stroke-linejoin='round'/%3E%3Cpath d='M10.6 20C10.85 19.3 11 16.2 11.4 12.7L12.6 12.7C13 16.2 13.15 19.3 13.4 20Z' fill='%238a6a45'/%3E%3Cg transform='translate(2.64 4.7) scale(0.78 0.78)'%3E%3Cpath d='M8.5 13.8C6.2 13.6 5 12 5 10.4C4.2 9.4 4.6 7.6 6 7.1C6.2 5.4 8 4.4 9.6 5.1C10.6 3.9 13.4 3.9 14.4 5.1C16 4.4 17.8 5.4 18 7.1C19.4 7.6 19.8 9.4 19 10.4C19 12 17.8 13.6 15.5 13.8Z' fill='%23237a45'/%3E%3Cpath d='M9.2 12.9C7.5 12.7 6.5 11.6 6.6 10.3C6 9.5 6.4 8.3 7.4 8C7.6 6.8 8.9 6.1 10 6.7C10.8 5.9 13.2 5.9 14 6.7C15.1 6.1 16.4 6.8 16.6 8C17.6 8.3 18 9.5 17.4 10.3C17.5 11.6 16.5 12.7 14.8 12.9Z' fill='%233ea564'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+  html,body{margin:0}
+  body{background:#151922;-webkit-font-smoothing:antialiased;font-family:'IBM Plex Sans',system-ui,sans-serif;}
+  @keyframes b3d-spin{to{transform:rotate(360deg)}}
+  @keyframes b3d-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  @keyframes b3d-rise-sm{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+  @keyframes b3d-grow-x{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  @keyframes b3d-pop{0%{opacity:0;transform:scale(0.9)}60%{transform:scale(1.03)}100%{opacity:1;transform:scale(1)}}
+  @keyframes b3d-draw{to{stroke-dashoffset:0}}
+  @keyframes b3d-medal-drop{0%{opacity:0;transform:translateY(-14px) scale(0.8)}100%{opacity:1;transform:none}}
+  @keyframes b3d-fade-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  @keyframes b3d-medal-shine{0%,100%{transform:rotate(-7deg) scale(1)}50%{transform:rotate(7deg) scale(1.08)}}
+  @keyframes b3d-confetti{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(var(--cx),var(--cy)) rotate(var(--cr))}}
+  @keyframes b3d-breathe{0%,100%{opacity:0.5;transform:scale(0.9)}50%{opacity:1;transform:scale(1)}}
+  a:focus-visible,button:focus-visible,[role="button"]:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent,#6b7cff) !important; outline-offset:2px; border-radius:8px;}
+  @media (prefers-reduced-motion: reduce){ *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;} }
+  @media (max-width:1120px){ .b3d-kstats{display:none !important;} }
+  @media (max-width:760px){
+    .b3d-aside{transform:translateX(-100%) !important;}
+    .b3d-aside.b3d-aside-open{transform:translateX(0) !important; z-index:60 !important; box-shadow:0 0 40px rgba(0,0,0,0.5) !important;}
+    .b3d-burger{display:flex !important;}
+    .b3d-mainwrap{margin-left:0 !important;}
+    .b3d-topnav{display:none !important;}
+    .b3d-pair{grid-template-columns:1fr !important;}
+    .b3d-stage{height:300px !important;}
+    .b3d-nav{flex-wrap:wrap !important; justify-content:center !important; gap:3px !important;}
+    .b3d-kgrid{grid-template-columns:1fr !important;}
+    .b3d-hero-grid{grid-template-columns:1fr !important;}
+    .b3d-hero-grid > div:first-child{text-align:center !important;}
+    .b3d-hero-grid > div:first-child > div{justify-content:center !important;}
+    .b3d-hero-viz{order:-1;}
+    .b3d-strip{flex-direction:column !important; align-items:flex-start !important; gap:12px !important;}
+    .b3d-strip-selects{width:100% !important;}
+    .b3d-main{padding-left:16px !important; padding-right:16px !important;}
+    .b3d-kbar{overflow-x:auto !important;}
+    .b3d-votewrap{position:sticky !important; bottom:10px !important; z-index:20 !important;}
+    .b3d-votebar{flex-wrap:wrap !important; gap:7px !important; width:100% !important;}
+    .b3d-votebar button{flex:1 1 44% !important; justify-content:center !important; padding:12px 10px !important;}
+  }
+  .b3d-navhead{display:flex; align-items:center; gap:10px; padding:2px 4px 12px;}
+  .b3d-aside-collapsed .b3d-navhead{flex-direction:column; gap:9px; padding:2px 0 12px;}
+  .b3d-aside-collapsed .b3d-navtoggle{margin-left:0 !important;}
+  /* ---- real 3D viewer registry (viewer.js) ---- */
+  .viewer-slot{position:relative; width:100%; height:100%; overflow:hidden; background:radial-gradient(130% 100% at 50% 30%, var(--stage1), var(--stage2) 70%);}
+  .viewer-slot model-viewer{width:100%; height:100%; --poster-color:transparent; background-color:transparent;}
+  .viewer-slot canvas{display:block;}
+  .viewer-hint{position:absolute; left:50%; bottom:12px; transform:translateX(-50%); background:var(--ctlBg); color:var(--muted); font-family:'IBM Plex Mono',monospace; font-size:11px; padding:4px 11px; border-radius:999px; border:1px solid var(--border); pointer-events:none; opacity:0; transition:opacity .4s; z-index:3;}
+  .viewer-slot:hover .viewer-hint{opacity:1;}
+  .viewer-controls{position:absolute; top:14px; right:14px; display:flex; gap:6px; z-index:4; opacity:0.6; transition:opacity .15s ease; pointer-events:auto;}
+  .viewer-slot:hover .viewer-controls{opacity:1;}
+  .viewer-ctl{width:31px; height:31px; display:flex; align-items:center; justify-content:center; padding:0; font-size:14px; line-height:1; color:var(--text); background:var(--ctlBg); border:1px solid var(--border); border-radius:8px; cursor:pointer; transition:background .12s, border-color .12s;}
+  .viewer-ctl:hover{background:var(--panel2); border-color:color-mix(in oklch, var(--accent) 50%, var(--border));}
+  .viewer-ctl:focus-visible{outline:2px solid var(--accent2); outline-offset:2px;}
+  @media (hover:none){ .viewer-controls{opacity:1;} }
+  .viewer-loading,.viewer-error{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:12px; color:var(--faint); font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.04em; z-index:2; text-align:center; padding:0 1rem; background:var(--stage2);}
+  .viewer-error{color:var(--amber);}
+  .viewer-spinner{width:34px; height:34px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:b3d-spin 0.8s linear infinite;}
+</style>
+<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
+<script src="./viewer.js"></script>
+</helmet>
+
+<div style="{{ vars }}">
+  <button class="b3d-burger" onClick="{{ toggleMobileNav }}" aria-label="Open navigation menu" style="display:none; position:fixed; top:12px; left:12px; z-index:62; width:40px; height:40px; align-items:center; justify-content:center; flex-direction:column; gap:4px; background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:11px; cursor:pointer;">
+    <span style="width:16px; height:2px; border-radius:2px; background:var(--text);"></span>
+    <span style="width:16px; height:2px; border-radius:2px; background:var(--text);"></span>
+    <span style="width:16px; height:2px; border-radius:2px; background:var(--text);"></span>
+  </button>
+  <sc-if value="{{ navMobileOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ toggleMobileNav }}" style="position:fixed; inset:0; z-index:55; background:rgba(5,7,12,0.5);"></div>
+  </sc-if>
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="{{ asideClass }}" style="{{ asideStyle }}">
+    <div class="b3d-navhead">
+      <div onClick="{{ goArena }}" style="width:32px; height:32px; flex-shrink:0; border-radius:8px; background:color-mix(in oklch, var(--accent) 15%, var(--panel2)); border:1px solid color-mix(in oklch, var(--accent) 42%, var(--border)); display:flex; align-items:center; justify-content:center; cursor:pointer;">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" style="display:block;"><path d="M12 2L20.66 7V17L12 22L3.34 17V7Z" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/><path d="M10.6 20C10.85 19.3 11 16.2 11.4 12.7L12.6 12.7C13 16.2 13.15 19.3 13.4 20Z" fill="oklch(0.5 0.062 61)"/><g transform="translate(2.640 4.7) scale(0.78 0.78)"><path d="M8.5 13.8C6.2 13.6 5 12 5 10.4C4.2 9.4 4.6 7.6 6 7.1C6.2 5.4 8 4.4 9.6 5.1C10.6 3.9 13.4 3.9 14.4 5.1C16 4.4 17.8 5.4 18 7.1C19.4 7.6 19.8 9.4 19 10.4C19 12 17.8 13.6 15.5 13.8Z" fill="color-mix(in oklch, var(--accent) 82%, #063a1e)"/><path d="M9.2 12.9C7.5 12.7 6.5 11.6 6.6 10.3C6 9.5 6.4 8.3 7.4 8C7.6 6.8 8.9 6.1 10 6.7C10.8 5.9 13.2 5.9 14 6.7C15.1 6.1 16.4 6.8 16.6 8C17.6 8.3 18 9.5 17.4 10.3C17.5 11.6 16.5 12.7 14.8 12.9Z" fill="color-mix(in oklch, var(--accent) 92%, #eaffea)"/></g></svg>
+      </div>
+      <span style="{{ sideLabelStyle }}"><span style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; letter-spacing:-0.01em; color:var(--text);">Bio <span style="color:var(--accent);">3D</span></span></span>
+      <button onClick="{{ toggleNav }}" class="b3d-navtoggle" title="Collapse" aria-label="Toggle sidebar width" style="margin-left:auto; width:26px; height:26px; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--muted); font-size:13px; cursor:pointer;" style-hover="filter:brightness(1.12)">{{ collapseGlyph }}</button>
+    </div>
+    <sc-for list="{{ sidebarGroups }}" as="g" hint-placeholder-count="5">
+      <div style="{{ g.headingStyle }}">{{ g.heading }}</div>
+      <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="3">
+        <a onClick="{{ it.onClick }}" title="{{ it.label }}" style="{{ it.style }}" style-hover="background: color-mix(in oklch, var(--accent) 10%, transparent); color: var(--text)">
+          <span style="{{ it.iconStyle }}">{{ it.iconEl }}</span>
+          <span style="{{ it.labelStyle }}">{{ it.label }}</span>
+          <span style="{{ it.soonStyle }}">soon</span>
+        </a>
+      </sc-for>
+    </sc-for>
+    <button onClick="{{ toggleTheme }}" title="Toggle theme" aria-label="Toggle color theme" style="{{ themeBtnStyle }}" style-hover="color: var(--text)">
+      <span style="display:inline-flex; justify-content:center; width:20px; font-size:15px;">{{ themeGlyph }}</span>
+      <span style="{{ sideLabelStyle }}">Theme</span>
+    </button>
+  </aside>
+
+  <div class="b3d-mainwrap" style="{{ mainStyle }}">
+
+  <!-- ============ KINGDOM SCOPE BAR ============ -->
+  <sc-if value="{{ showTopBar }}" hint-placeholder-val="{{ true }}">
+  <div class="b3d-kbar" style="position:sticky; top:0; z-index:29; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:11px 30px; background:var(--navBg); border-bottom:1px solid var(--border); backdrop-filter:blur(10px);">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600; letter-spacing:0.09em; text-transform:uppercase; color:var(--faint);">Kingdom</span>
+      <div style="position:relative; display:flex; align-items:center; z-index:46;">
+        <sc-if value="{{ notKingdomOpen }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ toggleKingdom }}" aria-label="Choose kingdom scope" style="display:inline-flex; align-items:center; gap:8px; white-space:nowrap; background:var(--panel2); border:1px solid var(--border); border-radius:11px; padding:6px 12px; cursor:pointer; color:var(--text); font-family:'IBM Plex Sans',sans-serif; font-size:13.5px; font-weight:600; transition:border-color 0.12s;" style-hover="border-color: color-mix(in oklch, var(--accent) 50%, var(--border))"><span>{{ activeKEmoji }}</span>{{ activeKLabel }}<span style="color:var(--faint); font-size:10px;">{{ caretGlyph }}</span></button>
+        </sc-if>
+        <sc-if value="{{ kingdomOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="display:inline-flex; align-items:center; gap:3px; background:var(--panel2); border:1px solid color-mix(in oklch, var(--accent) 45%, var(--border)); border-radius:11px; padding:3px;">
+          <sc-for list="{{ kingdomMenuItems }}" as="k" hint-placeholder-count="4">
+            <button onClick="{{ k.onClick }}" style="{{ k.segStyle }}" style-hover="filter: brightness(1.08)"><span>{{ k.emoji }}</span>{{ k.short }}<span style="{{ k.soonStyle }}">soon</span></button>
+          </sc-for>
+        </div>
+        </sc-if>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:16px;">
+      <nav class="b3d-topnav" style="display:flex; align-items:center; gap:3px;">
+        <sc-for list="{{ primaryNav }}" as="item" hint-placeholder-count="3">
+          <a style="{{ item.style }}" style-hover="background: color-mix(in oklch, var(--accent) 12%, transparent); color: var(--text)" onClick="{{ item.onClick }}">{{ item.label }}</a>
+        </sc-for>
+      </nav>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ kingdomOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ toggleKingdom }}" style="position:fixed; inset:0; z-index:25;"></div>
+  </sc-if>
+
+  <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeMenu }}" style="position:fixed; inset:0; z-index:44;"></div>
+  </sc-if>
+
+  <!-- ============ ROUTED SCREENS (keyed for entrance transition) ============ -->
+  <div key="{{ routeKey }}" style="animation:b3d-rise 0.42s cubic-bezier(0.22,0.61,0.36,1) both;">
+
+  <!-- ============ ANIMALS — COMING SOON ============ -->  <sc-if value="{{ isAnimals }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:820px; margin:0 auto; padding:64px 30px 80px; text-align:center;">
+    <div style="display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:10.5px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--amber); background:color-mix(in oklch, var(--amber) 15%, transparent); border:1px solid color-mix(in oklch, var(--amber) 38%, transparent); border-radius:999px; padding:4px 12px;">Coming soon</div>
+    <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:32px; letter-spacing:-0.02em; margin:18px 0 0; color:var(--text);">Animals are next on the roadmap</h1>
+    <p style="color:var(--muted); font-size:15px; line-height:1.6; max-width:600px; margin:14px auto 0;">The arena's task schema, Bradley–Terry pipeline, and scan/reference tiers generalise across kingdoms. Animal taxa are being sourced now — starting with soft-body and articulated-skeleton reconstruction.</p>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:34px; text-align:left;">
+      <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:18px;">
+        <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:15px; color:var(--win);">✓ Plants</div>
+        <p style="color:var(--muted); font-size:12.5px; line-height:1.5; margin:8px 0 0;">Live · 12 tasks across 175 image→3D outputs, procedural, and scan tiers.</p>
+      </div>
+      <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:18px;">
+        <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:15px; color:var(--win);">✓ Fungi</div>
+        <p style="color:var(--muted); font-size:12.5px; line-height:1.5; margin:8px 0 0;">Live · 6 fruiting-body tasks; gill & pore fidelity is the open frontier.</p>
+      </div>
+      <div style="background:var(--panel); border:1px dashed color-mix(in oklch, var(--amber) 45%, var(--border)); border-radius:14px; padding:18px;">
+        <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:15px; color:var(--amber);">◷ Animals</div>
+        <p style="color:var(--muted); font-size:12.5px; line-height:1.5; margin:8px 0 0;">In sourcing · articulated & soft-body taxa, targeted for the next milestone.</p>
+      </div>
+    </div>
+    <button onClick="{{ exitAnimals }}" style="margin-top:30px; display:inline-flex; align-items:center; gap:8px; background:var(--accent); border:none; border-radius:11px; color:oklch(0.98 0.01 258); font-family:'IBM Plex Sans',sans-serif; font-size:14px; font-weight:600; padding:11px 20px; cursor:pointer;">← Back to Plants arena</button>
+  </main>
+  </sc-if>
+
+  <!-- ============ HOME / LANDING ============ -->
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:1180px; margin:0 auto; padding:22px 30px 66px;">
+    <!-- HERO (open / unboxed) -->
+    <section style="position:relative;">
+      <div aria-hidden="true" style="position:absolute; top:-34%; right:-6%; width:520px; height:520px; background:repeating-radial-gradient(circle at 50% 50%, transparent 0 26px, color-mix(in oklch, var(--accent2) 8%, transparent) 26px 27px); -webkit-mask-image:radial-gradient(circle at 50% 50%, #000, transparent 66%); mask-image:radial-gradient(circle at 50% 50%, #000, transparent 66%); pointer-events:none;"></div>
+      <div class="b3d-hero-grid" style="position:relative; padding:34px 4px 32px; display:grid; grid-template-columns:1.02fr 0.98fr; gap:36px; align-items:center;">
+        <div style="text-align:left;">
+        <div style="display:flex; align-items:center; gap:8px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; letter-spacing:0.24em; text-transform:uppercase; color:var(--accent2);">Biological 3D reconstruction &middot; benchmark</span></div>
+          <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:52px; line-height:1.02; letter-spacing:-0.03em; margin:20px 0 0; color:var(--text);">The <span style="color:var(--accent2);">life-sciences</span> arena for<br><span style="position:relative; display:inline-block; color:var(--accent); text-shadow: 1px 1px 0 color-mix(in oklch, var(--accent) 62%, #05121a), 2px 2px 0 color-mix(in oklch, var(--accent) 54%, #05121a), 3px 3px 0 color-mix(in oklch, var(--accent) 46%, #05121a), 4px 4px 0 color-mix(in oklch, var(--accent) 38%, #05121a), 5px 5px 0 color-mix(in oklch, var(--accent) 30%, #05121a), 7px 8px 14px rgba(0,0,0,0.32);">3D</span> generation</h1>
+          <p style="color:var(--muted); font-size:16.5px; line-height:1.62; max-width:520px; margin:20px 0 0;">Two AI reconstructions of a real organism, judged side by side. Every vote powers Bradley&ndash;Terry leaderboards across the kingdoms of life.</p>
+          <div style="display:flex; flex-wrap:wrap; justify-content:flex-start; gap:12px; margin-top:30px;">
+            <button onClick="{{ enterArena }}" style="display:inline-flex; align-items:center; gap:9px; background:var(--accent); border:none; border-radius:11px; color:oklch(0.99 0.01 258); font-family:'IBM Plex Sans',sans-serif; font-size:15px; font-weight:600; padding:13px 24px; cursor:pointer; transition:filter 0.12s, transform 0.06s;" style-hover="filter:brightness(1.09)" style-active="filter:brightness(0.94); transform:translateY(1px)">Enter the arena &rarr;</button>
+            <button onClick="{{ goLeaderboard }}" style="display:inline-flex; align-items:center; gap:9px; background:var(--panel2); border:1px solid var(--border); border-radius:11px; color:var(--text); font-family:'IBM Plex Sans',sans-serif; font-size:15px; font-weight:600; padding:13px 22px; cursor:pointer; transition:border-color 0.12s;" style-hover="border-color:color-mix(in oklch, var(--accent) 50%, var(--border))">View leaderboard</button>
+          </div>
+        </div>
+        <div class="b3d-hero-viz" style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;">
+          <div style="position:relative; width:360px; height:360px;">
+            <div aria-hidden="true" style="position:absolute; inset:5%; border-radius:50%; border:1px solid color-mix(in oklch, var(--accent) 22%, transparent); box-shadow:inset 0 0 60px color-mix(in oklch, var(--accent) 8%, transparent); pointer-events:none;"></div>
+            <div aria-hidden="true" style="position:absolute; inset:15%; border-radius:50%; border:1px dashed color-mix(in oklch, var(--accent2) 26%, transparent); pointer-events:none; animation:b3d-spin 46s linear infinite;"></div>
+            <div aria-hidden="true" style="position:absolute; inset:11%; border-radius:50%; background:radial-gradient(circle at 50% 42%, color-mix(in oklch, var(--accent) 22%, transparent), transparent 70%); filter:blur(13px); pointer-events:none;"></div>
+            <canvas id="b3d-scene-canvas" role="img" aria-label="Interactive reconstructed 3D leaf specimen on a rotating scan turntable — drag to rotate" style="position:relative; display:block; width:360px; height:360px; cursor:grab; touch-action:none;"></canvas>
+            <div style="position:absolute; left:50%; bottom:-4px; transform:translateX(-50%); font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--faint); pointer-events:none; white-space:nowrap;">drag to rotate &middot; reconstructed mesh</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center;">
+            <sc-for list="{{ specimenChips }}" as="chip" hint-placeholder-count="3">
+              <button onClick="{{ chip.onClick }}" title="{{ chip.title }}" style="{{ chip.style }}" style-hover="{{ chip.hover }}"><span style="font-size:14px; line-height:1;">{{ chip.emoji }}</span>{{ chip.label }}<span style="{{ chip.soonStyle }}">soon</span></button>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+      <div style="position:relative; display:flex; flex-wrap:wrap; align-items:center; gap:12px 28px; padding:18px 4px 0; border-top:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--faint);">
+        <span style="display:inline-flex; align-items:center; gap:8px;"><span aria-hidden="true" style="width:7px; height:7px; border-radius:50%; background:var(--win); box-shadow:0 0 0 3px color-mix(in oklch, var(--win) 20%, transparent); animation:b3d-breathe 2.4s ease-in-out infinite;"></span><span data-cu="1" style="color:var(--accent); font-weight:600;">1,585</span> votes cast</span>
+        <span><span style="color:var(--accent); font-weight:600;">9</span> models</span>
+        <span><span style="color:var(--accent); font-weight:600;">18</span> tasks</span>
+        <span><span style="color:var(--accent); font-weight:600;">2</span> kingdoms live</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px 18px; flex-wrap:wrap; padding:13px 4px 0; font-family:'IBM Plex Mono',monospace; font-size:11px;">
+        <span style="letter-spacing:0.14em; text-transform:uppercase; color:var(--faint);">Generators from</span>
+        <span style="display:flex; flex-wrap:wrap; gap:6px 16px; color:var(--muted);">
+          <span>Microsoft</span><span>Tencent</span><span>Google</span><span>OpenAI</span><span>Tripo&nbsp;AI</span><span>Deemos</span><span>Inria</span>
+        </span>
+      </div>
+    </section>
+
+    <!-- KINGDOM ENTRY -->
+    <div style="display:flex; align-items:baseline; gap:12px; margin:40px 0 15px; flex-wrap:wrap;">
+      <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:21px; letter-spacing:-0.015em; color:var(--text); margin:0;">Choose a kingdom</h2>
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--faint);">the top-level axis of the benchmark</span>
+    </div>
+    <div class="b3d-kgrid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:16px;">
+      <sc-for list="{{ homeKingdoms }}" as="k" hint-placeholder-count="3">
+        <div onClick="{{ k.onClick }}" style="position:relative; overflow:hidden; border:1px solid var(--border); border-radius:16px; background:var(--panel); box-shadow:var(--shadowCard); padding:20px; cursor:pointer; transition:border-color 0.14s, transform 0.06s;" style-hover="border-color:color-mix(in oklch, var(--accent) 55%, var(--border)); transform:translateY(-2px)">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="width:48px; height:48px; flex-shrink:0; border-radius:14px; border:1px solid var(--border); background:radial-gradient(circle at 50% 40%, color-mix(in oklch, var(--accent) 13%, var(--panel2)), var(--panel)); display:flex; align-items:center; justify-content:center; font-size:25px; line-height:1;">{{ k.emoji }}</div>
+            <span style="{{ k.badgeStyle }}">{{ k.badge }}</span>
+          </div>
+          <h3 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:19px; letter-spacing:-0.01em; color:var(--text); margin:16px 0 1px;">{{ k.name }}</h3>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-style:italic; color:var(--accent2); margin-bottom:9px;">{{ k.latin }}</div>
+          <p style="color:var(--muted); font-size:13.5px; line-height:1.55; margin:0 0 14px; min-height:42px;">{{ k.blurb }}</p>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--faint); border-top:1px solid var(--border); padding-top:11px;">{{ k.stat }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- HOW IT WORKS -->
+    <div style="display:flex; align-items:baseline; gap:12px; margin:40px 0 15px; flex-wrap:wrap;">
+      <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:21px; letter-spacing:-0.015em; color:var(--text); margin:0;">How voting works</h2>
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--faint);">anonymous · pairwise · Bradley–Terry</span>
+    </div>
+    <div class="b3d-kgrid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:16px;">
+      <div style="border:1px solid var(--border); border-radius:16px; background:var(--panel); box-shadow:var(--shadowCard); padding:22px;">
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:700; color:var(--accent); border:1px solid color-mix(in oklch, var(--accent) 40%, transparent); border-radius:999px; width:26px; height:26px; display:flex; align-items:center; justify-content:center;">1</div>
+        <h3 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; color:var(--text); margin:15px 0 6px;">A reference specimen</h3>
+        <p style="color:var(--muted); font-size:13.5px; line-height:1.55; margin:0;">Every task starts from a real organism — a photo or scan of the ground-truth biology.</p>
+      </div>
+      <div style="border:1px solid var(--border); border-radius:16px; background:var(--panel); box-shadow:var(--shadowCard); padding:22px;">
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:700; color:var(--accent); border:1px solid color-mix(in oklch, var(--accent) 40%, transparent); border-radius:999px; width:26px; height:26px; display:flex; align-items:center; justify-content:center;">2</div>
+        <h3 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; color:var(--text); margin:15px 0 6px;">Two 3D reconstructions</h3>
+        <p style="color:var(--muted); font-size:13.5px; line-height:1.55; margin:0;">Two models generate 3D from that input. You inspect both in an interactive viewer — orbit, zoom, pan.</p>
+      </div>
+      <div style="border:1px solid var(--border); border-radius:16px; background:var(--panel); box-shadow:var(--shadowCard); padding:22px;">
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:700; color:var(--accent); border:1px solid color-mix(in oklch, var(--accent) 40%, transparent); border-radius:999px; width:26px; height:26px; display:flex; align-items:center; justify-content:center;">3</div>
+        <h3 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; color:var(--text); margin:15px 0 6px;">You pick the better one</h3>
+        <p style="color:var(--muted); font-size:13.5px; line-height:1.55; margin:0;">Vote for A, B, a tie, or both-bad. Names stay hidden until you choose — no brand bias.</p>
+      </div>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ ARENA ============ -->
+  <sc-if value="{{ isArena }}" hint-placeholder-val="{{ true }}">
+  <main class="b3d-main" style="max-width:1180px; margin:0 auto; padding:22px 30px 60px;">
+    <sc-if value="{{ showHero }}" hint-placeholder-val="{{ false }}">
+    <div style="text-align:center; padding:12px 0 26px;">
+      <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:34px; letter-spacing:-0.025em; margin:0; color:var(--text);">Which model rebuilds life best?</h1>
+      <p style="color:var(--muted); font-size:15.5px; line-height:1.6; max-width:600px; margin:12px auto 0;">Compare two AI-generated 3D reconstructions of a real organism, side by side, and vote for the better one. Every vote feeds the Bradley–Terry leaderboards — across Plants, Fungi, and soon Animals.</p>
+      <div style="display:inline-flex; flex-wrap:wrap; justify-content:center; gap:10px 22px; margin-top:18px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--faint);">
+        <span><span data-cu="1" style="color:var(--accent); font-weight:600;">1,585</span> votes cast</span>
+        <span><span style="color:var(--accent); font-weight:600;">9</span> models</span>
+        <span><span style="color:var(--accent); font-weight:600;">18</span> tasks</span>
+        <span><span style="color:var(--accent); font-weight:600;">2</span> kingdoms live</span>
+      </div>
+    </div>
+    </sc-if>
+    <!-- condensed task strip -->
+    <div class="b3d-strip" style="display:flex; align-items:center; gap:16px; padding:15px 20px; background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px;">
+      <div style="width:54px; height:54px; flex-shrink:0; border-radius:50%; border:1px solid var(--border); overflow:hidden; background:radial-gradient(circle at 50% 42%, color-mix(in oklch, var(--accent) 14%, var(--panel2)), var(--panel)); display:flex; align-items:center; justify-content:center; font-size:26px; line-height:1;">{{ kSubject.emoji }}</div>
+      <div style="min-width:0; flex:1;">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <span style="display:inline-block; background:color-mix(in oklch, var(--accent) 16%, transparent); color:var(--accent); border:1px solid color-mix(in oklch, var(--accent) 40%, transparent); border-radius:999px; padding:2px 10px; font-size:11.5px; font-weight:600;">{{ kSubject.chip }}</span>
+          <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:20px; letter-spacing:-0.015em; color:var(--text); margin:0;">{{ kSubject.title }}</h2>
+        </div>
+        <p style="color:var(--muted); font-size:13px; margin:5px 0 0;">Judge fidelity to the reference · vote on <strong style="color:var(--text); font-weight:600;">Overall</strong></p>
+      </div>
+      <div class="b3d-strip-selects" style="display:flex; gap:9px; flex-shrink:0;">
+        <div style="display:flex; align-items:center; gap:8px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:13.5px; color:var(--text);">All categories <span style="color:var(--faint);">▾</span></div>
+        <div style="display:flex; align-items:center; gap:8px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:13.5px; color:var(--text);">Overall <span style="color:var(--faint);">▾</span></div>
+      </div>
+    </div>
+
+    <!-- model pair · real Bio3DViewer (viewer.js → model-viewer / 3Dmol) -->
+    <div class="b3d-pair" style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:18px;">
+      <div style="{{ stageAFrame }}">
+        <div class="b3d-stage" style="position:relative; height:430px; overflow:hidden;">
+          <div style="position:absolute; top:14px; left:16px; z-index:5; display:inline-flex; align-items:center; gap:8px; background:var(--ctlBg); border:1px solid var(--border); border-radius:999px; padding:5px 12px; pointer-events:none;">
+            <span style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; color:var(--text); white-space:nowrap;">{{ modelALabel }}</span>
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:600; color:var(--accent2); border:1px solid var(--border); border-radius:999px; padding:1px 6px;">GLB</span>
+          </div>
+          <sc-if value="{{ stageAMedal.show }}" hint-placeholder-val="{{ false }}">
+            <div style="{{ stageAMedal.ribbonStyle }}"><span style="{{ stageAMedal.dotStyle }}"></span>{{ stageAMedal.label }}</div>
+          </sc-if>
+          <div class="viewer-slot" id="b3d-slot-a" style="position:absolute; inset:0;"></div>
+        </div>
+      </div>
+      <div style="{{ stageBFrame }}">
+        <div class="b3d-stage" style="position:relative; height:430px; overflow:hidden;">
+          <div style="position:absolute; top:14px; left:16px; z-index:5; display:inline-flex; align-items:center; gap:8px; background:var(--ctlBg); border:1px solid var(--border); border-radius:999px; padding:5px 12px; pointer-events:none;">
+            <span style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; color:var(--text); white-space:nowrap;">{{ modelBLabel }}</span>
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:600; color:var(--accent2); border:1px solid var(--border); border-radius:999px; padding:1px 6px;">GLB</span>
+          </div>
+          <sc-if value="{{ stageBMedal.show }}" hint-placeholder-val="{{ false }}">
+            <div style="{{ stageBMedal.ribbonStyle }}"><span style="{{ stageBMedal.dotStyle }}"></span>{{ stageBMedal.label }}</div>
+          </sc-if>
+          <div class="viewer-slot" id="b3d-slot-b" style="position:absolute; inset:0;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- floating vote pill -->
+    <sc-if value="{{ notVoted }}" hint-placeholder-val="{{ true }}">
+    <div class="b3d-votewrap" style="display:flex; justify-content:center; margin-top:22px;">
+      <div class="b3d-votebar" style="display:inline-flex; gap:9px; background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:999px; padding:9px; box-shadow:0 14px 40px var(--floatShadow);">
+        <button onClick="{{ voteA }}" style="display:flex; align-items:center; gap:9px; padding:12px 20px; border-radius:999px; border:none; background:color-mix(in oklch, var(--win) 16%, var(--panel2)); color:var(--text); font-family:'IBM Plex Sans',sans-serif; font-size:14.5px; font-weight:600; cursor:pointer; transition:filter 0.12s, transform 0.06s;" style-hover="filter:brightness(1.09)" style-active="filter:brightness(0.94); transform:translateY(1px)"><span style="width:8px; height:8px; border-radius:50%; background:var(--win);"></span>A is better <kbd style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; padding:1px 6px; border:1px solid var(--border); border-radius:5px; background:var(--panel); color:var(--muted);">←</kbd></button>
+        <button onClick="{{ voteTie }}" style="display:flex; align-items:center; gap:9px; padding:12px 20px; border-radius:999px; border:none; background:var(--panel2); color:var(--text); font-family:'IBM Plex Sans',sans-serif; font-size:14.5px; font-weight:600; cursor:pointer; transition:filter 0.12s, transform 0.06s;" style-hover="filter:brightness(1.09)" style-active="filter:brightness(0.94); transform:translateY(1px)">Tie <kbd style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; padding:1px 6px; border:1px solid var(--border); border-radius:5px; background:var(--panel); color:var(--muted);">T</kbd></button>
+        <button onClick="{{ voteBad }}" style="display:flex; align-items:center; gap:9px; padding:12px 20px; border-radius:999px; border:none; background:var(--panel2); color:var(--muted); font-family:'IBM Plex Sans',sans-serif; font-size:14.5px; font-weight:600; cursor:pointer; transition:filter 0.12s, transform 0.06s;" style-hover="filter:brightness(1.09)" style-active="filter:brightness(0.94); transform:translateY(1px)">Both bad <kbd style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; padding:1px 6px; border:1px solid var(--border); border-radius:5px; background:var(--panel); color:var(--muted);">X</kbd></button>
+        <button onClick="{{ voteB }}" style="display:flex; align-items:center; gap:9px; padding:12px 20px; border-radius:999px; border:none; background:color-mix(in oklch, var(--win) 16%, var(--panel2)); color:var(--text); font-family:'IBM Plex Sans',sans-serif; font-size:14.5px; font-weight:600; cursor:pointer; transition:filter 0.12s, transform 0.06s;" style-hover="filter:brightness(1.09)" style-active="filter:brightness(0.94); transform:translateY(1px)"><span style="width:8px; height:8px; border-radius:50%; background:var(--win);"></span>B is better <kbd style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; padding:1px 6px; border:1px solid var(--border); border-radius:5px; background:var(--panel); color:var(--muted);">→</kbd></button>
+      </div>
+    </div>
+    <p style="text-align:center; color:var(--faint); font-size:12.5px; margin-top:14px;">Anonymous pairwise comparison · your vote feeds the Bradley-Terry leaderboard</p>
+    </sc-if>
+
+    <!-- post-vote reveal -->
+    <sc-if value="{{ isVoted }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:center; justify-content:center; margin-top:22px;">
+      <button onClick="{{ nextPair }}" style="display:inline-flex; align-items:center; gap:8px; background:var(--accent); border:none; border-radius:11px; color:oklch(0.98 0.01 258); font-family:'IBM Plex Sans',sans-serif; font-size:14px; font-weight:600; padding:10px 18px; cursor:pointer; transition:filter 0.12s, transform 0.06s;" style-hover="filter:brightness(1.08)" style-active="transform:translateY(1px)">Next pair →</button>
+    </div>
+    </sc-if>
+  </main>
+  </sc-if>
+
+  <!-- ============ LEADERBOARD ============ -->
+  <sc-if value="{{ isLeaderboard }}" hint-placeholder-val="{{ true }}">
+  <main style="max-width:1180px; margin:0 auto; padding:26px 30px 60px;">
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap;">
+      <div>
+        <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:28px; letter-spacing:-0.02em; margin:0; color:var(--text);">Leaderboard<span style="{{ kScopeStyle }}">{{ kScope }}</span></h1>
+        <p style="color:var(--muted); font-size:14.5px; margin:8px 0 0; max-width:620px; line-height:1.5;">Bradley–Terry rankings from anonymous pairwise votes. Scores are relative; the 95% interval shows how firmly a model is placed.</p>
+      </div>
+      <div style="display:flex; gap:9px;">
+        <a onClick="{{ goMethodology }}" style="display:inline-flex; align-items:center; gap:7px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:8px 13px; font-size:13px; color:var(--text); text-decoration:none; cursor:pointer;" style-hover="border-color: color-mix(in oklch, var(--accent) 50%, var(--border)); color: var(--accent)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="display:block;"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"></circle><path d="M12 11v5M12 8.2v.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>How ranking works</a>
+      </div>
+    </div>
+
+    <!-- paradigm tabs -->
+    <div style="display:inline-flex; gap:3px; margin-top:22px; background:var(--panel2); border:1px solid var(--border); border-radius:11px; padding:3px;">
+      <sc-for list="{{ lbTabs }}" as="t" hint-placeholder-count="4">
+        <button onClick="{{ t.onClick }}" style="{{ t.style }}" style-hover="color: var(--text)">{{ t.label }}</button>
+      </sc-for>
+    </div>
+
+    <!-- board section -->
+    <div style="margin-top:14px; background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; overflow:hidden;">
+      <div style="display:flex; align-items:baseline; gap:12px; padding:16px 20px; border-bottom:1px solid var(--border); flex-wrap:wrap;">
+        <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin:0; color:var(--text);">{{ lbTitle }}</h2>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--faint);">{{ lbCount }}</span>
+        <span style="flex:1;"></span>
+        <span style="display:inline-flex; align-items:center; gap:6px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);"><span style="width:6px; height:6px; border-radius:50%; background:var(--win); box-shadow:0 0 0 3px color-mix(in oklch, var(--win) 22%, transparent);"></span>{{ lbTotalVotes }} votes</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--faint);">updated {{ lbUpdated }} ago</span>
+      </div>
+      <div style="display:grid; grid-template-columns:56px minmax(0,1fr) 74px 128px 52px 50px 16px; padding:10px 18px; border-bottom:1px solid var(--border); gap:6px; font-size:10.5px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--faint);">
+        <div style="text-align:right;">Rank</div>
+        <div style="padding-left:14px;">Generator</div>
+        <div style="text-align:right; color:var(--text);">BT score <span style="color:var(--accent);">↓</span></div>
+        <div style="padding-left:16px;">95% interval</div>
+        <div style="text-align:center;">Trend</div>
+        <div style="text-align:right;">Votes <span style="opacity:0.5;">↕</span></div>
+        <div></div>
+      </div>
+      <sc-for list="{{ lbRows }}" as="r" hint-placeholder-count="8">
+        <div>
+          <div onClick="{{ r.onToggle }}" style="{{ r.rowStyle }}" style-hover="background: color-mix(in oklch, var(--accent) 9%, var(--panel2))">
+            <div style="display:flex; align-items:center; justify-content:flex-end; gap:5px;">
+              <span style="{{ r.deltaStyle }}">{{ r.deltaText }}</span>
+              <span style="{{ r.medalStyle }}">{{ r.rank }}</span>
+            </div>
+            <div style="padding-left:14px; display:flex; align-items:center; gap:8px; min-width:0;">
+              <div style="{{ r.monoStyle }}">{{ r.mono }}</div>
+              <span style="flex:1 1 auto; min-width:0; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.name }}</span>
+              <span style="{{ r.provStyle }}">{{ r.provText }}</span>
+              <span style="display:inline-flex; gap:4px; flex-shrink:0;">
+                <sc-for list="{{ r.links }}" as="l" hint-placeholder-count="2">
+                  <a style="{{ l.style }}" style-hover="color: var(--accent2); border-color: var(--accent2);">{{ l.t }}</a>
+                </sc-for>
+              </span>
+            </div>
+            <div style="text-align:right;"><span style="{{ r.scoreStyle }}">{{ r.score }}</span></div>
+            <div style="padding-left:16px;">
+              <div style="position:relative; height:7px; background:var(--panel2); border:1px solid var(--border); border-radius:999px;">
+                <div style="{{ r.ciRange }}"></div>
+                <div style="{{ r.ciDot }}"></div>
+              </div>
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--faint); margin-top:4px;">{{ r.ci }}</div>
+            </div>
+            <div style="display:flex; justify-content:center;">{{ r.spark }}</div>
+            <div style="text-align:right; font-family:'IBM Plex Mono',monospace; color:var(--muted); font-variant-numeric:tabular-nums; font-size:13.5px;">{{ r.votes }}</div>
+            <div style="text-align:center; color:var(--faint); font-size:11px;">{{ r.caret }}</div>
+          </div>
+          <div style="{{ r.detailStyle }}">
+            <div style="display:flex; gap:26px; flex-wrap:wrap; align-items:flex-start; padding-top:12px;">
+              <div style="flex:1; min-width:220px;">
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.07em; text-transform:uppercase; color:var(--faint); margin-bottom:9px;">Win-rate by difficulty</div>
+                <sc-for list="{{ r.tierBars }}" as="t" hint-placeholder-count="3">
+                  <div style="display:flex; align-items:center; gap:10px; margin-bottom:7px;">
+                    <span style="width:64px; font-size:12px; color:var(--muted);">{{ t.label }}</span>
+                    <div style="flex:1; height:8px; background:var(--panel2); border-radius:999px; overflow:hidden;"><div style="{{ t.fillStyle }}"></div></div>
+                    <span style="width:38px; text-align:right; font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text); font-variant-numeric:tabular-nums;">{{ t.val }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex; gap:22px;">
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.07em; text-transform:uppercase; color:var(--faint);">Overall win-rate</div>
+                  <div style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:600; color:var(--accent); margin-top:4px;">{{ r.winPct }}</div>
+                </div>
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.07em; text-transform:uppercase; color:var(--faint);">First seen</div>
+                  <div style="font-family:'Space Grotesk',sans-serif; font-size:16px; font-weight:600; color:var(--text); margin-top:6px;">{{ r.firstSeen }}</div>
+                </div>
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.07em; text-transform:uppercase; color:var(--faint);">Type</div>
+                  <div style="font-size:13px; color:var(--muted); margin-top:8px;">{{ r.kindFull }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display:flex; gap:14px; align-items:center; margin-top:14px; flex-wrap:wrap; font-size:12px; color:var(--faint);">
+      <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:24px; height:6px; border-radius:999px; background:color-mix(in oklch, var(--accent) 55%, transparent);"></span>95% credible interval</span>
+      <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--accent);"></span>point estimate</span>
+      <span style="display:inline-flex; align-items:center; gap:6px;"><span style="color:var(--win); font-family:'IBM Plex Mono',monospace;">▲</span>rank change vs last period</span>
+      <span style="display:inline-flex; align-items:center; gap:6px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:600; color:var(--amber); background:color-mix(in oklch, var(--amber) 13%, transparent); border:1px solid color-mix(in oklch, var(--amber) 34%, transparent); border-radius:999px; padding:1px 7px;">provisional</span>under 30 votes</span>
+      <span style="display:inline-flex; align-items:center; gap:6px;">click a row for per-tier breakdown</span>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ DIFFICULTY ============ -->
+  <sc-if value="{{ isDifficulty }}" hint-placeholder-val="{{ true }}">
+  <main style="max-width:1180px; margin:0 auto; padding:26px 30px 60px;">
+    <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:28px; letter-spacing:-0.02em; margin:0; color:var(--text);">Difficulty tiers<span style="{{ kScopeStyle }}">{{ kScope }}</span></h1>
+    <p style="color:var(--muted); font-size:14.5px; margin:8px 0 0; max-width:660px; line-height:1.5;">Per-method win-rate across task difficulty. Green = holds up as tasks get harder; red = degrades. The gradient down each column is the story.</p>
+
+    <div style="margin-top:22px; background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:18px 22px 14px;">
+      <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:15px; color:var(--text);">Win-rate degradation curve</div>
+      <div style="color:var(--muted); font-size:12.5px; margin:2px 0 10px;">Each line is a method across Easy → Hard. Flatter = more robust; steep drops mark methods that only shine on easy tasks. Top three highlighted.</div>
+      {{ diffChartEl }}
+    </div>
+
+    <div style="margin-top:24px; background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; overflow:hidden;">
+      <div style="display:grid; grid-template-columns:minmax(0,1fr) 132px 132px 132px; padding:12px 18px; border-bottom:1px solid var(--border); font-size:10.5px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--faint);">
+        <div>Method</div>
+        <div style="text-align:center;">Easy</div>
+        <div style="text-align:center;">Moderate</div>
+        <div style="text-align:center;">Hard</div>
+      </div>
+      <sc-for list="{{ diffRows }}" as="r" hint-placeholder-count="8">
+        <div style="display:grid; grid-template-columns:minmax(0,1fr) 132px 132px 132px; align-items:center; padding:8px 18px; border-bottom:1px solid var(--border); gap:8px;">
+          <div style="display:flex; align-items:center; gap:9px; min-width:0;">
+            <span style="font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.name }}</span>
+            <span style="{{ r.kindStyle }}">model</span>
+          </div>
+          <div style="{{ r.c0Style }}">{{ r.c0 }}</div>
+          <div style="{{ r.c1Style }}">{{ r.c1 }}</div>
+          <div style="{{ r.c2Style }}">{{ r.c2 }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display:flex; gap:16px; align-items:center; margin-top:14px; flex-wrap:wrap; font-size:12px; color:var(--faint);">
+      <span>Win-rate vs field:</span>
+      <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px; height:14px; border-radius:4px; background:color-mix(in oklch, var(--win) 42%, transparent);"></span>≥ 66%</span>
+      <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px; height:14px; border-radius:4px; background:color-mix(in oklch, var(--amber) 42%, transparent);"></span>40–65%</span>
+      <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px; height:14px; border-radius:4px; background:color-mix(in oklch, var(--bad) 42%, transparent);"></span>&lt; 40%</span>
+    </div>
+
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:18px; margin:34px 0 4px; color:var(--text);">Per-tier leaders</h2>
+    <p style="color:var(--muted); font-size:13.5px; margin:0 0 16px;">Top three methods within each difficulty band.</p>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
+      <sc-for list="{{ diffTiers }}" as="t" hint-placeholder-count="3">
+        <div style="background:var(--panel); border:1px solid var(--border); border-top:2px solid var(--accent); border-radius:14px; padding:16px 18px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+            <span style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:15px; color:var(--text);">{{ t.tier }}</span>
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--faint);">{{ t.tasks }}</span>
+          </div>
+          <sc-for list="{{ t.rows }}" as="m" hint-placeholder-count="3">
+            <div style="display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px solid var(--border);">
+              <span style="{{ m.rankStyle }}">{{ m.rank }}</span>
+              <span style="flex:1; font-size:13.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ m.name }}</span>
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums;">{{ m.val }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ BENCHMARK ============ -->
+  <sc-if value="{{ isBenchmark }}" hint-placeholder-val="{{ true }}">
+  <main style="max-width:1180px; margin:0 auto; padding:26px 30px 60px;">
+    <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:28px; letter-spacing:-0.02em; margin:0; color:var(--text);">Recon benchmark <span style="font-weight:400; font-size:18px; color:var(--muted);">— objective accuracy vs ground-truth scan</span><span style="{{ kScopeStyle }}">{{ kScope }}</span></h1>
+    <p style="color:var(--muted); font-size:14.5px; margin:8px 0 0; max-width:720px; line-height:1.55;">Single-image → 3D scored against held-out GT plant scans (chamfer / F-score / coverage). The <strong style="color:var(--text);">agreement</strong> column shows where the geometric metric and the perceptual vote disagree.</p>
+
+    <!-- cross-species agreement -->
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin:28px 0 4px; color:var(--text);">Cross-species agreement</h2>
+    <p style="color:var(--muted); font-size:13px; margin:0 0 14px;">Negative Spearman = perception inverts geometric fidelity — voters prefer the geometrically worse model.</p>
+    <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; overflow:hidden;">
+      <div style="display:grid; grid-template-columns:minmax(0,1fr) 130px 130px 130px; padding:11px 18px; border-bottom:1px solid var(--border); font-size:10.5px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--faint);">
+        <div>Species / task</div><div style="text-align:right;">Spearman</div><div style="text-align:right;">Common</div><div style="text-align:right;">Scored</div>
+      </div>
+      <sc-for list="{{ agreeRows }}" as="r" hint-placeholder-count="5">
+        <div style="display:grid; grid-template-columns:minmax(0,1fr) 130px 130px 130px; align-items:center; padding:11px 18px; border-bottom:1px solid var(--border);">
+          <div style="color:var(--accent2); font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:12px;">{{ r.name }}</div>
+          <div style="text-align:right;"><span style="{{ r.spStyle }}">{{ r.sp }}</span></div>
+          <div style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums;">{{ r.common }}</div>
+          <div style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums;">{{ r.scored }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- inspect dual viewer -->
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin:30px 0 14px; color:var(--text);">Inspect <span style="font-weight:400; font-size:13.5px; color:var(--muted);">— reconstruction vs reference</span></h2>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <div style="border:1px solid var(--border); border-top:2px solid color-mix(in oklch, var(--accent) 55%, var(--border)); border-radius:14px; overflow:hidden; background:var(--stageFrame);">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:var(--panel2); border-bottom:1px solid var(--border);">
+          <span style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; color:var(--text);">L-Py</span>
+          <span style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:600; color:var(--accent2); border:1px solid var(--border); border-radius:999px; padding:1px 7px;">GLB</span>
+        </div>
+        <div style="position:relative; height:300px; overflow:hidden; background:radial-gradient(130% 100% at 50% 30%, var(--stage1), var(--stage2) 70%); box-shadow:inset 0 0 100px 20px var(--vignette); display:flex; align-items:center; justify-content:center;">
+          <div style="position:absolute; left:-20%; right:-20%; bottom:0; height:46%; background-image:linear-gradient(color-mix(in oklch, var(--accent) 24%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklch, var(--accent) 24%, transparent) 1px, transparent 1px); background-size:30px 30px; transform:perspective(300px) rotateX(60deg); transform-origin:bottom center; -webkit-mask-image:linear-gradient(to top, #000 8%, transparent 78%); mask-image:linear-gradient(to top, #000 8%, transparent 78%); pointer-events:none;"></div>
+          <div style="width:120px; height:120px; border-radius:50%; background:radial-gradient(circle at 44% 40%, color-mix(in oklch, var(--accent) 16%, transparent), transparent 68%); border:1px dashed var(--edge2);"></div>
+          <div style="position:absolute; left:50%; bottom:12px; transform:translateX(-50%); font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--faint);">chamfer 0.0545 · PASS</div>
+        </div>
+      </div>
+      <div style="border:1px solid var(--border); border-top:2px solid color-mix(in oklch, var(--win) 55%, var(--border)); border-radius:14px; overflow:hidden; background:var(--stageFrame);">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:var(--panel2); border-bottom:1px solid var(--border);">
+          <span style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; color:var(--text);">Held-out GT scan</span>
+          <span style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:600; color:var(--win); border:1px solid var(--border); border-radius:999px; padding:1px 7px;">real plant</span>
+        </div>
+        <div style="position:relative; height:300px; overflow:hidden; background:radial-gradient(130% 100% at 50% 30%, var(--stage1), var(--stage2) 70%); box-shadow:inset 0 0 100px 20px var(--vignette); display:flex; align-items:center; justify-content:center;">
+          <div style="position:absolute; left:-20%; right:-20%; bottom:0; height:46%; background-image:linear-gradient(color-mix(in oklch, var(--accent) 24%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklch, var(--accent) 24%, transparent) 1px, transparent 1px); background-size:30px 30px; transform:perspective(300px) rotateX(60deg); transform-origin:bottom center; -webkit-mask-image:linear-gradient(to top, #000 8%, transparent 78%); mask-image:linear-gradient(to top, #000 8%, transparent 78%); pointer-events:none;"></div>
+          <div style="width:120px; height:120px; border-radius:50%; background:radial-gradient(circle at 44% 40%, color-mix(in oklch, var(--win) 14%, transparent), transparent 68%); border:1px dashed var(--edge2);"></div>
+          <div style="position:absolute; left:50%; bottom:12px; transform:translateX(-50%); font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--faint);">30k points · ground truth</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- metric table -->
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin:30px 0 4px; color:var(--text);">Scored reconstructions <span style="font-weight:400; font-size:13px; color:var(--muted);">— {{ benchSubject }}</span></h2>
+    <p style="color:var(--muted); font-size:12.5px; margin:0 0 14px;">Chamfer ↓ lower is better · organ fidelity ↑ for structure-known methods only ("—" = recon method, no declared structure).</p>
+    <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; overflow:hidden;">
+      <div style="display:grid; grid-template-columns:36px minmax(0,1fr) 96px 84px 92px 96px; padding:11px 18px; border-bottom:1px solid var(--border); font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--faint);">
+        <div>#</div><div>Method</div><div style="text-align:right;">Chamfer ↓</div><div style="text-align:right;">F-score</div><div style="text-align:right;">Organ fid.</div><div style="text-align:right;">Verdict</div>
+      </div>
+      <sc-for list="{{ benchRows }}" as="r" hint-placeholder-count="7">
+        <div style="display:grid; grid-template-columns:36px minmax(0,1fr) 96px 84px 92px 96px; align-items:center; padding:10px 18px; border-bottom:1px solid var(--border);">
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--faint);">{{ r.rank }}</div>
+          <div style="font-weight:600; font-size:13.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:10px;">{{ r.name }}</div>
+          <div style="text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:13px; color:var(--win); font-variant-numeric:tabular-nums;">{{ r.chamfer }}</div>
+          <div style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums;">{{ r.fscore }}</div>
+          <div style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--text); font-variant-numeric:tabular-nums;">{{ r.organ }}</div>
+          <div style="text-align:right;"><span style="{{ r.verdictStyle }}">{{ r.verdict }}</span></div>
+        </div>
+      </sc-for>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ COVERAGE ============ -->
+  <sc-if value="{{ isCoverage }}" hint-placeholder-val="{{ true }}">
+  <main style="max-width:1180px; margin:0 auto; padding:26px 30px 60px;">
+    <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:28px; letter-spacing:-0.02em; margin:0; color:var(--text);">Coverage &amp; governance<span style="{{ kScopeStyle }}">{{ kScope }}</span></h1>
+    <p style="color:var(--muted); font-size:14.5px; margin:8px 0 0; max-width:700px; line-height:1.55;">How much evidence backs each ranking. A generator's rank is only as trustworthy as the votes behind it — confidence firms up as vote counts grow.</p>
+
+    <!-- paradigm summary -->
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; margin-top:22px;">
+      <sc-for list="{{ paradigms }}" as="p" hint-placeholder-count="6">
+        <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:14px 16px;">
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:600; color:var(--accent); font-variant-numeric:tabular-nums;">{{ p.count }}</div>
+          <div style="font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.35;">{{ p.label }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- generator coverage table -->
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin:30px 0 14px; color:var(--text);">Generator coverage <span style="font-weight:400; font-size:13px; color:var(--muted);">— by total Mode-A votes</span></h2>
+    <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; overflow:hidden;">
+      <div style="display:grid; grid-template-columns:minmax(0,1fr) 66px 74px 84px 118px 78px; padding:11px 18px; border-bottom:1px solid var(--border); font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--faint);">
+        <div>Generator</div><div style="text-align:right;">Tasks</div><div style="text-align:right;">Outputs</div><div style="text-align:right;">A-votes</div><div style="text-align:center;">Confidence</div><div style="text-align:center;">In arena</div>
+      </div>
+      <sc-for list="{{ covRows }}" as="r" hint-placeholder-count="10">
+        <div style="display:grid; grid-template-columns:minmax(0,1fr) 66px 74px 84px 118px 78px; align-items:center; padding:10px 18px; border-bottom:1px solid var(--border);">
+          <div style="display:flex; align-items:center; gap:9px; min-width:0;">
+            <span style="font-weight:600; font-size:13.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.name }}</span>
+            <span style="{{ r.kindStyle }}">model</span>
+          </div>
+          <div style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums;">{{ r.tasks }}</div>
+          <div style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums;">{{ r.outputs }}</div>
+          <div style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--text); font-variant-numeric:tabular-nums;">{{ r.votes }}</div>
+          <div style="text-align:center;"><span style="{{ r.confStyle }}">{{ r.conf }}</span></div>
+          <div style="text-align:center;"><span style="{{ r.inStyle }}">{{ r.inArena }}</span></div>
+        </div>
+      </sc-for>
+    </div>
+    <p style="color:var(--faint); font-size:12px; margin-top:12px;"><span style="color:var(--win);">firm</span> = ≥30 votes, interval trustworthy · <span style="color:var(--amber);">provisional</span> = still gathering · excluded outputs are held out of the perceptual pool but kept on record.</p>
+  </main>
+  </sc-if>
+
+  <!-- ============ SPOTLIGHT ============ -->
+  <sc-if value="{{ isSpotlight }}" hint-placeholder-val="{{ true }}">
+  <main style="max-width:1180px; margin:0 auto; padding:26px 30px 60px;">
+    <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:28px; letter-spacing:-0.02em; margin:0; color:var(--text);">Subject spotlight<span style="{{ kScopeStyle }}">{{ kScope }}</span></h1>
+    <p style="color:var(--muted); font-size:14.5px; margin:8px 0 0; max-width:660px; line-height:1.5;">Per-taxon deep dives: every model side-by-side against the reference, all metrics, and logged failure modes.</p>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:18px; margin-top:24px;">
+      <sc-for list="{{ subjects }}" as="s" hint-placeholder-count="6">
+        <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; overflow:hidden; display:flex; flex-direction:column; cursor:pointer;" style-hover="border-color: color-mix(in oklch, var(--accent) 55%, var(--border));">
+          <div style="position:relative; height:150px; overflow:hidden; background:radial-gradient(120% 100% at 50% 35%, var(--stage1), var(--stage2) 74%); display:flex; align-items:center; justify-content:center;">
+            <div style="position:absolute; left:-20%; right:-20%; bottom:0; height:48%; background-image:linear-gradient(color-mix(in oklch, var(--accent) 24%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklch, var(--accent) 24%, transparent) 1px, transparent 1px); background-size:24px 24px; transform:perspective(220px) rotateX(60deg); transform-origin:bottom center; -webkit-mask-image:linear-gradient(to top, #000 8%, transparent 76%); mask-image:linear-gradient(to top, #000 8%, transparent 76%); pointer-events:none;"></div>
+            <div style="width:88px; height:88px; border-radius:50%; background:radial-gradient(circle at 44% 40%, color-mix(in oklch, var(--accent) 15%, transparent), transparent 68%); border:1px dashed var(--edge2); display:flex; align-items:center; justify-content:center; font-size:40px; line-height:1;">{{ s.emoji }}</div>
+            <span style="{{ s.badgeStyle }}">{{ s.badge }}</span>
+            <span style="position:absolute; bottom:10px; right:12px; font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--faint);">{{ s.models }} models</span>
+          </div>
+          <div style="padding:16px 18px; flex:1; display:flex; flex-direction:column;">
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--faint); margin-bottom:7px; letter-spacing:0.01em;">{{ s.lineage }}</div>
+            <h3 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:17px; letter-spacing:-0.01em; margin:0; color:var(--accent2);">{{ s.common }}</h3>
+            <div style="font-style:italic; font-size:13px; color:var(--muted); margin:2px 0 8px;">{{ s.latin }}</div>
+            <p style="font-size:13.5px; color:var(--muted); line-height:1.5; margin:0;">{{ s.desc }}</p>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ MODELS DIRECTORY ============ -->
+  <sc-if value="{{ isModels }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:1180px; margin:0 auto; padding:26px 30px 60px;">
+    <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:28px; letter-spacing:-0.02em; margin:0; color:var(--text);">Models</h1>
+    <p style="color:var(--muted); font-size:14.5px; margin:8px 0 0; max-width:640px; line-height:1.5;">Every generator in the arena — reconstruction models, procedural baselines, and agentic pipelines. Click through for per-task and per-kingdom breakdowns.</p>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:16px; margin-top:24px;">
+      <sc-for list="{{ models }}" as="m" hint-placeholder-count="9">
+        <div onClick="{{ m.onClick }}" style="display:flex; align-items:center; gap:14px; background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:16px; cursor:pointer; transition:border-color 0.12s, transform 0.06s;" style-hover="border-color: color-mix(in oklch, var(--accent) 55%, var(--border)); transform: translateY(-2px)">
+          <div style="{{ m.monoStyle }}">{{ m.icon }}</div>
+          <div style="flex:1; min-width:0;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ m.name }}</span>
+              <span style="{{ m.kindStyle }}">{{ m.kind }}</span>
+            </div>
+            <div style="font-size:12.5px; color:var(--faint); margin-top:2px;">{{ m.org }}</div>
+            <div style="display:flex; gap:14px; margin-top:9px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums;">
+              <span style="color:var(--text);">{{ m.score }}</span>
+              <span>{{ m.votes }} votes</span>
+              <span>{{ m.tasks }} tasks</span>
+            </div>
+          </div>
+          <span style="color:var(--faint); font-size:18px;">→</span>
+        </div>
+      </sc-for>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ MODEL DETAIL ============ -->
+  <sc-if value="{{ isModelDetail }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:1180px; margin:0 auto; padding:26px 30px 60px;">
+    <a onClick="{{ goModels }}" style="display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:13px; text-decoration:none; cursor:pointer; margin-bottom:18px;" style-hover="color: var(--text)">← All models</a>
+    <div style="display:flex; align-items:center; gap:18px;">
+      <div style="{{ modelDetail.monoStyle }}">{{ modelDetail.icon }}</div>
+      <div>
+        <div style="display:flex; align-items:center; gap:11px;">
+          <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:26px; letter-spacing:-0.02em; margin:0; color:var(--text);">{{ modelDetail.name }}</h1>
+          <span style="{{ modelDetail.kindStyle }}">{{ modelDetail.kind }}</span>
+        </div>
+        <div style="color:var(--muted); font-size:14px; margin-top:4px;">{{ modelDetail.org }}</div>
+      </div>
+      <div style="margin-left:auto; display:flex; gap:8px;">
+        <a style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); text-decoration:none; border:1px solid var(--border); border-radius:8px; padding:6px 12px; cursor:pointer;" style-hover="color: var(--accent2); border-color: var(--accent2)">Paper ↗</a>
+        <a style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); text-decoration:none; border:1px solid var(--border); border-radius:8px; padding:6px 12px; cursor:pointer;" style-hover="color: var(--accent2); border-color: var(--accent2)">Code ↗</a>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-top:24px;">
+      <sc-for list="{{ modelDetail.stats }}" as="s" hint-placeholder-count="4">
+        <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:16px 18px;">
+          <div data-cu="1" style="font-family:'IBM Plex Mono',monospace; font-size:24px; font-weight:600; color:var(--accent); font-variant-numeric:tabular-nums;">{{ s.value }}</div>
+          <div style="font-size:12.5px; color:var(--muted); margin-top:4px;">{{ s.label }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin:30px 0 14px; color:var(--text);">Per-task BT score</h2>
+    <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; overflow:hidden;">
+      <div style="display:grid; grid-template-columns:minmax(0,1fr) 120px 120px; padding:11px 18px; border-bottom:1px solid var(--border); font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--faint);">
+        <div>Task</div><div>Kingdom</div><div style="text-align:right;">BT score</div>
+      </div>
+      <sc-for list="{{ modelDetail.taskRows }}" as="r" hint-placeholder-count="5">
+        <div style="display:grid; grid-template-columns:minmax(0,1fr) 120px 120px; align-items:center; padding:11px 18px; border-bottom:1px solid var(--border);" style-hover="background: color-mix(in oklch, var(--accent) 7%, var(--panel2))">
+          <div style="font-weight:600; font-size:13.5px; color:var(--text); font-style:italic;">{{ r.name }}</div>
+          <div style="font-size:13px; color:var(--muted);">{{ r.kingdom }}</div>
+          <div style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--text); font-variant-numeric:tabular-nums;">{{ r.score }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin:30px 0 14px; color:var(--text);">Sample outputs</h2>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
+      <sc-for list="{{ modelDetail.samples }}" as="s" hint-placeholder-count="3">
+        <div style="position:relative; height:200px; border:1px solid var(--border); border-radius:14px; overflow:hidden; background:radial-gradient(130% 100% at 50% 30%, var(--stage1), var(--stage2) 70%); box-shadow:inset 0 0 90px 16px var(--vignette); display:flex; align-items:center; justify-content:center;">
+          <div style="position:absolute; left:-20%; right:-20%; bottom:0; height:46%; background-image:linear-gradient(color-mix(in oklch, var(--accent) 26%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklch, var(--accent) 26%, transparent) 1px, transparent 1px); background-size:26px 26px; transform:perspective(240px) rotateX(60deg); transform-origin:bottom center; -webkit-mask-image:linear-gradient(to top, #000 8%, transparent 78%); mask-image:linear-gradient(to top, #000 8%, transparent 78%); pointer-events:none;"></div>
+          <sc-if value="{{ s.isLoaded }}" hint-placeholder-val="{{ true }}"><div style="font-size:46px; line-height:1; opacity:0.32;">{{ s.emoji }}</div></sc-if>
+          <sc-if value="{{ s.isLoading }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; align-items:center; gap:11px;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" style="transform-origin:50% 90%; animation:b3d-breathe 1.5s ease-in-out infinite;"><path d="M12 2L20.66 7V17L12 22L3.34 17V7Z" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" opacity="0.5"/><path d="M10.6 20C10.85 19.3 11 16.2 11.4 12.7L12.6 12.7C13 16.2 13.15 19.3 13.4 20Z" fill="oklch(0.5 0.062 61)"/><g transform="translate(2.640 4.7) scale(0.78 0.78)"><path d="M8.5 13.8C6.2 13.6 5 12 5 10.4C4.2 9.4 4.6 7.6 6 7.1C6.2 5.4 8 4.4 9.6 5.1C10.6 3.9 13.4 3.9 14.4 5.1C16 4.4 17.8 5.4 18 7.1C19.4 7.6 19.8 9.4 19 10.4C19 12 17.8 13.6 15.5 13.8Z" fill="color-mix(in oklch, var(--accent) 82%, #063a1e)"/><path d="M9.2 12.9C7.5 12.7 6.5 11.6 6.6 10.3C6 9.5 6.4 8.3 7.4 8C7.6 6.8 8.9 6.1 10 6.7C10.8 5.9 13.2 5.9 14 6.7C15.1 6.1 16.4 6.8 16.6 8C17.6 8.3 18 9.5 17.4 10.3C17.5 11.6 16.5 12.7 14.8 12.9Z" fill="color-mix(in oklch, var(--accent) 92%, #eaffea)"/></g></svg><span style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--faint);">Reconstructing…</span></div></sc-if>
+          <sc-if value="{{ s.isError }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; align-items:center; gap:8px; color:var(--amber);"><span style="font-size:22px;">⚠</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10.5px;">Model failed to load</span></div></sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ SUBMIT ============ -->
+  <sc-if value="{{ isSubmit }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:760px; margin:0 auto; padding:26px 30px 60px;">
+    <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:28px; letter-spacing:-0.02em; margin:0; color:var(--text);">Submit a model</h1>
+    <p style="color:var(--muted); font-size:14.5px; margin:8px 0 0; line-height:1.55;">Add a generator to the arena. Submissions are moderated, pre-tested on the calibration set, then enter the public pairwise queue — no self-voting, exclusions logged on the record.</p>
+
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:24px 0 8px;">
+      <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:14px 16px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--accent); font-weight:600;">01 · Submit</div><div style="font-size:12.5px; color:var(--muted); margin-top:6px; line-height:1.45;">Weights, API, or output files + provenance.</div></div>
+      <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:14px 16px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--accent); font-weight:600;">02 · Calibrate</div><div style="font-size:12.5px; color:var(--muted); margin-top:6px; line-height:1.45;">Pre-tested on the held-out calibration set.</div></div>
+      <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:14px 16px;"><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--accent); font-weight:600;">03 · Compete</div><div style="font-size:12.5px; color:var(--muted); margin-top:6px; line-height:1.45;">Enters the live pairwise vote queue.</div></div>
+    </div>
+
+    <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:22px; margin-top:16px; display:flex; flex-direction:column; gap:16px;">
+      <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; font-weight:600; color:var(--muted);">Model name
+        <input placeholder="e.g. TRELLIS 2.0" style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px 12px; font-family:'IBM Plex Sans',sans-serif; font-size:14px; font-weight:400;" style-focus="border-color: var(--accent)">
+      </label>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+        <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; font-weight:600; color:var(--muted);">Organization
+          <input placeholder="Lab or company" style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px 12px; font-family:'IBM Plex Sans',sans-serif; font-size:14px; font-weight:400;" style-focus="border-color: var(--accent)">
+        </label>
+        <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; font-weight:600; color:var(--muted);">Paradigm
+          <div style="display:flex; align-items:center; justify-content:space-between; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px 12px; font-size:14px;">Image → 3D <span style="color:var(--faint);">▾</span></div>
+        </label>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+        <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; font-weight:600; color:var(--muted);">Kingdom
+          <div style="display:flex; align-items:center; justify-content:space-between; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px 12px; font-size:14px;">Plants <span style="color:var(--faint);">▾</span></div>
+        </label>
+        <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; font-weight:600; color:var(--muted);">Output format
+          <div style="display:flex; align-items:center; justify-content:space-between; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px 12px; font-size:14px;">GLB <span style="color:var(--faint);">▾</span></div>
+        </label>
+      </div>
+      <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; font-weight:600; color:var(--muted);">Weights / API endpoint
+        <input placeholder="https:// or huggingface.co/…" style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px 12px; font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:400;" style-focus="border-color: var(--accent)">
+      </label>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding-top:4px;">
+        <span style="font-size:12px; color:var(--faint);">By submitting you agree outputs may be shown anonymously to voters.</span>
+        <button style="display:inline-flex; align-items:center; gap:8px; background:var(--accent); border:none; border-radius:11px; color:oklch(0.98 0.01 258); font-family:'IBM Plex Sans',sans-serif; font-size:14px; font-weight:600; padding:11px 22px; cursor:pointer; transition:filter 0.12s;" style-hover="filter:brightness(1.08)">Submit for review</button>
+      </div>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ SIGNIFICANCE ============ -->
+  <sc-if value="{{ isSignificance }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:1180px; margin:0 auto; padding:26px 30px 60px;">
+    <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:28px; letter-spacing:-0.02em; margin:0; color:var(--text);">Statistical significance<span style="{{ kScopeStyle }}">{{ kScope }}</span></h1>
+    <p style="color:var(--muted); font-size:14.5px; margin:8px 0 0; max-width:680px; line-height:1.55;">Bradley&ndash;Terry ratings carry uncertainty. Two models are only <em style="color:var(--text); font-style:normal; font-weight:600;">meaningfully</em> ranked apart when their 95% confidence intervals don't overlap.</p>
+
+    <div style="display:flex; align-items:flex-start; gap:12px; margin-top:20px; padding:14px 18px; background:color-mix(in oklch, var(--accent) 8%, var(--panel)); border:1px solid color-mix(in oklch, var(--accent) 30%, var(--border)); border-radius:14px;">
+      <span style="display:inline-flex; width:26px; height:26px; flex-shrink:0; align-items:center; justify-content:center; border-radius:8px; background:color-mix(in oklch, var(--accent) 18%, transparent); color:var(--accent); font-weight:700; font-family:'IBM Plex Mono',monospace; font-size:13px;">σ</span>
+      <p style="margin:0; color:var(--text); font-size:13.5px; line-height:1.5;">{{ sigNote }}</p>
+    </div>
+
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin:30px 0 4px; color:var(--text);">Rating intervals <span style="font-weight:400; font-size:13px; color:var(--muted);">&mdash; BT score &plusmn; 95% CI</span></h2>
+    <p style="color:var(--muted); font-size:13px; margin:0 0 14px;">Dashed line marks the leader. Grey intervals are cleanly separated below it; blue intervals still overlap the leader &mdash; not yet distinguishable.</p>
+    <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:18px 20px; overflow-x:auto;">
+      {{ sigForestEl }}
+    </div>
+
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin:32px 0 4px; color:var(--text);">Head-to-head win probability</h2>
+    <p style="color:var(--muted); font-size:13px; margin:0 0 14px;">Modelled P(row beats column) from the rating gap. Read across a row: greener cells = that model tends to win the matchup.</p>
+    <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:18px 20px; overflow-x:auto;">
+      {{ sigMatrixEl }}
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ DATASET ============ -->
+  <sc-if value="{{ isDataset }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:1180px; margin:0 auto; padding:26px 30px 60px;">
+    <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:28px; letter-spacing:-0.02em; margin:0; color:var(--text);">Dataset<span style="{{ kScopeStyle }}">{{ kScope }}</span></h1>
+    <p style="color:var(--muted); font-size:14.5px; margin:8px 0 0; max-width:680px; line-height:1.55;">The reference corpus behind every task &mdash; real organisms, how each was captured, and how many model outputs it has drawn.</p>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; margin-top:22px;">
+      <sc-for list="{{ datasetStats }}" as="s" hint-placeholder-count="4">
+        <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:14px 16px;">
+          <div data-cu="1" style="font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:600; color:var(--accent); font-variant-numeric:tabular-nums;">{{ s.value }}</div>
+          <div style="font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.35;">{{ s.label }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin:30px 0 0; color:var(--text);">Composition</h2>
+    <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:8px 22px 20px; margin-top:14px;">
+      <sc-for list="{{ datasetBars }}" as="bar" hint-placeholder-count="3">
+        <div style="margin-top:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:7px;"><span style="font-size:13px; font-weight:600; color:var(--text);">{{ bar.label }}</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--faint);">{{ bar.total }}</span></div>
+          <div style="display:flex; height:26px; border-radius:8px; overflow:hidden; border:1px solid var(--border);">
+            <sc-for list="{{ bar.segs }}" as="s" hint-placeholder-count="3"><div title="{{ s.title }}" style="{{ s.style }}"></div></sc-for>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:9px;">
+            <sc-for list="{{ bar.segs }}" as="s" hint-placeholder-count="3"><span style="display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--muted);"><span style="{{ s.dot }}"></span>{{ s.name }} &middot; {{ s.val }}</span></sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin:32px 0 0; color:var(--text);">Specimen inventory</h2>
+    <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; overflow:hidden; margin-top:14px;">
+      <div style="display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) 108px 132px 66px; padding:11px 18px; border-bottom:1px solid var(--border); font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--faint);">
+        <div>Specimen</div><div>Order</div><div style="text-align:center;">Tier</div><div>Provenance</div><div style="text-align:right;">Outputs</div>
+      </div>
+      <sc-for list="{{ datasetRows }}" as="r" hint-placeholder-count="6">
+        <div style="display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) 108px 132px 66px; align-items:center; padding:10px 18px; border-bottom:1px solid var(--border);">
+          <div style="min-width:0;">
+            <div style="font-weight:600; font-size:13.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.common }}</div>
+            <div style="font-style:italic; font-size:12px; color:var(--accent2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.latin }}</div>
+          </div>
+          <div style="font-size:12.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:10px;">{{ r.lineage }}</div>
+          <div style="text-align:center;"><span style="{{ r.tierStyle }}">{{ r.tier }}</span></div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.license }}</div>
+          <div style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--text); font-variant-numeric:tabular-nums;">{{ r.models }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ TASKS ============ -->
+  <sc-if value="{{ isTasks }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:1180px; margin:0 auto; padding:26px 30px 60px;">
+    <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:28px; letter-spacing:-0.02em; margin:0; color:var(--text);">Task catalog<span style="{{ kScopeStyle }}">{{ kScope }}</span></h1>
+    <p style="color:var(--muted); font-size:14.5px; margin:8px 0 0; max-width:680px; line-height:1.55;">Every benchmarked task: the source organism, the reconstruction paradigm it exercises, its difficulty tier, and the votes it's drawn.</p>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; margin-top:22px;">
+      <sc-for list="{{ taskStats }}" as="s" hint-placeholder-count="3">
+        <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:14px 16px;">
+          <div data-cu="1" style="font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:600; color:var(--accent); font-variant-numeric:tabular-nums;">{{ s.value }}</div>
+          <div style="font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.35;">{{ s.label }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; overflow:hidden; margin-top:24px;">
+      <div style="display:grid; grid-template-columns:64px minmax(0,1.5fr) minmax(0,1fr) 118px 78px; padding:11px 18px; border-bottom:1px solid var(--border); font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--faint);">
+        <div>Task</div><div>Subject</div><div>Paradigm</div><div style="text-align:center;">Tier</div><div style="text-align:right;">Votes</div>
+      </div>
+      <sc-for list="{{ taskRows }}" as="r" hint-placeholder-count="9">
+        <div style="display:grid; grid-template-columns:64px minmax(0,1.5fr) minmax(0,1fr) 118px 78px; align-items:center; padding:11px 18px; border-bottom:1px solid var(--border);">
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; color:var(--faint);">{{ r.id }}</div>
+          <div style="display:flex; align-items:center; gap:8px; min-width:0;"><span style="font-size:14px; line-height:1;">{{ r.emoji }}</span><span style="font-style:italic; font-size:13.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.subject }}</span></div>
+          <div style="font-size:12.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:10px;">{{ r.paradigm }}</div>
+          <div style="text-align:center;"><span style="{{ r.tierStyle }}">{{ r.tier }}</span></div>
+          <div style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--text); font-variant-numeric:tabular-nums;">{{ r.votes }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ METHODOLOGY ============ -->
+  <sc-if value="{{ isMethodology }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:940px; margin:0 auto; padding:26px 30px 70px;">
+    <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:28px; letter-spacing:-0.02em; margin:0; color:var(--text);">How the arena works</h1>
+    <p style="color:var(--muted); font-size:14.5px; margin:8px 0 0; max-width:700px; line-height:1.55;">Every ranking traces back to a simple, auditable loop: a real specimen, identical inputs, anonymous pairwise votes, and a statistical model that turns those votes into a score.</p>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); gap:14px; margin-top:26px;">
+      <sc-for list="{{ methodSteps }}" as="st" hint-placeholder-count="6">
+        <div style="background:var(--panel); border:1px solid var(--border); border-top:2px solid var(--accent); border-radius:14px; padding:15px 16px;">
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:700; color:var(--accent);">{{ st.num }}</div>
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14.5px; color:var(--text); margin:8px 0 5px;">{{ st.title }}</div>
+          <div style="font-size:12.5px; color:var(--muted); line-height:1.5;">{{ st.body }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:26px;">
+      <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:20px 22px;">
+        <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin:0 0 8px; color:var(--text);">The Bradley&ndash;Terry model</h2>
+        <p style="color:var(--muted); font-size:13px; line-height:1.55; margin:0 0 14px;">Each model earns a latent skill &beta;. The probability one beats another is a logistic function of their rating gap &mdash; the same math behind chess Elo.</p>
+        <div style="background:var(--panelDeep); border:1px solid var(--border); border-radius:11px; padding:16px; text-align:center; font-family:'IBM Plex Mono',monospace; font-size:14px; color:var(--text);">P(i &gt; j) = 1 / (1 + e<sup style="font-size:9px;">&minus;(&beta;<sub>i</sub> &minus; &beta;<sub>j</sub>)</sup>)</div>
+        <p style="color:var(--faint); font-size:12px; line-height:1.5; margin:14px 0 0;">Ratings are fit by maximum likelihood over all recorded pairs, then re-centred so the field mean sits near 1000.</p>
+      </div>
+      <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:20px 22px;">
+        <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin:0 0 8px; color:var(--text);">Pairwise sampling</h2>
+        <p style="color:var(--muted); font-size:13px; line-height:1.55; margin:0;">Pairs are drawn to maximise information: models with overlapping intervals are matched more often, so uncertainty collapses where the ranking is still contested. Both outputs are shown unlabelled, in a randomised left/right order, to remove position and brand bias.</p>
+      </div>
+      <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:20px 22px;">
+        <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin:0 0 8px; color:var(--text);">Difficulty tiers</h2>
+        <p style="color:var(--muted); font-size:13px; line-height:1.55; margin:0;">Tasks are graded Easy / Moderate / Hard by structural complexity &mdash; a single leaf versus a whole branching architecture. Tiering lets a model that only handles simple shapes be told apart from one that holds up under complexity.</p>
+      </div>
+      <div style="background:var(--panel); border:1px solid var(--border); box-shadow:var(--shadowCard); border-radius:14px; padding:20px 22px;">
+        <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin:0 0 8px; color:var(--text);">Confidence &amp; governance</h2>
+        <p style="color:var(--muted); font-size:13px; line-height:1.55; margin:0;">A rating is marked <span style="color:var(--win); font-weight:600;">firm</span> only past 30 votes; below that it stays <span style="color:var(--amber); font-weight:600;">provisional</span>. Every reference carries an explicit licence, and outputs can be held out of the pool without being deleted &mdash; kept on record for audit.</p>
+      </div>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ STUB (roadmap pages) ============ -->
+  <sc-if value="{{ isStub }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:720px; margin:0 auto; padding:64px 30px 90px; text-align:center;">
+    <div style="display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:10.5px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--amber); background:color-mix(in oklch, var(--amber) 15%, transparent); border:1px solid color-mix(in oklch, var(--amber) 38%, transparent); border-radius:999px; padding:4px 12px;">In progress</div>
+    <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:30px; letter-spacing:-0.02em; margin:18px 0 0; color:var(--text);">{{ stubTitle }}</h1>
+    <p style="color:var(--muted); font-size:15px; line-height:1.6; max-width:560px; margin:14px auto 0;">This section is on the Bio 3D Arena roadmap. The design system, tokens, and table/card patterns from the live pages carry straight into it — it's a content build, not a new design.</p>
+    <button onClick="{{ goArena }}" style="margin-top:28px; display:inline-flex; align-items:center; gap:8px; background:var(--accent); border:none; border-radius:11px; color:oklch(0.98 0.01 258); font-family:'IBM Plex Sans',sans-serif; font-size:14px; font-weight:600; padding:11px 20px; cursor:pointer;" style-hover="filter:brightness(1.08)">← Back to the arena</button>
+  </main>
+  </sc-if>
+
+  <!-- SCREEN_MOUNT -->
+
+  </div>
+  <!-- end routed screens -->
+
+  <footer style="padding:28px 30px 40px; border-top:1px solid var(--border);">
+    <div style="max-width:1180px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+      <span style="color:var(--faint); font-size:12.5px;">Anonymous pairwise comparison of biological 3D generations.</span>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--muted); text-decoration:none; border:1px solid var(--border); border-radius:8px; padding:4px 10px;" style-hover="color: var(--accent2); border-color: var(--accent2);">Paper ↗</a>
+        <a style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--muted); text-decoration:none; border:1px solid var(--border); border-radius:8px; padding:4px 10px;" style-hover="color: var(--accent2); border-color: var(--accent2);">GitHub ↗</a>
+        <a style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--muted); text-decoration:none; border:1px solid var(--border); border-radius:8px; padding:4px 10px;" style-hover="color: var(--accent2); border-color: var(--accent2);">Dataset ↗</a>
+        <a style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--muted); text-decoration:none; border:1px solid var(--border); border-radius:8px; padding:4px 10px;" style-hover="color: var(--accent2); border-color: var(--accent2);">Submit a model</a>
+        <a style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--faint); text-decoration:none; padding:4px 8px;">Terms</a>
+        <a style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--faint); text-decoration:none; padding:4px 8px;">Privacy</a>
+        <a style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--faint); text-decoration:none; padding:4px 8px;">Licenses</a>
+      </div>
+    </div>
+  </footer>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Theme&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;oklch(0.56 0.13 150)&quot;,&quot;options&quot;:[&quot;oklch(0.56 0.13 150)&quot;,&quot;oklch(0.5 0.11 168)&quot;,&quot;oklch(0.58 0.12 135)&quot;,&quot;oklch(0.63 0.17 274)&quot;,&quot;oklch(0.72 0.13 220)&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Accent&quot;}}">
+class Component extends DCLogic {
+  state = { theme: null, screen: 'home', kingdom: 'all', lbTab: 'overall', lbOpen: null, openMenu: null, voted: null, sessionVotes: 0, navCollapsed: false, navMobileOpen: false, stageLoading: false };
+
+  toggleNav() { this.setState((s) => ({ navCollapsed: !s.navCollapsed })); }
+
+  icon(name) {
+    const A = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' };
+    const p = (d) => React.createElement('path', Object.assign({ d }, A));
+    const cc = (cx, cy, r) => React.createElement('circle', Object.assign({ cx, cy, r }, A));
+    const sets = {
+      home: [p('M3 9.7 L10 3.7 L17 9.7'), p('M5 8.3 V16.4 H15 V8.3')],
+      arena: [p('M3.6 4.6 H8.4 V15.4 H3.6 Z'), p('M11.6 4.6 H16.4 V15.4 H11.6 Z')],
+      leaderboard: [p('M3 16.5 H17'), p('M5 16 V11'), p('M10 16 V5.5'), p('M15 16 V8.5')],
+      models: [p('M10 2.8 L16.6 6.6 L10 10.4 L3.4 6.6 Z'), p('M3.4 6.6 V13.4 L10 17.2 L16.6 13.4 V6.6'), p('M10 10.4 V17.2')],
+      difficulty: [p('M4 15.5 V13'), p('M8 15.5 V10'), p('M12 15.5 V7'), p('M16 15.5 V4.5')],
+      benchmark: [cc(10, 10, 6.4), cc(10, 10, 2.6), p('M10 1.6 V4'), p('M10 16 V18.4'), p('M1.6 10 H4'), p('M16 10 H18.4')],
+      coverage: [p('M3.5 3.5 H8.5 V8.5 H3.5 Z'), p('M11.5 3.5 H16.5 V8.5 H11.5 Z'), p('M3.5 11.5 H8.5 V16.5 H3.5 Z'), p('M11.5 11.5 H16.5 V16.5 H11.5 Z')],
+      significance: [p('M3 16 V4'), p('M3 16 H17'), p('M4.5 15 C8 15 8 6.5 10 6.5 C12 6.5 12 15 15.5 15')],
+      dataset: [p('M4.5 5.2 C4.5 3.8 15.5 3.8 15.5 5.2 V14.8 C15.5 16.2 4.5 16.2 4.5 14.8 Z'), p('M4.5 5.2 C4.5 6.6 15.5 6.6 15.5 5.2'), p('M4.5 10 C4.5 11.4 15.5 11.4 15.5 10')],
+      tasks: [p('M3.5 6 L5 7.5 L7.5 4.8'), p('M10 6 H16.5'), p('M3.5 13 L5 14.5 L7.5 11.8'), p('M10 13 H16.5')],
+      spotlight: [p('M10 2.6 L11.7 8.3 L17.4 10 L11.7 11.7 L10 17.4 L8.3 11.7 L2.6 10 L8.3 8.3 Z')],
+      methodology: [p('M5.5 3.5 H11.5 L14.5 6.5 V16.5 H5.5 Z'), p('M11.3 3.6 V6.6 H14.4'), p('M7.8 10.5 H12.2'), p('M7.8 13.2 H12.2')],
+      submit: [p('M10 12.5 V4.2'), p('M6.6 7.6 L10 4.2 L13.4 7.6'), p('M4.6 13 V16.4 H15.4 V13')],
+    };
+    const ch = (sets[name] || []).map((el, i) => React.cloneElement(el, { key: i }));
+    return React.createElement('svg', { width: 17, height: 17, viewBox: '0 0 20 20', style: { display: 'block', overflow: 'visible' } }, ch);
+  }
+
+  homeKingdoms() {
+    const defs = [
+      { key: 'plants', emoji: '\uD83C\uDF3F', name: 'Plants', latin: 'Plantae', tasks: 12, models: 9, live: true, blurb: 'Rosales, Poaceae, Solanales \u2014 leaves, flowers, whole architectures.' },
+      { key: 'fungi', emoji: '\uD83C\uDF44', name: 'Fungi', latin: 'Fungi', tasks: 6, models: 12, live: true, blurb: 'Agaricales & Boletales \u2014 caps, gills, pored fruiting bodies.' },
+      { key: 'animals', emoji: '\uD83D\uDC3E', name: 'Animals', latin: 'Animalia', tasks: 0, models: 0, live: false, blurb: 'In sourcing \u2014 the first taxa are arriving on the roadmap.' },
+    ];
+    return defs.map((d) => ({
+      emoji: d.emoji, name: d.name, latin: d.latin, blurb: d.blurb,
+      stat: d.live ? (d.tasks + ' tasks \u00b7 ' + d.models + ' models') : 'coming soon',
+      badge: d.live ? 'LIVE' : 'SOON',
+      badgeStyle: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '9px', fontWeight: '700', letterSpacing: '0.08em', padding: '2px 8px', borderRadius: '999px', marginLeft: 'auto', background: d.live ? 'color-mix(in oklch, var(--win) 18%, transparent)' : 'color-mix(in oklch, var(--amber) 16%, transparent)', color: d.live ? 'var(--win)' : 'var(--amber)' },
+      onClick: () => { this.setState({ kingdom: d.key, screen: d.key === 'animals' ? 'home' : 'arena', kingdomOpen: false }); window.scrollTo(0, 0); },
+    }));
+  }
+
+  sidebar() {
+    const c = this.state.navCollapsed;
+    const scr = this.state.screen;
+    const built = { home: 1, arena: 1, leaderboard: 1, models: 1, difficulty: 1, benchmark: 1, coverage: 1, spotlight: 1, submit: 1, significance: 1, dataset: 1, tasks: 1, methodology: 1 };
+    const defs = [
+      { heading: 'Overview', items: [['home', 'Home', 'home'], ['arena', 'Arena', 'arena']] },
+      { heading: 'Rankings', items: [['leaderboard', 'Leaderboard', 'leaderboard'], ['models', 'Models', 'models'], ['difficulty', 'Difficulty', 'difficulty']] },
+      { heading: 'Analysis', items: [['benchmark', 'Benchmark', 'benchmark'], ['coverage', 'Coverage', 'coverage'], ['significance', 'Significance', 'significance']] },
+      { heading: 'Data', items: [['dataset', 'Dataset', 'dataset'], ['tasks', 'Tasks', 'tasks'], ['spotlight', 'Spotlight', 'spotlight']] },
+      { heading: 'About', items: [['methodology', 'Methodology', 'methodology'], ['submit', 'Submit', 'submit']] },
+    ];
+    const soonTag = { fontFamily: "'IBM Plex Mono',monospace", fontSize: '8.5px', fontWeight: '700', letterSpacing: '0.04em', textTransform: 'uppercase', padding: '1px 5px', borderRadius: '999px', background: 'color-mix(in oklch, var(--amber) 16%, transparent)', color: 'var(--amber)', marginLeft: 'auto' };
+    const groups = defs.map((g) => ({
+      heading: g.heading,
+      items: g.items.map((it) => {
+        const key = it[0], label = it[1], icon = it[2];
+        const b = !!built[key];
+        const active = key === scr || (key === 'models' && scr === 'modeldetail');
+        return {
+          label, iconEl: this.icon(icon),
+          onClick: b ? () => this.go(key) : () => this.openStub(label),
+          soonStyle: (!b && !c) ? soonTag : { display: 'none' },
+          iconStyle: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '20px', flexShrink: 0, color: active ? 'var(--accent)' : 'inherit' },
+          labelStyle: c ? { display: 'none' } : {},
+          style: {
+            display: 'flex', alignItems: 'center', gap: '11px', padding: c ? '9px 0' : '8px 11px',
+            justifyContent: c ? 'center' : 'flex-start', borderRadius: '8px', textDecoration: 'none',
+            cursor: 'pointer', fontSize: '13.5px', fontWeight: active ? '600' : '500', whiteSpace: 'nowrap',
+            color: active ? 'var(--accent)' : 'var(--muted)',
+            background: active ? 'color-mix(in oklch, var(--accent) 14%, transparent)' : 'transparent',
+          },
+        };
+      }),
+      headingStyle: c ? { display: 'none' } : { fontFamily: "'IBM Plex Mono',monospace", fontSize: '9.5px', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--faint)', padding: '15px 11px 5px' },
+    }));
+    return {
+      sidebarGroups: groups,
+      navCollapsed: c,
+      toggleNav: () => this.toggleNav(),
+      collapseGlyph: c ? '\u00BB' : '\u00AB',
+      sideLabelStyle: c ? { display: 'none' } : {},
+      asideClass: (this.state.navMobileOpen ? 'b3d-aside b3d-aside-open' : 'b3d-aside') + (c ? ' b3d-aside-collapsed' : ''),
+      themeBtnStyle: {
+        marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '11px',
+        justifyContent: c ? 'center' : 'flex-start', padding: '10px 11px', background: 'transparent',
+        border: 'none', borderTop: '1px solid var(--border)', borderRadius: '0', color: 'var(--muted)',
+        fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '13.5px', fontWeight: '500', cursor: 'pointer',
+      },
+      asideStyle: {
+        position: 'fixed', left: '0', top: '0', bottom: '0', width: c ? '54px' : '236px',
+        background: 'var(--panelDeep)', borderRight: '1px solid var(--border)', display: 'flex',
+        flexDirection: 'column', padding: c ? '16px 7px' : '16px 14px', zIndex: '30',
+        overflowY: 'auto', transition: 'width 0.16s ease', boxShadow: '1px 0 0 var(--border), 6px 0 24px oklch(0.5 0.03 258 / 0.05)',
+      },
+      mainStyle: { marginLeft: c ? '54px' : '236px', transition: 'margin-left 0.16s ease' },
+    };
+  }
+
+  vote(c) { if (this.state.voted) return; this.setState((s) => ({ voted: c, sessionVotes: s.sessionVotes + 1 })); }
+
+  computeReveal() {
+    const voted = this.state.voted;
+    const A = { name: 'TRELLIS (Replicate)', org: 'Microsoft', delta: '+18', mono: 'TR' };
+    const B = { name: 'Hunyuan3D v2 (full)', org: 'Tencent', delta: '+14', mono: 'HY' };
+    const winner = voted === 'a' ? 'a' : voted === 'b' ? 'b' : null;
+    const GOLD = 'oklch(0.7 0.11 85)';
+    const baseFrame = { border: '1px solid var(--border)', borderTop: '2px solid color-mix(in oklch, var(--accent) 55%, var(--border))', borderRadius: '14px', overflow: 'hidden', background: 'var(--stageFrame)', transition: 'border-color 0.4s ease' };
+    const winFrame = { border: '1px solid var(--border)', borderTop: '2px solid color-mix(in oklch, ' + GOLD + ' 75%, var(--border))', borderRadius: '14px', overflow: 'hidden', background: 'var(--stageFrame)', transition: 'border-color 0.4s ease' };
+
+    // per-stage rank chip (top-right of each viewer) — quiet
+    const medalFor = (which) => {
+      if (!voted) return { show: false, ribbonStyle: { display: 'none' }, emoji: '', label: '', frame: baseFrame };
+      let label, frame = baseFrame, isWin = false;
+      if (voted === 'tie') { label = 'tie'; }
+      else if (voted === 'bad') { label = 'weak'; }
+      else if (winner === which) { label = '1st'; frame = winFrame; isWin = true; }
+      else { label = '2nd'; }
+      return {
+        show: true, label, frame,
+        ribbonStyle: {
+          position: 'absolute', top: '14px', right: '14px', zIndex: 6,
+          display: 'inline-flex', alignItems: 'center', gap: '6px',
+          fontFamily: "'IBM Plex Mono',monospace", fontSize: '10.5px', fontWeight: '600', letterSpacing: '0.04em',
+          color: isWin ? GOLD : 'var(--muted)',
+          background: 'var(--ctlBg)', border: '1px solid ' + (isWin ? 'color-mix(in oklch, ' + GOLD + ' 45%, var(--border))' : 'var(--border)'),
+          borderRadius: '999px', padding: '4px 10px',
+          animation: 'b3d-fade-in 0.35s ease both',
+        },
+        dotStyle: { width: '6px', height: '6px', borderRadius: '50%', background: isWin ? GOLD : 'var(--faint)' },
+      };
+    };
+
+    // compact reveal cards (A left, B right — maps to the two viewers)
+    const card = (m, which) => {
+      const isWin = winner === which && voted !== 'tie' && voted !== 'bad';
+      const rank = voted === 'tie' ? 'tie' : voted === 'bad' ? '—' : (winner === which ? '1st' : '2nd');
+      return {
+        rank, name: m.name, org: m.org, mono: m.mono,
+        delta: voted === 'bad' ? '±0' : (isWin ? m.delta : (voted === 'tie' ? '±0' : '−' + m.delta.replace('+', ''))),
+        monoStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', flexShrink: 0, borderRadius: '8px', background: 'var(--panel2)', color: isWin ? GOLD : 'var(--muted)', border: '1px solid ' + (isWin ? 'color-mix(in oklch, ' + GOLD + ' 40%, var(--border))' : 'var(--border)'), fontFamily: "'Space Grotesk',sans-serif", fontWeight: '700', fontSize: '12px' },
+        rankStyle: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '10px', fontWeight: '700', letterSpacing: '0.06em', textTransform: 'uppercase', color: isWin ? GOLD : 'var(--faint)' },
+        deltaStyle: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '11px', color: isWin ? 'var(--win)' : 'var(--faint)' },
+        style: {
+          position: 'relative', flex: '1 1 240px', maxWidth: '300px', display: 'flex', alignItems: 'center', gap: '11px',
+          padding: '12px 15px', borderRadius: '14px', background: 'var(--panel)',
+          borderLeft: '2px solid ' + (isWin ? GOLD : 'var(--border)'),
+          border: '1px solid var(--border)', boxShadow: 'var(--shadowCard)',
+          animation: 'b3d-fade-in 0.3s ease both',
+        },
+      };
+    };
+
+    return {
+      stageAFrame: medalFor('a').frame,
+      stageBFrame: medalFor('b').frame,
+      stageAMedal: medalFor('a'),
+      stageBMedal: medalFor('b'),
+      revealNote: voted === 'tie' ? 'Called a tie — the rating gap narrows.' : voted === 'bad' ? 'Both marked weak — no rating change.' : 'Names revealed · your vote fed the leaderboard.',
+      podiumCards: [card(A, 'a'), card(B, 'b')],
+    };
+  }
+
+  nextPair() { this._pairSeq = (this._pairSeq || 0) + 1; this.setState({ voted: null }); window.scrollTo(0, 0); }
+  openModel(name) { this.setState({ screen: 'modeldetail', selectedModel: name }); window.scrollTo(0, 0); }
+  openStub(title) { this.setState({ screen: 'stub', stubTitle: title, openMenu: null }); window.scrollTo(0, 0); }
+  closeMenu() { this.setState({ openMenu: null }); }
+
+  modelData() {
+    return [
+      { name: 'TRELLIS', org: 'Microsoft', kind: 'model', mono: 'TR', hue: 248, score: 1058.9, votes: 128, tasks: 19, winrate: 0.66, plants: 1058.9, fungi: 1242.0 },
+      { name: 'Hunyuan3D v2', org: 'Tencent', kind: 'model', mono: 'HY', hue: 210, score: 1043.8, votes: 119, tasks: 19, winrate: 0.61, plants: 1043.8, fungi: 1094.0 },
+      { name: 'Radim/gaussian', org: 'Research', kind: 'model', mono: 'RG', hue: 288, score: 1439.2, votes: 141, tasks: 15, winrate: 0.79, plants: 1439.2, fungi: 1210.0 },
+      { name: 'PartCrafter', org: 'Research', kind: 'model', mono: 'PC', hue: 168, score: 1033.8, votes: 96, tasks: 12, winrate: 0.58, plants: 1033.8, fungi: null },
+      { name: 'TripoSR', org: 'Tripo AI', kind: 'model', mono: 'TS', hue: 32, score: 506.7, votes: 61, tasks: 15, winrate: 0.33, plants: 506.7, fungi: 612.0 },
+      { name: 'Rodin / Hyper3D', org: 'Deemos', kind: 'model', mono: 'RD', hue: 340, score: 963.3, votes: 74, tasks: 15, winrate: 0.47, plants: 963.3, fungi: null },
+      { name: 'gemini-2.5-pro', org: 'Google', kind: 'agent', mono: 'Gm', hue: 250, score: 1418.6, votes: 44, tasks: 7, winrate: 0.71, plants: 1418.6, fungi: null },
+      { name: 'o3', org: 'OpenAI', kind: 'agent', mono: 'o3', hue: 150, score: 1301.9, votes: 39, tasks: 7, winrate: 0.63, plants: 1301.9, fungi: null },
+      { name: 'L-Py', org: 'Inria', kind: 'baseline', mono: 'Lp', hue: 130, score: 1041.0, votes: 28, tasks: 7, winrate: 0.55, plants: 1041.0, fungi: null },
+    ];
+  }
+
+  kindIcon(kind, size) {
+    const h = React.createElement;
+    const svg = (children) => h('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block' } }, children);
+    if (kind === 'agent') {
+      return svg([
+        h('circle', { key: 'c', cx: 12, cy: 12, r: 2.5 }),
+        h('circle', { key: 'n1', cx: 5, cy: 6, r: 1.7 }),
+        h('circle', { key: 'n2', cx: 19, cy: 6, r: 1.7 }),
+        h('circle', { key: 'n3', cx: 12, cy: 20, r: 1.7 }),
+        h('path', { key: 'l1', d: 'M10.2 10.5 6.4 7.2' }),
+        h('path', { key: 'l2', d: 'M13.8 10.5 17.6 7.2' }),
+        h('path', { key: 'l3', d: 'M12 14.5 12 18' }),
+      ]);
+    }
+    if (kind === 'baseline') {
+      return svg([
+        h('path', { key: 't', d: 'M12 21 12 12.5' }),
+        h('path', { key: 'b1', d: 'M12 14.5 7.6 9.8' }),
+        h('path', { key: 'b2', d: 'M12 12.5 16.4 7.8' }),
+        h('path', { key: 'b3', d: 'M7.6 9.8 5.6 11.4' }),
+        h('path', { key: 'b4', d: 'M7.6 9.8 6.2 6.8' }),
+        h('path', { key: 'b5', d: 'M16.4 7.8 18.4 6.2' }),
+        h('path', { key: 'b6', d: 'M16.4 7.8 15.9 4.8' }),
+      ]);
+    }
+    return svg([
+      h('path', { key: 'o', d: 'M12 3 20 7.5 20 16.5 12 21 4 16.5 4 7.5Z' }),
+      h('path', { key: 'i1', d: 'M12 3 12 12' }),
+      h('path', { key: 'i2', d: 'M12 12 20 7.5' }),
+      h('path', { key: 'i3', d: 'M12 12 4 7.5' }),
+      h('path', { key: 'i4', d: 'M12 12 12 21', style: { opacity: 0.45 } }),
+    ]);
+  }
+
+  computeModels() {
+    const kindColor = { model: 'var(--accent2)', agent: 'var(--accent)', baseline: 'var(--muted)' };
+    const models = this.modelData().map((m) => ({
+      name: m.name, org: m.org, kind: m.kind, mono: m.mono, icon: this.kindIcon(m.kind, 22),
+      score: m.score.toFixed(1), votes: m.votes, tasks: m.tasks,
+      onClick: () => this.openModel(m.name),
+      monoStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '42px', height: '42px', flexShrink: 0, borderRadius: '11px', background: 'oklch(0.62 0.14 ' + m.hue + ' / 0.18)', border: '1px solid oklch(0.62 0.14 ' + m.hue + ' / 0.42)', color: 'oklch(0.72 0.13 ' + m.hue + ')', fontFamily: "'Space Grotesk',sans-serif", fontWeight: '700', fontSize: '15px' },
+      kindStyle: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '10px', fontWeight: '600', color: kindColor[m.kind], border: '1px solid var(--border)', borderRadius: '999px', padding: '1px 7px' },
+    }));
+    return { models };
+  }
+
+  computeModelDetail() {
+    const m = this.modelData().find((x) => x.name === this.state.selectedModel) || this.modelData()[0];
+    const hue = m.hue;
+    const kindColor = { model: 'var(--accent2)', agent: 'var(--accent)', baseline: 'var(--muted)' };
+    const tasks = [
+      ['Rosa', 'Plants', m.plants],
+      ['Solanum lycopersicum', 'Plants', m.plants ? m.plants - 22 : null],
+      ['Zea mays', 'Plants', m.plants ? m.plants + 14 : null],
+      ['Amanita muscaria', 'Fungi', m.fungi],
+      ['Boletus edulis', 'Fungi', m.fungi ? m.fungi - 40 : null],
+    ];
+    const md = {
+      name: m.name, org: m.org, kind: m.kind, mono: m.mono, icon: this.kindIcon(m.kind, 30),
+      monoStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '60px', height: '60px', flexShrink: 0, borderRadius: '14px', background: 'oklch(0.62 0.14 ' + hue + ' / 0.18)', border: '1px solid oklch(0.62 0.14 ' + hue + ' / 0.42)', color: 'oklch(0.72 0.13 ' + hue + ')', fontFamily: "'Space Grotesk',sans-serif", fontWeight: '700', fontSize: '22px' },
+      kindStyle: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '11px', fontWeight: '600', color: kindColor[m.kind], border: '1px solid var(--border)', borderRadius: '999px', padding: '2px 9px' },
+      stats: [
+        { label: 'BT score', value: m.score.toFixed(1) },
+        { label: 'Total votes', value: String(m.votes) },
+        { label: 'Win-rate', value: Math.round(m.winrate * 100) + '%' },
+        { label: 'Tasks covered', value: String(m.tasks) },
+      ],
+      taskRows: tasks.map((t) => ({ name: t[0], kingdom: t[1], score: t[2] == null ? '—' : t[2].toFixed(1), muted: t[2] == null })),
+      samples: [
+        { isLoaded: true, isLoading: false, isError: false, emoji: '\uD83C\uDF39' },
+        { isLoaded: false, isLoading: true, isError: false, emoji: '' },
+        { isLoaded: false, isLoading: false, isError: true, emoji: '' },
+      ],
+    };
+    return { modelDetail: md };
+  }
+
+  toggleMenu(k) { this.setState((s) => ({ openMenu: s.openMenu === k ? null : k })); }
+
+  get kingdom() { return this.state.kingdom || 'all'; }
+
+  kingdomInfo() {
+    const map = {
+      all: { label: 'All kingdoms', emoji: '\uD83E\uDDEC', live: true, tasks: 18, votes: '1,585', updated: '2h ago',
+        subject: { common: 'Rose', latin: 'Rosa', chip: 'All kingdoms', emoji: '\uD83C\uDF39', title: 'Rosa — single-image → 3D reconstruction', prompt: 'Reconstruct a 3D model of a rose (Rosa) plant in bloom from a single RGB image. Serving a representative task sampled across all kingdoms.' } },
+      plants: { label: 'Plants', emoji: '\uD83C\uDF3F', live: true, tasks: 12, votes: '1,204', updated: '2h ago',
+        subject: { common: 'Rose', latin: 'Rosa', chip: 'Plants', emoji: '\uD83C\uDF39', title: 'Rosa — single-image → 3D reconstruction', prompt: 'Reconstruct a 3D model of a rose (Rosa) plant in bloom from a single RGB image.' } },
+      fungi: { label: 'Fungi', emoji: '\uD83C\uDF44', live: true, tasks: 6, votes: '381', updated: '1d ago',
+        subject: { common: 'Fly agaric', latin: 'Amanita muscaria', chip: 'Fungi', emoji: '\uD83C\uDF44', title: 'Amanita muscaria — single-image → 3D reconstruction', prompt: 'Reconstruct a 3D model of a fly agaric (Amanita muscaria) fruiting body from a single RGB image.' } },
+      animals: { label: 'Animals', emoji: '\uD83D\uDC3E', live: false, tasks: 0, votes: '0', updated: '—',
+        subject: { common: '', latin: '', chip: 'Animals', emoji: '\uD83D\uDC3E', title: '', prompt: '' } },
+    };
+    return map[this.kingdom] || map.plants;
+  }
+
+  componentDidMount() { this.startScene(); this.mountViewers(); this.countUp(); }
+  componentDidUpdate() { this.startScene(); this.mountViewers(); this.countUp(); }
+  componentWillUnmount() { if (this._vRetry) { clearInterval(this._vRetry); this._vRetry = null; } }
+
+  countUp() {
+    try { if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch (e) {}
+    const els = document.querySelectorAll('[data-cu]:not([data-cu-done])');
+    els.forEach((el) => {
+      const finalText = el.textContent;
+      const m = finalText.match(/([\d,]+(?:\.\d+)?)/);
+      if (!m) return;
+      el.setAttribute('data-cu-done', '1');
+      const numStr = m[1];
+      const target = parseFloat(numStr.replace(/,/g, ''));
+      if (!isFinite(target) || target < 10) return;
+      const decimals = (numStr.split('.')[1] || '').length;
+      const pre = finalText.slice(0, m.index), post = finalText.slice(m.index + numStr.length);
+      const fmt = (v) => decimals ? v.toFixed(decimals) : Math.round(v).toLocaleString();
+      const dur = 800, t0 = performance.now();
+      const step = (t) => {
+        const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+        el.textContent = pre + fmt(target * e) + post;
+        if (p < 1) requestAnimationFrame(step); else el.textContent = finalText;
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  // Real per-task assets are served by the backend (/api/next → {url, format}).
+  // For this prototype we point at a real, CORS-hosted GLB so the ACTUAL viewer runs.
+  specimenAsset() {
+    return { url: 'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Assets@main/Models/Avocado/glTF-Binary/Avocado.glb', format: 'glb' };
+  }
+
+  // Mount the shared Bio3DViewer registry (viewer.js) into both A/B slots and lock
+  // their cameras. Guarded so ordinary re-renders (voting, menus) don't remount and
+  // reset the camera — only a new pair / kingdom / (re)entering the arena remounts.
+  mountViewers() {
+    if (this.state.screen !== 'arena' || this.kingdom === 'animals') return;
+    const a = document.getElementById('b3d-slot-a');
+    const b = document.getElementById('b3d-slot-b');
+    if (!a || !b) return;
+    const V = window.Bio3DViewer;
+    if (!V) {
+      if (!this._vRetry) this._vRetry = setInterval(() => {
+        if (window.Bio3DViewer) { clearInterval(this._vRetry); this._vRetry = null; this.mountViewers(); }
+      }, 150);
+      return;
+    }
+    const key = this.kingdom + '|' + (this._pairSeq || 0);
+    const mounted = a.querySelector('model-viewer') || a.querySelector('.viewer-error');
+    if (this._viewerKey === key && mounted) return;
+    this._viewerKey = key;
+    const asset = this.specimenAsset();
+    V.mount(a, asset, null);
+    V.mount(b, asset, null);
+    V.syncPair(a, b);
+  }
+
+  buildLeaf() {
+    const nu = 15, nv = 11;
+    const verts = [], tris = [], grid = [];
+    for (let iu = 0; iu <= nu; iu++) {
+      const u = iu / nu;
+      const w = Math.sin(Math.pow(u, 0.62) * Math.PI);
+      const row = [];
+      for (let iv = 0; iv < nv; iv++) {
+        const t = (iv / (nv - 1)) * 2 - 1;
+        const x = t * w * 0.92;
+        const y = (u - 0.46) * 2.05;
+        const z = (t * t) * w * 0.5 - Math.sin(u * Math.PI) * 0.30 + Math.pow(u, 3) * 0.26;
+        row.push(verts.length);
+        verts.push([x, y, z]);
+      }
+      grid.push(row);
+    }
+    for (let iu = 0; iu < nu; iu++) {
+      for (let iv = 0; iv < nv - 1; iv++) {
+        const a = grid[iu][iv], b = grid[iu][iv + 1], c = grid[iu + 1][iv], d = grid[iu + 1][iv + 1];
+        tris.push([a, b, d]); tris.push([a, d, c]);
+      }
+    }
+    const mid = (nv - 1) / 2;
+    const veins = [];
+    const midrib = []; for (let iu = 0; iu <= nu; iu++) midrib.push(grid[iu][mid]);
+    veins.push(midrib);
+    for (let s = 2; s <= nu - 3; s += 3) {
+      const left = [grid[s][mid]], right = [grid[s][mid]];
+      for (let step = 1; step <= 4 && s + step <= nu && mid - step >= 0; step++) left.push(grid[s + step][mid - step]);
+      for (let step = 1; step <= 4 && s + step <= nu && mid + step < nv; step++) right.push(grid[s + step][mid + step]);
+      if (left.length > 1) veins.push(left);
+      if (right.length > 1) veins.push(right);
+    }
+    return { verts, tris, veins };
+  }
+
+  buildMushroom() {
+    const nu = 26;
+    const verts = [], tris = [], mats = [], grid = [], prof = [];
+    const Ncap = 8;
+    for (let i = 0; i <= Ncap; i++) { const t = i / Ncap; const ang = t * Math.PI * 0.5; prof.push({ r: 0.86 * Math.sin(ang), y: 0.60 - 0.54 * (1 - Math.cos(ang)), mat: 0 }); }
+    const Nstem = 7;
+    for (let i = 0; i <= Nstem; i++) { const t = i / Nstem; prof.push({ r: 0.23 + 0.09 * t * t, y: 0.05 - 1.06 * t, mat: 1 }); }
+    for (let p = 0; p < prof.length; p++) {
+      const row = [];
+      for (let a = 0; a <= nu; a++) { const ang = (a / nu) * Math.PI * 2; row.push(verts.length); verts.push([Math.cos(ang) * prof[p].r, prof[p].y, Math.sin(ang) * prof[p].r]); }
+      grid.push(row);
+    }
+    for (let p = 0; p < prof.length - 1; p++) {
+      if (prof[p].mat === 0 && prof[p + 1].mat === 1) continue; // open underside between cap rim and stem
+      const m = prof[p + 1].mat;
+      for (let a = 0; a < nu; a++) { const A = grid[p][a], B = grid[p][a + 1], C = grid[p + 1][a], D = grid[p + 1][a + 1]; tris.push([A, B, D]); mats.push(m); tris.push([A, D, C]); mats.push(m); }
+    }
+    const veins = [];
+    const rim = []; for (let a = 0; a <= nu; a++) rim.push(grid[Ncap][a]); veins.push(rim);
+    return { verts, tris, mats, veins };
+  }
+
+  sceneGeo() {
+    const dark = this.activeTheme === 'dark';
+    if (this.kingdom === 'fungi') {
+      if (!this._geoM) this._geoM = this.buildMushroom();
+      return {
+        geo: this._geoM, nodeStride: 2,
+        materials: [
+          { hue: 32, chroma: 0.185, l0: dark ? 0.46 : 0.55, lgain: 0.28, alpha: 0.74, stroke: 'oklch(0.72 0.16 34 / 0.18)' },
+          { hue: 84, chroma: 0.045, l0: dark ? 0.70 : 0.84, lgain: 0.14, alpha: 0.72, stroke: 'oklch(0.82 0.04 84 / 0.2)' },
+        ],
+        veinColor: 'oklch(0.92 0.05 60 / 0.5)',
+      };
+    }
+    if (!this._geoL) this._geoL = this.buildLeaf();
+    return {
+      geo: this._geoL, nodeStride: 1,
+      materials: [{ hue: 148, chroma: 0.16, l0: dark ? 0.40 : 0.47, lgain: dark ? 0.33 : 0.30, alpha: 0.64, stroke: 'oklch(0.72 0.15 150 / 0.16)' }],
+      veinColor: 'oklch(0.9 0.13 150 / 0.6)',
+    };
+  }
+
+  startScene() {
+    const canvas = document.getElementById('b3d-scene-canvas');
+    if (!canvas) return;
+    if (!this._sceneBound) {
+      this._sceneBound = true;
+      const down = (e) => { const s = e.target.closest && e.target.closest('#b3d-scene-canvas'); if (!s) return; this._drag = true; this._px = e.clientX; this._py = e.clientY; s.style.cursor = 'grabbing'; };
+      const move = (e) => { if (!this._drag) return; const dx = e.clientX - this._px, dy = e.clientY - this._py; this._ry = (this._ry || 0) + dx * 0.01; this._rx = Math.max(-1.05, Math.min(1.05, (this._rx || 0) + dy * 0.01)); this._vy = dx * 0.01; this._px = e.clientX; this._py = e.clientY; };
+      const up = () => { if (this._drag) { this._drag = false; const s = document.getElementById('b3d-scene-canvas'); if (s) s.style.cursor = 'grab'; } };
+      document.addEventListener('pointerdown', down);
+      document.addEventListener('pointermove', move);
+      document.addEventListener('pointerup', up);
+    }
+    if (this._sceneRAF) return;
+    const tick = () => {
+      const cv = document.getElementById('b3d-scene-canvas');
+      if (!cv) { this._sceneRAF = null; return; }
+      if (this._ry === undefined) { this._ry = 0.6; this._rx = -0.34; this._base = (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 0 : 0.006; this._vy = this._base; }
+      if (!this._drag) { this._ry += this._vy; this._vy += (this._base - this._vy) * 0.04; }
+      this.renderScene(cv);
+      this._sceneRAF = requestAnimationFrame(tick);
+    };
+    this._sceneRAF = requestAnimationFrame(tick);
+  }
+
+  renderScene(cv) {
+    const ctx = cv.getContext('2d');
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const cssW = cv.clientWidth || 360, cssH = cv.clientHeight || 360;
+    if (cv.width !== Math.round(cssW * dpr) || cv.height !== Math.round(cssH * dpr)) { cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
+    const W = cssW, H = cssH, cx = W / 2, cy = H / 2 - 4;
+    const dark = this.activeTheme === 'dark';
+    const ry = this._ry || 0, rx = this._rx || 0;
+    const cosY = Math.cos(ry), sinY = Math.sin(ry), cosX = Math.cos(rx), sinX = Math.sin(rx);
+    const rot = (p) => {
+      let x = p[0] * cosY + p[2] * sinY;
+      let z = -p[0] * sinY + p[2] * cosY;
+      let y = p[1] * cosX - z * sinX;
+      z = p[1] * sinX + z * cosX;
+      return [x, y, z];
+    };
+    const f = 3.6, focal = Math.min(W, H) * 0.40;
+    const proj = (r) => { const k = focal / (f - r[2]); return [cx + r[0] * k, cy - r[1] * k, r[2], k]; };
+
+    // turntable ground (spins with the model)
+    const groundY = -1.02;
+    ctx.lineWidth = 1;
+    for (let ri = 0; ri < 4; ri++) {
+      const rad = 0.42 + ri * 0.26;
+      ctx.beginPath();
+      for (let a = 0; a <= 48; a++) { const ang = (a / 48) * Math.PI * 2; const pr = proj(rot([Math.cos(ang) * rad, groundY, Math.sin(ang) * rad])); if (a === 0) ctx.moveTo(pr[0], pr[1]); else ctx.lineTo(pr[0], pr[1]); }
+      ctx.strokeStyle = dark ? 'oklch(0.62 0.05 258 / 0.20)' : 'oklch(0.5 0.04 258 / 0.20)';
+      ctx.stroke();
+    }
+    for (let a = 0; a < 12; a++) { const ang = (a / 12) * Math.PI * 2; const p0 = proj(rot([Math.cos(ang) * 0.42, groundY, Math.sin(ang) * 0.42])); const p1 = proj(rot([Math.cos(ang) * 1.20, groundY, Math.sin(ang) * 1.20])); ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.strokeStyle = dark ? 'oklch(0.62 0.05 258 / 0.11)' : 'oklch(0.5 0.04 258 / 0.12)'; ctx.stroke(); }
+
+    const sg = this.sceneGeo();
+    const geo = sg.geo, mats = geo.mats, materials = sg.materials;
+    const rv = geo.verts.map(rot);
+    const pv = rv.map(proj);
+    const light = [0.34, 0.55, 0.76]; const ln = Math.hypot(light[0], light[1], light[2]);
+    const faces = geo.tris.map((tri, fi) => {
+      const a = rv[tri[0]], b = rv[tri[1]], c = rv[tri[2]];
+      const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+      const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+      const nl = Math.hypot(nx, ny, nz) || 1;
+      return { tri, m: mats ? mats[fi] : 0, zc: (a[2] + b[2] + c[2]) / 3, b: Math.abs((nx * light[0] + ny * light[1] + nz * light[2]) / (nl * ln)) };
+    });
+    faces.sort((p, q) => p.zc - q.zc);
+    for (const fc of faces) {
+      const A = pv[fc.tri[0]], B = pv[fc.tri[1]], C = pv[fc.tri[2]];
+      const mt = materials[fc.m] || materials[0];
+      const l = mt.l0 + fc.b * mt.lgain;
+      ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.lineTo(C[0], C[1]); ctx.closePath();
+      ctx.fillStyle = 'oklch(' + l.toFixed(3) + ' ' + mt.chroma + ' ' + mt.hue + ' / ' + mt.alpha + ')';
+      ctx.fill();
+      ctx.strokeStyle = mt.stroke; ctx.lineWidth = 0.5; ctx.stroke();
+    }
+
+    ctx.lineCap = 'round';
+    for (let vi = 0; vi < geo.veins.length; vi++) {
+      const vein = geo.veins[vi];
+      ctx.beginPath();
+      for (let n = 0; n < vein.length; n++) { const p = pv[vein[n]]; if (n === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); }
+      ctx.strokeStyle = sg.veinColor; ctx.lineWidth = vi === 0 ? 1.7 : 1.0; ctx.stroke();
+    }
+
+    const stride = sg.nodeStride || 1;
+    for (let i = 0; i < pv.length; i += stride) {
+      const p = pv[i];
+      const depth = Math.max(0, Math.min(1, (p[2] + 1.6) / 3.2));
+      ctx.beginPath(); ctx.arc(p[0], p[1], 1.1 + depth * 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = 'oklch(0.72 0.16 274 / ' + (0.35 + depth * 0.5).toFixed(2) + ')';
+      ctx.shadowColor = 'oklch(0.72 0.16 274 / 0.8)'; ctx.shadowBlur = 4; ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+
+    // XYZ axis triad (spins with the model)
+    const axlen = 24, ox = 42, oy = H - 34;
+    const axes = [[[1, 0, 0], 'oklch(0.66 0.2 25)'], [[0, 1, 0], 'oklch(0.74 0.17 145)'], [[0, 0, 1], 'oklch(0.66 0.16 250)']];
+    for (const [dir, col] of axes) {
+      const r = rot(dir); const ex = ox + r[0] * axlen, ey = oy - r[1] * axlen;
+      ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(ex, ey, 2.2, 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill();
+    }
+  }
+
+  get activeTheme() {
+    if (this.state.theme) return this.state.theme;
+    try { const s = localStorage.getItem('b3d-theme'); if (s) return s; } catch (e) {}
+    return this.props.theme ?? 'dark';
+  }
+
+  varsObj() {
+    const dark = this.activeTheme === 'dark';
+    const accent = this.props.accent ?? (dark ? 'oklch(0.72 0.14 150)' : 'oklch(0.5 0.13 150)');
+    const base = dark ? {
+      '--bg': 'oklch(0.165 0.018 258)',
+      '--navBg': 'oklch(0.20 0.02 258 / 0.85)',
+      '--panel': 'oklch(0.215 0.021 258)',
+      '--panelDeep': 'oklch(0.195 0.02 258)',
+      '--panel2': 'oklch(0.255 0.023 258)',
+      '--border': 'oklch(0.325 0.025 258)',
+      '--edge2': 'oklch(0.5 0.03 258 / 0.35)',
+      '--text': 'oklch(0.95 0.006 258)',
+      '--muted': 'oklch(0.72 0.02 258)',
+      '--faint': 'oklch(0.58 0.02 258)',
+      '--stage1': 'oklch(0.30 0.032 258)',
+      '--stage2': 'oklch(0.135 0.018 258)',
+      '--stageFrame': 'oklch(0.145 0.018 258)',
+      '--vignette': 'oklch(0.10 0.015 258 / 0.55)',
+      '--ctlBg': 'oklch(0.16 0.02 258 / 0.78)',
+      '--floatShadow': 'oklch(0.08 0.02 258 / 0.6)',
+      '--rowAlt': 'oklch(0.19 0.02 258)',
+      '--shadowCard': '0 1px 2px oklch(0 0 0 / 0.24), 0 10px 30px oklch(0 0 0 / 0.26)',
+      '--shadowLift': '0 2px 6px oklch(0 0 0 / 0.3), 0 20px 50px oklch(0 0 0 / 0.4)',
+      '--wash': 'oklch(0.7 0.14 150 / 0.1)',
+      '--wash2': 'oklch(0.74 0.1 205 / 0.06)',
+      '--gridDot': 'oklch(0.7 0.03 175 / 0.05)',
+    } : {
+      '--bg': 'oklch(0.963 0.006 250)',
+      '--navBg': 'oklch(0.99 0.004 258 / 0.85)',
+      '--panel': 'oklch(1 0 0)',
+      '--panelDeep': 'oklch(0.987 0.004 258)',
+      '--panel2': 'oklch(0.955 0.008 250)',
+      '--border': 'oklch(0.9 0.008 258)',
+      '--edge2': 'oklch(0.7 0.02 258 / 0.4)',
+      '--text': 'oklch(0.26 0.02 258)',
+      '--muted': 'oklch(0.48 0.02 258)',
+      '--faint': 'oklch(0.62 0.02 258)',
+      '--stage1': 'oklch(0.93 0.008 258)',
+      '--stage2': 'oklch(0.8 0.012 258)',
+      '--stageFrame': 'oklch(0.9 0.01 258)',
+      '--vignette': 'oklch(0.55 0.02 258 / 0.15)',
+      '--ctlBg': 'oklch(1 0 0 / 0.82)',
+      '--floatShadow': 'oklch(0.55 0.02 258 / 0.22)',
+      '--rowAlt': 'oklch(0.965 0.006 258)',
+      '--shadowCard': '0 1px 2px oklch(0.5 0.03 258 / 0.05), 0 8px 24px oklch(0.5 0.04 258 / 0.08)',
+      '--shadowLift': '0 4px 10px oklch(0.5 0.03 258 / 0.08), 0 20px 48px oklch(0.5 0.05 258 / 0.14)',
+      '--wash': 'oklch(0.58 0.13 150 / 0.07)',
+      '--wash2': 'oklch(0.55 0.11 205 / 0.05)',
+      '--gridDot': 'oklch(0.42 0.03 175 / 0.045)',
+    };
+    return {
+      ...base,
+      '--accent': accent,
+      '--accent2': dark ? 'oklch(0.76 0.1 205)' : 'oklch(0.52 0.11 208)',
+      '--win': dark ? 'oklch(0.78 0.15 142)' : 'oklch(0.62 0.15 142)',
+      '--tie': dark ? 'oklch(0.68 0.04 258)' : 'oklch(0.6 0.04 258)',
+      '--bad': 'oklch(0.64 0.17 26)',
+      '--amber': 'oklch(0.78 0.14 78)',
+      minHeight: '100vh',
+      background: 'radial-gradient(130% 80% at 12% -8%, var(--wash), transparent 52%), radial-gradient(120% 70% at 92% 4%, var(--wash2), transparent 46%), radial-gradient(var(--gridDot) 1px, transparent 1.4px) 0 0 / 26px 26px, var(--bg)',
+      backgroundAttachment: 'fixed, fixed, fixed, fixed',
+      color: 'var(--text)',
+      fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
+    };
+  }
+
+  go(screen) { this.setState({ screen, navMobileOpen: false }); if (screen === 'arena') this.triggerStageLoad(); window.scrollTo(0, 0); }
+  toggleMobileNav() { this.setState((s) => ({ navMobileOpen: !s.navMobileOpen })); }
+  triggerStageLoad() { clearTimeout(this._loadTimer); this.setState({ stageLoading: true }); this._loadTimer = setTimeout(() => this.setState({ stageLoading: false }), 750); }
+  setKingdom(k) { this.setState({ kingdom: k, kingdomOpen: false }); window.scrollTo(0, 0); }
+  previewSpecimen(k) { this.setState({ kingdom: k }); }
+  specimenChips() {
+    const defs = [
+      { key: 'plants', emoji: '\uD83C\uDF3F', label: 'Plants', soon: false, title: 'Reconstructed leaf mesh' },
+      { key: 'fungi', emoji: '\uD83C\uDF44', label: 'Fungi', soon: false, title: 'Reconstructed fruiting-body mesh' },
+      { key: 'animals', emoji: '\uD83D\uDC3E', label: 'Animals', soon: true, title: 'Coming soon' },
+    ];
+    const cur = this.kingdom === 'all' ? 'plants' : this.kingdom;
+    return defs.map((d) => {
+      const active = d.key === cur && !d.soon;
+      return {
+        emoji: d.emoji, label: d.label, title: d.title,
+        onClick: d.soon ? () => {} : () => this.previewSpecimen(d.key),
+        hover: d.soon ? '' : 'border-color: color-mix(in oklch, var(--accent) 45%, var(--border))',
+        style: {
+          display: 'inline-flex', alignItems: 'center', gap: '6px',
+          padding: '5px 12px', borderRadius: '999px',
+          border: '1px solid ' + (active ? 'color-mix(in oklch, var(--accent) 55%, var(--border))' : 'var(--border)'),
+          background: active ? 'color-mix(in oklch, var(--accent) 13%, transparent)' : 'transparent',
+          color: active ? 'var(--text)' : (d.soon ? 'var(--faint)' : 'var(--muted)'),
+          fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '12.5px', fontWeight: active ? '600' : '500',
+          cursor: d.soon ? 'default' : 'pointer', opacity: d.soon ? 0.6 : 1,
+          transition: 'border-color 0.12s, background 0.12s',
+        },
+        soonStyle: d.soon ? { fontFamily: "'IBM Plex Mono',monospace", fontSize: '8px', fontWeight: '700', letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--faint)', border: '1px solid var(--border)', borderRadius: '999px', padding: '1px 5px', marginLeft: '2px' } : { display: 'none' },
+      };
+    });
+  }
+  toggleKingdom() { this.setState((s) => ({ kingdomOpen: !s.kingdomOpen })); }
+
+  kingdomMenu() {
+    const defs = [
+      { key: 'all', label: 'All kingdoms', emoji: '\uD83E\uDDEC', soon: false },
+      { key: 'plants', label: 'Plants', emoji: '\uD83C\uDF3F', soon: false },
+      { key: 'fungi', label: 'Fungi', emoji: '\uD83C\uDF44', soon: false },
+      { key: 'animals', label: 'Animals', emoji: '\uD83D\uDC3E', soon: true },
+    ];
+    const cur = this.kingdom;
+    return defs.map((d) => {
+      const active = d.key === cur;
+      const short = d.key === 'all' ? 'All' : d.label;
+      return {
+        label: d.label, emoji: d.emoji, short,
+        onClick: () => this.setKingdom(d.key),
+        checkStyle: active ? { color: 'var(--accent)', fontSize: '13px', marginLeft: 'auto' } : { display: 'none' },
+        soonStyle: d.soon ? { fontFamily: "'IBM Plex Mono',monospace", fontSize: '8.5px', fontWeight: '700', letterSpacing: '0.04em', textTransform: 'uppercase', padding: '1px 5px', borderRadius: '999px', background: 'color-mix(in oklch, var(--amber) 16%, transparent)', color: 'var(--amber)', marginLeft: '4px' } : { display: 'none' },
+        segStyle: {
+          display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px',
+          border: 'none', cursor: 'pointer', fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '13px',
+          fontWeight: '600', whiteSpace: 'nowrap',
+          background: active ? 'var(--accent)' : 'transparent',
+          color: active ? 'oklch(0.98 0.01 258)' : 'var(--muted)',
+        },
+        style: {
+          display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '8px 11px',
+          borderRadius: '8px', border: 'none', background: active ? 'color-mix(in oklch, var(--accent) 12%, transparent)' : 'transparent',
+          cursor: 'pointer', textAlign: 'left', fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '13.5px',
+          fontWeight: active ? '600' : '500', color: active ? 'var(--accent)' : 'var(--text)', whiteSpace: 'nowrap',
+        },
+      };
+    });
+  }
+  setLbTab(t) { this.setState({ lbTab: t }); }
+
+  kingdomBar() {
+    const defs = [
+      { key: 'all', label: 'All', emoji: '\uD83E\uDDEC', soon: false },
+      { key: 'plants', label: 'Plants', emoji: '\uD83C\uDF3F', soon: false },
+      { key: 'fungi', label: 'Fungi', emoji: '\uD83C\uDF44', soon: false },
+      { key: 'animals', label: 'Animals', emoji: '\uD83D\uDC3E', soon: true },
+    ];
+    const cur = this.kingdom;
+    return defs.map((d) => ({
+      label: d.label, soon: d.soon, emoji: d.emoji,
+      soonStyle: d.soon ? { fontFamily: "'IBM Plex Mono',monospace", fontSize: '8.5px', fontWeight: '700', letterSpacing: '0.04em', textTransform: 'uppercase', padding: '1px 5px', borderRadius: '999px', background: 'color-mix(in oklch, var(--amber) 18%, transparent)', color: 'var(--amber)', marginLeft: '6px' } : { display: 'none' },
+      onClick: () => this.setKingdom(d.key),
+      style: {
+        display: 'inline-flex', alignItems: 'center', padding: '7px 15px', borderRadius: '8px',
+        border: 'none', cursor: 'pointer', fontFamily: "'Space Grotesk',sans-serif",
+        fontSize: '14px', fontWeight: '600', whiteSpace: 'nowrap',
+        background: d.key === cur ? 'var(--accent)' : 'transparent',
+        color: d.key === cur ? 'oklch(0.98 0.01 258)' : 'var(--muted)',
+      },
+    }));
+  }
+
+  lbTabs() {
+    const defs = [
+      { key: 'overall', label: 'Overall' },
+      { key: 'image3d', label: 'Image → 3D' },
+      { key: 'procedural', label: 'Procedural' },
+      { key: 'scan', label: 'Scan / capture' },
+    ];
+    const cur = this.state.lbTab;
+    return defs.map((d) => ({
+      label: d.label, onClick: () => this.setLbTab(d.key),
+      style: {
+        padding: '7px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+        fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '13px', fontWeight: '600', whiteSpace: 'nowrap',
+        background: d.key === cur ? 'var(--panel)' : 'transparent',
+        color: d.key === cur ? 'var(--text)' : 'var(--muted)',
+        boxShadow: d.key === cur ? '0 1px 3px oklch(0.1 0.02 258 / 0.4)' : 'none',
+      },
+    }));
+  }
+
+  computeSubjects() {
+    const featured = {
+      position: 'absolute', top: '10px', left: '12px',
+      fontFamily: "'IBM Plex Mono',monospace", fontSize: '9.5px', fontWeight: '600', letterSpacing: '0.05em',
+      textTransform: 'uppercase', padding: '2px 8px', borderRadius: '999px',
+      background: 'color-mix(in oklch, var(--accent) 18%, transparent)', color: 'var(--accent)',
+      border: '1px solid color-mix(in oklch, var(--accent) 40%, transparent)',
+    };
+    const plain = { display: 'none' };
+    const byKingdom = {
+      plants: [
+        { common: 'Tomato', latin: 'Solanum lycopersicum', lineage: 'Plantae › Solanales › Solanaceae › Solanum', models: 24, feat: true, desc: 'How current image→3D models handle a whole tomato plant — the most-voted subject.' },
+        { common: 'Maize', latin: 'Zea mays', lineage: 'Plantae › Poales › Poaceae › Zea', models: 22, feat: true, desc: 'A tall two-ranked monocot: distichous strap leaves, apical tassel, axillary ears.' },
+        { common: 'Rose', latin: 'Rosa', lineage: 'Plantae › Rosales › Rosaceae › Rosa', models: 18, feat: true, desc: 'Spans a real CC0 X-ray CT scan, found artist roses, and procedural generators — bloom fidelity is the open frontier.' },
+        { common: 'Soybean', latin: 'Glycine max', lineage: 'Plantae › Fabales › Fabaceae › Glycine', models: 15, feat: true, desc: 'The Track-A2 legume spotlight. Scan tier is a CC-BY common-bean point-cloud stand-in.' },
+        { common: 'Thale cress', latin: 'Arabidopsis thaliana', lineage: 'Plantae › Brassicales › Brassicaceae › Arabidopsis', models: 14, feat: false, desc: 'A fine-structure rosette — the stress test for thin organs and self-occlusion.' },
+        { common: 'Barley root', latin: 'Hordeum vulgare', lineage: 'Plantae › Poales › Poaceae › Hordeum', models: 6, feat: false, desc: 'The volumetric sensor axis: a real 3D MRI root system, surfaced via marching cubes.' },
+      ],
+      fungi: [
+        { common: 'Fly agaric', latin: 'Amanita muscaria', lineage: 'Fungi › Agaricales › Amanitaceae › Amanita', models: 12, feat: true, desc: 'The iconic cap-and-stipe fruiting body — gill fidelity and cap curvature are the hard parts.' },
+        { common: 'Penny bun', latin: 'Boletus edulis', lineage: 'Fungi › Boletales › Boletaceae › Boletus', models: 9, feat: true, desc: 'A pored bolete: thick stipe, convex cap. Tests surface pore texture under single-view recon.' },
+        { common: 'Oyster mushroom', latin: 'Pleurotus ostreatus', lineage: 'Fungi › Agaricales › Pleurotaceae › Pleurotus', models: 7, feat: false, desc: 'Shelf-forming, overlapping caps — a self-occlusion and thin-margin stress case.' },
+        { common: 'Shiitake', latin: 'Lentinula edodes', lineage: 'Fungi › Agaricales › Omphalotaceae › Lentinula', models: 5, feat: false, desc: 'Cracked-cap surface detail and lamellae; scan tier is a photogrammetry stand-in.' },
+      ],
+      animals: [],
+    };
+    let raw;
+    if (this.kingdom === 'all') raw = [...byKingdom.plants.slice(0, 4), ...byKingdom.fungi.slice(0, 2)];
+    else raw = byKingdom[this.kingdom] || byKingdom.plants;
+    const emojiMap = { 'Tomato': '\uD83C\uDF45', 'Maize': '\uD83C\uDF3D', 'Rose': '\uD83C\uDF39', 'Soybean': '\uD83E\uDED8', 'Thale cress': '\uD83C\uDF31', 'Barley root': '\uD83C\uDF3E', 'Fly agaric': '\uD83C\uDF44', 'Penny bun': '\uD83C\uDF44', 'Oyster mushroom': '\uD83C\uDF44', 'Shiitake': '\uD83C\uDF44' };
+    return {
+      subjects: raw.map((s) => ({
+        common: s.common, latin: s.latin, lineage: s.lineage, models: s.models, desc: s.desc,
+        emoji: emojiMap[s.common] || (s.lineage.startsWith('Fungi') ? '\uD83C\uDF44' : '\uD83C\uDF3F'),
+        badge: s.feat ? 'featured' : '', badgeStyle: s.feat ? featured : plain,
+      })),
+    };
+  }
+
+  computeCoverage(kingdom) {
+    const kindStyle = { fontFamily: "'IBM Plex Mono',monospace", fontSize: '10px', fontWeight: '600', color: 'var(--accent2)', border: '1px solid var(--border)', borderRadius: '999px', padding: '1px 7px' };
+    const confPill = (firm) => ({
+      display: 'inline-block', fontFamily: "'IBM Plex Mono',monospace", fontSize: '10px', fontWeight: '600',
+      padding: '2px 9px', borderRadius: '999px',
+      background: firm ? 'color-mix(in oklch, var(--win) 15%, transparent)' : 'color-mix(in oklch, var(--amber) 15%, transparent)',
+      color: firm ? 'var(--win)' : 'var(--amber)',
+      border: '1px solid ' + (firm ? 'color-mix(in oklch, var(--win) 38%, transparent)' : 'color-mix(in oklch, var(--amber) 38%, transparent)'),
+    });
+    const inPill = (yes) => yes
+      ? { color: 'var(--accent)', fontSize: '14px', fontWeight: '700' }
+      : { fontFamily: "'IBM Plex Mono',monospace", fontSize: '10.5px', color: 'var(--faint)' };
+    const baseData = [
+      { name: 'Plant3D (Solo)', tasks: 15, outputs: 43, votes: 43, firm: true, in: false },
+      { name: 'Objaverse', tasks: 21, outputs: 30, votes: 30, firm: true, in: true },
+      { name: 'TRELLIS', tasks: 19, outputs: 30, votes: 30, firm: true, in: false },
+      { name: 'Hunyuan3D', tasks: 19, outputs: 26, votes: 26, firm: false, in: true },
+      { name: 'InstantMesh', tasks: 15, outputs: 22, votes: 22, firm: false, in: true },
+      { name: 'CrossD', tasks: 12, outputs: 17, votes: 17, firm: false, in: false },
+      { name: 'TripoSR (fal)', tasks: 15, outputs: 16, votes: 16, firm: false, in: true },
+      { name: 'Rodin/Hyper3D (fal)', tasks: 15, outputs: 15, votes: 10, firm: false, in: true },
+      { name: 'L-Py', tasks: 7, outputs: 8, votes: 8, firm: false, in: true },
+      { name: 'Demeter', tasks: 7, outputs: 7, votes: 7, firm: false, in: true },
+    ];
+    const cm = kingdom === 'fungi' ? { scale: 0.34, max: 6 }
+      : kingdom === 'all' ? { scale: 1.28, max: 10 }
+      : { scale: 1, max: 10 };
+    const data = baseData.slice(0, cm.max).map((d) => {
+      const outputs = Math.max(1, Math.round(d.outputs * cm.scale));
+      const votes = Math.max(1, Math.round(d.votes * cm.scale));
+      return { ...d, outputs, votes, firm: votes >= 30 };
+    });
+    const covRows = data.map((d) => ({
+      name: d.name, tasks: d.tasks, outputs: d.outputs, votes: d.votes, kindStyle,
+      conf: d.firm ? 'firm' : 'provisional', confStyle: confPill(d.firm),
+      inArena: d.in ? '\u2713' : 'excluded', inStyle: inPill(d.in),
+    }));
+    const baseParadigms = [
+      { count: 175, label: 'Image → 3D reconstruction' },
+      { count: 51, label: 'Retrieved asset' },
+      { count: 48, label: 'Scan / capture' },
+      { count: 24, label: 'LLM procedural (code-gen)' },
+      { count: 18, label: 'Expert / sim procedural' },
+      { count: 13, label: 'Agentic 3D' },
+    ];
+    const paradigms = baseParadigms.map((p) => ({ count: Math.max(1, Math.round(p.count * cm.scale)), label: p.label }));
+    return { covRows, paradigms };
+  }
+
+  computeBench(kingdom) {
+    const spStyle = (v) => ({
+      display: 'inline-block', minWidth: '54px', textAlign: 'right',
+      fontFamily: "'IBM Plex Mono',monospace", fontWeight: '600', fontSize: '13px',
+      fontVariantNumeric: 'tabular-nums',
+      color: v >= 0 ? 'var(--win)' : 'var(--bad)',
+    });
+    const agreeByKingdom = {
+      plants: [
+        { name: 'Zea mays — image → 3D', sp: 0.57, common: 10, scored: 22 },
+        { name: 'Solanum lycopersicum — image → 3D', sp: -0.15, common: 9, scored: 24 },
+        { name: 'Pinus sylvestris — image → 3D', sp: -0.21, common: 7, scored: 17 },
+        { name: 'Arabidopsis thaliana — image → 3D', sp: -0.33, common: 5, scored: 14 },
+        { name: 'Rosa — image → 3D', sp: -0.92, common: 5, scored: 18 },
+      ],
+      fungi: [
+        { name: 'Boletus edulis — image → 3D', sp: 0.31, common: 6, scored: 9 },
+        { name: 'Amanita muscaria — image → 3D', sp: -0.44, common: 5, scored: 12 },
+        { name: 'Pleurotus ostreatus — image → 3D', sp: -0.67, common: 4, scored: 7 },
+      ],
+      all: [
+        { name: 'Zea mays — image → 3D', sp: 0.57, common: 10, scored: 22 },
+        { name: 'Boletus edulis — image → 3D', sp: 0.31, common: 6, scored: 9 },
+        { name: 'Arabidopsis thaliana — image → 3D', sp: -0.33, common: 5, scored: 14 },
+        { name: 'Amanita muscaria — image → 3D', sp: -0.44, common: 5, scored: 12 },
+        { name: 'Rosa — image → 3D', sp: -0.92, common: 5, scored: 18 },
+      ],
+    };
+    const agree = agreeByKingdom[kingdom] || agreeByKingdom.all;
+    const agreeRows = agree.map((a) => ({
+      name: a.name, common: a.common, scored: a.scored,
+      sp: (a.sp > 0 ? '+' : '') + a.sp.toFixed(2), spStyle: spStyle(a.sp),
+    }));
+
+    const vPill = (pass) => ({
+      display: 'inline-block', fontFamily: "'IBM Plex Mono',monospace", fontSize: '10.5px', fontWeight: '700',
+      letterSpacing: '0.04em', padding: '2px 9px', borderRadius: '999px',
+      background: pass ? 'color-mix(in oklch, var(--win) 16%, transparent)' : 'color-mix(in oklch, var(--bad) 16%, transparent)',
+      color: pass ? 'var(--win)' : 'var(--bad)',
+      border: '1px solid ' + (pass ? 'color-mix(in oklch, var(--win) 40%, transparent)' : 'color-mix(in oklch, var(--bad) 40%, transparent)'),
+    });
+    const benchByKingdom = {
+      plants: {
+        subject: 'Arabidopsis thaliana',
+        rows: [
+          { name: 'L-Py', chamfer: '0.0545', fscore: '0.524', organ: '1.00', pass: true },
+          { name: 'Sketchfab · arab-agamous', chamfer: '0.0762', fscore: '0.413', organ: '—', pass: true },
+          { name: 'TRELLIS (Replicate)', chamfer: '0.0929', fscore: '0.387', organ: '—', pass: true },
+          { name: 'TRELLIS multi-view (fal)', chamfer: '0.0960', fscore: '0.363', organ: '—', pass: true },
+          { name: 'Hunyuan3D v2 (fal)', chamfer: '0.0972', fscore: '0.194', organ: '—', pass: true },
+          { name: 'ROMI Arabidopsis scan', chamfer: '0.1013', fscore: '0.297', organ: '—', pass: true },
+          { name: 'Sketchfab — lamujer', chamfer: '0.1464', fscore: '0.166', organ: '—', pass: false },
+        ],
+      },
+      fungi: {
+        subject: 'Amanita muscaria',
+        rows: [
+          { name: 'TRELLIS (Replicate)', chamfer: '0.0881', fscore: '0.402', organ: '—', pass: true },
+          { name: 'Hunyuan3D v2 (fal)', chamfer: '0.1042', fscore: '0.318', organ: '—', pass: true },
+          { name: 'MycoGen (procedural)', chamfer: '0.1120', fscore: '0.281', organ: '0.74', pass: true },
+          { name: 'TripoSR (fal)', chamfer: '0.1587', fscore: '0.149', organ: '—', pass: false },
+        ],
+      },
+    };
+    const bk = benchByKingdom[kingdom] || benchByKingdom.plants;
+    const benchRows = bk.rows.map((b, i) => ({
+      rank: i + 1, name: b.name, chamfer: b.chamfer, fscore: b.fscore, organ: b.organ,
+      verdict: b.pass ? 'PASS' : 'FAIL', verdictStyle: vPill(b.pass),
+    }));
+    return { agreeRows, benchRows, benchSubject: bk.subject };
+  }
+
+  heatStyle(v) {
+    let c;
+    if (v >= 0.66) c = 'var(--win)';
+    else if (v >= 0.40) c = 'var(--amber)';
+    else c = 'var(--bad)';
+    const strength = Math.round(24 + v * 34);
+    return {
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      height: '46px', borderRadius: '8px',
+      background: 'color-mix(in oklch, ' + c + ' ' + strength + '%, var(--panel2))',
+      color: 'var(--text)', fontFamily: "'IBM Plex Mono',monospace", fontWeight: '600',
+      fontSize: '15px', fontVariantNumeric: 'tabular-nums',
+      border: '1px solid color-mix(in oklch, ' + c + ' 30%, var(--border))',
+    };
+  }
+
+  computeDifficulty(kingdom) {
+    const kindStyle = { fontFamily: "'IBM Plex Mono',monospace", fontSize: '10px', fontWeight: '600', color: 'var(--accent2)', border: '1px solid var(--border)', borderRadius: '999px', padding: '1px 7px' };
+    const base = [
+      { name: 'Radim/gaussian (full)', v: [0.88, 0.79, 0.71] },
+      { name: 'TRELLIS (Replicate)', v: [0.81, 0.66, 0.52] },
+      { name: 'Hunyuan3D v2 (full)', v: [0.78, 0.61, 0.44] },
+      { name: 'PartCrafter (part-based)', v: [0.74, 0.58, 0.49] },
+      { name: 'TRELLIS (fal)', v: [0.72, 0.55, 0.38] },
+      { name: 'Rodin/Hyper3D (fal)', v: [0.69, 0.47, 0.31] },
+      { name: 'Hunyuan3D v3 (fal)', v: [0.66, 0.44, 0.29] },
+      { name: 'TripoSR (fal)', v: [0.48, 0.33, 0.19] },
+    ];
+    const km = kingdom === 'fungi' ? { mul: 0.82, max: 6, tiers: ['1 task', '2 tasks', '3 tasks'] }
+      : kingdom === 'all' ? { mul: 0.94, max: 8, tiers: ['4 tasks', '6 tasks', '8 tasks'] }
+      : { mul: 1, max: 8, tiers: ['3 tasks', '4 tasks', '5 tasks'] };
+    const data = base.slice(0, km.max).map((d) => ({ name: d.name, v: d.v.map((x) => Math.max(0.05, Math.min(0.97, x * km.mul))) }));
+    const pc = (x) => Math.round(x * 100) + '%';
+    const diffRows = data.map((d) => ({
+      name: d.name, kindStyle,
+      c0: pc(d.v[0]), c1: pc(d.v[1]), c2: pc(d.v[2]),
+      c0Style: this.heatStyle(d.v[0]), c1Style: this.heatStyle(d.v[1]), c2Style: this.heatStyle(d.v[2]),
+    }));
+    const rankStyle = (i) => ({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '19px', height: '19px', borderRadius: '50%', background: i === 0 ? 'color-mix(in oklch, var(--accent) 35%, transparent)' : 'var(--panel2)', color: i === 0 ? 'var(--accent)' : 'var(--faint)', fontFamily: "'IBM Plex Mono',monospace", fontSize: '10.5px', fontWeight: '700' });
+    const shortName = (n) => n.split(' (')[0];
+    const leaders = (col) => [...data].sort((a, b) => b.v[col] - a.v[col]).slice(0, 3).map((d) => [shortName(d.name), pc(d.v[col])]);
+    const tier = (name, tasks, rows) => ({ tier: name, tasks, rows: rows.map((r, i) => ({ rank: i + 1, name: r[0], val: r[1], rankStyle: rankStyle(i) })) });
+    const diffTiers = [
+      tier('Easy', km.tiers[0], leaders(0)),
+      tier('Moderate', km.tiers[1], leaders(1)),
+      tier('Hard', km.tiers[2], leaders(2)),
+    ];
+
+    // degradation chart
+    const h = React.createElement;
+    const ranked = data.map((d) => ({ name: d.name, v: d.v, avg: (d.v[0] + d.v[1] + d.v[2]) / 3 })).sort((a, b) => b.avg - a.avg);
+    const cols = [96, 340, 584];
+    const plotT = 20, plotB = 196;
+    const yOf = (v) => plotB - v * (plotB - plotT);
+    const palette = ['var(--accent)', 'var(--accent2)', 'var(--win)'];
+    const kids = [];
+    [0, 0.25, 0.5, 0.75, 1].forEach((gv, gi) => { const y = yOf(gv); kids.push(h('line', { key: 'g' + gi, x1: 96, x2: 584, y1: y, y2: y, stroke: 'var(--border)', strokeWidth: 1 })); kids.push(h('text', { key: 'gt' + gi, x: 84, y: y + 4, textAnchor: 'end', fill: 'var(--faint)', style: { fontSize: '11px', fontFamily: "'IBM Plex Mono',monospace" } }, Math.round(gv * 100) + '%')); });
+    ['Easy', 'Moderate', 'Hard'].forEach((lb, i) => { kids.push(h('text', { key: 'cl' + i, x: cols[i], y: plotB + 24, textAnchor: 'middle', fill: 'var(--muted)', style: { fontSize: '12.5px', fontWeight: 600, fontFamily: "'IBM Plex Sans',sans-serif" } }, lb)); });
+    const endLabels = [];
+    ranked.forEach((d, ri) => {
+      const isTop = ri < 3;
+      const col = isTop ? palette[ri] : 'var(--faint)';
+      const pts = d.v.map((v, i) => cols[i] + ',' + yOf(v)).join(' ');
+      kids.push(h('polyline', { key: 'pl' + ri, points: pts, fill: 'none', stroke: col, strokeWidth: isTop ? 2.6 : 1.4, strokeOpacity: isTop ? 1 : 0.38, strokeLinejoin: 'round', strokeLinecap: 'round' }));
+      if (isTop) {
+        d.v.forEach((v, i) => kids.push(h('circle', { key: 'pt' + ri + '-' + i, cx: cols[i], cy: yOf(v), r: 3.4, fill: col })));
+        endLabels.push({ y: yOf(d.v[2]), text: d.name.split(' (')[0], col: col });
+      }
+    });
+    // de-overlap end labels (min 14px apart, top-to-bottom)
+    endLabels.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < endLabels.length; i++) { if (endLabels[i].y - endLabels[i - 1].y < 14) endLabels[i].y = endLabels[i - 1].y + 14; }
+    endLabels.forEach((l, i) => kids.push(h('text', { key: 'el' + i, x: 596, y: l.y + 4, fill: l.col, style: { fontSize: '11.5px', fontWeight: 600, fontFamily: "'Space Grotesk',sans-serif" } }, l.text)));
+    const diffChartEl = h('svg', { viewBox: '0 0 812 236', style: { width: '100%', height: 'auto', display: 'block' } }, kids);
+    return { diffRows, diffTiers, diffChartEl };
+  }
+
+  computeLb(tab, kingdom) {
+    const L = { p: { t: 'paper' }, c: { t: 'code' }, d: { t: 'data' } };
+    const image3d = [
+      { name: 'Radim/gaussian (full)', score: 1439.2, lo: 1402, hi: 1476, votes: 141, kind: 'model', links: [L.p, L.c] },
+      { name: 'TRELLIS (Replicate)', score: 1058.9, lo: 1021, hi: 1096, votes: 128, kind: 'model', links: [L.p, L.c] },
+      { name: 'Hunyuan3D v2 (full)', score: 1043.8, lo: 1004, hi: 1083, votes: 119, kind: 'model', links: [L.p, L.c] },
+      { name: 'PartCrafter (part-based)', score: 1033.8, lo: 989, hi: 1078, votes: 96, kind: 'model', links: [L.p] },
+      { name: 'TRELLIS (fal)', score: 1030.4, lo: 992, hi: 1069, votes: 112, kind: 'model', links: [L.c] },
+      { name: 'Hunyuan3D v3 (fal)', score: 1021.6, lo: 980, hi: 1063, votes: 88, kind: 'model', links: [L.c] },
+      { name: 'Rodin/Hyper3D (fal)', score: 963.3, lo: 918, hi: 1008, votes: 74, kind: 'model', links: [L.c] },
+      { name: 'TripoSR (fal)', score: 506.7, lo: 448, hi: 566, votes: 61, kind: 'model', links: [L.p, L.c] },
+    ];
+    const procedural = [
+      { name: 'google/gemini-2.5-pro (agentic)', score: 1418.6, lo: 1372, hi: 1465, votes: 44, kind: 'agent', links: [L.c] },
+      { name: 'o3 (agentic)', score: 1301.9, lo: 1248, hi: 1356, votes: 39, kind: 'agent', links: [L.c] },
+      { name: 'claude-sonnet-4.5 (agentic)', score: 1276.4, lo: 1221, hi: 1332, votes: 36, kind: 'agent', links: [L.c] },
+      { name: 'L-Py (procedural)', score: 1041.0, lo: 998, hi: 1084, votes: 28, kind: 'baseline', links: [L.p, L.c] },
+      { name: 'Demeter (procedural)', score: 968.2, lo: 921, hi: 1016, votes: 24, kind: 'baseline', links: [L.p] },
+    ];
+    const scan = [
+      { name: 'ROMI Arabidopsis scan', score: 1120.4, lo: 1064, hi: 1177, votes: 22, kind: 'scan', links: [L.d] },
+      { name: 'ROSE-X Rosa X-ray CT', score: 1044.7, lo: 988, hi: 1101, votes: 19, kind: 'scan', links: [L.d] },
+      { name: 'IPK barley root MRI', score: 812.3, lo: 748, hi: 877, votes: 11, kind: 'scan', links: [L.d] },
+    ];
+    const catalog = { image3d, procedural, scan };
+    const titles = { overall: 'Overall — all paradigms', image3d: 'Image → 3D reconstruction', procedural: 'Procedural & agentic', scan: 'Scan / capture' };
+    let src;
+    if (tab === 'overall') src = [...image3d, ...procedural, ...scan].sort((a, b) => b.score - a.score).slice(0, 8);
+    else src = catalog[tab] || image3d;
+
+    // kingdom scope: plants = base, fungi = fewer methods & votes, all = aggregate (+fungi)
+    const kmod = kingdom === 'fungi' ? { vscale: 0.30, compress: 0.45, max: 5 }
+      : kingdom === 'all' ? { vscale: 1.12, compress: 0, max: 99 }
+      : { vscale: 1, compress: 0, max: 99 };
+    src = src.slice(0, kmod.max).map((d) => {
+      const votes = Math.max(3, Math.round(d.votes * kmod.vscale));
+      const sq = (x) => kmod.compress ? Math.round(1000 + (x - 1000) * (1 - kmod.compress)) : x;
+      return { ...d, votes, score: sq(d.score), lo: sq(d.lo), hi: sq(d.hi) };
+    });
+
+    const MIN = 420, MAX = 1500, SPAN = MAX - MIN;
+    const pct = (v) => ((v - MIN) / SPAN) * 100;
+    const medals = ['oklch(0.82 0.13 88)', 'oklch(0.8 0.015 258)', 'oklch(0.66 0.1 55)'];
+    const kindColor = { model: 'var(--accent2)', agent: 'var(--accent)', scan: 'var(--win)', baseline: 'var(--muted)' };
+    const kindLabel = { model: 'automated model', agent: 'LLM agent', scan: 'reference scan', baseline: 'procedural baseline' };
+    const linkStyle = { fontFamily: "'IBM Plex Mono',monospace", fontSize: '9.5px', fontWeight: '600', color: 'var(--faint)', border: '1px solid var(--border)', borderRadius: '5px', padding: '0 5px', textDecoration: 'none', cursor: 'pointer' };
+    const h = React.createElement;
+    const seedOf = (s) => { let x = 0; for (let k = 0; k < s.length; k++) x = (x * 31 + s.charCodeAt(k)) % 100000; return x; };
+    const openName = this.state.lbOpen;
+    const nowUpdated = { plants: '2h', fungi: '5h', all: '2h' }[kingdom] || '2h';
+    const rows = src.map((d, i) => {
+      const top3 = i < 3;
+      const mono = d.name.split(/[\s\/]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+      const hue = (d.name.charCodeAt(0) * 13 + d.name.length * 7) % 360;
+      const seed = seedOf(d.name);
+      // rank delta vs last period (deterministic, leader pinned stable)
+      let delta = i === 0 ? 0 : ((seed % 5) - 2); // -2..+2
+      const isNew = d.votes < 24 && (seed % 3 === 0);
+      // sparkline: 7-point score history trending to current, seeded
+      const pts = [];
+      for (let k = 0; k < 7; k++) {
+        const noise = (((seed >> k) % 100) / 100 - 0.5) * 60 * (1 - k / 8);
+        pts.push(d.score - (6 - k) * (delta * 6) + noise);
+      }
+      pts[6] = d.score;
+      const smin = Math.min.apply(null, pts), smax = Math.max.apply(null, pts), srng = (smax - smin) || 1;
+      const sw = 60, sh = 22;
+      const sparkPts = pts.map((v, k) => (k / 6) * sw + ',' + (sh - 2 - ((v - smin) / srng) * (sh - 4))).join(' ');
+      const trendUp = pts[6] >= pts[0];
+      const sparkColor = trendUp ? 'var(--win)' : 'var(--bad)';
+      const sparkEl = h('svg', { viewBox: '0 0 ' + sw + ' ' + sh, width: sw, height: sh, style: { display: 'block', overflow: 'visible' } }, [
+        h('polyline', { key: 'sl', points: sparkPts, fill: 'none', stroke: sparkColor, strokeWidth: 1.6, strokeLinejoin: 'round', strokeLinecap: 'round', style: { strokeDasharray: 200, strokeDashoffset: 200, animation: 'b3d-draw 0.9s ' + (0.25 + i * 0.05) + 's ease forwards' } }),
+        h('circle', { key: 'sd', cx: sw, cy: sh - 2 - ((pts[6] - smin) / srng) * (sh - 4), r: 2.1, fill: sparkColor }),
+      ]);
+      // detail: per-tier win-rate bars
+      const tierPct = [Math.min(96, 78 - (i * 5) + (seed % 9)), Math.min(90, 62 - (i * 5) + (seed % 11)), Math.min(84, 47 - (i * 4) + (seed % 13))].map((x) => Math.max(8, x));
+      const tierBars = [['Easy', tierPct[0]], ['Moderate', tierPct[1]], ['Hard', tierPct[2]]].map((t) => ({
+        label: t[0], val: t[1] + '%',
+        fillStyle: { height: '100%', width: t[1] + '%', borderRadius: '999px', background: 'linear-gradient(90deg, color-mix(in oklch, var(--accent) 55%, transparent), var(--accent))', transformOrigin: 'left', animation: 'b3d-grow-x 0.6s cubic-bezier(0.22,0.61,0.36,1) both' },
+      }));
+      const firstSeen = ['Mar', 'Apr', 'May', 'Jun'][seed % 4] + ' 2026';
+      const winPct = Math.round((tierPct[0] + tierPct[1] + tierPct[2]) / 3);
+      const expanded = openName === d.name;
+      const prov = d.votes < 30;
+      const deltaColor = isNew ? 'var(--accent2)' : delta > 0 ? 'var(--win)' : delta < 0 ? 'var(--bad)' : 'var(--faint)';
+      return {
+        rank: i + 1, name: d.name, kind: d.kind, kindFull: kindLabel[d.kind] || d.kind,
+        mono, hue: String(hue), firstSeen, winPct: winPct + '%', kingdomLabel: kingdom === 'all' ? 'all kingdoms' : kingdom,
+        monoStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', flexShrink: 0, borderRadius: '8px', background: 'oklch(0.62 0.13 ' + hue + ' / 0.16)', border: '1px solid oklch(0.62 0.13 ' + hue + ' / 0.4)', color: 'oklch(0.72 0.12 ' + hue + ')', fontFamily: "'Space Grotesk',sans-serif", fontWeight: '700', fontSize: '10.5px' },
+        links: d.links.map((l) => ({ t: l.t, style: linkStyle })),
+        score: d.score.toFixed(1), ci: d.lo + '–' + d.hi, votes: d.votes,
+        provText: prov ? 'provisional' : '',
+        provStyle: prov ? { display: 'inline-flex', alignItems: 'center', flexShrink: 0, fontFamily: "'IBM Plex Mono',monospace", fontSize: '9px', fontWeight: '600', letterSpacing: '0.03em', color: 'var(--amber)', background: 'color-mix(in oklch, var(--amber) 13%, transparent)', border: '1px solid color-mix(in oklch, var(--amber) 34%, transparent)', borderRadius: '999px', padding: '1px 7px' } : { display: 'none' },
+        deltaText: isNew ? 'NEW' : delta > 0 ? '▲' + delta : delta < 0 ? '▽' + Math.abs(delta) : '—',
+        deltaStyle: { fontFamily: "'IBM Plex Mono',monospace", fontSize: isNew ? '8.5px' : '11px', fontWeight: '700', color: deltaColor, letterSpacing: isNew ? '0.04em' : '0' },
+        spark: sparkEl, tierBars,
+        onToggle: () => this.setState((s) => ({ lbOpen: s.lbOpen === d.name ? null : d.name })),
+        caret: expanded ? '▾' : '▸', expanded,
+        scoreStyle: { fontFamily: "'IBM Plex Mono',monospace", fontWeight: '600', fontVariantNumeric: 'tabular-nums', color: i === 0 ? 'var(--accent)' : 'var(--text)' },
+        rowStyle: { display: 'grid', gridTemplateColumns: '56px minmax(0,1fr) 74px 128px 52px 50px 16px', alignItems: 'center', padding: '11px 18px', gap: '6px', cursor: 'pointer', borderBottom: expanded ? 'none' : '1px solid var(--border)', background: expanded ? 'color-mix(in oklch, var(--accent) 6%, transparent)' : i === 0 ? 'color-mix(in oklch, var(--accent) 7%, transparent)' : 'transparent', animation: 'b3d-rise-sm 0.4s ' + (i * 0.045) + 's both' },
+        detailStyle: { display: expanded ? 'block' : 'none', padding: '4px 18px 18px 66px', borderBottom: '1px solid var(--border)', background: 'color-mix(in oklch, var(--accent) 4%, transparent)' },
+        medalStyle: top3
+          ? { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '50%', background: medals[i], color: 'oklch(0.2 0.02 258)', fontFamily: "'IBM Plex Mono',monospace", fontSize: '11.5px', fontWeight: '700' }
+          : { fontFamily: "'IBM Plex Mono',monospace", fontSize: '13px', color: 'var(--faint)' },
+        kindStyle: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '10px', fontWeight: '600', color: kindColor[d.kind] || 'var(--accent2)', border: '1px solid var(--border)', borderRadius: '999px', padding: '1px 7px' },
+        ciRange: { position: 'absolute', top: '50%', transform: 'translateY(-50%)', height: '5px', borderRadius: '999px', background: 'color-mix(in oklch, var(--accent) 45%, transparent)', left: pct(d.lo) + '%', width: (pct(d.hi) - pct(d.lo)) + '%' },
+        ciDot: { position: 'absolute', top: '50%', transform: 'translate(-50%,-50%)', width: '9px', height: '9px', borderRadius: '50%', background: 'var(--accent)', border: '2px solid var(--panel)', left: pct(d.score) + '%' },
+      };
+    });
+    const totalVotes = src.reduce((a, d) => a + d.votes, 0);
+    return { lbRows: rows, lbTitle: titles[tab] || titles.image3d, lbCount: src.length + ' generators', lbTotalVotes: totalVotes.toLocaleString(), lbUpdated: nowUpdated };
+  }
+
+  navMenus() {
+    const built = { difficulty: 1, benchmark: 1, spotlight: 1, coverage: 1 };
+    const defs = [
+      { key: 'results', label: 'Results', items: [['difficulty', 'Difficulty'], ['benchmark', 'Benchmark'], ['significance', 'Significance'], ['spotlight', 'Spotlight']] },
+      { key: 'data', label: 'Data', items: [['coverage', 'Coverage'], ['dataset', 'Dataset'], ['tasks', 'Tasks']] },
+      { key: 'about', label: 'About', items: [['methodology', 'Methodology'], ['fidelity', 'Fidelity'], ['procedural', 'Procedural']] },
+    ];
+    const scr = this.state.screen;
+    const open = this.state.openMenu;
+    const soonTag = { fontFamily: "'IBM Plex Mono',monospace", fontSize: '8.5px', fontWeight: '700', letterSpacing: '0.04em', textTransform: 'uppercase', padding: '1px 5px', borderRadius: '999px', background: 'color-mix(in oklch, var(--amber) 16%, transparent)', color: 'var(--amber)' };
+    return defs.map((d) => {
+      const active = d.items.some((it) => it[0] === scr);
+      const lit = active || open === d.key;
+      return {
+        label: d.label,
+        onToggle: () => this.toggleMenu(d.key),
+        toggleStyle: {
+          display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 11px', borderRadius: '8px',
+          border: 'none', cursor: 'pointer', fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '13px',
+          fontWeight: active ? '600' : '500', whiteSpace: 'nowrap',
+          color: lit ? 'var(--accent)' : 'var(--muted)',
+          background: lit ? 'color-mix(in oklch, var(--accent) 14%, transparent)' : 'transparent',
+        },
+        panelStyle: {
+          position: 'absolute', top: 'calc(100% + 9px)', right: '0', minWidth: '190px',
+          background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: '14px', padding: '6px',
+          boxShadow: '0 14px 38px var(--floatShadow)', display: open === d.key ? 'block' : 'none', zIndex: 45,
+        },
+        items: d.items.map((it) => {
+          const b = !!built[it[0]];
+          return {
+            label: it[1], soon: !b, soonStyle: b ? { display: 'none' } : soonTag,
+            onClick: b ? () => { this.go(it[0]); this.setState({ openMenu: null }); } : () => this.openStub(it[1]),
+            style: {
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
+              padding: '8px 11px', borderRadius: '8px', textDecoration: 'none',
+              cursor: b ? 'pointer' : 'default', fontSize: '13.5px',
+              fontWeight: it[0] === scr ? '600' : '500',
+              color: it[0] === scr ? 'var(--accent)' : (b ? 'var(--text)' : 'var(--faint)'),
+            },
+          };
+        }),
+      };
+    });
+  }
+
+  navStyle(active) {
+    return {
+      padding: '7px 11px',
+      borderRadius: '8px',
+      fontSize: '13px',
+      fontWeight: active ? '600' : '500',
+      textDecoration: 'none',
+      cursor: 'pointer',
+      color: active ? 'var(--accent)' : 'var(--muted)',
+      background: active ? 'color-mix(in oklch, var(--accent) 14%, transparent)' : 'transparent',
+      whiteSpace: 'nowrap',
+    };
+  }
+
+  heatColor(v) {
+    let c;
+    if (v >= 0.66) c = 'var(--win)';
+    else if (v >= 0.40) c = 'var(--amber)';
+    else c = 'var(--bad)';
+    const strength = Math.round(22 + v * 40);
+    return 'color-mix(in oklch, ' + c + ' ' + strength + '%, var(--panel2))';
+  }
+
+  computeSignificance(kingdom) {
+    const h = React.createElement;
+    const md = this.modelData();
+    let rows = md.map((m) => {
+      const rating = kingdom === 'fungi' ? m.fungi : m.plants;
+      const votes = kingdom === 'fungi' ? Math.round(m.votes * 0.4) : (kingdom === 'all' ? Math.round(m.votes * 1.28) : m.votes);
+      return rating == null ? null : { name: m.name, rating: rating, votes: Math.max(6, votes) };
+    }).filter(Boolean);
+    rows = rows.map((r) => { const hw = Math.round(1.96 * 640 / Math.sqrt(r.votes)); return Object.assign({}, r, { lo: r.rating - hw, hi: r.rating + hw, hw: hw }); });
+    rows.sort((a, b) => b.rating - a.rating);
+    const leader = rows[0];
+    let tied = 0;
+    rows = rows.map((r, i) => { const sep = r.hi < leader.lo; const isTied = i > 0 && !sep; if (isTied) tied++; return Object.assign({}, r, { rank: i + 1, sep: sep }); });
+
+    // forest plot
+    const allLo = Math.min.apply(null, rows.map((r) => r.lo));
+    const allHi = Math.max.apply(null, rows.map((r) => r.hi));
+    const pad = (allHi - allLo) * 0.05;
+    const dMin = allLo - pad, dMax = allHi + pad;
+    const px0 = 232, px1 = 628;
+    const xOf = (v) => px0 + (v - dMin) / (dMax - dMin) * (px1 - px0);
+    const rowH = 30, top = 36;
+    const H = top + rows.length * rowH + 12;
+    const kids = [];
+    for (let t = 0; t <= 4; t++) { const val = dMin + (dMax - dMin) * t / 4; const x = xOf(val); kids.push(h('line', { key: 'ax' + t, x1: x, x2: x, y1: top - 6, y2: H - 14, stroke: 'var(--border)', strokeWidth: 1 })); kids.push(h('text', { key: 'axt' + t, x: x, y: top - 12, textAnchor: 'middle', fill: 'var(--faint)', style: { fontSize: '10.5px', fontFamily: "'IBM Plex Mono',monospace" } }, Math.round(val))); }
+    kids.push(h('line', { key: 'ld', x1: xOf(leader.rating), x2: xOf(leader.rating), y1: top - 6, y2: H - 14, stroke: 'var(--accent)', strokeWidth: 1, strokeDasharray: '4 4', strokeOpacity: 0.55 }));
+    rows.forEach((r, i) => {
+      const y = top + i * rowH + rowH / 2;
+      const col = r.rank === 1 ? 'var(--accent)' : (r.sep ? 'var(--faint)' : 'var(--accent2)');
+      kids.push(h('text', { key: 'nm' + i, x: 14, y: y + 4, fill: 'var(--text)', style: { fontSize: '12.5px', fontWeight: r.rank === 1 ? 700 : 500, fontFamily: "'IBM Plex Sans',sans-serif" } }, r.name));
+      kids.push(h('line', { key: 'wk' + i, x1: xOf(r.lo), x2: xOf(r.hi), y1: y, y2: y, stroke: col, strokeWidth: 2, strokeOpacity: 0.55 }));
+      kids.push(h('line', { key: 'ca' + i, x1: xOf(r.lo), x2: xOf(r.lo), y1: y - 4, y2: y + 4, stroke: col, strokeWidth: 2 }));
+      kids.push(h('line', { key: 'cb' + i, x1: xOf(r.hi), x2: xOf(r.hi), y1: y - 4, y2: y + 4, stroke: col, strokeWidth: 2 }));
+      kids.push(h('circle', { key: 'pt' + i, cx: xOf(r.rating), cy: y, r: 4.5, fill: col, stroke: 'var(--panel)', strokeWidth: 1.5 }));
+      kids.push(h('text', { key: 'vl' + i, x: 644, y: y + 4, fill: 'var(--muted)', style: { fontSize: '11.5px', fontFamily: "'IBM Plex Mono',monospace", fontVariantNumeric: 'tabular-nums' } }, Math.round(r.rating) + '  \u00b1' + r.hw));
+    });
+    const sigForestEl = h('svg', { viewBox: '0 0 792 ' + H, style: { width: '100%', height: 'auto', display: 'block', minWidth: '620px' } }, kids);
+
+    // head-to-head matrix
+    const tp = rows.slice(0, Math.min(6, rows.length));
+    const winP = (a, b) => 1 / (1 + Math.pow(10, (b.rating - a.rating) / 400));
+    const n = tp.length, cell = 58, gap = 6, labelW = 140, headH = 24;
+    const mW = labelW + n * (cell + gap), mH = headH + n * (cell + gap) + 6;
+    const mono = { 'TRELLIS': 'TR', 'Hunyuan3D v2': 'HY', 'Radim/gaussian': 'RG', 'PartCrafter': 'PC', 'TripoSR': 'TS', 'Rodin / Hyper3D': 'RD', 'gemini-2.5-pro': 'Gm', 'o3': 'o3', 'L-Py': 'Lp' };
+    const mk = [];
+    tp.forEach((b, j) => { const x = labelW + j * (cell + gap) + cell / 2; mk.push(h('text', { key: 'ch' + j, x: x, y: headH - 8, textAnchor: 'middle', fill: 'var(--faint)', style: { fontSize: '11px', fontFamily: "'IBM Plex Mono',monospace", fontWeight: 600 } }, mono[b.name] || b.name.slice(0, 3))); });
+    tp.forEach((a, i) => {
+      const cy = headH + i * (cell + gap) + cell / 2;
+      mk.push(h('text', { key: 'rh' + i, x: labelW - 10, y: cy + 4, textAnchor: 'end', fill: 'var(--text)', style: { fontSize: '12px', fontFamily: "'IBM Plex Sans',sans-serif" } }, a.name.split(' (')[0]));
+      tp.forEach((b, j) => {
+        const x = labelW + j * (cell + gap);
+        const yy = headH + i * (cell + gap);
+        if (i === j) { mk.push(h('rect', { key: 'd' + i + '-' + j, x: x, y: yy, width: cell, height: cell, rx: 8, style: { fill: 'var(--panelDeep)' } })); mk.push(h('text', { key: 'dt' + i + '-' + j, x: x + cell / 2, y: yy + cell / 2 + 4, textAnchor: 'middle', fill: 'var(--faint)', style: { fontSize: '13px' } }, '\u2014')); return; }
+        const p = winP(a, b);
+        mk.push(h('rect', { key: 'r' + i + '-' + j, x: x, y: yy, width: cell, height: cell, rx: 8, style: { fill: this.heatColor(p) } }));
+        mk.push(h('text', { key: 't' + i + '-' + j, x: x + cell / 2, y: yy + cell / 2 + 4, textAnchor: 'middle', fill: 'var(--text)', style: { fontSize: '12.5px', fontWeight: 600, fontFamily: "'IBM Plex Mono',monospace" } }, Math.round(p * 100) + '%'));
+      });
+    });
+    const sigMatrixEl = h('svg', { viewBox: '0 0 ' + mW + ' ' + mH, style: { width: '100%', height: 'auto', display: 'block', minWidth: Math.round(mW * 0.72) + 'px' } }, mk);
+
+    const lead = leader.name.split(' (')[0];
+    const sigNote = tied === 0
+      ? lead + ' leads with no overlapping intervals — a statistically clean #1 at this scope.'
+      : tied + ' model' + (tied > 1 ? 's' : '') + ' overlap ' + lead + '\u2019s 95% interval, so the gap at the top is not yet statistically significant.';
+    return { sigForestEl: sigForestEl, sigMatrixEl: sigMatrixEl, sigNote: sigNote };
+  }
+
+  computeDataset(kingdom) {
+    const specimensAll = {
+      plants: [
+        ['Rose', 'Rosa', 'Rosales', 'Moderate', 'CC0 CT scan', 18],
+        ['Tomato', 'Solanum lycopersicum', 'Solanales', 'Hard', 'Image + retrieved', 24],
+        ['Maize', 'Zea mays', 'Poales', 'Hard', 'Procedural + scan', 22],
+        ['Soybean', 'Glycine max', 'Fabales', 'Moderate', 'CC-BY scan', 15],
+        ['Thale cress', 'Arabidopsis thaliana', 'Brassicales', 'Hard', 'ROMI scan', 14],
+        ['Barley root', 'Hordeum vulgare', 'Poales', 'Hard', 'MRI volume', 6],
+      ],
+      fungi: [
+        ['Fly agaric', 'Amanita muscaria', 'Agaricales', 'Moderate', 'Image + retrieved', 12],
+        ['Penny bun', 'Boletus edulis', 'Boletales', 'Moderate', 'Image recon', 9],
+        ['Oyster mushroom', 'Pleurotus ostreatus', 'Agaricales', 'Easy', 'Retrieved asset', 7],
+      ],
+    };
+    let specimens;
+    if (kingdom === 'fungi') specimens = specimensAll.fungi;
+    else if (kingdom === 'plants') specimens = specimensAll.plants;
+    else specimens = specimensAll.plants.concat(specimensAll.fungi);
+    const tierColor = { Easy: 'var(--win)', Moderate: 'var(--amber)', Hard: 'var(--bad)' };
+    const tierPill = (t) => ({ display: 'inline-block', fontFamily: "'IBM Plex Mono',monospace", fontSize: '10.5px', fontWeight: 600, padding: '2px 9px', borderRadius: '999px', color: tierColor[t], background: 'color-mix(in oklch, ' + tierColor[t] + ' 15%, transparent)', border: '1px solid color-mix(in oklch, ' + tierColor[t] + ' 35%, transparent)' });
+    const datasetRows = specimens.map((s) => ({
+      common: s[0], latin: s[1], lineage: s[2], tier: s[3], license: s[4], models: s[5], tierStyle: tierPill(s[3]),
+    }));
+    const palette = ['var(--accent)', 'var(--accent2)', 'var(--win)', 'var(--amber)'];
+    const seg = (name, val, color) => ({ name: name, val: val, color: color });
+    const mkBar = (label, segsRaw) => {
+      const total = segsRaw.reduce((a, s) => a + s.val, 0);
+      return {
+        label: label, total: total + ' specimens',
+        segs: segsRaw.map((s) => ({
+          name: s.name, val: s.val, title: s.name + ' \u00b7 ' + s.val,
+          style: { width: (s.val / total * 100) + '%', background: s.color },
+          dot: { display: 'inline-block', width: '9px', height: '9px', borderRadius: '3px', background: s.color },
+        })),
+      };
+    };
+    const kCounts = kingdom === 'all'
+      ? [seg('Plants', 6, palette[0]), seg('Fungi', 3, palette[1])]
+      : (kingdom === 'fungi' ? [seg('Fungi', 3, palette[1])] : [seg('Plants', 6, palette[0])]);
+    const tierCounts = {};
+    specimens.forEach((s) => { tierCounts[s[3]] = (tierCounts[s[3]] || 0) + 1; });
+    const provCounts = {};
+    specimens.forEach((s) => { const key = s[4].split(' ')[0]; provCounts[key] = (provCounts[key] || 0) + 1; });
+    const datasetBars = [
+      mkBar('By kingdom', kCounts),
+      mkBar('By difficulty tier', ['Easy', 'Moderate', 'Hard'].filter((t) => tierCounts[t]).map((t) => seg(t, tierCounts[t], tierColor[t]))),
+      mkBar('By reference provenance', Object.keys(provCounts).map((k, i) => seg(k, provCounts[k], palette[i % palette.length]))),
+    ];
+    const datasetStats = [
+      { value: String(specimens.length), label: 'Reference specimens' },
+      { value: kingdom === 'all' ? '2' : '1', label: 'Kingdoms represented' },
+      { value: String(specimens.reduce((a, s) => a + s[5], 0)), label: 'Model outputs collected' },
+      { value: String(Object.keys(provCounts).length), label: 'Provenance types' },
+    ];
+    return { datasetRows: datasetRows, datasetBars: datasetBars, datasetStats: datasetStats };
+  }
+
+  computeTasks(kingdom) {
+    const all = [
+      { id: 'T-01', subject: 'Rosa', kingdom: 'plants', paradigm: 'Image \u2192 3D', tier: 'Moderate', votes: 214 },
+      { id: 'T-02', subject: 'Solanum lycopersicum', kingdom: 'plants', paradigm: 'Image \u2192 3D', tier: 'Hard', votes: 188 },
+      { id: 'T-03', subject: 'Zea mays', kingdom: 'plants', paradigm: 'Procedural', tier: 'Hard', votes: 173 },
+      { id: 'T-04', subject: 'Glycine max', kingdom: 'plants', paradigm: 'Scan match', tier: 'Moderate', votes: 141 },
+      { id: 'T-05', subject: 'Arabidopsis thaliana', kingdom: 'plants', paradigm: 'Image \u2192 3D', tier: 'Hard', votes: 132 },
+      { id: 'T-06', subject: 'Hordeum vulgare', kingdom: 'plants', paradigm: 'Volume recon', tier: 'Hard', votes: 96 },
+      { id: 'T-07', subject: 'Amanita muscaria', kingdom: 'fungi', paradigm: 'Image \u2192 3D', tier: 'Moderate', votes: 121 },
+      { id: 'T-08', subject: 'Boletus edulis', kingdom: 'fungi', paradigm: 'Image \u2192 3D', tier: 'Moderate', votes: 98 },
+      { id: 'T-09', subject: 'Pleurotus ostreatus', kingdom: 'fungi', paradigm: 'Retrieved', tier: 'Easy', votes: 62 },
+    ];
+    const rows = (kingdom === 'all' ? all : all.filter((t) => t.kingdom === kingdom));
+    const tierColor = { Easy: 'var(--win)', Moderate: 'var(--amber)', Hard: 'var(--bad)' };
+    const kEmoji = { plants: '\uD83C\uDF3F', fungi: '\uD83C\uDF44' };
+    const taskRows = rows.map((t) => ({
+      id: t.id, subject: t.subject, paradigm: t.paradigm, votes: t.votes, emoji: kEmoji[t.kingdom], tier: t.tier,
+      tierStyle: { display: 'inline-block', fontFamily: "'IBM Plex Mono',monospace", fontSize: '10.5px', fontWeight: 600, padding: '2px 9px', borderRadius: '999px', color: tierColor[t.tier], background: 'color-mix(in oklch, ' + tierColor[t.tier] + ' 15%, transparent)', border: '1px solid color-mix(in oklch, ' + tierColor[t.tier] + ' 35%, transparent)' },
+    }));
+    const taskStats = [
+      { value: String(rows.length), label: 'Live tasks' },
+      { value: rows.reduce((a, t) => a + t.votes, 0).toLocaleString(), label: 'Votes across tasks' },
+      { value: String(new Set(rows.map((t) => t.paradigm)).size), label: 'Paradigms exercised' },
+    ];
+    return { taskRows: taskRows, taskStats: taskStats };
+  }
+
+  methodInfo() {
+    const steps = [
+      ['01', 'Reference', 'A real organism is captured or sourced \u2014 CT scan, photogrammetry, or a licensed reference image.'],
+      ['02', 'Generate', 'Every model reconstructs a 3D asset from the same single input, under identical conditions.'],
+      ['03', 'Pair', 'Two outputs for one task are sampled anonymously and shown side by side.'],
+      ['04', 'Vote', 'You inspect both in the live viewer and pick the better reconstruction \u2014 or call a tie.'],
+      ['05', 'Bradley\u2013Terry', 'Pairwise votes fit a Bradley\u2013Terry model, turning wins into a latent skill rating.'],
+      ['06', 'Rank', 'Ratings and 95% intervals produce the leaderboard, refreshed as votes accumulate.'],
+    ];
+    const methodSteps = steps.map((s) => ({ num: s[0], title: s[1], body: s[2] }));
+    return { methodSteps: methodSteps };
+  }
+
+  renderVals() {
+    const scr = this.state.screen;
+    const defs = [
+      { key: 'arena', label: 'Arena' },
+      { key: 'leaderboard', label: 'Leaderboard' },
+      { key: null, label: 'Significance' },
+      { key: 'benchmark', label: 'Benchmark' },
+      { key: null, label: 'Dataset' },
+      { key: 'difficulty', label: 'Difficulty' },
+      { key: null, label: 'Tasks' },
+      { key: 'coverage', label: 'Coverage' },
+      { key: 'spotlight', label: 'Spotlight' },
+      { key: null, label: 'Methodology' },
+    ];
+    const navItems = defs.map((d) => ({
+      label: d.label,
+      style: this.navStyle(d.key && d.key === scr),
+      onClick: d.key ? () => this.go(d.key) : (e) => { if (e && e.preventDefault) e.preventDefault(); },
+    }));
+    const primaryNav = [
+      { key: 'arena', label: 'Arena' },
+      { key: 'leaderboard', label: 'Leaderboard' },
+      { key: 'models', label: 'Models' },
+    ].map((d) => ({ label: d.label, style: this.navStyle(d.key === scr || (d.key === 'models' && scr === 'modeldetail')), onClick: () => this.go(d.key) }));
+    const ki = this.kingdomInfo();
+    const animals = this.kingdom === 'animals';
+    return {
+      vars: this.varsObj(),
+      navItems,
+      ...this.sidebar(),
+      primaryNav,
+      navMenus: this.navMenus(),
+      kingdomBar: this.kingdomBar(),
+      lbTabs: this.lbTabs(),
+      kStats: ki.tasks + ' tasks · ' + ki.votes + ' votes · updated ' + ki.updated,
+      kSubject: ki.subject,
+      kScope: ki.label,
+      kScopeStyle: { display: 'inline-block', marginLeft: '12px', verticalAlign: 'middle', fontFamily: "'IBM Plex Mono',monospace", fontSize: '11px', fontWeight: '600', letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--accent)', background: 'color-mix(in oklch, var(--accent) 14%, transparent)', border: '1px solid color-mix(in oklch, var(--accent) 38%, transparent)', borderRadius: '999px', padding: '3px 11px' },
+      isAnimals: animals,
+      ...this.computeLb(this.state.lbTab, this.kingdom),
+      ...this.computeDifficulty(this.kingdom),
+      ...this.computeBench(this.kingdom),
+      ...this.computeCoverage(this.kingdom),
+      ...this.computeSignificance(this.kingdom),
+      ...this.computeDataset(this.kingdom),
+      ...this.computeTasks(this.kingdom),
+      ...this.methodInfo(),
+      ...this.computeSubjects(),
+      ...this.computeModels(),
+      ...this.computeModelDetail(),
+      themeGlyph: this.activeTheme === 'dark' ? '\u263e' : '\u2600',
+      toggleTheme: () => {
+        const cur = this.activeTheme === 'dark' ? 'light' : 'dark';
+        try { localStorage.setItem('b3d-theme', cur); } catch (e) {}
+        this.setState({ theme: cur });
+      },
+      goArena: () => this.go('arena'),
+      enterArena: () => this.go('arena'),
+      homeKingdoms: this.homeKingdoms(),
+      specimenChips: this.specimenChips(),
+      goLeaderboard: () => this.go('leaderboard'),
+      goMethodology: () => this.go('methodology'),
+      goModels: () => this.go('models'),
+      goSubmit: () => this.go('submit'),
+      isSubmit: this.state.screen === 'submit' && !animals,
+      isStub: this.state.screen === 'stub' && !animals,
+      routeKey: (animals ? 'animals' : this.state.screen) + '|' + this.state.kingdom,
+      stubTitle: this.state.stubTitle || '',
+      menuOpen: this.state.openMenu !== null,
+      closeMenu: () => this.closeMenu(),
+      kingdomOpen: !!this.state.kingdomOpen,
+      notKingdomOpen: !this.state.kingdomOpen,
+      toggleKingdom: () => this.toggleKingdom(),
+      kingdomMenuItems: this.kingdomMenu(),
+      caretGlyph: this.state.kingdomOpen ? '\u25C2' : '\u25B8',
+      activeKEmoji: ({ all: '\uD83E\uDDEC', plants: '\uD83C\uDF3F', fungi: '\uD83C\uDF44', animals: '\uD83D\uDC3E' })[this.kingdom],
+      activeKLabel: ki.label,
+      showHero: this.kingdom === 'all',
+      voteA: () => this.vote('a'), voteB: () => this.vote('b'), voteTie: () => this.vote('tie'), voteBad: () => this.vote('bad'),
+      nextPair: () => this.nextPair(),
+      isVoted: !!this.state.voted,
+      notVoted: !this.state.voted,
+      sessionVotes: this.state.sessionVotes,
+      resultText: { a: 'You picked Model A', b: 'You picked Model B', tie: 'You called it a tie', bad: 'You marked both weak' }[this.state.voted] || '',
+      modelALabel: this.state.voted ? 'TRELLIS (Replicate)' : 'Model A',
+      modelBLabel: this.state.voted ? 'Hunyuan3D v2 (full)' : 'Model B',
+      ...this.computeReveal(),
+      exitAnimals: () => { this.setState({ kingdom: 'plants', screen: 'arena' }); window.scrollTo(0, 0); },
+      isHome: scr === 'home' && !animals,
+      stageLoading: this.state.stageLoading,
+      showTopBar: !(scr === 'home' && !animals),
+      navMobileOpen: this.state.navMobileOpen,
+      toggleMobileNav: () => this.toggleMobileNav(),
+      isArena: scr === 'arena' && !animals,
+      isLeaderboard: scr === 'leaderboard' && !animals,
+      isDifficulty: scr === 'difficulty' && !animals,
+      isBenchmark: scr === 'benchmark' && !animals,
+      isCoverage: scr === 'coverage' && !animals,
+      isSpotlight: scr === 'spotlight' && !animals,
+      isModels: scr === 'models' && !animals,
+      isModelDetail: scr === 'modeldetail' && !animals,
+      isSignificance: scr === 'significance' && !animals,
+      isDataset: scr === 'dataset' && !animals,
+      isTasks: scr === 'tasks' && !animals,
+      isMethodology: scr === 'methodology' && !animals,
+    };
+  }
+}
+</script>
+</body>
+</html>

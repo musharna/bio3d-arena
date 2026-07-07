@@ -1,9 +1,25 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}Bio 3D Arena{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      try {
+        var t =
+          localStorage.getItem("bio3d_theme") ||
+          (matchMedia("(prefers-color-scheme: light)").matches
+            ? "light"
+            : "dark");
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    </script>
     <link rel="stylesheet" href="/static/style.css" />
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <!-- Viewer registry (loaded once, used per asset format):
@@ -14,43 +30,588 @@
     ></script>
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.4.2/build/3Dmol-min.js"></script>
     <script src="/static/viewer.js"></script>
+    <script defer src="/static/shell.js"></script>
   </head>
   <body>
-    <header class="topbar">
-      <a class="brand" href="/">🧬 Bio 3D Arena</a>
-      <input type="checkbox" id="nav-toggle" class="nav-toggle-cb" hidden />
-      <label for="nav-toggle" class="nav-burger" aria-label="Toggle navigation"
-        >☰</label
+    {% set path = request.url.path %} {% set kingdom = request.state.kingdom |
+    default('all', true) %}
+    <div class="b3d-app">
+      <button
+        id="b3d-burger"
+        class="b3d-burger"
+        aria-label="Open navigation menu"
       >
-      <nav>
-        <a href="/">Arena</a>
-        <a href="/leaderboard">Leaderboard</a>
-        <a href="/significance">Significance</a>
-        <a href="/benchmark">Benchmark</a>
-        <a href="/dataset">Dataset</a>
-        <a href="/difficulty">Difficulty</a>
-        <a href="/tasks">Tasks</a>
-        <a href="/submit">Submit</a>
-        <a href="/coverage">Coverage</a>
-        <a href="/procedural">Procedural</a>
-        <a href="/fidelity">Fidelity</a>
-        <a href="/methodology">Methodology</a>
-        {% if request.state.user %}
-        <span class="verified">✓ {{ request.state.user.username }}</span>
-        <form method="post" action="/auth/logout" style="display:inline">
-          <button type="submit">Sign out</button>
-        </form>
-        {% elif request.state.login_enabled %}
-        <a href="/auth/login">Sign in with Hugging Face</a>
-        {% endif %}
-      </nav>
-    </header>
-    <main>{% block content %}{% endblock %}</main>
-    <footer class="foot">
-      Anonymous pairwise comparison of biological 3D generations ·
-      <a href="/terms">Terms</a> ·
-      <a href="/privacy">Privacy</a> ·
-      <a href="/licenses">Licenses</a>
-    </footer>
+        <span></span><span></span><span></span>
+      </button>
+      <div class="b3d-scrim"></div>
+
+      <aside class="b3d-sidebar" aria-label="Primary navigation">
+        <div class="b3d-navhead">
+          <a href="/" class="b3d-logo-tile" aria-label="Bio 3D Arena home">
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M12 2L20.66 7V17L12 22L3.34 17V7Z"
+                fill="none"
+                stroke="var(--accent)"
+                stroke-width="1.5"
+                stroke-linejoin="round"
+              /><path
+                d="M10.6 20C10.85 19.3 11 16.2 11.4 12.7L12.6 12.7C13 16.2 13.15 19.3 13.4 20Z"
+                fill="oklch(0.5 0.062 61)"
+              /><g transform="translate(2.640 4.7) scale(0.78 0.78)">
+                <path
+                  d="M8.5 13.8C6.2 13.6 5 12 5 10.4C4.2 9.4 4.6 7.6 6 7.1C6.2 5.4 8 4.4 9.6 5.1C10.6 3.9 13.4 3.9 14.4 5.1C16 4.4 17.8 5.4 18 7.1C19.4 7.6 19.8 9.4 19 10.4C19 12 17.8 13.6 15.5 13.8Z"
+                  fill="color-mix(in oklch, var(--accent) 82%, #063a1e)"
+                /><path
+                  d="M9.2 12.9C7.5 12.7 6.5 11.6 6.6 10.3C6 9.5 6.4 8.3 7.4 8C7.6 6.8 8.9 6.1 10 6.7C10.8 5.9 13.2 5.9 14 6.7C15.1 6.1 16.4 6.8 16.6 8C17.6 8.3 18 9.5 17.4 10.3C17.5 11.6 16.5 12.7 14.8 12.9Z"
+                  fill="color-mix(in oklch, var(--accent) 92%, #eaffea)"
+                />
+              </g>
+            </svg>
+          </a>
+          <span class="b3d-wordmark"
+            >Bio <span class="b3d-accent-text">3D</span></span
+          >
+          <button
+            id="b3d-collapse"
+            class="b3d-collapse-btn"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+          >
+            «
+          </button>
+        </div>
+
+        <nav class="b3d-navgroups">
+          <div class="b3d-navgroup">
+            <div class="b3d-navheading">Overview</div>
+            <a
+              href="/"
+              class="b3d-nav-link{{ ' is-active' if path == '/' else '' }}"
+              title="Home"
+            >
+              <span class="b3d-nav-icon" aria-hidden="true"
+                ><svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path
+                    d="M3 9.7 L10 3.7 L17 9.7"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M5 8.3 V16.4 H15 V8.3"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /></svg
+              ></span>
+              <span class="b3d-nav-label">Home</span>
+            </a>
+            <a
+              href="/arena"
+              class="b3d-nav-link{{ ' is-active' if path == '/arena' else '' }}"
+              title="Arena"
+            >
+              <span class="b3d-nav-icon" aria-hidden="true"
+                ><svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path
+                    d="M3.6 4.6 H8.4 V15.4 H3.6 Z"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M11.6 4.6 H16.4 V15.4 H11.6 Z"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /></svg
+              ></span>
+              <span class="b3d-nav-label">Arena</span>
+            </a>
+          </div>
+
+          <div class="b3d-navgroup">
+            <div class="b3d-navheading">Rankings</div>
+            <a
+              href="/leaderboard"
+              class="b3d-nav-link{{ ' is-active' if path == '/leaderboard' else '' }}"
+              title="Leaderboard"
+            >
+              <span class="b3d-nav-icon" aria-hidden="true"
+                ><svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path
+                    d="M3 16.5 H17"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M5 16 V11"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M10 16 V5.5"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M15 16 V8.5"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /></svg
+              ></span>
+              <span class="b3d-nav-label">Leaderboard</span>
+            </a>
+            <a
+              href="/models"
+              class="b3d-nav-link{{ ' is-active' if path == '/models' else '' }}"
+              title="Models"
+            >
+              <span class="b3d-nav-icon" aria-hidden="true"
+                ><svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path
+                    d="M10 2.8 L16.6 6.6 L10 10.4 L3.4 6.6 Z"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M3.4 6.6 V13.4 L10 17.2 L16.6 13.4 V6.6"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M10 10.4 V17.2"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /></svg
+              ></span>
+              <span class="b3d-nav-label">Models</span>
+            </a>
+            <a
+              href="/difficulty"
+              class="b3d-nav-link{{ ' is-active' if path == '/difficulty' else '' }}"
+              title="Difficulty"
+            >
+              <span class="b3d-nav-icon" aria-hidden="true"
+                ><svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path
+                    d="M4 15.5 V13"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M8 15.5 V10"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M12 15.5 V7"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M16 15.5 V4.5"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /></svg
+              ></span>
+              <span class="b3d-nav-label">Difficulty</span>
+            </a>
+          </div>
+
+          <div class="b3d-navgroup">
+            <div class="b3d-navheading">Analysis</div>
+            <a
+              href="/benchmark"
+              class="b3d-nav-link{{ ' is-active' if path == '/benchmark' else '' }}"
+              title="Benchmark"
+            >
+              <span class="b3d-nav-icon" aria-hidden="true"
+                ><svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <circle
+                    cx="10"
+                    cy="10"
+                    r="6.4"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                  /><circle
+                    cx="10"
+                    cy="10"
+                    r="2.6"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                  /><path
+                    d="M10 1.6 V4"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                  /><path
+                    d="M10 16 V18.4"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                  /><path
+                    d="M1.6 10 H4"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                  /><path
+                    d="M16 10 H18.4"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                  /></svg
+              ></span>
+              <span class="b3d-nav-label">Benchmark</span>
+            </a>
+            <a
+              href="/coverage"
+              class="b3d-nav-link{{ ' is-active' if path == '/coverage' else '' }}"
+              title="Coverage"
+            >
+              <span class="b3d-nav-icon" aria-hidden="true"
+                ><svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path
+                    d="M3.5 3.5 H8.5 V8.5 H3.5 Z"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M11.5 3.5 H16.5 V8.5 H11.5 Z"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M3.5 11.5 H8.5 V16.5 H3.5 Z"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M11.5 11.5 H16.5 V16.5 H11.5 Z"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /></svg
+              ></span>
+              <span class="b3d-nav-label">Coverage</span>
+            </a>
+            <a
+              href="/significance"
+              class="b3d-nav-link{{ ' is-active' if path == '/significance' else '' }}"
+              title="Significance"
+            >
+              <span class="b3d-nav-icon" aria-hidden="true"
+                ><svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path
+                    d="M3 16 V4"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M3 16 H17"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M4.5 15 C8 15 8 6.5 10 6.5 C12 6.5 12 15 15.5 15"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /></svg
+              ></span>
+              <span class="b3d-nav-label">Significance</span>
+            </a>
+          </div>
+
+          <div class="b3d-navgroup">
+            <div class="b3d-navheading">Data</div>
+            <a
+              href="/dataset"
+              class="b3d-nav-link{{ ' is-active' if path == '/dataset' else '' }}"
+              title="Dataset"
+            >
+              <span class="b3d-nav-icon" aria-hidden="true"
+                ><svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path
+                    d="M4.5 5.2 C4.5 3.8 15.5 3.8 15.5 5.2 V14.8 C15.5 16.2 4.5 16.2 4.5 14.8 Z"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M4.5 5.2 C4.5 6.6 15.5 6.6 15.5 5.2"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M4.5 10 C4.5 11.4 15.5 11.4 15.5 10"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /></svg
+              ></span>
+              <span class="b3d-nav-label">Dataset</span>
+            </a>
+            <a
+              href="/tasks"
+              class="b3d-nav-link{{ ' is-active' if path == '/tasks' else '' }}"
+              title="Tasks"
+            >
+              <span class="b3d-nav-icon" aria-hidden="true"
+                ><svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path
+                    d="M3.5 6 L5 7.5 L7.5 4.8"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M10 6 H16.5"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M3.5 13 L5 14.5 L7.5 11.8"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M10 13 H16.5"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /></svg
+              ></span>
+              <span class="b3d-nav-label">Tasks</span>
+            </a>
+            <a
+              href="/spotlight"
+              class="b3d-nav-link{{ ' is-active' if path == '/spotlight' else '' }}"
+              title="Spotlight"
+            >
+              <span class="b3d-nav-icon" aria-hidden="true"
+                ><svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path
+                    d="M10 2.6 L11.7 8.3 L17.4 10 L11.7 11.7 L10 17.4 L8.3 11.7 L2.6 10 L8.3 8.3 Z"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /></svg
+              ></span>
+              <span class="b3d-nav-label">Spotlight</span>
+            </a>
+          </div>
+
+          <div class="b3d-navgroup">
+            <div class="b3d-navheading">About</div>
+            <a
+              href="/methodology"
+              class="b3d-nav-link{{ ' is-active' if path == '/methodology' else '' }}"
+              title="Methodology"
+            >
+              <span class="b3d-nav-icon" aria-hidden="true"
+                ><svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path
+                    d="M5.5 3.5 H11.5 L14.5 6.5 V16.5 H5.5 Z"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M11.3 3.6 V6.6 H14.4"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M7.8 10.5 H12.2"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M7.8 13.2 H12.2"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /></svg
+              ></span>
+              <span class="b3d-nav-label">Methodology</span>
+            </a>
+            <a
+              href="/submit"
+              class="b3d-nav-link{{ ' is-active' if path == '/submit' else '' }}"
+              title="Submit"
+            >
+              <span class="b3d-nav-icon" aria-hidden="true"
+                ><svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path
+                    d="M10 12.5 V4.2"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M6.6 7.6 L10 4.2 L13.4 7.6"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /><path
+                    d="M4.6 13 V16.4 H15.4 V13"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /></svg
+              ></span>
+              <span class="b3d-nav-label">Submit</span>
+            </a>
+          </div>
+        </nav>
+
+        <div class="b3d-sidebar-bottom">
+          <button
+            id="b3d-theme"
+            class="b3d-theme-btn"
+            aria-label="Toggle color theme"
+            title="Toggle theme"
+          >
+            <span class="b3d-nav-icon" aria-hidden="true">&#9790;</span>
+            <span class="b3d-nav-label">Theme</span>
+          </button>
+          <div class="b3d-auth">
+            {% if request.state.user %}
+            <span class="verified b3d-nav-label"
+              >✓ {{ request.state.user.username }}</span
+            >
+            <form method="post" action="/auth/logout" class="b3d-auth-form">
+              <button type="submit" class="b3d-nav-label">Sign out</button>
+            </form>
+            {% elif request.state.login_enabled %}
+            <a href="/auth/login" class="b3d-nav-label"
+              >Sign in with Hugging Face</a
+            >
+            {% endif %}
+          </div>
+        </div>
+      </aside>
+
+      <div class="b3d-content">
+        <div class="b3d-kbar">
+          <div class="b3d-kbar-left">
+            <span class="b3d-kbar-label">Kingdom</span>
+            {% include "_scope_pill.html" %}
+            <div class="b3d-kseg" role="tablist" aria-label="Kingdom scope">
+              <a
+                href="?kingdom=all"
+                class="b3d-kseg-item{{ ' is-active' if kingdom == 'all' else '' }}"
+                >All</a
+              >
+              <a
+                href="?kingdom=plants"
+                class="b3d-kseg-item{{ ' is-active' if kingdom == 'plants' else '' }}"
+                >&#127807; Plants</a
+              >
+              <a
+                href="?kingdom=fungi"
+                class="b3d-kseg-item{{ ' is-active' if kingdom == 'fungi' else '' }}"
+                >&#127812; Fungi</a
+              >
+              <a
+                href="?kingdom=animals"
+                class="b3d-kseg-item{{ ' is-active' if kingdom == 'animals' else '' }}"
+                >&#128062; Animals</a
+              >
+            </div>
+          </div>
+          <nav class="b3d-topnav" aria-label="Quick links">
+            <a
+              href="/arena"
+              class="b3d-topnav-link{{ ' is-active' if path == '/arena' else '' }}"
+              >Arena</a
+            >
+            <a
+              href="/leaderboard"
+              class="b3d-topnav-link{{ ' is-active' if path == '/leaderboard' else '' }}"
+              >Leaderboard</a
+            >
+            <a
+              href="/models"
+              class="b3d-topnav-link{{ ' is-active' if path == '/models' else '' }}"
+              >Models</a
+            >
+          </nav>
+        </div>
+
+        <main class="b3d-main">{% block content %}{% endblock %}</main>
+
+        <footer class="b3d-footer">
+          <div class="b3d-footer-inner">
+            <span class="b3d-footer-tagline"
+              >Anonymous pairwise comparison of biological 3D generations.</span
+            >
+            <div class="b3d-footer-links">
+              <a
+                class="b3d-footer-chip"
+                href="/methodology"
+                target="_blank"
+                rel="noopener"
+                >Paper &#8599;</a
+              >
+              <a
+                class="b3d-footer-chip"
+                href="https://github.com/musharna/bio3d-arena"
+                target="_blank"
+                rel="noopener"
+                >GitHub &#8599;</a
+              >
+              <a
+                class="b3d-footer-chip"
+                href="/dataset"
+                target="_blank"
+                rel="noopener"
+                >Dataset &#8599;</a
+              >
+              <a class="b3d-footer-chip" href="/submit">Submit a model</a>
+              <a class="b3d-footer-muted" href="/terms">Terms</a>
+              <a class="b3d-footer-muted" href="/privacy">Privacy</a>
+              <a class="b3d-footer-muted" href="/licenses">Licenses</a>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </div>
   </body>
 </html>

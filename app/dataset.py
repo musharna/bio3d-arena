@@ -10,17 +10,35 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import Comparison, Criterion, Generator, ModelOutput, Task, Vote
+from .models import (
+    Category,
+    Comparison,
+    Criterion,
+    Generator,
+    ModelOutput,
+    ReconTask,
+    Task,
+    TaskDifficulty,
+    Vote,
+)
 
 
-def build_preference_records(db: Session, comparison_ids: set[int] | None = None) -> dict:
+def build_preference_records(
+    db: Session, comparison_ids: set[int] | None = None, kingdom: str | None = None
+) -> dict:
     """Every decided comparison with full provenance — the /api/export.json payload.
 
     When `comparison_ids` is given, only comparisons in that set are included (used by
     scripts/build_dataset_release.py to scope the release's votes to the release bundle's
     own allowlisted tasks/generators). Default `None` keeps the full unfiltered global log,
     which is what the public /api/export.json route ships.
+
+    `kingdom` (optional, e.g. "fungi") restricts to comparisons whose task's category maps to
+    that kingdom via `kingdoms.KINGDOM_OF`; `None`/"all" keeps every kingdom.
     """
+    from .kingdoms import KINGDOM_OF, normalize_kingdom
+
+    kingdom = normalize_kingdom(kingdom)
     rows = db.execute(
         select(Vote, Comparison).join(Comparison, Vote.comparison_id == Comparison.id)
     ).all()
@@ -28,9 +46,11 @@ def build_preference_records(db: Session, comparison_ids: set[int] | None = None
     for vote, comp in rows:
         if comparison_ids is not None and comp.id not in comparison_ids:
             continue
+        task = db.get(Task, comp.task_id)
+        if kingdom != "all" and KINGDOM_OF.get(task.category.slug) != kingdom:
+            continue
         out_a = db.get(ModelOutput, comp.output_a_id)
         out_b = db.get(ModelOutput, comp.output_b_id)
-        task = db.get(Task, comp.task_id)
         crit = db.get(Criterion, comp.criterion_id)
         records.append(
             {
@@ -117,3 +137,77 @@ def render_datasheet(version: str, manifest: dict, rollup: list[dict]) -> str:
             "",
         ]
     )
+
+
+def dataset_composition(db: Session, category_ids: set[int] | None = None) -> dict:
+    """Server-computed composition stats for the /dataset page: stat-card counts + the
+    "by kingdom" / "by tier" segmented-bar breakdowns. Every number here REUSES existing
+    tables (ReconTask, ModelOutput, TaskDifficulty, Category → kingdoms.KINGDOM_OF) —
+    nothing is fabricated. `category_ids` optionally scopes to one kingdom's category ids
+    (the caller passes `kingdoms.category_ids_for_kingdom(db, request.state.kingdom)`);
+    `None` means "all kingdoms".
+    """
+    from .kingdoms import KINGDOM_OF, KINGDOMS
+
+    task_q = select(Task.id, Task.category_id).where(Task.active.is_(True))
+    if category_ids is not None:
+        task_q = task_q.where(Task.category_id.in_(category_ids))
+    task_rows = db.execute(task_q).all()
+    task_ids = {r.id for r in task_rows}
+    category_of_task = {r.id: r.category_id for r in task_rows}
+
+    category_slug = dict(db.execute(select(Category.id, Category.slug)).all())
+
+    out_q = select(ModelOutput.id, ModelOutput.task_id, ModelOutput.source).where(
+        ModelOutput.hidden_at.is_(None), ModelOutput.is_gold.is_(False)
+    )
+    if category_ids is not None:
+        out_q = out_q.where(ModelOutput.task_id.in_(task_ids))
+    out_rows = db.execute(out_q).all()
+    n_outputs = len(out_rows)
+    provenance_types = len({r.source for r in out_rows})
+
+    by_kingdom_counts: dict[str, int] = {k: 0 for k in KINGDOMS}
+    for r in out_rows:
+        slug = category_slug.get(category_of_task.get(r.task_id))
+        k = KINGDOM_OF.get(slug)
+        if k:
+            by_kingdom_counts[k] += 1
+    kingdoms_represented = sum(1 for v in by_kingdom_counts.values() if v > 0)
+
+    recon_q = select(ReconTask.species_slug).join(Task, ReconTask.task_id == Task.id)
+    if category_ids is not None:
+        recon_q = recon_q.where(Task.category_id.in_(category_ids))
+    ref_specimens = len(set(db.execute(recon_q).scalars()))
+
+    tier_q = select(TaskDifficulty.task_id, TaskDifficulty.tier).join(
+        Task, TaskDifficulty.task_id == Task.id
+    )
+    if category_ids is not None:
+        tier_q = tier_q.where(Task.category_id.in_(category_ids))
+    task_tier = dict(db.execute(tier_q).all())
+    by_tier_counts: dict[str, int] = {"easy": 0, "moderate": 0, "hard": 0}
+    for r in out_rows:
+        tier = task_tier.get(r.task_id)
+        if tier in by_tier_counts:
+            by_tier_counts[tier] += 1
+
+    def _bars(counts: dict[str, int]) -> list[dict]:
+        total = sum(counts.values())
+        return [
+            {
+                "key": key,
+                "count": count,
+                "pct": round(count / total * 100, 1) if total else 0.0,
+            }
+            for key, count in counts.items()
+        ]
+
+    return {
+        "ref_specimens": ref_specimens,
+        "kingdoms_represented": kingdoms_represented,
+        "n_outputs": n_outputs,
+        "provenance_types": provenance_types,
+        "by_kingdom": _bars(by_kingdom_counts),
+        "by_tier": _bars(by_tier_counts),
+    }

@@ -46,7 +46,11 @@ def _fresh_pair_exists(outs: list[ModelOutput], voted_pairs: set[frozenset[int]]
 
 
 def pick_task(
-    db: Session, category_id: int | None = None, exclude_fn=None, voted_pairs=None
+    db: Session,
+    category_id: int | None = None,
+    category_ids: set[int] | None = None,
+    exclude_fn=None,
+    voted_pairs=None,
 ) -> Task | None:
     """Pick a random active task that has at least one votable (non-gold) pair the session
     has NOT already voted on.
@@ -59,10 +63,17 @@ def pick_task(
     `voted_pairs` (set of frozenset({a_id, b_id})) is the session's already-voted pairings;
     a task is only a candidate if it still has a FRESH pair after that exclusion too — else
     pick_task offers a task whose every pair pick_pair must skip, dead-ending the session on
-    the /api/vote 409 'already voted on this pairing'."""
+    the /api/vote 409 'already voted on this pairing'.
+
+    `category_ids` (a set) scopes to the active kingdom — when passed, it takes precedence
+    over `category_id` (a single explicit `?category=` selector still uses `category_id`; the
+    kingdom bucket uses `category_ids`). An EMPTY set means the kingdom has zero mapped
+    categories, so no task is eligible (returns None), not 'all tasks'."""
     voted = voted_pairs or set()
     stmt = select(Task).where(Task.active.is_(True))
-    if category_id is not None:
+    if category_ids is not None:
+        stmt = stmt.where(Task.category_id.in_(category_ids))
+    elif category_id is not None:
         stmt = stmt.where(Task.category_id == category_id)
     tasks = db.execute(stmt).scalars().all()
 

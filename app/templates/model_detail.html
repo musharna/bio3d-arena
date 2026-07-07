@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}{{ gen.name }} · Models · Bio 3D Arena{% endblock %}
+{% block content %}
+<section class="b3d-models">
+  <header class="b3d-page-head">
+    <h1 class="b3d-model-detail-head">
+      {{ gen.name }}
+      <span class="kind kind-{{ gen.kind }}">{{ gen.kind }}</span>
+      {% include "_scope_pill.html" %}
+    </h1>
+    <p class="b3d-page-lede">
+      {% if card and card.paradigm_display %}{{ card.paradigm_display }}{% endif %}
+      {% if gen.description %}&middot; {{ gen.description }}{% endif %}
+    </p>
+    <p><a href="/models">&larr; all models</a></p>
+  </header>
+
+  {% if card %}
+  <div class="b3d-model-stats mono b3d-model-detail-stats">
+    <span title="Bradley–Terry overall score">{% if card.bt_score is not none %}<strong>{{ card.bt_score }}</strong> BT{% else %}<span class="subtle">unrated</span>{% endif %}</span>
+    <span><strong>{{ card.votes }}</strong> votes</span>
+    <span><strong>{{ card.tasks }}</strong> tasks</span>
+    <span class="subtle">{{ card.confidence }}</span>
+  </div>
+  {% else %}
+  <p class="subtle">No coverage stats for this generator in the current scope.</p>
+  {% endif %}
+
+  <div class="b3d-section-head">
+    <h2>Ratings by task</h2>
+  </div>
+  {% if task_rows %}
+  <div class="ranktable-wrap">
+    <table class="ranktable">
+      <thead>
+        <tr>
+          <th>Task</th>
+          <th>Category</th>
+          <th class="num">Outputs</th>
+          <th class="num">Votes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in task_rows %}
+        <tr>
+          <td>{{ r.task }}</td>
+          <td class="subtle">{{ r.category }}</td>
+          <td class="num">{{ r.outputs }}</td>
+          <td class="num">{{ r.votes }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="subtle">No outputs for this generator in the current scope.</p>
+  {% endif %}
+
+  {% if samples %}
+  <div class="b3d-section-head">
+    <h2>Sample outputs</h2>
+  </div>
+  <div class="b3d-model-samples">
+    {% for s in samples %}
+    <div class="b3d-model-sample">
+      {% if s.format in ("glb", "gltf") %}
+      <model-viewer
+        src="{{ s.asset_url }}"
+        camera-controls
+        disable-zoom
+        interaction-prompt="none"
+        loading="lazy"
+      ></model-viewer>
+      {% else %}
+      <a href="{{ s.asset_url }}" target="_blank" rel="noopener" class="b3d-model-sample-link">view {{ s.format }}</a>
+      {% endif %}
+      <div class="b3d-model-sample-label subtle">{{ s.title }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

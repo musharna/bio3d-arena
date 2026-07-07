@@ -1,46 +1,52 @@
 {% extends "base.html" %}
 {% block title %}Fidelity · Bio 3D Arena{% endblock %}
 {% block content %}
-<h1>Cross-Paradigm Fidelity</h1>
-<p class="muted">
-  Absolute biological ground-truth fidelity per taxon &mdash; the objective complement to the
-  preference arena (which compares only within a paradigm). <strong>No single blended score:</strong>
-  completeness is the validated ranker; geometry and trait are labeled context.
-</p>
-<div class="axis-legend">
-  {% for a in board.axes_meta %}<span class="badge">{{ a.label }} &mdash; {{ a.badge }}</span> {% endfor %}
-</div>
-{% if not board.taxa %}
-<p class="empty">No completeness data yet &mdash; run <code>scripts/score_completeness.py</code>.</p>
-{% endif %}
-{% for t in board.taxa %}
-<h2>{{ t.taxon }}</h2>
-<table class="board">
-  <thead>
-    <tr>
-      <th>#</th><th>Paradigm</th><th>n</th>
-      <th>Completeness (%complete / mean)</th><th>Geometry (F-score)</th>
-      <th>Trait acc.</th><th>Best model</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for r in t.rows %}
-    <tr>
-      <td>{{ loop.index }}</td><td>{{ r.paradigm_label }}</td><td>{{ r.n }}</td>
-      <td>{{ (100 * r.completeness.pct_complete) | round(0) | int }}%{% if r.completeness.mean_score is not none %} / {{ r.completeness.mean_score | round(2) }}{% endif %}</td>
-      <td>{% if r.geometry.n %}{{ r.geometry.mean_fscore | round(2) }} <span class="muted">(n={{ r.geometry.n }})</span>{% else %}&mdash;{% endif %}</td>
-      <td>{% if r.trait.n %}{{ r.trait.mean_accuracy | round(2) }} <span class="muted">(n={{ r.trait.n }})</span>{% else %}&mdash;{% endif %}</td>
-      <td>{{ r.best_model.name }}</td>
-    </tr>
+<section class="board fid">
+  <header class="b3d-page-head">
+    <h1>Cross-paradigm fidelity {% include "_scope_pill.html" %}</h1>
+    <p class="b3d-page-lede">
+      Absolute biological ground-truth fidelity per taxon &mdash; the objective complement to the
+      preference arena (which compares only within a paradigm). <strong>No single blended score:</strong>
+      completeness is the validated ranker; geometry and trait are labeled context.
+    </p>
+  </header>
+  <div class="fid-axes">
+    {% for a in board.axes_meta %}
+    <span class="cov-badge {{ 'cov-firm' if a.primary else 'cov-prov' }}">{{ a.label }} &mdash; {{ a.badge }}</span>
     {% endfor %}
-    {% for r in t.reference %}
-    <tr class="reference">
-      <td>ref</td><td>{{ r.paradigm_label }} <span class="muted">(GT)</span></td><td>{{ r.n }}</td>
-      <td>{{ (100 * r.completeness.pct_complete) | round(0) | int }}%{% if r.completeness.mean_score is not none %} / {{ r.completeness.mean_score | round(2) }}{% endif %}</td>
-      <td colspan="3" class="muted">reference upper-bound &mdash; not ranked</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% endfor %}
+  </div>
+  {% if not board.taxa %}
+  <p class="subtle">No completeness data yet &mdash; run <code>scripts/score_completeness.py</code>.</p>
+  {% endif %}
+  {% for t in board.taxa %}
+  <h3 class="fid-taxon">{{ t.taxon }}</h3>
+  <table class="ranktable">
+    <thead>
+      <tr>
+        <th>#</th><th>Paradigm</th><th>n</th>
+        <th>Completeness (%complete / mean)</th><th>Geometry (F-score)</th>
+        <th>Trait acc.</th><th>Best model</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in t.rows %}
+      <tr>
+        <td>{{ loop.index }}</td><td>{{ r.paradigm_label }}</td><td class="num">{{ r.n }}</td>
+        <td class="num">{{ (100 * r.completeness.pct_complete) | round(0) | int }}%{% if r.completeness.mean_score is not none %} / {{ r.completeness.mean_score | round(2) }}{% endif %}</td>
+        <td class="num">{% if r.geometry.n %}{{ r.geometry.mean_fscore | round(2) }} <span class="subtle">(n={{ r.geometry.n }})</span>{% else %}&mdash;{% endif %}</td>
+        <td class="num">{% if r.trait.n %}{{ r.trait.mean_accuracy | round(2) }} <span class="subtle">(n={{ r.trait.n }})</span>{% else %}&mdash;{% endif %}</td>
+        <td>{{ r.best_model.name }}</td>
+      </tr>
+      {% endfor %}
+      {% for r in t.reference %}
+      <tr class="reference">
+        <td>ref</td><td>{{ r.paradigm_label }} <span class="subtle">(GT)</span></td><td class="num">{{ r.n }}</td>
+        <td class="num">{{ (100 * r.completeness.pct_complete) | round(0) | int }}%{% if r.completeness.mean_score is not none %} / {{ r.completeness.mean_score | round(2) }}{% endif %}</td>
+        <td colspan="3" class="subtle">reference upper-bound &mdash; not ranked</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+</section>
 {% endblock %}

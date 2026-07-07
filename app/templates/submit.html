@@ -1,30 +1,122 @@
 {% extends "base.html" %}
 {% block title %}Submit · Bio 3D Arena{% endblock %}
 {% block content %}
-<section class="board prose">
-  <h2>Submit a model output</h2>
-  <p class="subtle">Upload a 3D output (GLB/GLTF mesh or PDB/mmCIF structure) for a
-    benchmark task. Submissions are validated, then reviewed by a moderator before
-    they enter the arena and the rankings.</p>
-  <form class="card submit-form" method="post" action="/api/submit"
-        enctype="multipart/form-data" id="submit-form">
-    <label>Task
-      <select name="task_id" required>
-        {% for t in tasks %}
-        <option value="{{ t.id }}">{{ t.title }} ({{ t.category }})</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Generator slug <input name="generator_slug" placeholder="my-model-v1" required /></label>
-    <label>Generator name <input name="generator_name" placeholder="My Model v1" /></label>
-    <label>Output title <input name="title" placeholder="optional" /></label>
-    <label>Your name / contact <input name="submitter" placeholder="optional" /></label>
-    <label>Asset file
-      <input type="file" name="file" accept=".glb,.gltf,.pdb,.cif,.mmcif,.ent" required />
-    </label>
-    <button type="submit">Submit for review</button>
+{% set paradigm_options = [
+  ("image_recon", "Image→3D reconstruction"),
+  ("capture_scan", "Scan / capture"),
+  ("procedural_llm", "LLM procedural (code-gen)"),
+  ("procedural_expert", "Expert / simulation procedural"),
+  ("retrieval", "Retrieved asset"),
+  ("text_native", "Text→3D (native)"),
+  ("video", "Video→3D / 4D"),
+  ("texturing", "Texturing / editing"),
+  ("agentic", "Agentic 3D"),
+  ("sketch", "Sketch→3D"),
+] %}
+<section class="board">
+  <header class="b3d-page-head">
+    <h1>Submit a model {% include "_scope_pill.html" %}</h1>
+    <p class="b3d-page-lede">Add a generator to the arena. Submissions are moderated, pre-tested
+      on the calibration set, then enter the public pairwise queue — no self-voting, exclusions
+      logged on the record.</p>
+  </header>
+
+  <div class="b3d-steps-grid sub-steps-grid">
+    <div class="b3d-step-card">
+      <div class="b3d-step-num">01</div>
+      <h3>Submit</h3>
+      <p>Weights, API, or output files + provenance.</p>
+    </div>
+    <div class="b3d-step-card">
+      <div class="b3d-step-num">02</div>
+      <h3>Calibrate</h3>
+      <p>Pre-tested on the held-out calibration set.</p>
+    </div>
+    <div class="b3d-step-card">
+      <div class="b3d-step-num">03</div>
+      <h3>Compete</h3>
+      <p>Enters the live pairwise vote queue.</p>
+    </div>
+  </div>
+
+  <form class="sub-form" method="post" action="/api/submit" enctype="multipart/form-data" id="submit-form">
+    <div class="sub-field">
+      <label for="sub-generator-name">Model name</label>
+      <input id="sub-generator-name" name="generator_name" placeholder="e.g. TRELLIS 2.0" />
+    </div>
+
+    <div class="sub-row">
+      <div class="sub-field">
+        <label for="sub-generator-slug">Generator slug <span class="sub-req">*</span></label>
+        <input id="sub-generator-slug" name="generator_slug" placeholder="trellis-2-0" required />
+      </div>
+      <div class="sub-field">
+        <label for="sub-task">Task <span class="sub-req">*</span></label>
+        <select id="sub-task" name="task_id" required>
+          {% for t in tasks %}
+          <option value="{{ t.id }}">{{ t.title }} ({{ t.category }})</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="sub-row">
+      <div class="sub-field">
+        <label for="sub-org">Organization</label>
+        <input id="sub-org" name="organization" placeholder="Lab or company" />
+      </div>
+      <div class="sub-field">
+        <label for="sub-paradigm">Paradigm</label>
+        <select id="sub-paradigm" name="paradigm">
+          <option value="">— unspecified —</option>
+          {% for key, label in paradigm_options %}
+          <option value="{{ key }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="sub-row">
+      <div class="sub-field">
+        <label for="sub-kingdom">Kingdom</label>
+        <select id="sub-kingdom" name="kingdom">
+          <option value="">— unspecified —</option>
+          <option value="plants">Plants</option>
+          <option value="fungi">Fungi</option>
+          <option value="animals">Animals</option>
+        </select>
+      </div>
+      <div class="sub-field">
+        <label for="sub-format">Output format</label>
+        <select id="sub-format" name="output_format">
+          <option value="">— unspecified —</option>
+          <option value="glb">GLB</option>
+          <option value="gltf">GLTF</option>
+          <option value="pdb">PDB</option>
+          <option value="mmcif">mmCIF</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sub-row">
+      <div class="sub-field">
+        <label for="sub-title">Output title</label>
+        <input id="sub-title" name="title" placeholder="optional" />
+      </div>
+      <div class="sub-field">
+        <label for="sub-submitter">Your name / contact</label>
+        <input id="sub-submitter" name="submitter" placeholder="optional" />
+      </div>
+    </div>
+
+    <div class="sub-field">
+      <label for="sub-file">Asset file <span class="sub-req">*</span></label>
+      <input id="sub-file" type="file" name="file" accept=".glb,.gltf,.pdb,.cif,.mmcif,.ent" required />
+    </div>
+
+    <button type="submit" class="b3d-btn-primary sub-submit">Submit for review</button>
+    <p id="submit-status" class="sub-status"></p>
   </form>
-  <p id="submit-status" class="status-line"></p>
 </section>
 <script>
   const form = document.getElementById("submit-form");
@@ -32,17 +124,30 @@
     e.preventDefault();
     const s = document.getElementById("submit-status");
     s.textContent = "Uploading…";
+    s.classList.remove("sub-status-ok", "sub-status-err");
+    const fd = new FormData(form);
+    // Fold the design's extra selects (no top-level /api/submit params) into `meta`.
+    const meta = {};
+    for (const k of ["organization", "paradigm", "kingdom", "output_format"]) {
+      const v = fd.get(k);
+      if (v) meta[k] = v;
+      fd.delete(k);
+    }
+    fd.set("meta", JSON.stringify(meta));
     try {
-      const res = await fetch("/api/submit", { method: "POST", body: new FormData(form) });
+      const res = await fetch("/api/submit", { method: "POST", body: fd });
       const data = await res.json();
       if (res.ok) {
         s.textContent = "✓ Submitted (#" + data.submission_id + ") — pending review.";
+        s.classList.add("sub-status-ok");
         form.reset();
       } else {
         s.textContent = "Error: " + (data.detail || res.status);
+        s.classList.add("sub-status-err");
       }
     } catch (err) {
       s.textContent = "Error: " + err;
+      s.classList.add("sub-status-err");
     }
   });
 </script>

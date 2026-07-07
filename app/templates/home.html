@@ -1,0 +1,118 @@
+{% extends "base.html" %} {% block title %}Bio 3D Arena — Biological 3D
+reconstruction benchmark{% endblock %} {% block content %}
+<section class="b3d-hero">
+  <div class="b3d-hero-rings-bg" aria-hidden="true"></div>
+  <div class="b3d-hero-grid">
+    <div>
+      <span class="b3d-hero-eyebrow"
+        >Biological 3D reconstruction &middot; benchmark</span
+      >
+      <h1 class="b3d-hero-h1">
+        The <span class="b3d-hero-accent2">life-sciences</span> arena for<br />
+        <span class="b3d-hero-accent3d">3D</span> generation
+      </h1>
+      <p class="b3d-hero-lede">
+        Two AI reconstructions of a real organism, judged side by side. Every
+        vote powers Bradley&ndash;Terry leaderboards across the kingdoms of
+        life.
+      </p>
+      <div class="b3d-hero-ctas">
+        <a href="/arena" class="b3d-btn-primary">Enter the arena &rarr;</a>
+        <a href="/methodology" class="b3d-btn-secondary">View methodology</a>
+      </div>
+      <div class="b3d-hero-stats">
+        <span
+          ><span class="b3d-live-dot" aria-hidden="true"></span>
+          <strong>{{ "{:,}".format(total_votes) }}</strong> votes cast</span
+        >
+        <span><strong>{{ models_count }}</strong> models</span>
+        <span><strong>{{ tasks_count }}</strong> tasks</span>
+        <span><strong>{{ kingdoms_live }}</strong> kingdoms live</span>
+      </div>
+      <div class="b3d-hero-generators">
+        <span class="b3d-hero-generators-label">Generators from</span>
+        <span class="b3d-hero-generators-list">
+          <span>Microsoft</span><span>Tencent</span><span>Google</span
+          ><span>OpenAI</span><span>Tripo&nbsp;AI</span><span>Deemos</span
+          ><span>Inria</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Hero viz: v1 uses a static concentric-ring motif (no wired sample GLB yet); a real
+         window.Bio3DViewer.mount() specimen turntable is deferred to a follow-up task. -->
+    <div class="b3d-hero-viz">
+      <div class="b3d-hero-viz-ring-wrap">
+        <div class="b3d-hero-viz-ring-outer" aria-hidden="true"></div>
+        <div class="b3d-hero-viz-ring-dashed" aria-hidden="true"></div>
+        <div class="b3d-hero-viz-glow" aria-hidden="true"></div>
+        <div class="b3d-hero-viz-mark" role="img" aria-label="Reconstructed 3D specimen motif">
+          &#127807;
+        </div>
+      </div>
+      <span class="b3d-hero-viz-caption"
+        >reconstructed mesh &middot; live viewer in the arena</span
+      >
+    </div>
+  </div>
+</section>
+
+<div class="b3d-section-head">
+  <h2>Choose a kingdom</h2>
+  <span class="b3d-section-head-note"
+    >the top-level axis of the benchmark</span
+  >
+</div>
+<div class="b3d-kgrid">
+  {% for k in kingdom_cards %}
+  <a
+    href="/arena?kingdom={{ k.slug }}"
+    class="b3d-kcard"
+  >
+    <div class="b3d-kcard-top">
+      <div class="b3d-kcard-icon" aria-hidden="true">{{ k.emoji }}</div>
+      <span
+        class="b3d-kcard-badge {{ 'is-live' if k.live else 'is-soon' }}"
+        >{{ "live" if k.live else "soon" }}</span
+      >
+    </div>
+    <div class="b3d-kcard-name">{{ k.name }}</div>
+    <p class="b3d-kcard-blurb">{{ k.blurb }}</p>
+    <div class="b3d-kcard-stat">{{ k.task_count }} task{{ "" if k.task_count == 1 else "s" }}</div>
+  </a>
+  {% endfor %}
+</div>
+
+<div class="b3d-section-head">
+  <h2>How voting works</h2>
+  <span class="b3d-section-head-note"
+    >anonymous &middot; pairwise &middot; Bradley&ndash;Terry</span
+  >
+</div>
+<div class="b3d-steps-grid">
+  <div class="b3d-step-card">
+    <div class="b3d-step-num">1</div>
+    <h3>A reference specimen</h3>
+    <p>
+      Every task starts from a real organism — a photo or scan of the
+      ground-truth biology.
+    </p>
+  </div>
+  <div class="b3d-step-card">
+    <div class="b3d-step-num">2</div>
+    <h3>Two 3D reconstructions</h3>
+    <p>
+      Two models generate 3D from that input. You inspect both in an
+      interactive viewer — orbit, zoom, pan.
+    </p>
+  </div>
+  <div class="b3d-step-card">
+    <div class="b3d-step-num">3</div>
+    <h3>You pick the better one</h3>
+    <p>
+      Vote for A, B, a tie, or both-bad. Names stay hidden until you choose —
+      no brand bias.
+    </p>
+  </div>
+</div>
+{% endblock %}
