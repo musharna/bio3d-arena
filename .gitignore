@@ -10,3 +10,6 @@ data/assets/
 /data/
 .claude/settings.local.json
 .env
+
+# SDD process scratch (briefs/reports/ledger) — never ship
+.superpowers/
