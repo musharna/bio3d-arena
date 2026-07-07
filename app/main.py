@@ -1248,6 +1248,15 @@ def significance_page(
         )
     else:
         sig = service.compute_significance(db, criterion, category_id)
+    # Forest-plot CI bounds: REUSE the leaderboard's cached BT confidence interval per
+    # generator (same kingdom scoping the leaderboard route branches on) rather than
+    # computing new stats — bt_lower/bt_upper are absolute values so merging rows across
+    # paradigm groups here is safe even though _leaderboard_rows computes rank/percent
+    # geometry per-paradigm internally. A generator sig.ranked knows about but that has no
+    # leaderboard row (scope mismatch) simply has no entry; the template renders it as a
+    # bare point rather than fabricating an interval.
+    lb_rows = _leaderboard_rows(db, criterion, category, None, request.state.kingdom)
+    ci_map = {r["generator"]: (r["bt_lower"], r["bt_upper"]) for r in lb_rows}
     cats = db.execute(select(Category)).scalars().all()
     crits = db.execute(select(Criterion)).scalars().all()
     category_options = [
@@ -1273,6 +1282,7 @@ def significance_page(
             "bias": service.compute_bias(db),
             "category_options": category_options,
             "criterion_options": criterion_options,
+            "ci_map": ci_map,
         },
     )
 

@@ -81,62 +81,62 @@ kbd,
   font-variant-numeric: tabular-nums;
 }
 
-/* Significance matrix + sig flags (appended at top so vars below still apply) */
+/* === Significance (Task 16) — heat-scale H2H matrix + inline-SVG forest plot,
+   card-wrapped on the shared .diff-panel/.diff-axis-* tokens from Task 13. Cell
+   backgrounds are color-mix(var(--win)/var(--bad), var(--panel2)) at two strengths
+   per side so the scale reads clearly in both themes without relying on hue alone
+   (the .matrix-legend words below are the colorblind-safe explanation). === */
 .matrix-wrap {
   overflow-x: auto;
 }
 .matrix {
   border-collapse: collapse;
-  margin: 0.5rem 0 1.5rem;
+  margin: 0.5rem 0 1rem;
   font-size: 0.82rem;
 }
 .matrix th,
 .matrix td {
   padding: 0.4rem 0.55rem;
   text-align: center;
-  border: 1px solid #2c3a4d;
+  border: 1px solid var(--border);
 }
 .matrix thead th,
 .matrix tbody th {
-  color: #8b98a9;
+  color: var(--muted);
   font-weight: 600;
   white-space: nowrap;
 }
 .matrix td.mc {
   font-variant-numeric: tabular-nums;
-  color: #0c1117;
+  color: var(--text);
   font-weight: 600;
 }
 .mc-hi {
-  background: #2f6fed;
-  color: #ffffff !important;
-} /* row clearly beats col (>=0.95) — strong blue */
+  background: color-mix(in oklch, var(--win) 60%, var(--panel2));
+} /* row clearly beats col (>=0.95) */
 .mc-mid {
-  background: #8fb3f4;
-  color: #0c1117 !important;
-} /* leans row (>=0.75) — light blue */
+  background: color-mix(in oklch, var(--win) 26%, var(--panel2));
+} /* leans row (>=0.75) */
 .mc-na {
-  background: #2a3548;
-  color: #e6edf3 !important;
+  background: var(--panel2);
 } /* uncertain ~0.5 — neutral */
 .mc-lomid {
-  background: #e6b277;
-  color: #0c1117 !important;
-} /* leans col (<=0.25) — light orange */
+  background: color-mix(in oklch, var(--bad) 26%, var(--panel2));
+} /* leans col (<=0.25) */
 .mc-lo {
-  background: #c2701a;
-  color: #ffffff !important;
-} /* col clearly beats row (<=0.05) — strong orange */
+  background: color-mix(in oklch, var(--bad) 60%, var(--panel2));
+} /* col clearly beats row (<=0.05) */
 .mc-self {
-  background: #161d28;
-  color: #5c6b7e !important;
+  background: var(--panelDeep);
+  color: var(--faint) !important;
+  font-weight: 400;
 }
 .matrix-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
   align-items: center;
-  margin: -0.5rem 0 1.5rem;
+  margin: 0.6rem 0 0;
   font-size: 0.78rem;
   color: var(--muted);
 }
@@ -149,18 +149,117 @@ kbd,
   vertical-align: -0.12rem;
   border: 1px solid var(--border);
 }
+.swatch-hi {
+  background: color-mix(in oklch, var(--win) 60%, var(--panel2));
+}
+.swatch-mid {
+  background: color-mix(in oklch, var(--win) 26%, var(--panel2));
+}
+.swatch-na {
+  background: var(--panel2);
+}
+.swatch-lomid {
+  background: color-mix(in oklch, var(--bad) 26%, var(--panel2));
+}
+.swatch-lo {
+  background: color-mix(in oklch, var(--bad) 60%, var(--panel2));
+}
 .sig-yes {
-  color: #4cc38a;
+  color: var(--win);
   font-weight: 700;
 }
 .sig-no {
-  color: #8b98a9;
+  color: var(--muted);
 }
 .bias-table td:first-child {
-  color: #c8d2de;
+  color: var(--text);
 }
 .bias-line a {
   white-space: nowrap;
+}
+
+/* sigma callout — mirrors the coming-soon/info-box accent-tint pattern used
+   elsewhere (color-mix(accent, panel/border)) rather than a bespoke color. */
+.sig-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 0.85rem 1.1rem;
+  background: color-mix(in oklch, var(--accent) 8%, var(--panel));
+  border: 1px solid color-mix(in oklch, var(--accent) 30%, var(--border));
+  border-radius: var(--r-card);
+}
+.sig-callout-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--accent) 18%, transparent);
+  color: var(--accent);
+  font-weight: 700;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
+}
+.sig-callout p {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* forest plot (rating intervals) — inline SVG, server-rendered geometry */
+.forest-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  min-width: 560px;
+}
+.forest-name {
+  font-size: 12.5px;
+  font-family: "IBM Plex Sans", sans-serif;
+  fill: var(--text);
+}
+.forest-name-lead {
+  font-weight: 700;
+}
+.forest-value {
+  font-size: 11.5px;
+  fill: var(--muted);
+}
+.forest-leader-line {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  stroke-opacity: 0.55;
+}
+.forest-sep-whisker {
+  stroke: var(--faint);
+  stroke-width: 2;
+  stroke-opacity: 0.7;
+}
+.forest-sep-dot {
+  fill: var(--faint);
+  stroke: var(--panel);
+  stroke-width: 1.5;
+}
+.forest-lead-whisker {
+  stroke: var(--accent2);
+  stroke-width: 2;
+  stroke-opacity: 0.85;
+}
+.forest-lead-dot {
+  fill: var(--accent2);
+  stroke: var(--panel);
+  stroke-width: 1.5;
+}
+.forest-bare-dot {
+  fill: var(--faint);
+  stroke: var(--panel);
+  stroke-width: 1.5;
 }
 .prose {
   max-width: 760px;
