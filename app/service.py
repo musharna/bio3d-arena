@@ -7,12 +7,13 @@ full decisive-vote record.
 
 from __future__ import annotations
 
+import datetime as dt
 from collections import defaultdict
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from . import config, kingdoms, ranking
+from . import config, kingdoms, matchmaking, ranking
 from .calibration import cohens_kappa
 from .scope import is_assessable
 from .paradigms import same_paradigm
@@ -1093,6 +1094,75 @@ def coverage_summary(db: Session, category_ids: set[int] | None = None) -> dict:
         by_paradigm[key] = by_paradigm.get(key, 0) + 1
 
     return {"generators": gen_rows, "tasks": task_rows, "by_paradigm": by_paradigm}
+
+
+def _relative_time(value: dt.datetime | None) -> str:
+    """Render a datetime as a short relative string ("2h ago", "just now", "3d ago").
+
+    No existing relative-time helper was found in app/ or templates to reuse (leaderboard
+    templates render raw timestamps client-side), so this is a small standalone formatter.
+    `value` may be naive (as read back from SQLite — stored via `_utcnow()`, which is UTC)
+    or tz-aware; both are normalized to UTC before diffing against `dt.datetime.now(utc)`.
+    """
+    if value is None:
+        return "—"
+    now = dt.datetime.now(dt.timezone.utc)
+    v = value if value.tzinfo is not None else value.replace(tzinfo=dt.timezone.utc)
+    secs = max(0.0, (now - v).total_seconds())
+    if secs < 60:
+        return "just now"
+    mins = int(secs // 60)
+    if mins < 60:
+        return f"{mins}m ago"
+    hours = int(mins // 60)
+    if hours < 24:
+        return f"{hours}h ago"
+    days = int(hours // 24)
+    return f"{days}d ago"
+
+
+def kingdom_scope_stats(db: Session, kingdom: str) -> dict | None:
+    """Cheap kingdom-scoped counts for the scope-bar stats strip (`.b3d-kstats`):
+    active-task count, vote count, and a relative-time string for the latest vote in scope.
+
+    `kingdom="all"` (or unmapped) scopes over every category — reuses
+    `matchmaking.total_votes` for the vote count per the design brief. A specific kingdom
+    joins Vote -> Comparison -> Task on indexed columns (Task.category_id, Comparison.task_id,
+    Task.active) — single COUNT / MAX queries, no row materialization. Returns None on any
+    error; callers must never let a stats failure break a page.
+    """
+    try:
+        category_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
+
+        tasks_stmt = select(func.count(Task.id)).where(Task.active.is_(True))
+        if category_ids is not None:
+            tasks_stmt = tasks_stmt.where(Task.category_id.in_(category_ids))
+        tasks = db.execute(tasks_stmt).scalar_one()
+
+        if category_ids is None:
+            votes = matchmaking.total_votes(db)
+            latest = db.execute(select(func.max(Vote.created))).scalar_one()
+        else:
+            votes_stmt = (
+                select(func.count(Vote.id))
+                .select_from(Vote)
+                .join(Comparison, Vote.comparison_id == Comparison.id)
+                .join(Task, Comparison.task_id == Task.id)
+                .where(Task.category_id.in_(category_ids))
+            )
+            latest_stmt = (
+                select(func.max(Vote.created))
+                .select_from(Vote)
+                .join(Comparison, Vote.comparison_id == Comparison.id)
+                .join(Task, Comparison.task_id == Task.id)
+                .where(Task.category_id.in_(category_ids))
+            )
+            votes = db.execute(votes_stmt).scalar_one()
+            latest = db.execute(latest_stmt).scalar_one()
+
+        return {"tasks": tasks, "votes": votes, "updated": _relative_time(latest)}
+    except Exception:
+        return None
 
 
 MODE_C_KAPPA_BAR = 0.6

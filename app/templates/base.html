@@ -556,23 +556,34 @@
               >
             </div>
           </div>
-          <nav class="b3d-topnav" aria-label="Quick links">
-            <a
-              href="/arena"
-              class="b3d-topnav-link{{ ' is-active' if path == '/arena' else '' }}"
-              >Arena</a
-            >
-            <a
-              href="/leaderboard"
-              class="b3d-topnav-link{{ ' is-active' if path == '/leaderboard' else '' }}"
-              >Leaderboard</a
-            >
-            <a
-              href="/models"
-              class="b3d-topnav-link{{ ' is-active' if path == '/models' else '' }}"
-              >Models</a
-            >
-          </nav>
+          <div class="b3d-kbar-right">
+            {% if request.state.kingdom_stats %}
+            <div class="b3d-kstats" aria-label="Kingdom summary">
+              <span>{{ request.state.kingdom_stats.tasks }} tasks</span>
+              <span>&middot;</span>
+              <span>{{ request.state.kingdom_stats.votes }} votes</span>
+              <span>&middot;</span>
+              <span>updated {{ request.state.kingdom_stats.updated }}</span>
+            </div>
+            {% endif %}
+            <nav class="b3d-topnav" aria-label="Quick links">
+              <a
+                href="/arena"
+                class="b3d-topnav-link{{ ' is-active' if path == '/arena' else '' }}"
+                >Arena</a
+              >
+              <a
+                href="/leaderboard"
+                class="b3d-topnav-link{{ ' is-active' if path == '/leaderboard' else '' }}"
+                >Leaderboard</a
+              >
+              <a
+                href="/models"
+                class="b3d-topnav-link{{ ' is-active' if path == '/models' else '' }}"
+                >Models</a
+              >
+            </nav>
+          </div>
         </div>
 
         <main class="b3d-main">{% block content %}{% endblock %}</main>

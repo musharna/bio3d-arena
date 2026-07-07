@@ -2066,6 +2066,26 @@ details.group[open] > summary.group-title::before {
   text-transform: uppercase;
   color: var(--faint);
 }
+.b3d-kbar-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.b3d-kstats {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+@media (max-width: 1120px) {
+  .b3d-kstats {
+    display: none;
+  }
+}
 .b3d-scope-pill {
   display: inline-flex;
   align-items: center;
