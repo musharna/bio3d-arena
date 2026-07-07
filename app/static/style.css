@@ -1324,24 +1324,27 @@ details.group[open] > summary.group-title::before {
   }
 }
 
-/* coverage page — confidence badges */
+/* coverage page — confidence badges (v2 tokens; see Task 15 block below for the
+   rest of the /coverage re-skin: stat-card grid + .cov-panel + .cov-check) */
 .cov-badge {
   display: inline-block;
-  padding: 0.05rem 0.45rem;
+  font-family: "IBM Plex Mono", monospace;
+  padding: 0.08rem 0.55rem;
   border-radius: 999px;
-  font-size: 0.78em;
+  font-size: 0.72rem;
   font-weight: 600;
+  letter-spacing: 0.02em;
   border: 1px solid transparent;
 }
 .cov-firm {
-  color: #1a7f37;
-  background: rgba(35, 134, 54, 0.14);
-  border-color: rgba(35, 134, 54, 0.35);
+  color: var(--win);
+  background: color-mix(in oklch, var(--win) 16%, transparent);
+  border-color: color-mix(in oklch, var(--win) 40%, transparent);
 }
 .cov-prov {
-  color: #b07a00;
-  background: rgba(176, 122, 0, 0.14);
-  border-color: rgba(176, 122, 0, 0.35);
+  color: var(--amber);
+  background: color-mix(in oklch, var(--amber) 16%, transparent);
+  border-color: color-mix(in oklch, var(--amber) 40%, transparent);
 }
 
 /* Reference gallery panel in the vote UI — "what the organism should look like" */
@@ -2770,4 +2773,52 @@ details.group[open] > summary.group-title::before {
 .diff-top3-metric {
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+/* === Coverage (Task 15) — paradigm stat-card grid + panel-wrapped sections on the
+   shared .ranktable/.b3d-page-head tokens. .cov-badge/.cov-firm/.cov-prov above. === */
+.cov-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.85rem;
+  margin: 0 0 1.3rem;
+}
+.cov-stat-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadowCard);
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.cov-stat-num {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+.cov-stat-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.cov-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadowCard);
+  padding: 1.1rem 1.25rem;
+  margin: 0 0 1.3rem;
+}
+.cov-panel h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+}
+.cov-panel.prose h3:not(:first-child) {
+  margin-top: 1.1rem;
+}
+.cov-check {
+  color: var(--win);
+  font-weight: 700;
 }
