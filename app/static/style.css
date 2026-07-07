@@ -2490,3 +2490,128 @@ details.group[open] > summary.group-title::before {
 .lb-sort-inactive {
   color: var(--faint);
 }
+
+/* === Models index + detail (Task 12) — model-card family on shared tokens === */
+.b3d-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.b3d-model-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadowCard);
+  padding: 1rem 1.25rem;
+  text-decoration: none;
+  color: inherit;
+  transition:
+    border-color 0.14s,
+    transform 0.06s;
+}
+.b3d-model-card:hover {
+  border-color: color-mix(in oklch, var(--accent) 55%, var(--border));
+  transform: translateY(-2px);
+}
+.b3d-model-icon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: radial-gradient(
+    circle at 50% 40%,
+    color-mix(in oklch, var(--accent) 16%, var(--panel2)),
+    var(--panel)
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.b3d-model-main {
+  flex: 1;
+  min-width: 0;
+}
+.b3d-model-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.b3d-model-name {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.b3d-model-secondary {
+  display: block;
+  color: var(--muted);
+  font-size: 12.5px;
+  margin-top: 0.15rem;
+}
+.b3d-model-stats {
+  display: flex;
+  gap: 1.1rem;
+  font-size: 12.5px;
+  color: var(--faint);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.b3d-model-stats strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.b3d-model-arrow {
+  color: var(--faint);
+  font-size: 18px;
+  margin-left: 0.25rem;
+  flex-shrink: 0;
+}
+.b3d-model-detail-stats {
+  margin: 0.5rem 0 0.25rem;
+}
+.b3d-model-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+.b3d-model-samples {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+.b3d-model-sample {
+  width: 150px;
+}
+.b3d-model-sample model-viewer {
+  width: 150px;
+  height: 110px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  display: block;
+}
+.b3d-model-sample-link {
+  display: block;
+  width: 150px;
+  height: 110px;
+  border-radius: 8px;
+  border: 1px dashed var(--border);
+  background: var(--panel2);
+  color: var(--accent2);
+  text-align: center;
+  line-height: 110px;
+  font-size: 12px;
+  text-decoration: none;
+}
+.b3d-model-sample-label {
+  margin-top: 0.3rem;
+  font-size: 11px;
+}

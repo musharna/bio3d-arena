@@ -13,6 +13,7 @@ PUBLIC_PATHS = [
     "/tasks",
     "/submit",
     "/coverage",
+    "/models",
     "/procedural",
     "/fidelity",
     "/methodology",

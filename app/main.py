@@ -997,6 +997,113 @@ def api_leaderboard(
     }
 
 
+def _model_cards(db: Session, k_ids: set[int] | None) -> list[dict]:
+    """Per-generator directory rows for /models: coverage stats + overall BT score, matched
+    by the same unique display name `coverage_summary`/`_leaderboard_rows` compute internally
+    (both derive it from `service.generator_display_names`, so matching on it is safe). No
+    fabricated org/company field — `Generator` has none (name/kind/paradigm/description only).
+    """
+    names = service.generator_display_names(db)
+    cov_by_name = {
+        r["generator"]: r for r in service.coverage_summary(db, category_ids=k_ids)["generators"]
+    }
+    bt_by_name = {r["generator"]: r for r in _leaderboard_rows(db, "overall", "all", None)}
+
+    cards = []
+    for g in db.execute(select(Generator)).scalars().all():
+        disp_name = names.get(g.id, g.name)
+        cov = cov_by_name.get(disp_name)
+        if cov is None:
+            continue  # gold-only / empty generators don't appear (mirrors coverage_summary)
+        bt = bt_by_name.get(disp_name)
+        cards.append(
+            {
+                "slug": g.slug,
+                "name": disp_name,
+                "kind": g.kind,
+                "paradigm": g.paradigm,
+                "paradigm_display": paradigms.DISPLAY_NAMES.get(g.paradigm, g.paradigm)
+                if g.paradigm
+                else "",
+                "description": g.description,
+                "bt_score": bt["bt_score"] if bt else None,
+                "votes": cov["votes"],
+                "tasks": cov["tasks"],
+                "confidence": cov["confidence"],
+            }
+        )
+    # BT score desc; generators without a score (no overall rating yet) sink to the bottom.
+    cards.sort(key=lambda c: (c["bt_score"] is None, -(c["bt_score"] or 0), c["name"]))
+    return cards
+
+
+@app.get("/models", response_class=HTMLResponse)
+def models_index(request: Request, db: Session = Depends(get_db)):
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    return templates.TemplateResponse(
+        request,
+        "models.html",
+        {"cards": _model_cards(db, k_ids)},
+    )
+
+
+@app.get("/models/{slug}", response_class=HTMLResponse)
+def model_detail(slug: str, request: Request, db: Session = Depends(get_db)):
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
+    gen = db.execute(select(Generator).where(Generator.slug == slug)).scalars().first()
+    if gen is None:
+        raise HTTPException(404, "Unknown generator")
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    cards = _model_cards(db, k_ids)
+    card = next((c for c in cards if c["slug"] == slug), None)
+
+    outs = [o for o in gen.outputs if not o.is_gold and o.hidden_at is None]
+    by_task: dict[int, dict] = {}
+    for o in outs:
+        t = o.task
+        if t is None:
+            continue
+        row = by_task.setdefault(
+            t.id,
+            {
+                "task": t.title,
+                "category": t.category.name if t.category else "",
+                "outputs": 0,
+                "votes": 0,
+            },
+        )
+        row["outputs"] += 1
+        row["votes"] += o.n_comparisons
+    task_rows = sorted(by_task.values(), key=lambda r: (-r["outputs"], r["task"]))
+
+    samples = []
+    for o in outs[:6]:
+        samples.append(
+            {
+                "id": o.id,
+                "title": o.title or (o.task.title if o.task else ""),
+                "asset_url": storage.url_for(o.asset_path),
+                "format": o.asset_format,
+            }
+        )
+
+    return templates.TemplateResponse(
+        request,
+        "model_detail.html",
+        {
+            "gen": gen,
+            "card": card,
+            "task_rows": task_rows,
+            "samples": samples,
+        },
+    )
+
+
 @app.get("/dataset", response_class=HTMLResponse)
 def dataset_page(request: Request, db: Session = Depends(get_db)):
     roadmap = _roadmap_or_none(request, db)
