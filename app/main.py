@@ -32,6 +32,7 @@ from . import (
     fidelity,
     ingest,
     integrity,
+    kingdoms,
     matchmaking,
     paradigms,
     ranking,
@@ -100,6 +101,11 @@ async def ensure_session(request: Request, call_next):
                 request.state.user = _db.get(User, _vs.user_id)
     except Exception:  # noqa: BLE001 — never let user-resolution break a page
         request.state.user = None
+    _kq = request.query_params.get("kingdom")
+    _kingdom = kingdoms.normalize_kingdom(
+        _kq if _kq is not None else request.cookies.get("bio3d_kingdom")
+    )
+    request.state.kingdom = _kingdom
     response = await call_next(request)
     if is_new:
         response.set_cookie(
@@ -109,6 +115,13 @@ async def ensure_session(request: Request, call_next):
             samesite="lax",
             max_age=60 * 60 * 24 * 365,
             secure=config.COOKIE_SECURE,
+        )
+    if _kq is not None:
+        response.set_cookie(
+            "bio3d_kingdom",
+            _kingdom,
+            max_age=60 * 60 * 24 * 365,
+            samesite="lax",
         )
     return response
 

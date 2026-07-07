@@ -1497,6 +1497,20 @@ details.group[open] > summary.group-title::before {
   text-transform: uppercase;
   color: var(--faint);
 }
+.b3d-scope-pill {
+  display: inline-flex;
+  align-items: center;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
 .b3d-kseg {
   display: inline-flex;
   align-items: center;
