@@ -721,6 +721,122 @@ textarea:focus-visible,
   width: calc(100% - 1.2rem);
   border-radius: var(--r-ctl);
 }
+
+/* Post-vote reveal (Feature C) — additive only; never touches .pair/.model-col/.vote-bar/
+   .kwise-grid contracts above. Stacked BELOW the existing top-left .model-label (rather than
+   overlapping it) so "Model A"/"Model B" stays visible alongside the revealed real name. */
+.reveal-name {
+  position: absolute;
+  top: 54px;
+  left: 16px;
+  z-index: 6;
+  background: var(--ctlBg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 4px 10px;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--text);
+  animation: b3d-fade-in 0.3s ease both;
+}
+/* Kwise cards lay their label out in normal flow (not absolutely-positioned like the 2-up
+   .model-label), so the reveal name rides inline next to it instead of floating. */
+.kwise-cell .reveal-name {
+  position: static;
+  display: inline-block;
+  margin-left: 0.4rem;
+  animation: none;
+}
+.rank-chip {
+  position: absolute;
+  top: 54px;
+  right: 16px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--ctlBg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 4px 10px;
+  animation: b3d-fade-in 0.3s ease both;
+}
+.rank-chip.is-first {
+  color: var(--win);
+  border-color: color-mix(in oklch, var(--win) 45%, var(--border));
+}
+/* Gold winner border — same .model-col that already frames each stage/kwise-cell, just an
+   added class toggled post-vote. */
+.model-col.is-winner {
+  border-top: 2px solid var(--win);
+}
+#next-pair-btn {
+  display: block;
+  width: fit-content;
+  margin: 1.4rem auto 0;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--r-ctl);
+  color: oklch(0.98 0.01 258);
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.65rem 1.2rem;
+  cursor: pointer;
+  transition:
+    filter 0.12s,
+    transform 0.06s;
+}
+#next-pair-btn:hover {
+  filter: brightness(1.08);
+}
+#next-pair-btn:active {
+  transform: translateY(1px);
+}
+/* First-vote confetti burst (fired once, gated in JS via localStorage + prefers-reduced-motion —
+   the CSS side only needs to render + auto-clean the particles). Fixed overlay so it isn't
+   clipped by any scrolling ancestor. */
+#confetti-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  overflow: hidden;
+}
+.confetti-piece {
+  position: absolute;
+  width: 7px;
+  height: 10px;
+  border-radius: 2px;
+  animation: b3d-confetti 0.9s ease-out forwards;
+}
+@keyframes b3d-confetti {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--cx), var(--cy)) rotate(var(--cr));
+  }
+}
+@keyframes b3d-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 .onboard-banner:not([hidden]) {
   display: flex;
   align-items: center;
@@ -2310,6 +2426,14 @@ details.group[open] > summary.group-title::before {
   justify-content: center;
   gap: 1rem;
 }
+.b3d-hero-viz-stage {
+  /* Live-GLB variant of the hero viz: reuses .viewer-slot's arena stage look
+     (gradient + vignette + controls) sized to sit in the hero's right column
+     rather than a full comparison panel. */
+  width: 100%;
+  height: 380px;
+  border-radius: var(--r-card);
+}
 .b3d-hero-viz-ring-wrap {
   position: relative;
   width: 300px;
@@ -2505,6 +2629,9 @@ details.group[open] > summary.group-title::before {
   }
   .b3d-hero-viz {
     order: -1;
+  }
+  .b3d-hero-viz-stage {
+    height: 300px;
   }
   .b3d-kgrid,
   .b3d-steps-grid {

@@ -570,13 +570,49 @@ def require_admin_query(token: str | None = None) -> None:
 # ------------------------------------------------------------------- arena UI
 
 
+def _pick_hero_asset(db: Session, spotlight_subjects: list[dict]) -> dict | None:
+    """Pick a featured GLB for the Home hero turntable — query-driven, never a
+    hardcoded output id (the seed DB differs per env, and a fresh/empty DB must
+    fall back to `None` so the template renders the ring-motif placeholder).
+
+    Preference order: a visible, non-gold GLB whose task is one of the curated
+    Spotlight poster-child subjects (most-voted among those); else the
+    most-voted visible non-gold GLB in the whole DB; else `None`.
+    """
+    base = select(ModelOutput).where(
+        ModelOutput.is_gold.is_(False),
+        ModelOutput.hidden_at.is_(None),
+        ModelOutput.asset_format == "glb",
+    )
+    spotlight_titles = [s["task_title"] for s in spotlight_subjects]
+    if spotlight_titles:
+        out = (
+            db.execute(
+                base.join(Task, ModelOutput.task_id == Task.id)
+                .where(Task.title.in_(spotlight_titles))
+                .order_by(ModelOutput.n_comparisons.desc())
+            )
+            .scalars()
+            .first()
+        )
+        if out is not None:
+            return {"url": storage.url_for(out.asset_path), "format": out.asset_format}
+    out = db.execute(base.order_by(ModelOutput.n_comparisons.desc())).scalars().first()
+    if out is None:
+        return None
+    return {"url": storage.url_for(out.asset_path), "format": out.asset_format}
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, db: Session = Depends(get_db)):
     """Marketing/landing page. Never kingdom-gated (see `_roadmap_or_none` docstring) —
     it's the one screen every visitor should be able to load regardless of scope."""
     from sqlalchemy import func
 
+    from . import spotlight
+
     total_votes = matchmaking.total_votes(db)
+    hero_asset = _pick_hero_asset(db, spotlight.SPOTLIGHTS)
     models_count = db.execute(
         select(func.count(func.distinct(Generator.id))).where(Generator.kind == "model")
     ).scalar_one()
@@ -622,6 +658,7 @@ def home(request: Request, db: Session = Depends(get_db)):
             "tasks_count": tasks_count,
             "kingdoms_live": kingdoms_live,
             "kingdom_cards": kingdom_cards,
+            "hero_asset": hero_asset,
         },
     )
 
@@ -718,7 +755,23 @@ def api_vote(
     db.commit()
     # Keep the same criterion/category filter (+ active kingdom) for the follow-up comparison.
     nxt = _build_comparison(db, sid, criterion, category, kingdom=request.state.kingdom)
-    return {"status": "ok", "next": nxt}
+
+    # Post-vote reveal (Feature C): real generator names for the just-voted pair, ONLY for
+    # non-gold comparisons — gold is an attention-check decoy, so revealing it would leak the
+    # answer. Purely additive: never affects vote recording, dedup, or `next` above.
+    reveal = None
+    if not comparison.is_gold:
+        out_a = db.get(ModelOutput, comparison.output_a_id)
+        out_b = db.get(ModelOutput, comparison.output_b_id)
+        names = service.generator_display_names(db)
+        # Defensive: an output deleted between comparison-build and vote would be None here;
+        # never 500 the (already-committed) vote's reveal — mirror the kvote guard below.
+        reveal = {
+            "a": {"name": names.get(out_a.generator_id, "Unknown") if out_a else "Unknown"},
+            "b": {"name": names.get(out_b.generator_id, "Unknown") if out_b else "Unknown"},
+            "winner": vote_in.winner,
+        }
+    return {"status": "ok", "next": nxt, "reveal": reveal}
 
 
 @app.post("/api/kvote")
@@ -749,7 +802,19 @@ def api_kvote(
     integrity.note_vote(db, sid)  # ONE rate-accounting per ballot, not per derived vote
     db.commit()
     nxt = _build_kwise_comparison(db, sid, criterion, category, kingdom=request.state.kingdom)
-    return {"status": "ok", "next": nxt}
+
+    # Post-vote reveal (Feature C): real generator names for every output shown in the ballot +
+    # which one was picked, so the grid can label each card. K-wise never serves gold (see
+    # _build_kwise_comparison docstring), so no omission case is needed here.
+    names = service.generator_display_names(db)
+    reveal_outputs = []
+    for oid in ids:
+        out = db.get(ModelOutput, oid)
+        if out is None:
+            continue  # defensive: dangling id, shouldn't happen but never 500 the reveal
+        reveal_outputs.append({"output_id": oid, "name": names.get(out.generator_id, "Unknown")})
+    reveal = {"outputs": reveal_outputs, "best_output_id": kvote_in.best_output_id}
+    return {"status": "ok", "next": nxt, "reveal": reveal}
 
 
 @app.post("/api/flag")
@@ -838,6 +903,32 @@ def _leaderboard_rows(
     return grouped_rows
 
 
+def _group_rank_judge_rows(rows: list[dict]) -> list[dict]:
+    """Rank + CI-bar geometry computed WITHIN each paradigm group, mirroring
+    _leaderboard_rows — cross-paradigm BT scores come from disconnected match
+    components, so a single flat cross-paradigm ranking would be meaningless (I3b).
+    Shared by the cached (global) and live (kingdom) judge-board paths."""
+    groups: dict[str, list[dict]] = {}
+    for r in rows:
+        groups.setdefault(r["paradigm"], []).append(r)
+    grouped_rows: list[dict] = []
+    for pgm in sorted(groups):
+        grows = groups[pgm]
+        grows.sort(key=lambda x: x["bt_score"], reverse=True)
+        ranks = ranking.rank_by_ci([(r["bt_lower"], r["bt_upper"]) for r in grows])
+        for row, rank in zip(grows, ranks):
+            row["rank"] = rank
+        lo = min(r["bt_lower"] for r in grows)
+        hi = max(r["bt_upper"] for r in grows)
+        span = (hi - lo) or 1.0
+        for r in grows:
+            r["ci_left"] = round(100.0 * (r["bt_lower"] - lo) / span, 1)
+            r["ci_width"] = round(100.0 * (r["bt_upper"] - r["bt_lower"]) / span, 1)
+            r["ci_point"] = round(100.0 * (r["bt_score"] - lo) / span, 1)
+        grouped_rows.extend(grows)
+    return grouped_rows
+
+
 def _judge_leaderboard_rows(
     db: Session, criterion_slug: str = "overall", view_condition: str = "multi4"
 ) -> list[dict]:
@@ -876,28 +967,19 @@ def _judge_leaderboard_rows(
                 "n_games": r.n_games,
             }
         )
-    # Rank + CI-bar geometry are computed WITHIN each paradigm group, mirroring
-    # _leaderboard_rows — cross-paradigm BT scores come from disconnected match
-    # components, so a single flat cross-paradigm ranking would be meaningless (I3b).
-    groups: dict[str, list[dict]] = {}
-    for r in rows:
-        groups.setdefault(r["paradigm"], []).append(r)
-    grouped_rows: list[dict] = []
-    for pgm in sorted(groups):
-        grows = groups[pgm]
-        grows.sort(key=lambda x: x["bt_score"], reverse=True)
-        ranks = ranking.rank_by_ci([(r["bt_lower"], r["bt_upper"]) for r in grows])
-        for row, rank in zip(grows, ranks):
-            row["rank"] = rank
-        lo = min(r["bt_lower"] for r in grows)
-        hi = max(r["bt_upper"] for r in grows)
-        span = (hi - lo) or 1.0
-        for r in grows:
-            r["ci_left"] = round(100.0 * (r["bt_lower"] - lo) / span, 1)
-            r["ci_width"] = round(100.0 * (r["bt_upper"] - r["bt_lower"]) / span, 1)
-            r["ci_point"] = round(100.0 * (r["bt_score"] - lo) / span, 1)
-        grouped_rows.extend(grows)
-    return grouped_rows
+    return _group_rank_judge_rows(rows)
+
+
+def _kingdom_judge_leaderboard_rows(
+    db: Session,
+    criterion_slug: str,
+    view_condition: str,
+    category_ids: set[int] | None,
+) -> list[dict]:
+    """Live (uncached) VLM-judge board for an active kingdom — mirrors _leaderboard_rows'
+    kingdom branch (service.kingdom_leaderboard_rows) but over JudgeVote/JudgeRating."""
+    rows = service.kingdom_judge_leaderboard_rows(db, criterion_slug, view_condition, category_ids)
+    return _group_rank_judge_rows(rows)
 
 
 @app.get("/leaderboard", response_class=HTMLResponse)
@@ -915,12 +997,12 @@ def leaderboard(
     paradigm = paradigm or None  # "" (unset <select>) and None both mean "no filter"
     kingdom = request.state.kingdom
     k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
+    cat_ids = (
+        _effective_category_ids(k_ids, _resolve_category_id(db, category))
+        if k_ids is not None
+        else None
+    )
     if verified:
-        cat_ids = (
-            _effective_category_ids(k_ids, _resolve_category_id(db, category))
-            if k_ids is not None
-            else None
-        )
         rows = service.verified_leaderboard_rows(db, criterion, category, category_ids=cat_ids)
     else:
         rows = _leaderboard_rows(db, criterion, category, paradigm, kingdom)
@@ -965,12 +1047,16 @@ def leaderboard(
             "bias": service.compute_bias(db),
             "sel_criterion": criterion,
             "sel_category": category,
-            # VLM judge board is global-only (JudgeRating.category_id.is_(None) — no
-            # kingdom-scoped judge ranking yet); hide it rather than show an unscoped board
-            # under an active kingdom filter (deferred — see task-6 report).
-            "judge_rows": []
-            if k_ids is not None
-            else _judge_leaderboard_rows(db, criterion, "multi4"),
+            # The cached JudgeRating table is global-only (category_id.is_(None)) and can't
+            # represent a kingdom (a SET of categories), so under an active kingdom the judge
+            # board is computed live over kingdom-filtered JudgeVotes instead (mirrors the
+            # human on-the-fly path — service.kingdom_judge_leaderboard_rows). `kingdom=all`
+            # keeps the cached path unchanged.
+            "judge_rows": (
+                _kingdom_judge_leaderboard_rows(db, criterion, "multi4", cat_ids)
+                if k_ids is not None
+                else _judge_leaderboard_rows(db, criterion, "multi4")
+            ),
             "verified": verified,
         },
     )

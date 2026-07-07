@@ -16,6 +16,7 @@ from app.models import (
     Comparison,
     Criterion,
     Generator,
+    JudgeVote,
     ModelOutput,
     Task,
     TaskDifficulty,
@@ -198,6 +199,13 @@ _LBPFX = "klb"
 
 
 def _clear_lb_fixtures(db):
+    # JudgeVote rows (added by _seed_lb_judge_fixtures for the judge-board tests below) must
+    # go first — they FK to both Task and ModelOutput, which are deleted further down.
+    lb_task_ids = [t.id for t in db.execute(select(Task).where(Task.title.like("KLB %"))).scalars()]
+    if lb_task_ids:
+        db.query(JudgeVote).filter(JudgeVote.task_id.in_(lb_task_ids)).delete(
+            synchronize_session=False
+        )
     db.query(Vote).filter(Vote.session_id.like(f"{_LBPFX}-%")).delete(synchronize_session=False)
     db.query(Comparison).filter(Comparison.session_id.like(f"{_LBPFX}-%")).delete(
         synchronize_session=False
@@ -267,6 +275,46 @@ def _patch_kingdom_to_fungi(monkeypatch, fungi_slug):
     monkeypatch.setitem(kingdoms_mod.KINGDOM_OF, fungi_slug, "fungi")
 
 
+def _seed_lb_judge_fixtures(db):
+    """Extends _seed_lb_fixtures with decisive JudgeVote rows on the same plants/fungi pairs
+    (g*1 always beats g*2), so the live kingdom-scoped VLM judge path
+    (service.kingdom_judge_leaderboard_rows) has real per-kingdom judge signal to rank —
+    mirrors the human-vote fixture but for Feature A (kingdom judge board)."""
+    p, f, gp1, gp2, gf1, gf2 = _seed_lb_fixtures(db)
+    crit = db.execute(select(Criterion).where(Criterion.slug == "overall")).scalars().first()
+
+    def _judge_votes(winner_gen, loser_gen, tag):
+        out_w = (
+            db.execute(select(ModelOutput).where(ModelOutput.generator_id == winner_gen.id))
+            .scalars()
+            .first()
+        )
+        out_l = (
+            db.execute(select(ModelOutput).where(ModelOutput.generator_id == loser_gen.id))
+            .scalars()
+            .first()
+        )
+        for i in range(9):
+            db.add(
+                JudgeVote(
+                    task_id=out_w.task_id,
+                    output_a_id=out_w.id,
+                    output_b_id=out_l.id,
+                    criterion_id=crit.id,
+                    winner="a",
+                    view_condition="multi4",
+                    judge_model="claude-sonnet-4-6",
+                    swap_group=f"{_LBPFX}-jg-{tag}-{i}",
+                    rationale="",
+                )
+            )
+
+    _judge_votes(gp1, gp2, "p")
+    _judge_votes(gf1, gf2, "f")
+    db.commit()
+    return p, f, gp1, gp2, gf1, gf2
+
+
 def test_leaderboard_rows_kingdom_scoping_excludes_other_kingdom_players(monkeypatch):
     """The function the /leaderboard route calls: with kingdom='fungi' active, only the fungi
     generators (which have decisive matches in that kingdom) appear — the plants-only pair,
@@ -307,8 +355,10 @@ def test_leaderboard_rows_all_kingdom_keeps_cached_path_unaffected(monkeypatch):
 
 
 def test_leaderboard_route_kingdom_query_param_scopes_rows(monkeypatch):
-    """End-to-end: GET /leaderboard?kingdom=fungi renders only the fungi generators' names, and
-    hides the (global-only) VLM judge board section entirely while a single kingdom is active."""
+    """End-to-end: GET /leaderboard?kingdom=fungi renders only the fungi generators' names. This
+    fixture has no JudgeVotes, so the (now live, Feature A) judge board correctly comes back
+    empty and the section stays hidden — see test_leaderboard_route_kingdom_renders_judge_board
+    below for the case where judge votes exist."""
     with SessionLocal() as db:
         p, f, gp1, gp2, gf1, gf2 = _seed_lb_fixtures(db)
         fungi_slug = f.slug
@@ -323,7 +373,70 @@ def test_leaderboard_route_kingdom_query_param_scopes_rows(monkeypatch):
     assert gf2.name in body
     assert gp1.name not in body
     assert gp2.name not in body
-    assert "VLM judge" not in body  # judge board deferred/hidden under an active kingdom
+    assert "VLM judge" not in body  # no judge votes in this fixture -> empty judge_rows
+
+    with SessionLocal() as db:
+        _clear_lb_fixtures(db)
+
+
+# --------------------------------------------------------------------- kingdom judge board (Feature A)
+#
+# The cached JudgeRating table is global-only (category_id.is_(None)), same limitation as the
+# cached human Rating table, so the judge board is likewise computed live for an active kingdom
+# instead of being hidden — see service.kingdom_judge_leaderboard_rows and
+# main._kingdom_judge_leaderboard_rows.
+
+
+def test_kingdom_judge_leaderboard_rows_scopes_to_kingdom(monkeypatch):
+    """service.kingdom_judge_leaderboard_rows (the judge-board analog of
+    kingdom_leaderboard_rows): with the fungi kingdom's category id set, only the fungi
+    generators' judge votes count — the plants-only judge pair must not appear."""
+    with SessionLocal() as db:
+        p, f, gp1, gp2, gf1, gf2 = _seed_lb_judge_fixtures(db)
+
+        rows = service.kingdom_judge_leaderboard_rows(db, "overall", "multi4", {f.id})
+        names = {r["generator"] for r in rows}
+        assert names == {gf1.name, gf2.name}
+        assert gp1.name not in names
+        assert gp2.name not in names
+        assert all(r["n_games"] > 0 for r in rows)
+
+        _clear_lb_fixtures(db)
+
+
+def test_kingdom_judge_leaderboard_rows_all_kingdom_keeps_cached_path_unaffected():
+    """The cached judge path (_judge_leaderboard_rows, used for kingdom='all') must not surface
+    these ad-hoc JudgeVotes — they were never fed through recompute_judge_scope, so they have no
+    cached JudgeRating row, unlike the live kingdom path exercised above."""
+    from app.main import _judge_leaderboard_rows
+
+    with SessionLocal() as db:
+        p, f, gp1, gp2, gf1, gf2 = _seed_lb_judge_fixtures(db)
+
+        rows = _judge_leaderboard_rows(db, "overall", "multi4")
+        names = {r["generator"] for r in rows}
+        assert gp1.name not in names
+        assert gp2.name not in names
+        assert gf1.name not in names
+        assert gf2.name not in names
+
+        _clear_lb_fixtures(db)
+
+
+def test_leaderboard_route_kingdom_renders_judge_board(monkeypatch):
+    """End-to-end (Feature A): GET /leaderboard?kingdom=fungi now renders a live judge board
+    scoped to the fungi kingdom instead of hiding it, once judge votes exist for that kingdom."""
+    with SessionLocal() as db:
+        p, f, gp1, gp2, gf1, gf2 = _seed_lb_judge_fixtures(db)
+        fungi_slug = f.slug
+
+    _patch_kingdom_to_fungi(monkeypatch, fungi_slug)
+
+    c = TestClient(app)
+    r = c.get("/leaderboard?kingdom=fungi")
+    assert r.status_code == 200
+    body = r.text
+    assert "VLM judge" in body  # Feature A: no longer hidden under an active kingdom
 
     with SessionLocal() as db:
         _clear_lb_fixtures(db)

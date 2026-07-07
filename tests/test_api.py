@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
+
 from fastapi.testclient import TestClient
 
+from app import config
 from app.database import SessionLocal
 from app.main import app
-from app.models import Rating
+from app.models import Comparison, KBallot, ModelOutput, Rating
 from app.seed import seed_all
 
 client = TestClient(app)
@@ -91,3 +94,75 @@ def test_admin_create_category():
         follow_redirects=False,
     )
     assert r.status_code == 303
+
+
+def test_vote_reveal_present_for_real_comparison(monkeypatch):
+    """Feature C: a non-gold vote's response carries a `reveal` with both real names + the
+    winner, so the client can show the post-vote fanfare. Force GOLD_RATE=0 so this is
+    deterministic rather than depending on the 10% default gold-injection chance. Uses a
+    fresh client/session — the shared module-level `client` has already voted through most
+    of the seeded pairing pool in earlier tests, so /api/next could 404 here otherwise."""
+    monkeypatch.setattr(config, "GOLD_RATE", 0.0)
+    fresh = TestClient(app)
+    nxt = fresh.get("/api/next").json()
+    res = fresh.post("/api/vote", json={"comparison_id": nxt["comparison_id"], "winner": "a"})
+    assert res.status_code == 200
+    reveal = res.json()["reveal"]
+    assert reveal is not None
+    assert isinstance(reveal["a"]["name"], str) and reveal["a"]["name"]
+    assert isinstance(reveal["b"]["name"], str) and reveal["b"]["name"]
+    assert reveal["winner"] == "a"
+
+
+def test_vote_reveal_omitted_for_gold(monkeypatch):
+    """Gold comparisons are an attention-check decoy — revealing the winner/names would leak
+    the answer, so `reveal` must be omitted (null) even though the vote itself still records.
+    Fresh client for the same pool-exhaustion reason as the test above."""
+    monkeypatch.setattr(config, "GOLD_RATE", 1.0)
+    fresh = TestClient(app)
+    nxt = fresh.get("/api/next").json()
+    with SessionLocal() as db:
+        comp = db.get(Comparison, nxt["comparison_id"])
+        assert comp.is_gold is True
+        expected = comp.gold_expected
+    res = fresh.post("/api/vote", json={"comparison_id": nxt["comparison_id"], "winner": expected})
+    assert res.status_code == 200
+    assert res.json().get("reveal") is None
+
+
+def test_kvote_reveal_labels_every_output_and_the_pick():
+    """Feature C for K-wise: the /api/kvote response carries a `reveal` with a real name for
+    every output shown in the ballot plus which one was picked, so the grid can label each
+    card. Builds a ballot directly (mirrors tests/test_kvote_endpoint.py) over real seeded
+    outputs so generator_display_names has real rows to resolve."""
+    with SessionLocal() as db:
+        outs = db.query(ModelOutput).filter_by(is_gold=False).limit(4).all()
+        assert len(outs) == 4
+        out_ids = [o.id for o in outs]
+        task_id = outs[0].task_id
+        crit_id = _overall_criterion_id(db)
+        ballot = KBallot(
+            task_id=task_id,
+            criterion_id=crit_id,
+            session_id="reveal-kvote-test",
+            output_ids_json=json.dumps(out_ids),
+        )
+        db.add(ballot)
+        db.commit()
+        ballot_id = ballot.id
+        best_id = out_ids[0]
+
+    res = client.post("/api/kvote", json={"ballot_id": ballot_id, "best_output_id": best_id})
+    assert res.status_code == 200
+    reveal = res.json()["reveal"]
+    assert reveal is not None
+    assert reveal["best_output_id"] == best_id
+    seen_ids = {o["output_id"] for o in reveal["outputs"]}
+    assert seen_ids == set(out_ids)
+    assert all(isinstance(o["name"], str) and o["name"] for o in reveal["outputs"])
+
+
+def _overall_criterion_id(db) -> int:
+    from app.models import Criterion
+
+    return db.query(Criterion).filter_by(slug="overall").one().id
