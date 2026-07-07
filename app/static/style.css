@@ -2071,21 +2071,6 @@ details.group[open] > summary.group-title::before {
   align-items: center;
   gap: 20px;
 }
-.b3d-kstats {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-family: "IBM Plex Mono", monospace;
-  font-size: 11px;
-  color: var(--faint);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-@media (max-width: 1120px) {
-  .b3d-kstats {
-    display: none;
-  }
-}
 .b3d-scope-pill {
   display: inline-flex;
   align-items: center;
@@ -2100,37 +2085,79 @@ details.group[open] > summary.group-title::before {
   border-radius: 999px;
   padding: 3px 10px;
 }
-.b3d-kseg {
+/* Kingdom scope dropdown pill (replaces the old 4-chip segmented control) */
+.b3d-kdrop {
+  position: relative;
+}
+.b3d-kdrop-btn {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 8px;
   background: var(--panel2);
   border: 1px solid var(--border);
-  border-radius: 11px;
-  padding: 3px;
-}
-.b3d-kseg-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  border-radius: 8px;
-  padding: 6px 12px;
+  border-radius: 999px;
+  padding: 6px 13px;
   cursor: pointer;
-  color: var(--muted);
+  color: var(--text);
   text-decoration: none;
   font-family: "IBM Plex Sans", sans-serif;
   font-size: 13.5px;
   font-weight: 600;
   transition:
     background 0.12s,
+    border-color 0.12s;
+}
+.b3d-kdrop-btn:hover {
+  border-color: color-mix(in oklch, var(--accent) 45%, var(--border));
+}
+.b3d-kdrop-caret {
+  font-size: 9px;
+  color: var(--faint);
+  transition: transform 0.12s;
+}
+.b3d-kdrop.is-open .b3d-kdrop-caret {
+  transform: rotate(180deg);
+}
+.b3d-kdrop-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 190px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  box-shadow: var(--shadowCard);
+  padding: 4px;
+  z-index: 30;
+}
+.b3d-kdrop.is-open .b3d-kdrop-menu {
+  display: block;
+}
+.b3d-kdrop-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  border-radius: 8px;
+  padding: 8px 11px;
+  cursor: pointer;
+  color: var(--muted);
+  text-decoration: none;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 13.5px;
+  font-weight: 500;
+  transition:
+    background 0.12s,
     color 0.12s;
 }
-.b3d-kseg-item:hover {
+.b3d-kdrop-item:hover {
   color: var(--text);
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
 }
-.b3d-kseg-item.is-active {
+.b3d-kdrop-item.is-active {
   color: var(--text);
+  font-weight: 600;
   background: color-mix(in oklch, var(--accent) 18%, transparent);
 }
 .b3d-topnav {
@@ -2277,7 +2304,8 @@ details.group[open] > summary.group-title::before {
 
 .b3d-sidebar a:focus-visible,
 .b3d-sidebar button:focus-visible,
-.b3d-kseg-item:focus-visible,
+.b3d-kdrop-btn:focus-visible,
+.b3d-kdrop-item:focus-visible,
 .b3d-topnav-link:focus-visible,
 .b3d-footer-chip:focus-visible,
 .b3d-burger:focus-visible {

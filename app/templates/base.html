@@ -12,12 +12,14 @@
     />
     <script>
       try {
-        var t =
-          localStorage.getItem("bio3d_theme") ||
-          (matchMedia("(prefers-color-scheme: light)").matches
-            ? "light"
-            : "dark");
-        document.documentElement.setAttribute("data-theme", t);
+        var t = localStorage.getItem("bio3d_theme");
+        var effective =
+          t === "light" || t === "dark"
+            ? t
+            : matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+        document.documentElement.setAttribute("data-theme", effective);
       } catch (e) {}
     </script>
     <link rel="stylesheet" href="/static/style.css" />
@@ -505,11 +507,11 @@
           <button
             id="b3d-theme"
             class="b3d-theme-btn"
-            aria-label="Toggle color theme"
-            title="Toggle theme"
+            aria-label="Theme: Auto (click to cycle Auto / Light / Dark)"
+            title="Cycle theme: Auto / Light / Dark"
           >
-            <span class="b3d-nav-icon" aria-hidden="true">&#9790;</span>
-            <span class="b3d-nav-label">Theme</span>
+            <span class="b3d-nav-icon" aria-hidden="true">⏾</span>
+            <span class="b3d-nav-label">Auto</span>
           </button>
           <div class="b3d-auth">
             {% if request.state.user %}
@@ -532,40 +534,46 @@
         <div class="b3d-kbar">
           <div class="b3d-kbar-left">
             <span class="b3d-kbar-label">Kingdom</span>
-            {% include "_scope_pill.html" %}
-            <div class="b3d-kseg" role="tablist" aria-label="Kingdom scope">
-              <a
-                href="?kingdom=all"
-                class="b3d-kseg-item{{ ' is-active' if kingdom == 'all' else '' }}"
-                >All</a
+            {% set kingdom_meta = {"all": ("\U0001F9EC", "All kingdoms"),
+            "plants": ("\U0001F33F", "Plants"), "fungi": ("\U0001F344",
+            "Fungi"), "animals": ("\U0001F43E", "Animals")} %} {% set
+            active_kingdom = kingdom if kingdom in kingdom_meta else "all" %}
+            {% set active_meta = kingdom_meta[active_kingdom] %}
+            <div class="b3d-kdrop">
+              <button
+                type="button"
+                id="b3d-kdrop-btn"
+                class="b3d-kdrop-btn"
+                aria-haspopup="true"
+                aria-expanded="false"
+                aria-controls="b3d-kdrop-menu"
               >
-              <a
-                href="?kingdom=plants"
-                class="b3d-kseg-item{{ ' is-active' if kingdom == 'plants' else '' }}"
-                >&#127807; Plants</a
+                <span aria-hidden="true">{{ active_meta[0] }}</span>
+                <span class="b3d-kdrop-label"
+                  >{{ active_meta[1] }}</span
+                >
+                <span class="b3d-kdrop-caret" aria-hidden="true"
+                  >&#9662;</span
+                >
+              </button>
+              <div
+                id="b3d-kdrop-menu"
+                class="b3d-kdrop-menu"
+                role="menu"
+                aria-label="Kingdom scope"
               >
-              <a
-                href="?kingdom=fungi"
-                class="b3d-kseg-item{{ ' is-active' if kingdom == 'fungi' else '' }}"
-                >&#127812; Fungi</a
-              >
-              <a
-                href="?kingdom=animals"
-                class="b3d-kseg-item{{ ' is-active' if kingdom == 'animals' else '' }}"
-                >&#128062; Animals</a
-              >
+                {% for k, meta in kingdom_meta.items() %}
+                <a
+                  href="?kingdom={{ k }}"
+                  role="menuitem"
+                  class="b3d-kdrop-item{{ ' is-active' if active_kingdom == k else '' }}"
+                  >{{ meta[0] }} {{ meta[1] }}</a
+                >
+                {% endfor %}
+              </div>
             </div>
           </div>
           <div class="b3d-kbar-right">
-            {% if request.state.kingdom_stats %}
-            <div class="b3d-kstats" aria-label="Kingdom summary">
-              <span>{{ request.state.kingdom_stats.tasks }} tasks</span>
-              <span>&middot;</span>
-              <span>{{ request.state.kingdom_stats.votes }} votes</span>
-              <span>&middot;</span>
-              <span>updated {{ request.state.kingdom_stats.updated }}</span>
-            </div>
-            {% endif %}
             <nav class="b3d-topnav" aria-label="Quick links">
               <a
                 href="/arena"
