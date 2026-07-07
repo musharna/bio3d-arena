@@ -2615,3 +2615,116 @@ details.group[open] > summary.group-title::before {
   margin-top: 0.3rem;
   font-size: 11px;
 }
+
+/* === Difficulty (Task 13) — card-wrapped sections on shared .ranktable tokens,
+   + a server-rendered inline-SVG degradation chart + heat-mapped tier grid === */
+.diff-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadowCard);
+  padding: 1.1rem 1.25rem;
+  margin: 0 0 1.3rem;
+}
+.diff-panel h2,
+.diff-panel h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+}
+.diff-panel h4 {
+  margin: 1rem 0 0.3rem;
+  font-size: 0.95rem;
+}
+.diff-panel h4:first-child {
+  margin-top: 0;
+}
+
+/* Degradation chart: axis chrome stays low-contrast so the data lines read first */
+.diff-chart {
+  width: 100%;
+  height: auto;
+  max-width: 640px;
+  margin-top: 0.4rem;
+}
+.diff-axis-line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.diff-axis-tick {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+  fill: var(--faint);
+}
+.diff-axis-title {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  fill: var(--muted);
+}
+.diff-line {
+  fill: none;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.diff-line-faint {
+  stroke: var(--faint);
+  stroke-width: 1.3;
+  opacity: 0.5;
+}
+.diff-line-label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+/* Heat-mapped paradigm x tier grid: legend swatches + cell backgrounds are set inline
+   (per-cell color-mix computed server-side from the row's own tier/column spread) */
+.diff-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.5rem 0 0.9rem;
+}
+.diff-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  margin-left: 0.4rem;
+}
+.diff-heatmap td.num {
+  transition: background 0.12s;
+}
+
+/* Per-tier top-3 cards (sit above each tier's full scorecard table) */
+.diff-top3 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0.2rem 0 0.9rem;
+}
+.diff-top3-card {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-ctl);
+  padding: 0.35rem 0.7rem;
+  font-size: 0.85rem;
+}
+.diff-top3-rank {
+  color: var(--accent2);
+  font-weight: 700;
+}
+.diff-top3-name {
+  font-weight: 600;
+}
+.diff-top3-metric {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
