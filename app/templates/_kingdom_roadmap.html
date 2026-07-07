@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ kingdom_label }} · Roadmap · Bio 3D Arena{% endblock %}
+{% block content %}
+<section class="board b3d-roadmap">
+  <p class="eyebrow b3d-roadmap-eyebrow">Coming soon</p>
+  <h1>{{ kingdom_label }} are next on the roadmap</h1>
+  <p class="subtle">
+    {{ kingdom_label }} join the arena once a first benchmark task is seeded for the kingdom —
+    voting, leaderboards, and every other data view activate automatically the moment that
+    happens, no separate launch step required. In the meantime, the rest of the tree is live.
+  </p>
+  <div class="b3d-roadmap-grid">
+    <div class="b3d-roadmap-item is-live">
+      <span class="b3d-roadmap-mark" aria-hidden="true">✓</span>
+      <span>Plants live</span>
+    </div>
+    <div class="b3d-roadmap-item is-live">
+      <span class="b3d-roadmap-mark" aria-hidden="true">✓</span>
+      <span>Fungi live</span>
+    </div>
+    <div class="b3d-roadmap-item is-pending">
+      <span class="b3d-roadmap-mark" aria-hidden="true">◷</span>
+      <span>{{ kingdom_label }} in sourcing</span>
+    </div>
+  </div>
+  <a class="b3d-roadmap-back" href="{{ request.url.path }}?kingdom=all">&larr; Back to all kingdoms</a>
+</section>
+{% endblock %}

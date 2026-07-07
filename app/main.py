@@ -220,6 +220,44 @@ def _effective_category_ids(k_ids: set[int] | None, category_id: int | None) -> 
     return {category_id} if category_id in k_ids else set()
 
 
+def _kingdom_is_live(db: Session, kingdom: str) -> bool:
+    """True when `kingdom` has >=1 active Task in its mapped categories. `all` (no scoping)
+    is always live. A kingdom whose categories exist but have zero tasks yet (e.g. Animals —
+    seeded as a category placeholder, self-activates the moment its first task is added, same
+    convention as the `coming_soon` category flag in /api/meta) is NOT live — the data pages
+    route to the roadmap screen instead of rendering an empty board."""
+    kingdom = kingdoms.normalize_kingdom(kingdom)
+    if kingdom == "all":
+        return True
+    k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
+    if not k_ids:
+        return False
+    return (
+        db.execute(select(Task.id).where(Task.category_id.in_(k_ids), Task.active.is_(True)))
+        .scalars()
+        .first()
+        is not None
+    )
+
+
+def _roadmap_or_none(request: Request, db: Session) -> HTMLResponse | None:
+    """Return the coming-soon roadmap page when the request's active kingdom isn't live yet;
+    else None so the caller renders its normal template. Applied at the top of every
+    kingdom-scoped data route (Leaderboard, Arena, Difficulty, Significance, Benchmark,
+    Coverage, Tasks, Dataset) — Home/Methodology/Submit/Spotlight are never gated."""
+    kingdom = request.state.kingdom
+    if kingdom == "all" or _kingdom_is_live(db, kingdom):
+        return None
+    return templates.TemplateResponse(
+        request,
+        "_kingdom_roadmap.html",
+        {
+            "kingdom": kingdom,
+            "kingdom_label": kingdoms.KINGDOM_LABEL.get(kingdom, kingdom.title()),
+        },
+    )
+
+
 def _serialize(
     comparison: Comparison,
     task: Task,
@@ -532,7 +570,10 @@ def require_admin_query(token: str | None = None) -> None:
 
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request):
+def index(request: Request, db: Session = Depends(get_db)):
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
     return templates.TemplateResponse(request, "arena.html")
 
 
@@ -811,6 +852,9 @@ def leaderboard(
     paradigm: str | None = None,
     verified: bool = False,
 ):
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
     paradigm = paradigm or None  # "" (unset <select>) and None both mean "no filter"
     kingdom = request.state.kingdom
     k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
@@ -898,7 +942,10 @@ def api_leaderboard(
 
 
 @app.get("/dataset", response_class=HTMLResponse)
-def dataset_page(request: Request):
+def dataset_page(request: Request, db: Session = Depends(get_db)):
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
     releases_dir = config.RELEASES_DIR
     releases = []
     if releases_dir.is_dir():
@@ -944,6 +991,9 @@ def licenses_page(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/coverage", response_class=HTMLResponse)
 def coverage_page(request: Request, db: Session = Depends(get_db)):
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
     k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
     summary = service.coverage_summary(db, category_ids=k_ids)
     return templates.TemplateResponse(
@@ -1024,6 +1074,9 @@ def significance_page(
     criterion: str = "overall",
     category: str = "all",
 ):
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
     category_id = _resolve_category_id(db, category)
     k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
     if k_ids is not None:
@@ -1066,6 +1119,9 @@ def significance_page(
 
 @app.get("/tasks", response_class=HTMLResponse)
 def tasks_page(request: Request, db: Session = Depends(get_db)):
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
     k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
     stmt = select(Task)
     if k_ids is not None:
@@ -1271,6 +1327,9 @@ def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int
     from . import recon_service
     from .models import Task
 
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
     k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
     stmt = select(Task)
     if k_ids is not None:
@@ -1343,6 +1402,9 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
     """Render the per-tier objective scorecard + the cross-tier degradation gradient."""
     from .models import ReconTask, Task, TaskDifficulty
 
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
     k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
     scorecard = difficulty.tier_scorecard(db, category_ids=k_ids)
     tiers = list(difficulty.TIERS)
