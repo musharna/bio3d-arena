@@ -967,6 +967,49 @@ kbd {
   color: var(--muted);
   font-weight: 400;
 }
+
+/* === Benchmark (Task 14) — card-wrapped sections on shared .ranktable/.diff-panel
+   tokens; the GT pane gets an accent top-border so it reads as "ground truth"
+   without duplicating the "Held-out GT scan" label text. === */
+.bm-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadowCard);
+  padding: 1.1rem 1.25rem;
+  margin: 0 0 1.3rem;
+}
+.bm-panel h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+}
+.bm-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 0.6rem;
+}
+.bm-pick select {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.45rem 0.6rem;
+  font-size: 0.9rem;
+  min-width: 220px;
+}
+.recon-pane-gt {
+  border-top: 3px solid var(--win);
+}
+/* Cross-species agreement — colored ± Spearman (mono via td.num already) */
+.bm-pos {
+  color: var(--win);
+}
+.bm-neg {
+  color: var(--bad);
+}
 @media (max-width: 720px) {
   .recon-compare {
     grid-template-columns: 1fr;
