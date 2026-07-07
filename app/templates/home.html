@@ -39,9 +39,16 @@ reconstruction benchmark{% endblock %} {% block content %}
       </div>
     </div>
 
-    <!-- Hero viz: v1 uses a static concentric-ring motif (no wired sample GLB yet); a real
-         window.Bio3DViewer.mount() specimen turntable is deferred to a follow-up task. -->
+    <!-- Hero viz: a live rotating specimen when a featured GLB is available
+         (mounted below via the shared window.Bio3DViewer.mount); otherwise the
+         static concentric-ring motif placeholder. -->
     <div class="b3d-hero-viz">
+      {% if hero_asset %}
+      <div class="viewer-slot b3d-hero-viz-stage" id="hero-slot"></div>
+      <span class="b3d-hero-viz-caption"
+        >live reconstruction &middot; drag to rotate</span
+      >
+      {% else %}
       <div class="b3d-hero-viz-ring-wrap">
         <div class="b3d-hero-viz-ring-outer" aria-hidden="true"></div>
         <div class="b3d-hero-viz-ring-dashed" aria-hidden="true"></div>
@@ -53,9 +60,26 @@ reconstruction benchmark{% endblock %} {% block content %}
       <span class="b3d-hero-viz-caption"
         >reconstructed mesh &middot; live viewer in the arena</span
       >
+      {% endif %}
     </div>
   </div>
 </section>
+
+{% if hero_asset %}
+<script>
+  (function () {
+    var slot = document.getElementById("hero-slot");
+    if (!slot || !window.Bio3DViewer) return;
+    window.Bio3DViewer.mount(slot, {{ hero_asset | tojson }});
+    var mv = slot.querySelector("model-viewer");
+    if (mv) {
+      mv.setAttribute("auto-rotate", "");
+      mv.setAttribute("auto-rotate-delay", "0");
+      mv.setAttribute("rotation-per-second", "16deg");
+    }
+  })();
+</script>
+{% endif %}
 
 <div class="b3d-section-head">
   <h2>Choose a kingdom</h2>

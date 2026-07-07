@@ -570,13 +570,49 @@ def require_admin_query(token: str | None = None) -> None:
 # ------------------------------------------------------------------- arena UI
 
 
+def _pick_hero_asset(db: Session, spotlight_subjects: list[dict]) -> dict | None:
+    """Pick a featured GLB for the Home hero turntable — query-driven, never a
+    hardcoded output id (the seed DB differs per env, and a fresh/empty DB must
+    fall back to `None` so the template renders the ring-motif placeholder).
+
+    Preference order: a visible, non-gold GLB whose task is one of the curated
+    Spotlight poster-child subjects (most-voted among those); else the
+    most-voted visible non-gold GLB in the whole DB; else `None`.
+    """
+    base = select(ModelOutput).where(
+        ModelOutput.is_gold.is_(False),
+        ModelOutput.hidden_at.is_(None),
+        ModelOutput.asset_format == "glb",
+    )
+    spotlight_titles = [s["task_title"] for s in spotlight_subjects]
+    if spotlight_titles:
+        out = (
+            db.execute(
+                base.join(Task, ModelOutput.task_id == Task.id)
+                .where(Task.title.in_(spotlight_titles))
+                .order_by(ModelOutput.n_comparisons.desc())
+            )
+            .scalars()
+            .first()
+        )
+        if out is not None:
+            return {"url": storage.url_for(out.asset_path), "format": out.asset_format}
+    out = db.execute(base.order_by(ModelOutput.n_comparisons.desc())).scalars().first()
+    if out is None:
+        return None
+    return {"url": storage.url_for(out.asset_path), "format": out.asset_format}
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, db: Session = Depends(get_db)):
     """Marketing/landing page. Never kingdom-gated (see `_roadmap_or_none` docstring) —
     it's the one screen every visitor should be able to load regardless of scope."""
     from sqlalchemy import func
 
+    from . import spotlight
+
     total_votes = matchmaking.total_votes(db)
+    hero_asset = _pick_hero_asset(db, spotlight.SPOTLIGHTS)
     models_count = db.execute(
         select(func.count(func.distinct(Generator.id))).where(Generator.kind == "model")
     ).scalar_one()
@@ -622,6 +658,7 @@ def home(request: Request, db: Session = Depends(get_db)):
             "tasks_count": tasks_count,
             "kingdoms_live": kingdoms_live,
             "kingdom_cards": kingdom_cards,
+            "hero_asset": hero_asset,
         },
     )
 

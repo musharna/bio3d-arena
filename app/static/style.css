@@ -2310,6 +2310,14 @@ details.group[open] > summary.group-title::before {
   justify-content: center;
   gap: 1rem;
 }
+.b3d-hero-viz-stage {
+  /* Live-GLB variant of the hero viz: reuses .viewer-slot's arena stage look
+     (gradient + vignette + controls) sized to sit in the hero's right column
+     rather than a full comparison panel. */
+  width: 100%;
+  height: 380px;
+  border-radius: var(--r-card);
+}
 .b3d-hero-viz-ring-wrap {
   position: relative;
   width: 300px;
@@ -2505,6 +2513,9 @@ details.group[open] > summary.group-title::before {
   }
   .b3d-hero-viz {
     order: -1;
+  }
+  .b3d-hero-viz-stage {
+    height: 300px;
   }
   .b3d-kgrid,
   .b3d-steps-grid {
