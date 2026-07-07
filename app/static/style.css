@@ -319,11 +319,11 @@ kbd,
   cursor: pointer;
 }
 .mod-actions .approve {
-  background: #4cc38a;
+  background: var(--win);
   color: #06281b;
 }
 .mod-actions .reject {
-  background: #b9636b;
+  background: var(--bad);
   color: #1a0c0e;
 }
 .prose ul {
@@ -3339,4 +3339,24 @@ details.group[open] > summary.group-title::before {
   .sub-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* === Task 22 — Fidelity board (axis legend + per-taxon reference row). Reuses
+   .cov-badge/.cov-firm/.cov-prov (primary vs labeled-context axes), .ranktable,
+   and .b3d-page-head from earlier tasks; adds only what those don't cover. === */
+.fid-axes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.6rem;
+  align-items: center;
+  margin: 0 0 1rem;
+}
+.fid-taxon {
+  margin: 1.4rem 0 0.3rem;
+  font-size: 1.05rem;
+}
+.ranktable tr.reference td {
+  color: var(--faint);
+  background: var(--panelDeep);
+  font-style: italic;
 }
