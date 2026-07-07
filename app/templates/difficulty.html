@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Difficulty · Bio 3D Arena{% endblock %}
 {% block content %}
+{# Heatmap cell tint (top-level so every table below is in scope, incl. paradigm grid + scorecard). #}
+{% macro diff_heat(value, vmin, vmax, invert) %}{% if value is not none and vmax is not none and vmin is not none and vmax > vmin %}{% set frac = (value - vmin) / (vmax - vmin) %}{% set frac = (1 - frac) if invert else frac %}{% set frac = 0 if frac < 0 else (1 if frac > 1 else frac) %}{% set pct = (24 + frac * 34) | round(1) %}{% set hcolor = 'var(--win)' if frac >= 0.66 else ('var(--amber)' if frac >= 0.33 else 'var(--bad)') %}background: color-mix(in oklch, {{ hcolor }} {{ pct }}%, var(--panel2));{% endif %}{% endmacro %}
 <section class="diff">
   <header class="b3d-page-head">
     <h1>Difficulty tiers {% include "_scope_pill.html" %}</h1>
@@ -121,7 +123,6 @@
   {# heat-map coloring: per numeric column, normalize within its own comparison set
      (a tier's rows, or here a tier COLUMN across generators), better = greener. Defined
      once here so both this table and the paradigm × difficulty grid below can reuse it. #}
-  {% macro diff_heat(value, vmin, vmax, invert) %}{% if value is not none and vmax is not none and vmin is not none and vmax > vmin %}{% set frac = (value - vmin) / (vmax - vmin) %}{% set frac = (1 - frac) if invert else frac %}{% set frac = 0 if frac < 0 else (1 if frac > 1 else frac) %}{% set pct = (24 + frac * 34) | round(1) %}{% set hcolor = 'var(--win)' if frac >= 0.66 else ('var(--amber)' if frac >= 0.33 else 'var(--bad)') %}background: color-mix(in oklch, {{ hcolor }} {{ pct }}%, var(--panel2));{% endif %}{% endmacro %}
 
   {% set gt_vmin = {} %}
   {% set gt_vmax = {} %}
