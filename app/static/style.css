@@ -2835,6 +2835,7 @@ details.group[open] > summary.group-title::before {
 }
 .b3d-step-card {
   border: 1px solid var(--border);
+  border-top: 2px solid var(--accent);
   border-radius: var(--r-card);
   background: var(--panel);
   box-shadow: var(--shadowCard);
@@ -2845,13 +2846,7 @@ details.group[open] > summary.group-title::before {
   font-size: 12px;
   font-weight: 700;
   color: var(--accent);
-  border: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
-  border-radius: 999px;
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  letter-spacing: 0.03em;
 }
 .b3d-step-card h3 {
   font-family: "Space Grotesk", sans-serif;
@@ -3796,6 +3791,7 @@ details.group[open] > summary.group-title::before {
    bottom margin); .meth-panel mirrors the .cov-panel/.ds-panel/.tk-panel card
    namespace. .meth-formula is a static inline-styled BT formula — no math lib. === */
 .meth-steps-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   margin-bottom: 1.3rem;
 }
 .meth-panel {
@@ -3846,6 +3842,17 @@ details.group[open] > summary.group-title::before {
    --panel2 inputs + accent focus rings. === */
 .sub-steps-grid {
   margin-bottom: 1.3rem;
+}
+.sub-steps-grid .b3d-step-card h3 {
+  font-family: "IBM Plex Mono", monospace;
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+.sub-steps-grid .b3d-step-card .b3d-step-num {
+  font-size: inherit;
+  font-weight: inherit;
 }
 .sub-form {
   background: var(--panel);
