@@ -755,7 +755,21 @@ def api_vote(
     db.commit()
     # Keep the same criterion/category filter (+ active kingdom) for the follow-up comparison.
     nxt = _build_comparison(db, sid, criterion, category, kingdom=request.state.kingdom)
-    return {"status": "ok", "next": nxt}
+
+    # Post-vote reveal (Feature C): real generator names for the just-voted pair, ONLY for
+    # non-gold comparisons — gold is an attention-check decoy, so revealing it would leak the
+    # answer. Purely additive: never affects vote recording, dedup, or `next` above.
+    reveal = None
+    if not comparison.is_gold:
+        out_a = db.get(ModelOutput, comparison.output_a_id)
+        out_b = db.get(ModelOutput, comparison.output_b_id)
+        names = service.generator_display_names(db)
+        reveal = {
+            "a": {"name": names.get(out_a.generator_id, "Unknown")},
+            "b": {"name": names.get(out_b.generator_id, "Unknown")},
+            "winner": vote_in.winner,
+        }
+    return {"status": "ok", "next": nxt, "reveal": reveal}
 
 
 @app.post("/api/kvote")
@@ -786,7 +800,19 @@ def api_kvote(
     integrity.note_vote(db, sid)  # ONE rate-accounting per ballot, not per derived vote
     db.commit()
     nxt = _build_kwise_comparison(db, sid, criterion, category, kingdom=request.state.kingdom)
-    return {"status": "ok", "next": nxt}
+
+    # Post-vote reveal (Feature C): real generator names for every output shown in the ballot +
+    # which one was picked, so the grid can label each card. K-wise never serves gold (see
+    # _build_kwise_comparison docstring), so no omission case is needed here.
+    names = service.generator_display_names(db)
+    reveal_outputs = []
+    for oid in ids:
+        out = db.get(ModelOutput, oid)
+        if out is None:
+            continue  # defensive: dangling id, shouldn't happen but never 500 the reveal
+        reveal_outputs.append({"output_id": oid, "name": names.get(out.generator_id, "Unknown")})
+    reveal = {"outputs": reveal_outputs, "best_output_id": kvote_in.best_output_id}
+    return {"status": "ok", "next": nxt, "reveal": reveal}
 
 
 @app.post("/api/flag")

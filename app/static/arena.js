@@ -2,6 +2,9 @@
 // Category + criterion selectors scope what gets shown and which axis is judged.
 let current = null; // active pairwise comparison (2-up); null while a K-wise ballot is shown
 let busy = false;
+// Post-vote reveal (Feature C): the `next` payload from a vote/kvote response is stashed here
+// instead of rendered immediately whenever a `reveal` is shown, so "Next pair" can advance to it.
+let pendingNext = null;
 
 const el = (id) => document.getElementById(id);
 
@@ -224,6 +227,7 @@ function renderKwise(data) {
     pickBtn.type = "button";
     pickBtn.className = "vote-btn win kwise-pick-btn";
     pickBtn.textContent = "Pick this one";
+    pickBtn.dataset.outputId = o.output_id; // read back by showKwiseReveal to label this card
     pickBtn.addEventListener("click", () =>
       submitKvote(data.ballot_id, o.output_id),
     );
@@ -270,7 +274,13 @@ async function submitKvote(ballotId, bestOutputId) {
       return;
     }
     const data = await res.json();
-    if (data.next) {
+    if (data.reveal) {
+      // Hold the follow-up ballot/pair until "Next pair" is clicked — showKwiseReveal labels
+      // each card in place with its real name and marks the pick, same grid stays on screen.
+      pendingNext = data.next;
+      showKwiseReveal(data.reveal);
+      flash("Pick recorded ✓");
+    } else if (data.next) {
       render(data.next);
       flash("Pick recorded ✓");
     } else {
@@ -322,8 +332,17 @@ async function vote(winner) {
       // In a scoped mode the embedded `data.next` shortcut is built by the
       // regular (unscoped) builder, so ignore it and re-fetch through the
       // mode-aware path (qs threads ?set). loadNext handles the `done` payload.
+      // No reveal in session mode — it re-fetches straight through.
       flash("Vote recorded ✓");
       await loadNext();
+    } else if (data.reveal) {
+      // Non-gold vote: hold `next` until "Next pair" is clicked, and clear `current` so a
+      // stray keyboard shortcut (arrow/t/x — these don't check button `disabled`) can't
+      // double-vote the pair that's still on screen during the reveal.
+      current = null;
+      pendingNext = data.next;
+      showReveal(data.reveal);
+      flash("Vote recorded ✓");
     } else if (data.next) {
       render(data.next);
       flash("Vote recorded ✓");
@@ -377,6 +396,174 @@ function flash(msg) {
   s.classList.add("flash");
   setTimeout(() => s.classList.remove("flash"), 700);
 }
+
+// ------------------------------------------------------------------ post-vote reveal (Feature C)
+// Purely additive fanfare on top of the existing vote/kvote flows: reveals the real model
+// names + rank + gold winner border, then gates advancing on an explicit "Next pair" click.
+// Never touches vote recording — `reveal` only exists in the response after the vote/pick is
+// already committed server-side.
+
+function disableVoteBar(disabled) {
+  document
+    .querySelectorAll(".vote-bar .vote-btn")
+    .forEach((b) => (b.disabled = disabled));
+}
+
+function rankLabelFor(side, winner) {
+  if (winner === "tie") return "tie";
+  if (winner === "bad") return "weak"; // "both bad" vote — no real winner to crown
+  return winner === side ? "1st" : "2nd";
+}
+
+// 2-up pairwise reveal: name pills + rank chips on the two stages, gold border on the winner.
+function showReveal(reveal) {
+  const cols = document.querySelectorAll(".pair .model-col");
+  const sides = [
+    ["a", cols[0]],
+    ["b", cols[1]],
+  ];
+  for (const [side, col] of sides) {
+    const nameEl = el(`reveal-name-${side}`);
+    const chipEl = el(`rank-chip-${side}`);
+    const info = reveal[side];
+    if (nameEl && info) {
+      nameEl.textContent = info.name;
+      nameEl.hidden = false;
+    }
+    if (chipEl) {
+      const label = rankLabelFor(side, reveal.winner);
+      chipEl.textContent = label;
+      chipEl.classList.toggle("is-first", label === "1st");
+      chipEl.hidden = false;
+    }
+    if (col && reveal.winner === side) col.classList.add("is-winner");
+  }
+  disableVoteBar(true);
+  const btn = el("next-pair-btn");
+  if (btn) btn.hidden = false;
+  maybeFireConfetti();
+}
+
+// 4-up K-wise reveal: label each card in place (inline, next to its "Option N" label) + mark
+// the picked card with the same gold winner border as the 2-up view.
+function showKwiseReveal(reveal) {
+  const grid = el("kwise-grid");
+  if (!grid) return;
+  const cells = grid.querySelectorAll(".kwise-cell");
+  const byId = new Map(reveal.outputs.map((o) => [o.output_id, o]));
+  cells.forEach((cell) => {
+    const pickBtn = cell.querySelector(".kwise-pick-btn");
+    const outputId = pickBtn && pickBtn.dataset.outputId;
+    const info = outputId ? byId.get(Number(outputId)) : null;
+    if (pickBtn) pickBtn.disabled = true;
+    if (!info) return;
+    let pill = cell.querySelector(".reveal-name");
+    if (!pill) {
+      pill = document.createElement("span");
+      pill.className = "reveal-name";
+      const label = cell.querySelector(".model-label");
+      if (label) label.appendChild(pill);
+      else cell.appendChild(pill);
+    }
+    pill.textContent = info.name;
+    pill.hidden = false;
+    if (
+      reveal.best_output_id != null &&
+      info.output_id === reveal.best_output_id
+    ) {
+      cell.classList.add("is-winner");
+    }
+  });
+  const allBad = el("kwise-allbad");
+  if (allBad) allBad.disabled = true;
+  const btn = el("next-pair-btn");
+  if (btn) btn.hidden = false;
+  maybeFireConfetti();
+}
+
+// Clears every reveal artifact (both 2-up and 4-up) and re-enables voting — called right
+// before advancing to the pending next pair/ballot.
+function clearReveal() {
+  ["a", "b"].forEach((side) => {
+    const nameEl = el(`reveal-name-${side}`);
+    const chipEl = el(`rank-chip-${side}`);
+    if (nameEl) {
+      nameEl.hidden = true;
+      nameEl.textContent = "";
+    }
+    if (chipEl) {
+      chipEl.hidden = true;
+      chipEl.textContent = "";
+      chipEl.classList.remove("is-first");
+    }
+  });
+  document
+    .querySelectorAll(".model-col.is-winner")
+    .forEach((c) => c.classList.remove("is-winner"));
+  disableVoteBar(false);
+  document
+    .querySelectorAll(".kwise-pick-btn")
+    .forEach((b) => (b.disabled = false));
+  const allBad = el("kwise-allbad");
+  if (allBad) allBad.disabled = false;
+  const btn = el("next-pair-btn");
+  if (btn) btn.hidden = true;
+  const layer = el("confetti-layer");
+  if (layer) layer.textContent = "";
+}
+
+// First-vote-only confetti, gated on localStorage + prefers-reduced-motion. Fail-quiet like
+// the onboarding banner above — a blocked localStorage must never break the reveal itself.
+function maybeFireConfetti() {
+  let shown = true;
+  try {
+    shown = !!localStorage.getItem("bio3d_confetti_shown");
+  } catch (e) {
+    shown = true; // localStorage unavailable → skip, never break the reveal
+  }
+  if (shown) return;
+  try {
+    localStorage.setItem("bio3d_confetti_shown", "1");
+  } catch (e) {
+    /* ignore */
+  }
+  if (
+    window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  ) {
+    return; // respect reduced-motion: skip the burst entirely, not just speed it up
+  }
+  const layer = el("confetti-layer");
+  if (!layer) return;
+  const colors = ["var(--accent)", "var(--accent2)", "var(--win)"];
+  for (let i = 0; i < 16; i++) {
+    const p = document.createElement("span");
+    p.className = "confetti-piece";
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 70 + Math.random() * 90;
+    p.style.setProperty("--cx", Math.cos(angle) * dist + "px");
+    p.style.setProperty("--cy", Math.sin(angle) * dist + "px");
+    p.style.setProperty("--cr", Math.floor(Math.random() * 360) + "deg");
+    p.style.left = 45 + Math.random() * 10 + "%";
+    p.style.top = "35%";
+    p.style.background = colors[i % colors.length];
+    p.style.animationDelay = Math.random() * 0.15 + "s";
+    p.addEventListener("animationend", () => p.remove());
+    layer.appendChild(p);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const btn = el("next-pair-btn");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    clearReveal();
+    const n = pendingNext;
+    pendingNext = null;
+    if (n) render(n);
+    else loadNext();
+  });
+});
 
 // Reference-image lightbox: open on thumbnail click, close on overlay click or Escape.
 function openReferenceLightbox(url, credit) {

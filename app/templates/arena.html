@@ -81,6 +81,10 @@ block content %}
           >🤖 AI-generated</span
         >
       </div>
+      <!-- Post-vote reveal (Feature C): hidden until arena.js's showReveal() populates + shows
+           these after a non-gold vote is committed. Never present before that. -->
+      <div class="reveal-name" id="reveal-name-a" hidden></div>
+      <div class="rank-chip" id="rank-chip-a" hidden></div>
       <div class="viewer-slot" id="slot-a"></div>
     </div>
     <div class="model-col">
@@ -90,6 +94,8 @@ block content %}
           >🤖 AI-generated</span
         >
       </div>
+      <div class="reveal-name" id="reveal-name-b" hidden></div>
+      <div class="rank-chip" id="rank-chip-b" hidden></div>
       <div class="viewer-slot" id="slot-b"></div>
     </div>
   </div>
@@ -118,8 +124,12 @@ block content %}
   >
     🤷 Can't tell / all bad
   </button>
+  <!-- Post-vote reveal (Feature C): shown by arena.js after a vote commits, in place of the
+       vote bar. Hidden by default; never present before a vote. -->
+  <button type="button" id="next-pair-btn" hidden>Next pair →</button>
   <p id="status-line" class="status-line"></p>
 </section>
+<div id="confetti-layer" aria-hidden="true"></div>
 <div
   id="reference-lightbox"
   class="reference-lightbox"
