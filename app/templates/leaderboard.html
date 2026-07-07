@@ -1,9 +1,33 @@
 {% extends "base.html" %}
 {% block title %}Leaderboard · Bio 3D Arena{% endblock %}
 {% block content %}
-<section class="board">
-  <h2>Leaderboard</h2>
-  <form class="filter-row" method="get" action="/leaderboard">
+{% set sel_paradigm_matches = paradigm_options | selectattr('selected') | list %}
+{% set sel_paradigm_value = sel_paradigm_matches[0].value if sel_paradigm_matches else None %}
+<section class="lb">
+  <header class="b3d-page-head">
+    <h1>Leaderboard {% include "_scope_pill.html" %}</h1>
+    <p class="b3d-page-lede">
+      Bradley–Terry rankings from anonymous pairwise votes. Scores are relative;
+      the 95% interval shows how firmly a model is placed.
+      <span class="mono lb-votecount">{{ total_votes }} votes cast.</span>
+    </p>
+  </header>
+
+  <details class="lb-info">
+    <summary>How ranking works</summary>
+    <div class="lb-info-body subtle">
+      <p>
+        <b>Rank (UB)</b> groups models whose 95% bootstrap CIs overlap into the
+        same rank (they are not statistically separable). BT = Bradley–Terry
+        score (Elo-scaled); the bar shows the 95% CI with the point estimate
+        marked. Elo updates live per vote. Recompute in Admin.
+      </p>
+    </div>
+  </details>
+
+  <form class="lb-filters filter-row" method="get" action="/leaderboard">
+    <input type="hidden" name="paradigm" value="{{ sel_paradigm_value or '' }}" />
+    {% if verified %}<input type="hidden" name="verified" value="true" />{% endif %}
     <label>Category
       <select name="category" onchange="this.form.submit()">
         {% for opt in category_options %}
@@ -18,74 +42,95 @@
         {% endfor %}
       </select>
     </label>
-    <label>Paradigm
-      <select name="paradigm" onchange="this.form.submit()">
-        {% for opt in paradigm_options %}
-        <option value="{% if opt.value %}{{ opt.value }}{% endif %}" {% if opt.selected %}selected{% endif %}>{{ opt.display }}</option>
-        {% endfor %}
-      </select>
-    </label>
   </form>
-  <p class="subtle scope-toggle">
-    Scope:
-    <a href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}"{% if not verified %} class="active"{% endif %}>Trusted</a> ·
-    <a href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}&verified=true"{% if verified %} class="active"{% endif %}>Verified ✓</a>
-    {% if verified %}<span class="subtle"> — Bradley–Terry over votes from signed-in (Hugging Face) users only.</span>{% endif %}
-  </p>
-  <p class="subtle">
-    {{ total_votes }} votes cast. <b>Rank (UB)</b> groups models whose 95% bootstrap
-    CIs overlap into the same rank (they are not statistically separable). BT =
-    Bradley–Terry score (Elo-scaled); the bar shows the 95% CI with the point
-    estimate marked. Elo updates live per vote. Recompute in Admin.
-  </p>
+
+  <nav class="lb-ptabs" role="tablist" aria-label="Paradigm">
+    {% for opt in paradigm_options %}
+    <a
+      href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}{% if opt.value %}&paradigm={{ opt.value }}{% endif %}{% if verified %}&verified=true{% endif %}"
+      class="lb-ptab{{ ' is-active' if opt.selected else '' }}"
+      role="tab"
+      aria-selected="{{ 'true' if opt.selected else 'false' }}"
+      >{{ opt.display }}</a
+    >
+    {% endfor %}
+  </nav>
+
+  <div class="lb-scope-row">
+    <span class="lb-scope-label mono">Scope</span>
+    <div class="lb-scope-toggle">
+      <a href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}"
+        class="lb-scope-item{{ ' is-active' if not verified else '' }}">Trusted</a>
+      <a href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}&verified=true"
+        class="lb-scope-item{{ ' is-active' if verified else '' }}">Verified ✓</a>
+    </div>
+    {% if verified %}<span class="subtle">Bradley–Terry over votes from signed-in (Hugging Face) users only.</span>{% endif %}
+  </div>
+
   <p class="subtle bias-line">
     Bias audit — left(A) win rate
     <b>{% if bias.left_win_rate is none %}—{% else %}{{ bias.left_win_rate }}{% endif %}</b>
     (≈0.50 = unbiased) · tie {% if bias.tie_rate is none %}—{% else %}{{ bias.tie_rate }}{% endif %} · bad {% if bias.bad_rate is none %}—{% else %}{{ bias.bad_rate }}{% endif %} ·
     <a href="/significance?criterion={{ sel_criterion }}&category={{ sel_category }}">significance &amp; full audit →</a>
   </p>
+
   {% if rows %}
   {% for pgm, group_rows in rows|groupby('paradigm') %}
-  <h3 class="paradigm-heading">{{ paradigm_display_names.get(pgm, pgm) if pgm else "Untagged" }}</h3>
-  <p class="subtle">Scores are only comparable within a paradigm.</p>
-  <table class="ranktable">
-    <thead>
-      <tr>
-        <th title="Models with overlapping 95% CIs share a rank">Rank (UB)</th>
-        <th>Generator</th>
-        <th>Kind</th>
-        <th>Paradigm</th>
-        <th>BT score</th>
-        <th>95% CI</th>
-        <th>Games</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for r in group_rows %}
-      <tr>
-        <td>{{ r.rank }}</td>
-        <td class="gen">{{ r.generator }}</td>
-        <td><span class="kind kind-{{ r.kind }}">{{ r.kind }}</span></td>
-        <td class="subtle">{{ paradigm_display_names.get(r.paradigm, r.paradigm) if r.paradigm else "—" }}</td>
-        <td class="num strong">{{ r.bt_score }}</td>
-        <td class="ci-cell">
-          <div
-            class="ci-bar"
-            title="95% bootstrap CI [{{ r.bt_lower }}, {{ r.bt_upper }}]"
-          >
-            <span
-              class="ci-range"
-              style="left: {{ r.ci_left }}%; width: {{ r.ci_width }}%;"
-            ></span>
-            <span class="ci-dot" style="left: {{ r.ci_point }}%;"></span>
-          </div>
-          <span class="ci-nums">[{{ r.bt_lower }}, {{ r.bt_upper }}]</span>
-        </td>
-        <td class="num">{{ r.n_games }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="lb-panel">
+    <div class="lb-panel-head">
+      <h3 class="paradigm-heading">{{ paradigm_display_names.get(pgm, pgm) if pgm else "Untagged" }}</h3>
+      <span class="subtle">{{ group_rows|length }} generator{{ 's' if group_rows|length != 1 else '' }} · scores comparable only within this paradigm</span>
+    </div>
+    <div class="ranktable-wrap">
+      <table class="ranktable">
+        <thead>
+          <tr>
+            <th class="lb-th-rank" title="Models with overlapping 95% CIs share a rank">Rank (UB)</th>
+            <th>Generator</th>
+            <th class="num">BT score <span class="lb-sort mono" aria-hidden="true">↓</span></th>
+            <th>95% interval</th>
+            <th>Trend</th>
+            <th class="num">Votes <span class="lb-sort mono lb-sort-inactive" aria-hidden="true">↕</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in group_rows %}
+          <tr>
+            <td class="lb-rank">
+              {% if loop.index <= 3 %}
+              <span class="lb-medal lb-medal-{{ ['gold', 'silver', 'bronze'][loop.index0] }}">{{ r.rank }}</span>
+              {% else %}
+              <span class="lb-rank-num mono">{{ r.rank }}</span>
+              {% endif %}
+            </td>
+            <td class="gen">
+              <span class="gen-name">{{ r.generator }}</span>
+              <span class="kind kind-{{ r.kind }}">{{ r.kind }}</span>
+            </td>
+            <td class="num{% if loop.index == 1 %} strong{% endif %}">{{ r.bt_score }}</td>
+            <td class="ci-cell">
+              <div
+                class="ci-bar"
+                title="95% bootstrap CI [{{ r.bt_lower }}, {{ r.bt_upper }}]"
+              >
+                <span
+                  class="ci-range"
+                  style="left: {{ r.ci_left }}%; width: {{ r.ci_width }}%;"
+                ></span>
+                <span class="ci-dot" style="left: {{ r.ci_point }}%;"></span>
+              </div>
+              <span class="ci-nums mono">[{{ r.bt_lower }}, {{ r.bt_upper }}]</span>
+            </td>
+            <td class="lb-trend" title="Trend tracking not yet available">
+              <span class="lb-trend-dot" aria-hidden="true"></span>
+            </td>
+            <td class="num">{{ r.n_games }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
   {% endfor %}
   {% else %}
   {% if verified %}<p>No verified votes yet — sign in with Hugging Face and vote to seed the verified board.</p>{% else %}<p>No ratings yet for this slice. Cast some votes in the <a href="/arena">Arena</a>.</p>{% endif %}
@@ -93,28 +138,40 @@
   {% if judge_rows %}
   <h2>VLM judge (Sonnet 4.6, multi-view)</h2>
   {% for pgm, group_rows in judge_rows|groupby('paradigm') %}
-  <h3 class="paradigm-heading">{{ paradigm_display_names.get(pgm, pgm) if pgm else "Untagged" }}</h3>
-  <p class="subtle">Scores are only comparable within a paradigm.</p>
-  <table class="ranktable">
-    <thead>
-      <tr>
-        <th>Rank (UB)</th>
-        <th>Generator</th>
-        <th>BT score</th>
-        <th>Games</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for r in group_rows %}
-      <tr>
-        <td>{{ r.rank }}</td>
-        <td class="gen">{{ r.generator }}</td>
-        <td class="num strong">{{ r.bt_score }}</td>
-        <td class="num">{{ r.n_games }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="lb-panel">
+    <div class="lb-panel-head">
+      <h3 class="paradigm-heading">{{ paradigm_display_names.get(pgm, pgm) if pgm else "Untagged" }}</h3>
+      <span class="subtle">Scores are only comparable within a paradigm.</span>
+    </div>
+    <div class="ranktable-wrap">
+      <table class="ranktable">
+        <thead>
+          <tr>
+            <th class="lb-th-rank">Rank (UB)</th>
+            <th>Generator</th>
+            <th class="num">BT score</th>
+            <th class="num">Votes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in group_rows %}
+          <tr>
+            <td class="lb-rank">
+              {% if loop.index <= 3 %}
+              <span class="lb-medal lb-medal-{{ ['gold', 'silver', 'bronze'][loop.index0] }}">{{ r.rank }}</span>
+              {% else %}
+              <span class="lb-rank-num mono">{{ r.rank }}</span>
+              {% endif %}
+            </td>
+            <td class="gen">{{ r.generator }}</td>
+            <td class="num{% if loop.index == 1 %} strong{% endif %}">{{ r.bt_score }}</td>
+            <td class="num">{{ r.n_games }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
   {% endfor %}
   {% endif %}
 </section>

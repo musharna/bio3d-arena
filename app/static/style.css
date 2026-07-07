@@ -670,7 +670,8 @@ kbd {
   font-weight: 600;
 }
 
-/* Tables (leaderboard, tasks) */
+/* Tables (leaderboard, tasks) — "one table system": uppercase mono micro-headers,
+   hairline rows, tabular-nums. Shared by every data-dense page (leaderboard first). */
 .board h2 {
   margin-top: 0;
 }
@@ -681,24 +682,40 @@ kbd {
 .ranktable {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 1rem;
+  margin-top: 0;
 }
 .ranktable th,
 .ranktable td {
   text-align: left;
-  padding: 0.55rem 0.7rem;
+  padding: 0.65rem 0.85rem;
   border-bottom: 1px solid var(--border);
 }
 .ranktable th {
-  color: var(--muted);
-  font-size: 0.82rem;
+  font-family: "IBM Plex Mono", monospace;
+  color: var(--faint);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
+}
+.ranktable tbody tr {
+  transition: background 0.12s;
+}
+.ranktable tbody tr:hover {
+  background: color-mix(in oklch, var(--accent) 7%, transparent);
+}
+.ranktable tbody tr:last-child td {
+  border-bottom: none;
 }
 .ranktable td.num {
   text-align: right;
+  font-family: "IBM Plex Mono", monospace;
   font-variant-numeric: tabular-nums;
 }
 .ranktable td.gen {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-weight: 600;
 }
 .ranktable td.strong {
@@ -706,24 +723,35 @@ kbd {
   color: var(--accent);
 }
 .kind {
-  font-size: 0.72rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   padding: 0.1rem 0.5rem;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in oklch, currentColor 40%, transparent);
+  background: color-mix(in oklch, currentColor 14%, transparent);
 }
+/* Typed & colored so paradigm is legible at a glance in any table. */
 .kind-baseline {
-  color: var(--muted);
+  color: var(--faint);
 }
 .kind-model {
   color: var(--accent2);
+}
+.kind-agent {
+  color: var(--accent);
+}
+.kind-scan {
+  color: var(--win);
 }
 .kind-human {
   color: var(--accent);
 }
 
-/* Leaderboard CI whisker bar */
+/* Leaderboard CI whisker bar: track + accent-tinted range + accent point dot */
 .ci-cell {
-  min-width: 140px;
+  min-width: 150px;
 }
 .ci-bar {
   position: relative;
@@ -731,14 +759,14 @@ kbd {
   background: var(--panel2);
   border: 1px solid var(--border);
   border-radius: 999px;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.3rem;
 }
 .ci-range {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
   height: 6px;
-  background: rgba(91, 141, 239, 0.45); /* accent2 @ 45% */
+  background: color-mix(in oklch, var(--accent) 45%, transparent);
   border-radius: 999px;
 }
 .ci-dot {
@@ -2252,4 +2280,213 @@ details.group[open] > summary.group-title::before {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* === Leaderboard v2 (Task 11) — generic page-head is reused by later data pages === */
+.b3d-page-head {
+  margin-bottom: 1.1rem;
+}
+.b3d-page-head h1 {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  font-size: 28px;
+  margin: 0 0 0.5rem;
+}
+.b3d-page-lede {
+  color: var(--muted);
+  font-size: 0.95rem;
+  max-width: 760px;
+  margin: 0;
+}
+.lb-votecount {
+  color: var(--faint);
+  font-size: 0.85em;
+}
+
+/* "How ranking works" info affordance — a native <details> disclosure, no JS needed */
+.lb-info {
+  margin: 0.9rem 0 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+}
+.lb-info summary {
+  cursor: pointer;
+  padding: 0.55rem 0.85rem;
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text);
+  list-style: none;
+}
+.lb-info summary::-webkit-details-marker {
+  display: none;
+}
+.lb-info summary::before {
+  content: "ⓘ ";
+  color: var(--accent2);
+}
+.lb-info[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+.lb-info-body {
+  padding: 0.75rem 0.85rem;
+}
+.lb-info-body p {
+  margin: 0;
+}
+
+.lb-filters {
+  margin-bottom: 0.9rem;
+}
+
+/* Paradigm segmented tabs (Overall / Image→3D / Procedural / Scan capture …) */
+.lb-ptabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 3px;
+  width: fit-content;
+  margin-bottom: 1.1rem;
+}
+.lb-ptab {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  padding: 6px 14px;
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.lb-ptab:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+.lb-ptab.is-active {
+  color: var(--text);
+  background: color-mix(in oklch, var(--accent) 18%, transparent);
+}
+
+/* Trusted / Verified scope toggle */
+.lb-scope-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+.lb-scope-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.lb-scope-toggle {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 2px;
+}
+.lb-scope-item {
+  border-radius: var(--r-pill);
+  padding: 0.25rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+}
+.lb-scope-item:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+.lb-scope-item.is-active {
+  color: var(--text);
+  background: color-mix(in oklch, var(--accent) 18%, transparent);
+}
+
+/* Per-paradigm ranked-board panel (card treatment matching the v2 table system) */
+.lb-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadowCard);
+  padding: 1.1rem 1.25rem 0.5rem;
+  margin: 0 0 1.3rem;
+}
+.lb-panel-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.15rem;
+}
+.paradigm-heading {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.ranktable-wrap {
+  overflow-x: auto;
+  margin: 0.5rem -1.25rem 0;
+  padding: 0 1.25rem;
+}
+
+/* Rank medals (top 3 within a paradigm group) */
+.lb-rank {
+  white-space: nowrap;
+}
+.lb-rank-num {
+  color: var(--faint);
+  padding-left: 0.35rem;
+}
+.lb-medal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.lb-medal-gold {
+  color: oklch(0.28 0.05 90);
+  background: oklch(0.82 0.15 90);
+}
+.lb-medal-silver {
+  color: oklch(0.28 0.01 258);
+  background: oklch(0.82 0.012 258);
+}
+.lb-medal-bronze {
+  color: oklch(0.98 0.02 55);
+  background: oklch(0.62 0.1 55);
+}
+
+/* Trend placeholder — no historical series is tracked yet, so this stays a neutral,
+   honest "no data" dot rather than fabricating a direction (see task-11 brief). */
+.lb-trend-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tie);
+}
+
+.lb-sort {
+  font-size: 0.85em;
+  color: var(--accent2);
+}
+.lb-sort-inactive {
+  color: var(--faint);
 }
