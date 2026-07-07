@@ -367,7 +367,7 @@ select:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--accent2);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -580,7 +580,7 @@ textarea:focus-visible,
 }
 .viewer-ctl:focus-visible {
   background: var(--panel2);
-  outline: 2px solid var(--accent2);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 /* Touch devices have no hover — keep the toolbar always tappable. */
@@ -1304,7 +1304,7 @@ kbd {
   font-size: 0.85rem;
 }
 .spotlight-search:focus-visible {
-  outline: 2px solid var(--accent2);
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 .result-count {
@@ -1552,15 +1552,14 @@ details.group[open] > summary.group-title::before {
   border-color: color-mix(in oklch, var(--amber) 40%, transparent);
 }
 
-/* Reference gallery panel in the vote UI — "what the organism should look like" */
-.reference-panel {
+/* Reference gallery panel in the vote UI — "what the organism should look like".
+   Arena-only: overrides the spotlight `.reference-panel` flex-row (shared class, styled at
+   ~:1215) so the arena panel stacks gallery-over-caption. Scoped by #id (arena.html sets both
+   id="reference-panel" and class="reference-panel"; spotlight.html sets only the class) so
+   none of margin/text-align/display leak into /spotlight. */
+#reference-panel {
   margin: 0.5rem 0 0.75rem;
   text-align: center;
-}
-/* Arena-only: override the spotlight `.reference-panel` flex-row (shared class) so the arena
-   panel stacks gallery-over-caption. Targeted by #id to beat the class rule without touching
-   /spotlight. */
-#reference-panel {
   display: block;
 }
 /* Fixed-footprint strip: a constant width + single row (no wrap, scroll on overflow) so the

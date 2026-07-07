@@ -336,7 +336,7 @@ def verified_leaderboard_rows(
 
 
 def kingdom_leaderboard_rows(
-    db: Session, criterion_slug: str, category_ids: set[int]
+    db: Session, criterion_slug: str, category_ids: set[int] | None
 ) -> list[dict]:
     """On-the-fly (uncached) Bradley-Terry rows for a kingdom scope — a SET of category ids,
     which the cached `Rating` table (keyed by a single category_id) cannot represent. Mirrors
