@@ -29,8 +29,10 @@ def test_footer_drops_mvp_label():
 
 def test_admin_not_in_public_nav():
     html = client.get("/").text
-    nav = html.split("<nav>")[1].split("</nav>")[0]
+    # v2 sidebar shell: the public nav is <nav class="b3d-navgroups">; admin must not be linked
+    nav = html.split('<nav class="b3d-navgroups">')[1].split("</nav>")[0]
     assert ">Admin<" not in nav
+    assert 'href="/admin"' not in nav
     # the admin route stays reachable by direct URL — but only with the admin token
     assert client.get("/admin").status_code == 401
     assert client.get("/admin", params={"token": "test-token"}).status_code == 200

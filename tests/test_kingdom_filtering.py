@@ -28,12 +28,15 @@ def setup_module(_m):
 
 
 def _mk(db):
-    p = Category(slug="plants", name="Plants")
-    f = Category(slug="fungi", name="Fungi")
+    # Unique slugs (not the real "plants"/"fungi"): other modules commit those via
+    # seed_all(force=True) on the shared DB, so raw slugs collide in the full suite.
+    # These tests reference categories by id, so the slug value is immaterial.
+    p = Category(slug="mkt-plants", name="MKT Plants")
+    f = Category(slug="mkt-fungi", name="MKT Fungi")
     db.add_all([p, f])
     db.flush()
-    tp = Task(category_id=p.id, title="Rose", prompt="", active=True)
-    tf = Task(category_id=f.id, title="Bolete", prompt="", active=True)
+    tp = Task(category_id=p.id, title="MKT Rose", prompt="", active=True)
+    tf = Task(category_id=f.id, title="MKT Bolete", prompt="", active=True)
     db.add_all([tp, tf])
     db.flush()
     return p, f, tp, tf
