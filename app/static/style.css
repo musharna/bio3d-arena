@@ -284,46 +284,7 @@ textarea:focus-visible,
   }
 }
 
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.7rem 1.2rem;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-}
-.brand {
-  font-weight: 700;
-  font-size: 1.1rem;
-  color: var(--text);
-}
-.topbar nav a {
-  margin-left: 1.1rem;
-  color: var(--muted);
-  font-weight: 500;
-}
-.topbar nav a:hover {
-  color: var(--text);
-}
-.nav-burger {
-  display: none;
-  cursor: pointer;
-  font-size: 1.5rem;
-  line-height: 1;
-  color: var(--text);
-  user-select: none;
-}
-main {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 1.4rem 1.2rem;
-}
-.foot {
-  text-align: center;
-  color: var(--muted);
-  padding: 2rem;
-  font-size: 0.85rem;
-}
+/* App shell — sidebar, kingdom scope bar, footer rail (see .b3d-* block appended at EOF) */
 
 /* Filter row (arena + leaderboard scope selectors) */
 .filter-row {
@@ -788,26 +749,6 @@ kbd {
   .vote-btn kbd,
   .onboard-banner kbd {
     display: none;
-  }
-  .topbar {
-    flex-wrap: wrap;
-  }
-  .nav-burger {
-    display: block;
-  }
-  .topbar nav {
-    display: none;
-    flex-basis: 100%;
-    flex-direction: column;
-    margin-top: 0.6rem;
-  }
-  #nav-toggle:checked ~ nav {
-    display: flex;
-  }
-  .topbar nav a {
-    margin-left: 0;
-    padding: 0.7rem 0;
-    border-top: 1px solid var(--border);
   }
   .ab-toggle {
     display: flex;
@@ -1318,4 +1259,433 @@ details.group[open] > summary.group-title::before {
   border-radius: 6px;
   max-width: 90vw;
   text-align: center;
+}
+
+/* ============================================================
+   App shell v2 — sidebar, kingdom scope bar, footer rail.
+   Component families: .b3d-app, .b3d-sidebar, .b3d-nav*, .b3d-kbar, .b3d-footer.
+   ============================================================ */
+
+.b3d-app {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.b3d-sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 248px;
+  background: var(--panelDeep);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 14px;
+  z-index: 30;
+  overflow-y: auto;
+  transition:
+    width 0.16s ease,
+    transform 0.16s ease;
+  box-shadow:
+    1px 0 0 var(--border),
+    6px 0 24px oklch(0.5 0.03 258 / 0.05);
+}
+.b3d-app.is-collapsed .b3d-sidebar {
+  width: 72px;
+  padding: 16px 8px;
+}
+.b3d-app.is-collapsed .b3d-sidebar .b3d-nav-label,
+.b3d-app.is-collapsed .b3d-sidebar .b3d-wordmark,
+.b3d-app.is-collapsed .b3d-sidebar .b3d-navheading {
+  display: none;
+}
+.b3d-app.is-collapsed .b3d-sidebar .b3d-nav-link,
+.b3d-app.is-collapsed .b3d-sidebar .b3d-theme-btn {
+  justify-content: center;
+}
+.b3d-app.is-collapsed .b3d-collapse-btn {
+  transform: rotate(180deg);
+}
+
+.b3d-navhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+}
+.b3d-logo-tile {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--accent) 15%, var(--panel2));
+  border: 1px solid color-mix(in oklch, var(--accent) 42%, var(--border));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.b3d-wordmark {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: nowrap;
+}
+.b3d-accent-text {
+  color: var(--accent);
+}
+.b3d-collapse-btn {
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.b3d-collapse-btn:hover {
+  filter: brightness(1.12);
+}
+
+.b3d-navgroups {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.b3d-navheading {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 15px 11px 5px;
+}
+.b3d-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 11px;
+  border-radius: 8px;
+  text-decoration: none;
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--muted);
+  background: transparent;
+}
+.b3d-nav-link:hover {
+  background: color-mix(in oklch, var(--accent) 10%, transparent);
+  color: var(--text);
+}
+.b3d-nav-link.is-active {
+  color: var(--accent);
+  font-weight: 600;
+  background: color-mix(in oklch, var(--accent) 14%, transparent);
+}
+.b3d-nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  flex-shrink: 0;
+}
+
+.b3d-sidebar-bottom {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+}
+.b3d-theme-btn {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 11px;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--muted);
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.b3d-theme-btn:hover {
+  color: var(--text);
+}
+.b3d-auth {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 11px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.b3d-auth .verified {
+  color: var(--win);
+}
+.b3d-auth a,
+.b3d-auth-form button {
+  color: var(--muted);
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.b3d-auth a:hover,
+.b3d-auth-form button:hover {
+  color: var(--text);
+}
+.b3d-auth-form {
+  display: inline;
+}
+
+/* Content column */
+.b3d-content {
+  flex: 1;
+  min-width: 0;
+  margin-left: 248px;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left 0.16s ease;
+}
+.b3d-app.is-collapsed .b3d-content {
+  margin-left: 72px;
+}
+
+/* Kingdom scope bar */
+.b3d-kbar {
+  position: sticky;
+  top: 0;
+  z-index: 29;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 30px;
+  background: var(--navBg);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+  overflow-x: auto;
+}
+.b3d-kbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.b3d-kbar-label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.b3d-kseg {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 3px;
+}
+.b3d-kseg-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--muted);
+  text-decoration: none;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 13.5px;
+  font-weight: 600;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.b3d-kseg-item:hover {
+  color: var(--text);
+}
+.b3d-kseg-item.is-active {
+  color: var(--text);
+  background: color-mix(in oklch, var(--accent) 18%, transparent);
+}
+.b3d-topnav {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.b3d-topnav-link {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+.b3d-topnav-link:hover {
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  color: var(--text);
+}
+.b3d-topnav-link.is-active {
+  color: var(--accent);
+}
+@media (max-width: 1120px) {
+  .b3d-topnav {
+    display: none;
+  }
+}
+
+.b3d-main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 30px;
+  width: 100%;
+  flex: 1;
+}
+
+/* Footer resource rail */
+.b3d-footer {
+  padding: 28px 30px 40px;
+  border-top: 1px solid var(--border);
+}
+.b3d-footer-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.b3d-footer-tagline {
+  color: var(--faint);
+  font-size: 12.5px;
+}
+.b3d-footer-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.b3d-footer-chip {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11.5px;
+  color: var(--muted);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+.b3d-footer-chip:hover {
+  color: var(--accent2);
+  border-color: var(--accent2);
+}
+.b3d-footer-muted {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11.5px;
+  color: var(--faint);
+  text-decoration: none;
+  padding: 4px 8px;
+}
+.b3d-footer-muted:hover {
+  color: var(--text);
+}
+
+/* Mobile hamburger + scrim + off-canvas sidebar drawer */
+.b3d-burger {
+  display: none;
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 62;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadowCard);
+  border-radius: 11px;
+  cursor: pointer;
+}
+.b3d-burger span {
+  width: 16px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text);
+}
+.b3d-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: rgba(5, 7, 12, 0.5);
+}
+.b3d-scrim.is-open {
+  display: block;
+}
+
+@media (max-width: 760px) {
+  .b3d-burger {
+    display: flex;
+  }
+  .b3d-sidebar {
+    transform: translateX(-100%);
+    box-shadow: none;
+  }
+  .b3d-sidebar.is-open {
+    transform: none;
+    box-shadow:
+      1px 0 0 var(--border),
+      6px 0 24px oklch(0 0 0 / 0.3);
+  }
+  .b3d-content {
+    margin-left: 0;
+  }
+  .b3d-app.is-collapsed .b3d-content {
+    margin-left: 0;
+  }
+  .b3d-kbar {
+    padding-left: 60px;
+  }
+}
+
+.b3d-sidebar a:focus-visible,
+.b3d-sidebar button:focus-visible,
+.b3d-kseg-item:focus-visible,
+.b3d-topnav-link:focus-visible,
+.b3d-footer-chip:focus-visible,
+.b3d-burger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .b3d-sidebar,
+  .b3d-content,
+  .b3d-collapse-btn {
+    transition: none !important;
+  }
 }
