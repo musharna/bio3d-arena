@@ -75,9 +75,9 @@
                 >{{ {"up": "▲", "down": "▽", "flat": "−"}[r.momentum] }}</span
               >
               {% if loop.index <= 3 %}
-              <span class="lb-medal lb-medal-{{ ['gold', 'silver', 'bronze'][loop.index0] }}">{{ r.rank }}</span>
+              <span class="lb-medal lb-medal-{{ ['gold', 'silver', 'bronze'][loop.index0] }}">{{ loop.index }}</span>
               {% else %}
-              <span class="lb-rank-num mono">{{ r.rank }}</span>
+              <span class="lb-rank-num mono">{{ loop.index }}</span>
               {% endif %}
             </td>
             <td class="gen">
@@ -199,9 +199,9 @@
           <tr>
             <td class="lb-rank">
               {% if loop.index <= 3 %}
-              <span class="lb-medal lb-medal-{{ ['gold', 'silver', 'bronze'][loop.index0] }}">{{ r.rank }}</span>
+              <span class="lb-medal lb-medal-{{ ['gold', 'silver', 'bronze'][loop.index0] }}">{{ loop.index }}</span>
               {% else %}
-              <span class="lb-rank-num mono">{{ r.rank }}</span>
+              <span class="lb-rank-num mono">{{ loop.index }}</span>
               {% endif %}
             </td>
             <td class="gen">{{ r.generator }}</td>
