@@ -7,6 +7,7 @@ scripts/export_public.py.
 
 from __future__ import annotations
 
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -203,6 +204,41 @@ def dataset_composition(db: Session, category_ids: set[int] | None = None) -> di
             for key, count in counts.items()
         ]
 
+    # "By reference provenance" — coarse bucket of ModelOutput.source (already fetched
+    # above for provenance_types) by its prefix before the first ':' (the convention every
+    # ingestion path already follows: "api:tripo", "procedural:agrigen", "found:sketchfab",
+    # "agentic:claude-opus-4", "bio3d-arena", ...). No new data collected — a display
+    # grouping of the existing free-text source string, ordered by count desc, colored by
+    # cycling the shared accent/semantic tokens (unbounded key set, so no fixed .ds-seg-*
+    # class per bucket like by_kingdom/by_tier get).
+    from collections import Counter
+
+    _PALETTE = [
+        "var(--accent)",
+        "var(--accent2)",
+        "var(--win)",
+        "var(--amber)",
+        "var(--bad)",
+        "var(--faint)",
+    ]
+    _ACRONYMS = {"api": "API", "mri": "MRI", "ct": "CT"}
+
+    prov_counts: Counter[str] = Counter()
+    for r in out_rows:
+        prefix = (r.source or "unknown").split(":", 1)[0] or "unknown"
+        prov_counts[prefix] += 1
+    prov_total = sum(prov_counts.values())
+    by_provenance = [
+        {
+            "key": key,
+            "label": _ACRONYMS.get(key, key.replace("-", " ").replace("_", " ").title()),
+            "count": count,
+            "pct": round(count / prov_total * 100, 1) if prov_total else 0.0,
+            "color": _PALETTE[i % len(_PALETTE)],
+        }
+        for i, (key, count) in enumerate(prov_counts.most_common())
+    ]
+
     return {
         "ref_specimens": ref_specimens,
         "kingdoms_represented": kingdoms_represented,
@@ -210,4 +246,5 @@ def dataset_composition(db: Session, category_ids: set[int] | None = None) -> di
         "provenance_types": provenance_types,
         "by_kingdom": _bars(by_kingdom_counts),
         "by_tier": _bars(by_tier_counts),
+        "by_provenance": by_provenance,
     }

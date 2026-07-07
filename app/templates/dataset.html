@@ -33,35 +33,64 @@
   {% set kingdom_label = {"plants": "Plants", "fungi": "Fungi", "animals": "Animals"} %}
   {% set kingdom_emoji = {"plants": "\U0001F33F", "fungi": "\U0001F344", "animals": "\U0001F43E"} %}
   {% if composition.n_outputs %}
-  <div class="ds-panel">
-    <h3>By kingdom <span class="subtle">— {{ composition.n_outputs }} model output{{ 's' if composition.n_outputs != 1 else '' }}</span></h3>
-    <div class="ds-bar-track">
-      {% for seg in composition.by_kingdom %}{% if seg.count %}
-      <div class="ds-bar-seg ds-seg-{{ seg.key }}" style="width: {{ seg.pct }}%" title="{{ kingdom_label.get(seg.key, seg.key) }}: {{ seg.count }} ({{ seg.pct }}%)"></div>
-      {% endif %}{% endfor %}
-    </div>
-    <div class="ds-legend">
-      {% for seg in composition.by_kingdom %}
-      <span class="ds-legend-chip"><span class="ds-legend-swatch ds-seg-{{ seg.key }}"></span>{{ kingdom_emoji.get(seg.key, '') }} {{ kingdom_label.get(seg.key, seg.key) }} <span class="mono">{{ seg.count }}</span></span>
-      {% endfor %}
-    </div>
-  </div>
+  <div class="ds-panel ds-composition">
+    <h3>Composition</h3>
 
-  {% if composition.by_tier | sum(attribute='count') %}
-  <div class="ds-panel">
-    <h3>By difficulty tier <span class="subtle">— {{ composition.by_tier | sum(attribute='count') }} tiered output{{ 's' if (composition.by_tier | sum(attribute='count')) != 1 else '' }}</span></h3>
-    <div class="ds-bar-track">
-      {% for seg in composition.by_tier %}{% if seg.count %}
-      <div class="ds-bar-seg ds-seg-{{ seg.key }}" style="width: {{ seg.pct }}%" title="{{ seg.key | capitalize }}: {{ seg.count }} ({{ seg.pct }}%)"></div>
-      {% endif %}{% endfor %}
+    <div class="ds-comp-row">
+      <div class="ds-comp-row-head">
+        <span>By kingdom</span>
+        <span class="subtle">{{ composition.n_outputs }} model output{{ 's' if composition.n_outputs != 1 else '' }}</span>
+      </div>
+      <div class="ds-bar-track">
+        {% for seg in composition.by_kingdom %}{% if seg.count %}
+        <div class="ds-bar-seg ds-seg-{{ seg.key }}" style="width: {{ seg.pct }}%" title="{{ kingdom_label.get(seg.key, seg.key) }}: {{ seg.count }} ({{ seg.pct }}%)"></div>
+        {% endif %}{% endfor %}
+      </div>
+      <div class="ds-legend">
+        {% for seg in composition.by_kingdom %}
+        <span class="ds-legend-chip"><span class="ds-legend-swatch ds-seg-{{ seg.key }}"></span>{{ kingdom_emoji.get(seg.key, '') }} {{ kingdom_label.get(seg.key, seg.key) }} <span class="mono">{{ seg.count }}</span></span>
+        {% endfor %}
+      </div>
     </div>
-    <div class="ds-legend">
-      {% for seg in composition.by_tier %}
-      <span class="ds-legend-chip"><span class="ds-legend-swatch ds-seg-{{ seg.key }}"></span>{{ seg.key | capitalize }} <span class="mono">{{ seg.count }}</span></span>
-      {% endfor %}
+
+    {% if composition.by_tier | sum(attribute='count') %}
+    <div class="ds-comp-row">
+      <div class="ds-comp-row-head">
+        <span>By difficulty tier</span>
+        <span class="subtle">{{ composition.by_tier | sum(attribute='count') }} tiered output{{ 's' if (composition.by_tier | sum(attribute='count')) != 1 else '' }}</span>
+      </div>
+      <div class="ds-bar-track">
+        {% for seg in composition.by_tier %}{% if seg.count %}
+        <div class="ds-bar-seg ds-seg-{{ seg.key }}" style="width: {{ seg.pct }}%" title="{{ seg.key | capitalize }}: {{ seg.count }} ({{ seg.pct }}%)"></div>
+        {% endif %}{% endfor %}
+      </div>
+      <div class="ds-legend">
+        {% for seg in composition.by_tier %}
+        <span class="ds-legend-chip"><span class="ds-legend-swatch ds-seg-{{ seg.key }}"></span>{{ seg.key | capitalize }} <span class="mono">{{ seg.count }}</span></span>
+        {% endfor %}
+      </div>
     </div>
+    {% endif %}
+
+    {% if composition.by_provenance %}
+    <div class="ds-comp-row">
+      <div class="ds-comp-row-head">
+        <span>By reference provenance</span>
+        <span class="subtle">{{ composition.n_outputs }} model output{{ 's' if composition.n_outputs != 1 else '' }}</span>
+      </div>
+      <div class="ds-bar-track">
+        {% for seg in composition.by_provenance %}{% if seg.count %}
+        <div class="ds-bar-seg" style="width: {{ seg.pct }}%; background: {{ seg.color }}" title="{{ seg.label }}: {{ seg.count }} ({{ seg.pct }}%)"></div>
+        {% endif %}{% endfor %}
+      </div>
+      <div class="ds-legend">
+        {% for seg in composition.by_provenance %}
+        <span class="ds-legend-chip"><span class="ds-legend-swatch" style="background: {{ seg.color }}"></span>{{ seg.label }} <span class="mono">{{ seg.count }}</span></span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
   </div>
-  {% endif %}
   {% else %}
   <p class="subtle">No outputs at this scope yet.</p>
   {% endif %}

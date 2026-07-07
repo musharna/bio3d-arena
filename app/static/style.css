@@ -3644,6 +3644,24 @@ details.group[open] > summary.group-title::before {
   margin: 0 0 0.6rem;
   font-size: 1.05rem;
 }
+/* .ds-composition groups the by-kingdom / by-tier / by-provenance bars into one card
+   (each a .ds-comp-row) instead of one panel per bar, matching the prototype. */
+.ds-composition h3 {
+  margin: 0 0 0.9rem;
+}
+.ds-comp-row + .ds-comp-row {
+  margin-top: 1.1rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--border);
+}
+.ds-comp-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.55rem;
+  font-weight: 600;
+}
 .ds-bar-track {
   display: flex;
   width: 100%;
