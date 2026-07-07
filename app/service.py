@@ -419,14 +419,27 @@ def recompute_all(db: Session) -> dict:
 
 
 def _judge_matches_for_scope(
-    db: Session, criterion_id: int, view_condition: str, include_ties: bool = True
+    db: Session,
+    criterion_id: int,
+    view_condition: str,
+    include_ties: bool = True,
+    *,
+    category_ids: set[int] | None = None,
 ) -> list[tuple[int, int]]:
     """Decisive (winner_gen, loser_gen) pairs from JudgeVote for one (criterion, condition).
-    Tie → split both directions; bad excluded. Mirrors _matches_for_scope (human)."""
+    Tie → split both directions; bad excluded. Mirrors _matches_for_scope (human).
+
+    category_ids, when given (a kingdom's category-id set), restricts to JudgeVotes whose
+    task belongs to one of those categories — same "kingdom" convention as _matches_for_scope,
+    but JudgeVote carries task_id directly (no Comparison join needed)."""
     stmt = select(JudgeVote).where(
         JudgeVote.criterion_id == criterion_id,
         JudgeVote.view_condition == view_condition,
     )
+    if category_ids is not None:
+        stmt = stmt.join(Task, JudgeVote.task_id == Task.id).where(
+            Task.category_id.in_(category_ids)
+        )
     ref_gens = mode_a_excluded_generator_ids(db)
     matches: list[tuple[int, int]] = []
     for jv in db.execute(stmt).scalars():
@@ -521,6 +534,40 @@ def recompute_judge_all(db: Session, view_condition: str = "multi4") -> dict:
         recompute_judge_scope(db, criterion, view_condition, commit=False)
     db.commit()
     return {"status": "ok", "view_condition": view_condition, "criteria": len(criteria)}
+
+
+def kingdom_judge_leaderboard_rows(
+    db: Session, criterion_slug: str, view_condition: str, category_ids: set[int] | None
+) -> list[dict]:
+    """On-the-fly (uncached) VLM-judge Bradley-Terry rows for a kingdom scope — mirrors
+    `kingdom_leaderboard_rows` (human) but over JudgeVote instead of Vote, since the cached
+    `JudgeRating` table is likewise keyed by a single category_id and cannot represent a SET
+    of categories. Caller (main._kingdom_judge_leaderboard_rows) still owns per-paradigm
+    rank/CI grouping, matching the cached judge path's shape."""
+    crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+    if crit is None:
+        return []
+    players = _players_for_scope(db, category_ids=category_ids)
+    matches = _judge_matches_for_scope(db, crit.id, view_condition, category_ids=category_ids)
+    result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP)
+    names = generator_display_names(db)
+    rows = []
+    for gid in players:
+        if result.n_games.get(gid, 0) <= 0:
+            continue  # only generators with an actual judge game in this kingdom appear
+        gen = db.get(Generator, gid)
+        rows.append(
+            {
+                "generator": names.get(gid, gen.name if gen else str(gid)),
+                "kind": gen.kind if gen else "model",
+                "paradigm": gen.paradigm if gen else None,
+                "bt_score": round(result.scores.get(gid, 0.0), 1),
+                "bt_lower": round(result.lower.get(gid, 0.0), 1),
+                "bt_upper": round(result.upper.get(gid, 0.0), 1),
+                "n_games": result.n_games.get(gid, 0),
+            }
+        )
+    return rows
 
 
 # Memoized tier_perceptual_ranking output, keyed by (criterion, condition) → (vote_signature,

@@ -838,6 +838,32 @@ def _leaderboard_rows(
     return grouped_rows
 
 
+def _group_rank_judge_rows(rows: list[dict]) -> list[dict]:
+    """Rank + CI-bar geometry computed WITHIN each paradigm group, mirroring
+    _leaderboard_rows — cross-paradigm BT scores come from disconnected match
+    components, so a single flat cross-paradigm ranking would be meaningless (I3b).
+    Shared by the cached (global) and live (kingdom) judge-board paths."""
+    groups: dict[str, list[dict]] = {}
+    for r in rows:
+        groups.setdefault(r["paradigm"], []).append(r)
+    grouped_rows: list[dict] = []
+    for pgm in sorted(groups):
+        grows = groups[pgm]
+        grows.sort(key=lambda x: x["bt_score"], reverse=True)
+        ranks = ranking.rank_by_ci([(r["bt_lower"], r["bt_upper"]) for r in grows])
+        for row, rank in zip(grows, ranks):
+            row["rank"] = rank
+        lo = min(r["bt_lower"] for r in grows)
+        hi = max(r["bt_upper"] for r in grows)
+        span = (hi - lo) or 1.0
+        for r in grows:
+            r["ci_left"] = round(100.0 * (r["bt_lower"] - lo) / span, 1)
+            r["ci_width"] = round(100.0 * (r["bt_upper"] - r["bt_lower"]) / span, 1)
+            r["ci_point"] = round(100.0 * (r["bt_score"] - lo) / span, 1)
+        grouped_rows.extend(grows)
+    return grouped_rows
+
+
 def _judge_leaderboard_rows(
     db: Session, criterion_slug: str = "overall", view_condition: str = "multi4"
 ) -> list[dict]:
@@ -876,28 +902,19 @@ def _judge_leaderboard_rows(
                 "n_games": r.n_games,
             }
         )
-    # Rank + CI-bar geometry are computed WITHIN each paradigm group, mirroring
-    # _leaderboard_rows — cross-paradigm BT scores come from disconnected match
-    # components, so a single flat cross-paradigm ranking would be meaningless (I3b).
-    groups: dict[str, list[dict]] = {}
-    for r in rows:
-        groups.setdefault(r["paradigm"], []).append(r)
-    grouped_rows: list[dict] = []
-    for pgm in sorted(groups):
-        grows = groups[pgm]
-        grows.sort(key=lambda x: x["bt_score"], reverse=True)
-        ranks = ranking.rank_by_ci([(r["bt_lower"], r["bt_upper"]) for r in grows])
-        for row, rank in zip(grows, ranks):
-            row["rank"] = rank
-        lo = min(r["bt_lower"] for r in grows)
-        hi = max(r["bt_upper"] for r in grows)
-        span = (hi - lo) or 1.0
-        for r in grows:
-            r["ci_left"] = round(100.0 * (r["bt_lower"] - lo) / span, 1)
-            r["ci_width"] = round(100.0 * (r["bt_upper"] - r["bt_lower"]) / span, 1)
-            r["ci_point"] = round(100.0 * (r["bt_score"] - lo) / span, 1)
-        grouped_rows.extend(grows)
-    return grouped_rows
+    return _group_rank_judge_rows(rows)
+
+
+def _kingdom_judge_leaderboard_rows(
+    db: Session,
+    criterion_slug: str,
+    view_condition: str,
+    category_ids: set[int] | None,
+) -> list[dict]:
+    """Live (uncached) VLM-judge board for an active kingdom — mirrors _leaderboard_rows'
+    kingdom branch (service.kingdom_leaderboard_rows) but over JudgeVote/JudgeRating."""
+    rows = service.kingdom_judge_leaderboard_rows(db, criterion_slug, view_condition, category_ids)
+    return _group_rank_judge_rows(rows)
 
 
 @app.get("/leaderboard", response_class=HTMLResponse)
@@ -915,12 +932,12 @@ def leaderboard(
     paradigm = paradigm or None  # "" (unset <select>) and None both mean "no filter"
     kingdom = request.state.kingdom
     k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
+    cat_ids = (
+        _effective_category_ids(k_ids, _resolve_category_id(db, category))
+        if k_ids is not None
+        else None
+    )
     if verified:
-        cat_ids = (
-            _effective_category_ids(k_ids, _resolve_category_id(db, category))
-            if k_ids is not None
-            else None
-        )
         rows = service.verified_leaderboard_rows(db, criterion, category, category_ids=cat_ids)
     else:
         rows = _leaderboard_rows(db, criterion, category, paradigm, kingdom)
@@ -965,12 +982,16 @@ def leaderboard(
             "bias": service.compute_bias(db),
             "sel_criterion": criterion,
             "sel_category": category,
-            # VLM judge board is global-only (JudgeRating.category_id.is_(None) — no
-            # kingdom-scoped judge ranking yet); hide it rather than show an unscoped board
-            # under an active kingdom filter (deferred — see task-6 report).
-            "judge_rows": []
-            if k_ids is not None
-            else _judge_leaderboard_rows(db, criterion, "multi4"),
+            # The cached JudgeRating table is global-only (category_id.is_(None)) and can't
+            # represent a kingdom (a SET of categories), so under an active kingdom the judge
+            # board is computed live over kingdom-filtered JudgeVotes instead (mirrors the
+            # human on-the-fly path — service.kingdom_judge_leaderboard_rows). `kingdom=all`
+            # keeps the cached path unchanged.
+            "judge_rows": (
+                _kingdom_judge_leaderboard_rows(db, criterion, "multi4", cat_ids)
+                if k_ids is not None
+                else _judge_leaderboard_rows(db, criterion, "multi4")
+            ),
             "verified": verified,
         },
     )
