@@ -311,56 +311,94 @@ textarea:focus-visible,
   min-width: 180px;
 }
 
-/* Arena */
+/* Arena — task strip */
 .task-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1rem 1.2rem;
-  margin-bottom: 1rem;
+  border-radius: var(--r-card);
+  box-shadow: var(--shadowCard);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.1rem;
+}
+.task-card-main {
+  min-width: 0;
+  flex: 1;
+}
+.task-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
 }
 .task-card h2 {
-  margin: 0.3rem 0;
-  font-size: 1.3rem;
+  margin: 0.2rem 0 0;
+  font-size: 1.25rem;
 }
 .prompt {
-  color: var(--text);
-  margin: 0.2rem 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.35rem 0 0;
 }
 .criterion {
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   margin: 0.4rem 0 0;
+}
+.criterion strong {
+  color: var(--text);
 }
 .cat-chip {
   display: inline-block;
-  background: var(--panel2);
+  background: color-mix(in oklch, var(--accent) 16%, transparent);
   color: var(--accent);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.1rem 0.7rem;
-  font-size: 0.78rem;
+  border: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
+  border-radius: var(--r-pill);
+  padding: 0.15rem 0.65rem;
+  font-size: 0.72rem;
   font-weight: 600;
 }
+/* Selects + calibration link ride alongside the task strip, not stacked above it. */
+.task-card .filter-row {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+/* Arena — stages (the two/four viewer cells) */
 .pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  gap: 1.1rem;
 }
 .model-col {
-  background: var(--panel);
+  position: relative;
+  background: var(--stageFrame);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-card);
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 .model-label {
-  text-align: center;
-  font-weight: 700;
-  padding: 0.5rem;
-  background: var(--panel2);
-  letter-spacing: 0.05em;
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--ctlBg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 5px 12px;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: normal;
+  color: var(--text);
+  text-align: left;
 }
 .ab-toggle {
   display: none;
@@ -368,9 +406,14 @@ textarea:focus-visible,
 .viewer-slot {
   position: relative; /* 3Dmol positions its canvas absolutely inside */
   width: 100%;
-  height: 360px;
+  height: 430px;
   overflow: hidden;
-  background: radial-gradient(circle at 50% 35%, #243044, #131a24 70%);
+  background: radial-gradient(
+    130% 100% at 50% 30%,
+    var(--stage1),
+    var(--stage2) 70%
+  );
+  box-shadow: inset 0 0 100px 20px var(--vignette);
 }
 .viewer-slot model-viewer {
   width: 100%;
@@ -383,13 +426,15 @@ textarea:focus-visible,
 .viewer-hint {
   position: absolute;
   left: 50%;
-  bottom: 8px;
+  bottom: 12px;
   transform: translateX(-50%);
-  background: rgba(15, 20, 25, 0.72);
-  color: #c8d2de;
-  font-size: 0.72rem;
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
+  background: var(--ctlBg);
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.7rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.4s;
@@ -413,25 +458,29 @@ textarea:focus-visible,
   opacity: 1;
 }
 .viewer-ctl {
-  width: 30px;
-  height: 30px;
+  width: 31px;
+  height: 31px;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1;
-  color: #e8eef5;
-  background: rgba(15, 20, 25, 0.72);
+  color: var(--text);
+  background: var(--ctlBg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-ctl);
   cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
 }
 .viewer-ctl:hover {
-  background: rgba(30, 40, 52, 0.92);
+  background: var(--panel2);
+  border-color: color-mix(in oklch, var(--accent) 50%, var(--border));
 }
 .viewer-ctl:focus-visible {
-  background: rgba(30, 40, 52, 0.92);
+  background: var(--panel2);
   outline: 2px solid var(--accent2);
   outline-offset: 2px;
 }
@@ -450,20 +499,23 @@ textarea:focus-visible,
   justify-content: center;
   flex-direction: column;
   gap: 0.5rem;
-  color: var(--muted);
-  font-size: 0.85rem;
+  color: var(--faint);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
   z-index: 2;
   text-align: center;
   padding: 0 1rem;
+  background: var(--stage2);
 }
 .viewer-error {
-  color: #e6b277;
+  color: var(--amber);
 }
 .viewer-spinner {
-  width: 26px;
-  height: 26px;
-  border: 3px solid rgba(91, 141, 239, 0.25);
-  border-top-color: var(--accent2);
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: viewer-spin 0.8s linear infinite;
 }
@@ -473,30 +525,42 @@ textarea:focus-visible,
   }
 }
 .fmt-chip {
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   font-weight: 700;
   color: var(--accent2);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 0 0.4rem;
   vertical-align: middle;
 }
 .ai-badge {
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   font-weight: 700;
-  color: #e6b277;
+  color: var(--amber);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 0 0.4rem;
   vertical-align: middle;
   margin-left: 0.3rem;
   cursor: help;
 }
+
+/* Arena — vote bar (floating pill) */
 .vote-bar {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.7rem;
-  margin-top: 1rem;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  width: fit-content;
+  max-width: 100%;
+  margin: 1.4rem auto 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 0.5rem;
+  box-shadow:
+    var(--shadowCard),
+    0 14px 40px oklch(0 0 0 / 0.35);
 }
 /* Guarded with :not([hidden]) — [hidden] is a UA style (display:none) that a plain
    unconditional `.kwise-grid{display:grid}` rule would beat on specificity/origin, so the
@@ -504,8 +568,8 @@ textarea:focus-visible,
 .kwise-grid:not([hidden]) {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 1.1rem;
+  margin-bottom: 1.1rem;
 }
 .kwise-cell .kwise-pick-btn {
   margin: 0.6rem;
@@ -515,32 +579,48 @@ textarea:focus-visible,
   margin-top: 0.7rem;
 }
 .vote-btn {
-  padding: 0.9rem;
-  border-radius: 10px;
-  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.15rem;
+  border-radius: var(--r-pill);
+  border: none;
   background: var(--panel2);
   color: var(--text);
-  font-size: 1rem;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 0.92rem;
   font-weight: 600;
   cursor: pointer;
   transition:
-    transform 0.05s,
-    background 0.15s;
+    filter 0.12s,
+    transform 0.06s;
 }
 .vote-btn:hover {
-  background: #2c3a50;
+  filter: brightness(1.09);
 }
 .vote-btn:active {
+  filter: brightness(0.94);
   transform: translateY(1px);
 }
 .vote-btn.win {
-  border-color: var(--accent);
-}
-.vote-btn.tie {
-  border-color: var(--accent2);
+  background: color-mix(in oklch, var(--win) 16%, var(--panel2));
 }
 .vote-btn.bad {
-  border-color: #b9636b;
+  color: var(--muted);
+}
+.win-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--win);
+  flex-shrink: 0;
+}
+/* K-wise "Pick this one" reuses .vote-btn.win for color but reads as a full-width CTA
+   under the stage, not an inline pill — override the radius/width for this composed class. */
+.vote-btn.kwise-pick-btn {
+  width: calc(100% - 1.2rem);
+  border-radius: var(--r-ctl);
 }
 .onboard-banner:not([hidden]) {
   display: flex;
@@ -550,7 +630,7 @@ textarea:focus-visible,
   background: var(--panel);
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
-  border-radius: 10px;
+  border-radius: var(--r-card);
   padding: 0.7rem 1rem;
   margin-bottom: 1rem;
   color: var(--muted);
@@ -571,13 +651,13 @@ textarea:focus-visible,
   color: var(--text);
 }
 kbd {
-  font-family: ui-monospace, monospace;
-  font-size: 0.8em;
-  padding: 0.1em 0.4em;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.75em;
+  padding: 0.1em 0.45em;
   border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--panel2);
-  color: var(--text);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--muted);
 }
 .status-line {
   text-align: center;
@@ -737,14 +817,29 @@ kbd {
 }
 
 @media (max-width: 720px) {
+  .task-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.8rem;
+  }
+  .task-card .filter-row {
+    width: 100%;
+  }
   .pair {
     grid-template-columns: 1fr;
+  }
+  .viewer-slot {
+    height: 300px;
   }
   .kwise-grid {
     grid-template-columns: 1fr;
   }
   .vote-bar {
-    grid-template-columns: 1fr 1fr;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .vote-bar .vote-btn {
+    flex: 1 1 44%;
   }
   .vote-btn kbd,
   .onboard-banner kbd {

@@ -17,36 +17,39 @@ block content %}
     </button>
   </div>
 
-  <div class="filter-row">
-    <label
-      >Category
-      <select id="sel-category">
-        <option value="all">All categories</option>
-      </select>
-    </label>
-    <label
-      >Judge on
-      <select id="sel-criterion"></select>
-    </label>
-    <a href="/arena?set=calibration" class="muted" title="Vote the calibration subset"
-      >calibration set</a
-    >
-  </div>
-
   <div id="task-card" class="task-card">
-    <span class="cat-chip" id="task-cat">…</span>
-    <h2 id="task-title">Loading a comparison…</h2>
-    <p id="task-prompt" class="prompt"></p>
-    <figure id="reference-panel" class="reference-panel" hidden>
-      <div id="reference-gallery" class="reference-gallery"></div>
-      <figcaption class="reference-cap">
-        Reference — what this organism should look like. Judge each model's fidelity to it.
-      </figcaption>
-    </figure>
-    <p class="criterion">
-      Vote on: <strong id="criterion-name">overall</strong> — rotate, zoom, and
-      pan each model, then pick the better one.
-    </p>
+    <div class="task-card-main">
+      <div class="task-card-heading">
+        <span class="cat-chip" id="task-cat">…</span>
+        <h2 id="task-title">Loading a comparison…</h2>
+      </div>
+      <p id="task-prompt" class="prompt"></p>
+      <figure id="reference-panel" class="reference-panel" hidden>
+        <div id="reference-gallery" class="reference-gallery"></div>
+        <figcaption class="reference-cap">
+          Reference — what this organism should look like. Judge each model's fidelity to it.
+        </figcaption>
+      </figure>
+      <p class="criterion">
+        Vote on: <strong id="criterion-name">overall</strong> — rotate, zoom, and
+        pan each model, then pick the better one.
+      </p>
+    </div>
+    <div class="filter-row">
+      <label
+        >Category
+        <select id="sel-category">
+          <option value="all">All categories</option>
+        </select>
+      </label>
+      <label
+        >Judge on
+        <select id="sel-criterion"></select>
+      </label>
+      <a href="/arena?set=calibration" class="muted" title="Vote the calibration subset"
+        >calibration set</a
+      >
+    </div>
   </div>
 
   <div class="ab-toggle" role="tablist" aria-label="Which model to view">
@@ -99,12 +102,12 @@ block content %}
 
   <div class="vote-bar">
     <button class="vote-btn win" data-winner="a">
-      👈 A is better <kbd>←</kbd>
+      <span class="win-dot" aria-hidden="true"></span>👈 A is better <kbd>←</kbd>
     </button>
     <button class="vote-btn tie" data-winner="tie">🤝 Tie <kbd>T</kbd></button>
     <button class="vote-btn bad" data-winner="bad">👎 Both bad <kbd>X</kbd></button>
     <button class="vote-btn win" data-winner="b">
-      B is better 👉 <kbd>→</kbd>
+      <span class="win-dot" aria-hidden="true"></span>B is better 👉 <kbd>→</kbd>
     </button>
   </div>
   <button
