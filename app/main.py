@@ -764,9 +764,11 @@ def api_vote(
         out_a = db.get(ModelOutput, comparison.output_a_id)
         out_b = db.get(ModelOutput, comparison.output_b_id)
         names = service.generator_display_names(db)
+        # Defensive: an output deleted between comparison-build and vote would be None here;
+        # never 500 the (already-committed) vote's reveal — mirror the kvote guard below.
         reveal = {
-            "a": {"name": names.get(out_a.generator_id, "Unknown")},
-            "b": {"name": names.get(out_b.generator_id, "Unknown")},
+            "a": {"name": names.get(out_a.generator_id, "Unknown") if out_a else "Unknown"},
+            "b": {"name": names.get(out_b.generator_id, "Unknown") if out_b else "Unknown"},
             "winner": vote_in.winner,
         }
     return {"status": "ok", "next": nxt, "reveal": reveal}
