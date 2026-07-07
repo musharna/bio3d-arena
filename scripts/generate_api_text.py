@@ -93,6 +93,27 @@ TAXA: list[tuple[str, str]] = [
         "A turkey tail fungus, Trametes versicolor: thin fan-shaped bracket shelves with "
         "concentric coloured bands, growing in overlapping rosettes on wood.",
     ),
+    # Kingdom Animalia (SP3)
+    (
+        "Canis lupus familiaris — single-image → 3D reconstruction",
+        "A domestic dog, Canis lupus familiaris: a whole four-legged dog standing in side profile, "
+        "with a head, muzzle and ears, a trunk, four legs, and a tail.",
+    ),
+    (
+        "Anas platyrhynchos — single-image → 3D reconstruction",
+        "A mallard drake, Anas platyrhynchos: a whole duck with a green head and flat bill, a plump "
+        "body, two folded wings, two webbed legs, and a short tail.",
+    ),
+    (
+        "Danaus plexippus — single-image → 3D reconstruction",
+        "A monarch butterfly, Danaus plexippus: a whole adult butterfly with four orange-and-black "
+        "wings spread open, a head with two antennae, a thorax, an abdomen, and six thin legs.",
+    ),
+    (
+        "Carassius auratus — single-image → 3D reconstruction",
+        "A goldfish, Carassius auratus: a whole orange fish in side profile with a streamlined "
+        "body, a caudal tail fin, two pectoral fins, and a dorsal fin.",
+    ),
 ]
 
 
