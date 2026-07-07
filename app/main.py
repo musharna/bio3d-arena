@@ -1289,6 +1289,8 @@ def _model_cards(db: Session, k_ids: set[int] | None) -> list[dict]:
                 "slug": g.slug,
                 "name": disp_name,
                 "kind": g.kind,
+                "avatar": _avatar_initials(disp_name),
+                "avatar_hue": _avatar_hue(g.slug or disp_name),
                 "paradigm": g.paradigm,
                 "paradigm_display": paradigms.DISPLAY_NAMES.get(g.paradigm, g.paradigm)
                 if g.paradigm
@@ -1678,13 +1680,15 @@ def tasks_page(request: Request, db: Session = Depends(get_db)):
 
 
 @app.get("/spotlight", response_class=HTMLResponse)
-def spotlight_index(request: Request):
+def spotlight_index(request: Request, db: Session = Depends(get_db)):
     from . import spotlight
 
     subjects = sorted(spotlight.SPOTLIGHTS, key=lambda s: (not s["featured"], s["order"]))
     kingdom = kingdoms.normalize_kingdom(request.state.kingdom)
     if kingdom != "all":
         subjects = [s for s in subjects if s.get("kingdom") == kingdom]
+    counts = spotlight.model_counts(db)
+    subjects = [{**s, "model_count": counts.get(s["slug"])} for s in subjects]
     return templates.TemplateResponse(request, "spotlight_index.html", {"subjects": subjects})
 
 

@@ -1319,9 +1319,14 @@ kbd {
    no fabricated taxonomy. */
 .sp-idx-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 1.25rem;
   margin-top: 0.5rem;
+}
+@media (max-width: 760px) {
+  .sp-idx-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .sp-idx-card {
   display: block;
@@ -1360,6 +1365,23 @@ kbd {
   position: absolute;
   top: 12px;
   left: 12px;
+}
+/* "N models" badge — top-right of the stage, mirrors .cat-chip's pill treatment so it
+   reads as a sibling of the FEATURED badge rather than a new visual language. */
+.sp-idx-count {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  color: var(--text);
+  background: color-mix(in oklch, var(--panel) 70%, transparent);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(2px);
 }
 .sp-idx-emoji {
   font-size: 56px;
@@ -3277,10 +3299,17 @@ details.group[open] > summary.group-title::before {
 }
 
 /* === Models index + detail (Task 12) — model-card family on shared tokens === */
-.b3d-model-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+/* 2-col card grid (design-parity: task-models-spotlight), collapses to 1-col on narrow
+   viewports; each card carries a colored avatar tile (shares .lb-avatar's hue formula). */
+.b3d-model-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+}
+@media (max-width: 760px) {
+  .b3d-model-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .b3d-model-card {
   display: flex;
@@ -3316,6 +3345,15 @@ details.group[open] > summary.group-title::before {
   align-items: center;
   justify-content: center;
 }
+/* Colored-initials avatar tile (same hue formula as the leaderboard's .lb-avatar), just
+   sized up for the card grid — overrides only the size-related props, keeps the color. */
+.b3d-model-icon.lb-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  border: none;
+}
 .b3d-model-main {
   flex: 1;
   min-width: 0;
@@ -3346,6 +3384,7 @@ details.group[open] > summary.group-title::before {
   color: var(--faint);
   white-space: nowrap;
   flex-shrink: 0;
+  margin-top: 0.45rem;
 }
 .b3d-model-stats strong {
   color: var(--text);

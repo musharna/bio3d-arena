@@ -126,6 +126,27 @@ def find_spotlight(slug: str) -> dict | None:
     return next((s for s in SPOTLIGHTS if s["slug"] == slug), None)
 
 
+def model_counts(db: Session) -> dict[str, int]:
+    """slug -> count of non-gold outputs on that subject's task, i.e. the same population
+    `build_spotlight` lists as `models` — so the index's "N models" badge always matches
+    what you actually see after clicking through. One grouped query, not one per card."""
+    from sqlalchemy import func
+
+    titles = [s["task_title"] for s in SPOTLIGHTS]
+    rows = db.execute(
+        select(Task.title, func.count(ModelOutput.id))
+        .join(ModelOutput, ModelOutput.task_id == Task.id)
+        .where(Task.title.in_(titles), ModelOutput.is_gold.is_(False))
+        .group_by(Task.title)
+    ).all()
+    count_by_title = dict(rows)
+    return {
+        s["slug"]: count_by_title[s["task_title"]]
+        for s in SPOTLIGHTS
+        if s["task_title"] in count_by_title
+    }
+
+
 def _metrics_dict(m: Metric | None) -> dict:
     return {
         "chamfer": m.chamfer if m else None,
