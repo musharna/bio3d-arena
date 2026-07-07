@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import random
+import re
 import uuid
 from pathlib import Path
 from urllib.parse import quote
@@ -849,6 +851,105 @@ def api_flag(flag_in: FlagIn, request: Request, db: Session = Depends(get_db)):
 
 # ------------------------------------------------------------------ leaderboard
 
+# Provenance chips (paper/code/data) are a HEURISTIC, not real url fields — Generator /
+# ModelOutput carry no paper/code/dataset link columns. The design brief's literal
+# kind-based rule (model/agent/scan/baseline) doesn't match this repo's actual
+# Generator.kind values (a full-repo grep finds only "model"/"decoy" ever set); `paradigm`
+# is the axis that actually varies per generator, so the heuristic keys off paradigm
+# instead, with the same intent: an approximate visual cue, never a claim of a real link.
+_PARADIGM_PROVENANCE: dict[str, list[str]] = {
+    "capture_scan": ["data"],
+    "retrieval": ["data"],
+    "agentic": ["code"],
+    "procedural_llm": ["code"],
+    "procedural_expert": ["paper", "code"],
+    "image_recon": ["paper", "code"],
+    "text_native": ["paper", "code"],
+}
+
+
+def _provenance_chips(paradigm: str | None, kind: str) -> list[str]:
+    if kind == "baseline":
+        return []
+    return _PARADIGM_PROVENANCE.get(paradigm or "", ["code"])
+
+
+def _avatar_initials(display_name: str) -> str:
+    """2 uppercase initials from a generator's display name, e.g. 'Radim/gaussian (full)'
+    -> 'RG', 'google/gemini-2.5-pro (agentic)' -> 'GG', single-word -> first 2 chars."""
+    base = display_name.split("(")[0].strip()
+    parts = [p for p in re.split(r"[/\s_·-]+", base) if p]
+    if len(parts) >= 2:
+        return (parts[0][0] + parts[1][0]).upper()
+    if parts and len(parts[0]) >= 2:
+        return parts[0][:2].upper()
+    if parts:
+        return (parts[0] + "?").upper()
+    return "??"
+
+
+def _avatar_hue(key: str) -> int:
+    """Stable 0-360 hue derived from a generator's slug, so the avatar tile color is
+    deterministic across requests/processes. Python's builtin `hash()` is per-process
+    randomized for strings (security feature), so a stable hash (md5) substitutes for the
+    literal `hash(slug) % 360` the brief describes."""
+    digest = hashlib.md5(key.encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) % 360
+
+
+def _trend_polyline(values: list[float | None], width: int = 64, height: int = 20) -> str:
+    """SVG polyline `points` for the trend sparkline. Win-rate values are already a 0..1
+    fraction. Empty/all-None -> a flat baseline (never a fabricated shape)."""
+    pad = 2.0
+    usable = [v for v in values if v is not None]
+    if not usable:
+        mid = height / 2.0
+        return f"0,{mid:.1f} {width},{mid:.1f}"
+    n = len(values)
+    step = width / max(n - 1, 1)
+    last_y = height / 2.0
+    pts = []
+    for i, v in enumerate(values):
+        x = round(i * step, 1)
+        if v is not None:
+            last_y = pad + (1.0 - v) * (height - 2 * pad)
+        pts.append(f"{x},{round(last_y, 1)}")
+    return " ".join(pts)
+
+
+def _momentum(values: list[float | None]) -> str:
+    """'up'/'down'/'flat' derived from the trend series — NOT a rank-vs-last-period delta
+    (no historical rank snapshot table exists)."""
+    vals = [v for v in values if v is not None]
+    if len(vals) < 2:
+        return "flat"
+    delta = vals[-1] - vals[0]
+    if delta > 0.03:
+        return "up"
+    if delta < -0.03:
+        return "down"
+    return "flat"
+
+
+def _enrich_leaderboard_rows(
+    rows: list[dict], trend_by_gid: dict[int, list[float | None]]
+) -> list[dict]:
+    """Attach the prototype's display-only fields (avatar, provenance chips, trend
+    sparkline + momentum, model-detail link, provisional flag) to already-ranked
+    leaderboard rows. Never touches bt_score/rank/ci_* — pure presentation enrichment."""
+    for r in rows:
+        r["avatar"] = _avatar_initials(r["generator"])
+        r["avatar_hue"] = _avatar_hue(r.get("slug") or r["generator"])
+        r["provenance"] = _provenance_chips(r.get("paradigm"), r.get("kind", "model"))
+        gid = r.get("generator_id")
+        trend = trend_by_gid.get(gid, []) if gid is not None else []
+        r["trend"] = trend
+        r["trend_points"] = _trend_polyline(trend)
+        r["momentum"] = _momentum(trend)
+        r["provisional"] = r.get("n_games", 0) < service.FIRM_VOTE_THRESHOLD
+        r["detail_url"] = f"/models/{r['slug']}" if r.get("slug") else "#"
+    return rows
+
 
 def _leaderboard_rows(
     db: Session,
@@ -902,6 +1003,8 @@ def _leaderboard_rows(
                     "generator": names.get(r.generator_id, gen.name),
                     "kind": gen.kind,
                     "paradigm": gen.paradigm,
+                    "generator_id": r.generator_id,
+                    "slug": gen.slug,
                     "elo": round(r.elo, 1),
                     "bt_score": round(r.bt_score, 1),
                     "bt_lower": round(r.bt_lower, 1),
@@ -909,18 +1012,17 @@ def _leaderboard_rows(
                     "n_games": r.n_games,
                 }
             )
-    # Rank + CI-bar geometry are computed WITHIN each paradigm group, never across
-    # paradigms — cross-paradigm BT comparisons are the confound this project removes
-    # (spec §D). When a single paradigm filter is active there is exactly one group,
-    # which reduces to the old flat-list behavior. finalize_rows() supplies the shared
-    # rank + whisker geometry (also used by the verified board).
-    groups: dict[str, list[dict]] = {}
-    for r in rows:
-        groups.setdefault(r["paradigm"], []).append(r)
-    grouped_rows: list[dict] = []
-    for pgm in sorted(groups):
-        grouped_rows.extend(service.finalize_rows(groups[pgm]))
-    return grouped_rows
+    # ONE flat table for the selected tab (design-parity task-lb): a `paradigm` filter
+    # already narrowed `rows` to a single paradigm above, so "rank 1..N by bt_score desc"
+    # is unambiguous there. With NO filter ("Overall") this DELIBERATELY merges rows from
+    # every paradigm into one BT-desc ranking for the prototype's unified board — BT scores
+    # across paradigms come from disconnected match components (spec §D's "never rank
+    # across paradigms" invariant), so this is a display-only ordering, not a statistical
+    # claim that e.g. rank 3 beats rank 4 across paradigms. The template/legend must footnote
+    # that within-paradigm comparison (i.e. selecting a single paradigm tab) is the rigorous
+    # one. finalize_rows() supplies the shared rank + whisker geometry (also used by the
+    # verified board); CI-tie grouping still applies, just over the whole merged set.
+    return service.finalize_rows(rows)
 
 
 def _group_rank_judge_rows(rows: list[dict]) -> list[dict]:
@@ -1033,12 +1135,38 @@ def leaderboard(
     category_id_sel = _resolve_category_id(db, category)
     cat_ids = _effective_category_ids(k_ids, category_id_sel) if k_ids is not None else None
     if verified:
-        rows = service.verified_leaderboard_rows(db, criterion, category, category_ids=cat_ids)
+        # verified_leaderboard_rows has no paradigm parameter (it always merges every
+        # paradigm's votes into one BT fit); filter the ALREADY-RANKED rows for display so a
+        # paradigm tab still narrows the Verified scope. Unlike the trusted-scope branch
+        # below, this does NOT recompute a fresh within-paradigm rank — the row's `rank`
+        # stays whatever the global verified fit assigned it.
+        all_rows = service.verified_leaderboard_rows(db, criterion, category, category_ids=cat_ids)
+        rows = [r for r in all_rows if r["paradigm"] == paradigm] if paradigm else all_rows
     else:
-        rows = _leaderboard_rows(db, criterion, category, paradigm, kingdom)
+        # "Overall" (all_rows, paradigm filter None) computes the unified flat BT-desc rank
+        # once; a single-paradigm tab gets its OWN call so its rank is a fresh 1..N within
+        # just that paradigm's rows, not a slice of the merged Overall ranking.
+        all_rows = _leaderboard_rows(db, criterion, category, None, kingdom)
+        rows = (
+            all_rows
+            if paradigm is None
+            else _leaderboard_rows(db, criterion, category, paradigm, kingdom)
+        )
     total = matchmaking.total_votes(db)
     cats = db.execute(select(Category)).scalars().all()
     crits = db.execute(select(Criterion)).scalars().all()
+    # Real Vote.created-derived trend sparkline, scoped exactly like the rows above (kingdom
+    # ids take precedence over a plain category id, mirroring _matches_for_scope elsewhere).
+    crit_row = db.execute(select(Criterion).where(Criterion.slug == criterion)).scalars().first()
+    trend_by_gid: dict[int, list[float | None]] = {}
+    if rows and crit_row is not None:
+        trend_by_gid = service.generator_trend_series(
+            db,
+            crit_row.id,
+            None if cat_ids is not None else category_id_sel,
+            category_ids=cat_ids,
+        )
+    rows = _enrich_leaderboard_rows(rows, trend_by_gid)
     # Precompute `selected` flags in Python so the template avoids `==` (which the
     # HTML formatter mangles inside Jinja tags).
     category_options = [
@@ -1056,8 +1184,10 @@ def leaderboard(
     criterion_options = [
         {"slug": c.slug, "name": c.name, "selected": criterion == c.slug} for c in crits
     ]
-    # Collect all paradigms present in the rows
-    paradigms_in_rows = sorted({r["paradigm"] for r in rows if r.get("paradigm")})
+    # Paradigm tabs reflect the FULL universe for this (criterion/category/kingdom) scope,
+    # independent of which tab is currently active — deriving them from the (already
+    # paradigm-filtered) `rows` would make every non-active tab vanish after the first click.
+    paradigms_in_rows = sorted({r["paradigm"] for r in all_rows if r.get("paradigm")})
     paradigm_options = [
         {"value": None, "display": "All paradigms", "selected": paradigm is None}
     ] + [
@@ -1077,6 +1207,7 @@ def leaderboard(
             "bias": service.compute_bias(db),
             "sel_criterion": criterion,
             "sel_category": category,
+            "firm_vote_threshold": service.FIRM_VOTE_THRESHOLD,
             # The cached JudgeRating table is global-only (category_id.is_(None)) and can't
             # represent a kingdom (a SET of categories); under an active kingdom the judge board
             # instead reads the `KingdomJudgeRating` cache (refreshed by /admin/recompute), with

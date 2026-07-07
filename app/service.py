@@ -327,6 +327,8 @@ def verified_leaderboard_rows(
                 "generator": names.get(gid, gen.name if gen else str(gid)),
                 "kind": gen.kind if gen else "model",
                 "paradigm": gen.paradigm if gen else None,
+                "generator_id": gid,
+                "slug": gen.slug if gen else str(gid),
                 "bt_score": round(result.scores.get(gid, 0.0), 1),
                 "bt_lower": round(result.lower.get(gid, 0.0), 1),
                 "bt_upper": round(result.upper.get(gid, 0.0), 1),
@@ -363,6 +365,8 @@ def kingdom_leaderboard_rows(
                 "generator": names.get(gid, gen.name if gen else str(gid)),
                 "kind": gen.kind if gen else "model",
                 "paradigm": gen.paradigm if gen else None,
+                "generator_id": gid,
+                "slug": gen.slug if gen else str(gid),
                 "bt_score": round(result.scores.get(gid, 0.0), 1),
                 "bt_lower": round(result.lower.get(gid, 0.0), 1),
                 "bt_upper": round(result.upper.get(gid, 0.0), 1),
@@ -370,6 +374,118 @@ def kingdom_leaderboard_rows(
             }
         )
     return rows
+
+
+def generator_trend_series(
+    db: Session,
+    criterion_id: int,
+    category_id: int | None = None,
+    *,
+    category_ids: set[int] | None = None,
+    n_buckets: int = 8,
+) -> dict[int, list[float | None]]:
+    """Per-generator win-rate over `n_buckets` equal-width time buckets, derived from real
+    `Vote.created` timestamps — the leaderboard's trend sparkline. NOT a fabricated number:
+    each bucket's value is wins/games among that generator's own decisive votes landing in
+    that time window (a tie splits as half a win to each side, mirroring the BT tie-credit
+    convention in `_matches_for_scope`).
+
+    Mirrors `_matches_for_scope`'s scope filters (trust gate, decisive-only, gold exclusion,
+    Mode-A reference-generator exclusion, same-paradigm pairing) but keeps the vote timestamp
+    instead of collapsing to a flat match list, in ONE pass over the scoped votes.
+
+    A generator with <4 total scoped votes returns `[]` (too sparse for a meaningful trend —
+    caller renders a flat baseline instead). An empty bucket carries forward the previous
+    populated bucket's value; leading empty buckets stay `None` (never backfilled with a
+    fabricated 0.5).
+    """
+    stmt = (
+        select(Vote, Comparison)
+        .join(Comparison, Vote.comparison_id == Comparison.id)
+        .outerjoin(VoterSession, VoterSession.session_id == Vote.session_id)
+        .where(
+            Comparison.criterion_id == criterion_id,
+            Comparison.is_gold.is_(False),
+            (VoterSession.trust.is_(None)) | (VoterSession.trust >= config.TRUST_THRESHOLD),
+        )
+    )
+    if category_ids is not None:
+        stmt = stmt.join(Task, Comparison.task_id == Task.id).where(
+            Task.category_id.in_(category_ids)
+        )
+    elif category_id is not None:
+        stmt = stmt.join(Task, Comparison.task_id == Task.id).where(Task.category_id == category_id)
+
+    ref_gens = mode_a_excluded_generator_ids(db)
+    records: list[tuple[dt.datetime, int, int, str]] = []  # (created, gen_a, gen_b, winner)
+    gen_paradigm: dict[int, str] = {}
+    for vote, comparison in db.execute(stmt).all():
+        if vote.winner == "bad":
+            continue
+        out_a = db.get(ModelOutput, comparison.output_a_id)
+        out_b = db.get(ModelOutput, comparison.output_b_id)
+        if out_a is None or out_b is None:
+            continue  # dangling vote (output deleted)
+        gen_a, gen_b = out_a.generator_id, out_b.generator_id
+        if gen_a in ref_gens or gen_b in ref_gens:
+            continue
+        for gid in (gen_a, gen_b):
+            if gid not in gen_paradigm:
+                g = db.get(Generator, gid)
+                gen_paradigm[gid] = g.paradigm if g else ""
+        if not same_paradigm(gen_paradigm[gen_a], gen_paradigm[gen_b]):
+            continue  # never blend cross-paradigm votes into one generator's trend
+        records.append((vote.created, gen_a, gen_b, vote.winner))
+
+    if not records:
+        return {}
+    t_min = min(r[0] for r in records)
+    t_max = max(r[0] for r in records)
+    span = (t_max - t_min).total_seconds() or 1.0
+
+    def _bucket_of(ts: dt.datetime) -> int:
+        frac = (ts - t_min).total_seconds() / span
+        return min(int(frac * n_buckets), n_buckets - 1)
+
+    wins: dict[int, list[float]] = {}
+    games: dict[int, list[float]] = {}
+
+    def _ensure(gid: int) -> None:
+        if gid not in wins:
+            wins[gid] = [0.0] * n_buckets
+            games[gid] = [0.0] * n_buckets
+
+    for created, gen_a, gen_b, winner in records:
+        b = _bucket_of(created)
+        _ensure(gen_a)
+        _ensure(gen_b)
+        if winner == "a":
+            wins[gen_a][b] += 1.0
+            games[gen_a][b] += 1.0
+            games[gen_b][b] += 1.0
+        elif winner == "b":
+            wins[gen_b][b] += 1.0
+            games[gen_b][b] += 1.0
+            games[gen_a][b] += 1.0
+        elif winner == "tie":
+            wins[gen_a][b] += 0.5
+            wins[gen_b][b] += 0.5
+            games[gen_a][b] += 1.0
+            games[gen_b][b] += 1.0
+
+    out: dict[int, list[float | None]] = {}
+    for gid, g_games in games.items():
+        if sum(g_games) < 4:
+            out[gid] = []  # too sparse — render a flat baseline, not a noisy trend
+            continue
+        series: list[float | None] = []
+        prev: float | None = None
+        for b in range(n_buckets):
+            if g_games[b] > 0:
+                prev = round(wins[gid][b] / g_games[b], 3)
+            series.append(prev)
+        out[gid] = series
+    return out
 
 
 def recompute_scope(
@@ -470,6 +586,8 @@ def cached_kingdom_leaderboard_rows(
                 "generator": names.get(r.generator_id, gen.name),
                 "kind": gen.kind,
                 "paradigm": gen.paradigm,
+                "generator_id": r.generator_id,
+                "slug": gen.slug,
                 "bt_score": round(r.bt_score, 1),
                 "bt_lower": round(r.bt_lower, 1),
                 "bt_upper": round(r.bt_upper, 1),

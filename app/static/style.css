@@ -2788,12 +2788,41 @@ details.group[open] > summary.group-title::before {
   font-size: 0.85em;
 }
 
+/* Page-head row: H1+lede on the left, the compact "How ranking works" pill top-right
+   (design-parity task-lb — was previously a full-width bar below the header). */
+.lb-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
 /* "How ranking works" info affordance — a native <details> disclosure, no JS needed */
 .lb-info {
   margin: 0.9rem 0 1.1rem;
   border: 1px solid var(--border);
   border-radius: var(--r-ctl);
   background: var(--panel);
+}
+.lb-info-compact {
+  margin: 0.15rem 0 0;
+  width: auto;
+  max-width: 260px;
+  flex: none;
+}
+.lb-info-compact summary {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.lb-info-compact[open] {
+  max-width: 320px;
+  white-space: normal;
+}
+.lb-info-compact .lb-info-body {
+  padding: 0.65rem 0.75rem;
+  font-size: 0.82rem;
 }
 .lb-info summary {
   cursor: pointer;
@@ -2824,30 +2853,32 @@ details.group[open] > summary.group-title::before {
   margin-bottom: 0.9rem;
 }
 
-/* Paradigm segmented tabs (Overall / Image→3D / Procedural / Scan capture …) */
+/* Paradigm tabs — compact UNDERLINE row (design-parity task-lb): plain text tabs with a
+   bottom-border on the active one, not a boxed segmented-pill group, so the table below
+   leads the page instead of a "big bordered box". Wraps to a 2nd line gracefully if the
+   real paradigm vocabulary (7 values) doesn't fit one row at narrow widths. */
 .lb-ptabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
-  background: var(--panel2);
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  padding: 3px;
-  width: fit-content;
+  gap: 1.35rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+  width: 100%;
   margin-bottom: 1.1rem;
 }
 .lb-ptab {
   display: inline-flex;
   align-items: center;
-  border-radius: 8px;
-  padding: 6px 14px;
+  padding: 0 0 0.55rem;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
   color: var(--muted);
   font-size: 13.5px;
   font-weight: 600;
   text-decoration: none;
   transition:
-    background 0.12s,
-    color 0.12s;
+    color 0.12s,
+    border-color 0.12s;
 }
 .lb-ptab:hover {
   color: var(--text);
@@ -2855,7 +2886,7 @@ details.group[open] > summary.group-title::before {
 }
 .lb-ptab.is-active {
   color: var(--text);
-  background: color-mix(in oklch, var(--accent) 18%, transparent);
+  border-bottom-color: var(--accent);
 }
 
 /* Trusted / Verified scope toggle */
@@ -2976,6 +3007,148 @@ details.group[open] > summary.group-title::before {
 }
 .lb-sort-inactive {
   color: var(--faint);
+}
+
+/* Momentum glyph (▲/▽/−) left of the rank number/medal — a DERIVED trend direction, never
+   a rank-vs-last-period delta (design-parity task-lb; no rank-snapshot table exists). */
+.lb-momentum {
+  display: inline-block;
+  width: 1em;
+  margin-right: 0.15rem;
+  font-size: 0.75em;
+  text-align: center;
+}
+.lb-momentum-up {
+  color: var(--win);
+}
+.lb-momentum-down {
+  color: var(--bad);
+}
+.lb-momentum-flat {
+  color: var(--faint);
+}
+
+/* Generator cell: colored avatar tile + stacked name/provenance-chips body */
+.ranktable td.gen {
+  align-items: flex-start;
+}
+.lb-avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: oklch(0.6 0.12 var(--h, 200));
+  color: white;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.lb-gen-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.lb-gen-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+.lb-prov-row {
+  display: flex;
+  gap: 0.3rem;
+}
+.lb-prov {
+  font-size: 0.62rem;
+  padding: 0.02rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--faint);
+  letter-spacing: 0.03em;
+}
+
+/* Trend sparkline (SVG polyline), colored by derived momentum */
+.lb-trend-cell {
+  line-height: 0;
+}
+.lb-spark polyline {
+  stroke: var(--faint);
+}
+.lb-spark-up polyline {
+  stroke: var(--win);
+}
+.lb-spark-down polyline {
+  stroke: var(--bad);
+}
+.lb-spark-flat polyline {
+  stroke: var(--faint);
+}
+
+/* Votes cell + per-row expand chevron -> /models/{slug} */
+.lb-votes-cell {
+  white-space: nowrap;
+}
+.lb-chevron {
+  display: inline-block;
+  margin-left: 0.5rem;
+  color: var(--faint);
+  text-decoration: none;
+  font-size: 0.85em;
+  transition: color 0.12s;
+}
+.lb-chevron:hover {
+  color: var(--accent);
+}
+
+/* Footer legend under the unified table */
+.lb-legend {
+  margin: 0.7rem 0 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+}
+.lb-legend-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 6px;
+  vertical-align: middle;
+}
+.lb-legend-badge {
+  vertical-align: middle;
+}
+
+/* "Filters & bias audit" — relocated BELOW the table (design-parity task-lb) so the ranked
+   table leads the page; reuses the existing filter-row/scope/bias-line styling verbatim. */
+.lb-filters-audit {
+  margin-top: 1.6rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.9rem;
+}
+.lb-filters-audit summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--muted);
+  list-style: none;
+}
+.lb-filters-audit summary::-webkit-details-marker {
+  display: none;
+}
+.lb-filters-audit summary::before {
+  content: "▸ ";
+}
+.lb-filters-audit[open] summary::before {
+  content: "▾ ";
+}
+.lb-filters-audit-body {
+  padding-top: 0.8rem;
 }
 
 /* === Models index + detail (Task 12) — model-card family on shared tokens === */
