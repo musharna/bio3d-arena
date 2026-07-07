@@ -1116,13 +1116,101 @@ kbd {
 }
 
 /* --- Subject Spotlight (internal model-comparison deep-dive) --- */
-.spotlight-list {
-  list-style: none;
-  padding: 0;
+
+/* Task 21: spotlight index — featured-taxon cards (stage-gradient header +
+   kingdom emoji "specimen", breadcrumb/name/blurb below). Only fields present on
+   the SPOTLIGHTS dicts are ever rendered (slug/task_title/featured/blurb/kingdom) —
+   no fabricated taxonomy. */
+.sp-idx-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.25rem;
+  margin-top: 0.5rem;
 }
-.spotlight-list li {
-  padding: 0.5rem 0;
+.sp-idx-card {
+  display: block;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadowCard);
+  overflow: hidden;
+  color: var(--text);
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.sp-idx-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in oklch, var(--accent) 55%, var(--border));
+  box-shadow: var(--shadowLift);
+  text-decoration: none;
+}
+.sp-idx-stage {
+  position: relative;
+  height: 168px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(var(--gridDot) 1px, transparent 1.4px),
+    radial-gradient(130% 130% at 50% 32%, var(--stage1), var(--stage2) 75%);
+  background-size:
+    22px 22px,
+    auto;
   border-bottom: 1px solid var(--border);
+}
+.sp-idx-featured {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+}
+.sp-idx-emoji {
+  font-size: 56px;
+  line-height: 1;
+  filter: drop-shadow(0 8px 18px oklch(0 0 0 / 0.32));
+}
+.sp-idx-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 1rem 1.15rem 1.15rem;
+}
+.sp-idx-breadcrumb {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.sp-idx-name {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  font-style: italic;
+  color: var(--accent2);
+}
+.sp-idx-sub {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.sp-idx-blurb {
+  margin: 0.4rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* Task 21: spotlight detail — reference-photo card wrapper (the shared
+   `.reference-panel` flex-row itself is unchanged so /arena's override at
+   `#reference-panel` below keeps working; this just frames it on /spotlight). */
+.sp-ref-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: 0.5rem 1rem;
+  margin: 0.75rem 0 1.1rem;
 }
 .reference-panel {
   display: flex;
@@ -1175,13 +1263,16 @@ kbd {
   gap: 0.35rem;
 }
 .chip {
-  background: transparent;
+  background: var(--panel2);
   border: 1px solid var(--border);
-  color: var(--text, #e6edf3);
+  color: var(--text);
   border-radius: 999px;
   padding: 0.25rem 0.7rem;
   font-size: 0.85rem;
   cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
 }
 .chip:hover {
   border-color: var(--accent2);
@@ -1189,10 +1280,10 @@ kbd {
 .chip.active {
   background: var(--accent2);
   border-color: var(--accent2);
-  color: #fff;
+  color: oklch(0.99 0.01 258);
 }
 .chip.active .subtle {
-  color: #e8eefc;
+  color: oklch(0.94 0.02 258);
 }
 .scored-toggle {
   font-size: 0.85rem;
@@ -1205,12 +1296,16 @@ kbd {
 .spotlight-search {
   flex: 1 1 160px;
   min-width: 140px;
-  background: var(--bg, #0d1117);
+  background: var(--panelDeep);
   border: 1px solid var(--border);
   border-radius: 8px;
-  color: var(--text, #e6edf3);
+  color: var(--text);
   padding: 0.3rem 0.6rem;
   font-size: 0.85rem;
+}
+.spotlight-search:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 1px;
 }
 .result-count {
   font-size: 0.8rem;
@@ -1241,7 +1336,8 @@ kbd {
 .spotlight-card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-card);
+  box-shadow: var(--shadowCard);
   padding: 0.6rem;
   display: flex;
   flex-direction: column;
@@ -1267,8 +1363,8 @@ kbd {
   /* Intentional "no preview" state — distinct from a blank/broken image.
      background overrides the parent .thumb white so the card reads as "click to load",
      not as a missing/failed render. */
-  background: #1e1e2a;
-  border: 1px dashed #444;
+  background: var(--panelDeep);
+  border: 1px dashed var(--border);
   border-radius: 8px;
   color: var(--muted);
   font-size: 0.85rem;
@@ -1276,6 +1372,7 @@ kbd {
 }
 .card-gen {
   font-weight: 700;
+  color: var(--text);
 }
 .card-badge {
   display: inline-block;
@@ -1284,9 +1381,9 @@ kbd {
   padding: 0.08rem 0.55rem;
   font-size: 0.7rem;
   font-weight: 600;
-  background: rgba(167, 139, 250, 0.16);
-  color: #a78bfa;
-  border: 1px solid rgba(167, 139, 250, 0.4);
+  background: color-mix(in oklch, var(--accent2) 16%, transparent);
+  color: var(--accent2);
+  border: 1px solid color-mix(in oklch, var(--accent2) 40%, transparent);
 }
 .metric-table {
   width: 100%;
@@ -1317,24 +1414,24 @@ kbd {
   border: 1px solid transparent;
 }
 .flag-ok {
-  background: rgba(63, 185, 80, 0.16);
-  color: #3fb950;
-  border-color: rgba(63, 185, 80, 0.4);
+  background: color-mix(in oklch, var(--win) 16%, transparent);
+  color: var(--win);
+  border-color: color-mix(in oklch, var(--win) 40%, transparent);
 }
 .flag-shape {
-  background: rgba(248, 81, 73, 0.16);
-  color: #f85149;
-  border-color: rgba(248, 81, 73, 0.4);
+  background: color-mix(in oklch, var(--bad) 16%, transparent);
+  color: var(--bad);
+  border-color: color-mix(in oklch, var(--bad) 40%, transparent);
 }
 .flag-coverage {
-  background: rgba(210, 153, 34, 0.16);
-  color: #d29922;
-  border-color: rgba(210, 153, 34, 0.4);
+  background: color-mix(in oklch, var(--amber) 16%, transparent);
+  color: var(--amber);
+  border-color: color-mix(in oklch, var(--amber) 40%, transparent);
 }
 .flag-surface {
-  background: rgba(88, 166, 255, 0.16);
-  color: #58a6ff;
-  border-color: rgba(88, 166, 255, 0.4);
+  background: color-mix(in oklch, var(--accent2) 16%, transparent);
+  color: var(--accent2);
+  border-color: color-mix(in oklch, var(--accent2) 40%, transparent);
 }
 .flag-unscored {
   background: var(--panel2);
@@ -1352,6 +1449,9 @@ kbd {
 .group-title {
   margin: 1.2rem 0 0.4rem;
   font-size: 1rem;
+  color: var(--text);
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
 }
 
 /* --- Spotlight layout: scrollable card grid + sticky side viewer --- */
@@ -1374,9 +1474,14 @@ kbd {
   width: 100%;
   height: calc(100vh - 2rem);
   max-height: 80vh;
-  background: linear-gradient(180deg, #b4babf 0%, #6f767c 100%);
+  background: radial-gradient(
+    130% 100% at 50% 30%,
+    var(--stage1),
+    var(--stage2) 70%
+  );
+  box-shadow: inset 0 0 100px 20px var(--vignette);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-card);
   overflow: hidden;
 }
 #live-viewer-slot.viewer-empty {
@@ -1384,8 +1489,9 @@ kbd {
   align-items: center;
   justify-content: center;
   background: var(--panel);
+  box-shadow: none;
   border-style: dashed;
-  color: var(--muted, #8b9298);
+  color: var(--muted);
   font-size: 0.85rem;
 }
 /* collapsible group sections */

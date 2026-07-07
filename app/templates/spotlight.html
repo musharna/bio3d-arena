@@ -1,8 +1,13 @@
-{% extends "base.html" %} {% block title %}{{ s.title }} · Spotlight{% endblock
-%} {% block content %}
-<section class="board">
-  <h2>{{ s.title }}</h2>
-  <p class="subtle">{{ s.blurb }}</p>
+{% extends "base.html" %}
+{% block title %}{{ s.title }} · Spotlight{% endblock %}
+{% block content %}
+<section class="board sp-detail">
+  <header class="b3d-page-head">
+    <h1>{{ s.title }} {% include "_scope_pill.html" %}</h1>
+    <p class="b3d-page-lede">{{ s.blurb }}</p>
+    <p><a href="/spotlight">&larr; all spotlights</a></p>
+  </header>
+  <div class="sp-ref-card">
   <div class="reference-panel">
     {% if s.reference_image %}<img
       src="{{ s.reference_image }}"
@@ -13,6 +18,7 @@
     {% else %}
     <div class="subtle">No reference image curated.</div>
     {% endif %}
+  </div>
   </div>
   {% set ai = s.models | selectattr('cls', 'equalto', 'ai') | list %}
   {% set procedural = s.models | selectattr('cls', 'equalto', 'procedural') | list %}
@@ -87,7 +93,7 @@
         <img
           src="{{ m.input_image_url }}"
           alt="input photo"
-          style="width:56px;height:42px;object-fit:cover;border-radius:4px;vertical-align:middle;border:1px solid #444"
+          style="width:56px;height:42px;object-fit:cover;border-radius:4px;vertical-align:middle;border:1px solid var(--border)"
         />
       </div>
       {% endif %}
