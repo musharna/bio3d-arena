@@ -2547,6 +2547,45 @@ details.group[open] > summary.group-title::before {
   color: var(--muted);
 }
 
+/* Arena page hero — centered variant of the home hero (H1 + lede + inline
+   mono stat row), sitting above the task strip. */
+.arena-hero {
+  text-align: center;
+  max-width: 720px;
+  margin: 0.25rem auto 1.6rem;
+}
+.arena-hero-h1 {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 38px;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text);
+}
+.arena-hero-lede {
+  color: var(--muted);
+  font-size: 15.5px;
+  line-height: 1.6;
+  margin: 0.9rem auto 0;
+  max-width: 620px;
+}
+.arena-hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem 0.65rem;
+  margin-top: 1.1rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+.arena-hero-stats strong {
+  color: var(--accent2);
+  font-weight: 600;
+}
+
 .b3d-hero-viz {
   display: flex;
   flex-direction: column;

@@ -617,6 +617,24 @@ def _pick_hero_asset(db: Session, spotlight_subjects: list[dict]) -> dict | None
     return {"url": storage.url_for(out.asset_path), "format": out.asset_format}
 
 
+def _hero_stats(db: Session) -> dict:
+    """Cheap headline counts shared by the home hero and the arena hero, so both
+    pages report the same numbers (votes cast / distinct models / active tasks /
+    live kingdoms)."""
+    from sqlalchemy import func
+
+    return {
+        "total_votes": matchmaking.total_votes(db),
+        "models_count": db.execute(
+            select(func.count(func.distinct(Generator.id))).where(Generator.kind == "model")
+        ).scalar_one(),
+        "tasks_count": db.execute(
+            select(func.count(Task.id)).where(Task.active.is_(True))
+        ).scalar_one(),
+        "kingdoms_live": sum(1 for k in kingdoms.KINGDOMS if _kingdom_is_live(db, k)),
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, db: Session = Depends(get_db)):
     """Marketing/landing page. Never kingdom-gated (see `_roadmap_or_none` docstring) —
@@ -625,13 +643,12 @@ def home(request: Request, db: Session = Depends(get_db)):
 
     from . import spotlight
 
-    total_votes = matchmaking.total_votes(db)
     hero_asset = _pick_hero_asset(db, spotlight.SPOTLIGHTS)
-    models_count = db.execute(
-        select(func.count(func.distinct(Generator.id))).where(Generator.kind == "model")
-    ).scalar_one()
-    tasks_count = db.execute(select(func.count(Task.id)).where(Task.active.is_(True))).scalar_one()
-    kingdoms_live = sum(1 for k in kingdoms.KINGDOMS if _kingdom_is_live(db, k))
+    stats = _hero_stats(db)
+    total_votes = stats["total_votes"]
+    models_count = stats["models_count"]
+    tasks_count = stats["tasks_count"]
+    kingdoms_live = stats["kingdoms_live"]
 
     # "Choose a kingdom" cards below the hero — live/task-count are real per-kingdom queries
     # (not the top-level `kingdoms_live`/`tasks_count`, which are the all-kingdoms totals).
@@ -682,7 +699,7 @@ def arena_page(request: Request, db: Session = Depends(get_db)):
     roadmap = _roadmap_or_none(request, db)
     if roadmap is not None:
         return roadmap
-    return templates.TemplateResponse(request, "arena.html")
+    return templates.TemplateResponse(request, "arena.html", _hero_stats(db))
 
 
 @app.get("/api/meta")

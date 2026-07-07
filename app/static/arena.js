@@ -206,7 +206,7 @@ function renderKwise(data) {
     cell.className = "model-col kwise-cell";
     const label = document.createElement("div");
     label.className = "model-label";
-    label.textContent = "Option " + (i + 1) + " ";
+    label.textContent = "Model " + "ABCD"[i] + " ";
     const fmtChip = document.createElement("span");
     fmtChip.className = "fmt-chip";
     label.appendChild(fmtChip);
@@ -444,7 +444,7 @@ function showReveal(reveal) {
   maybeFireConfetti();
 }
 
-// 4-up K-wise reveal: label each card in place (inline, next to its "Option N" label) + mark
+// 4-up K-wise reveal: label each card in place (inline, next to its "Model X" label) + mark
 // the picked card with the same gold winner border as the 2-up view.
 function showKwiseReveal(reveal) {
   const grid = el("kwise-grid");
