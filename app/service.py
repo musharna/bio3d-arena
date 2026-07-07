@@ -748,13 +748,17 @@ def compute_bias(db: Session) -> dict:
 FIRM_VOTE_THRESHOLD = 30
 
 
-def coverage_summary(db: Session) -> dict:
+def coverage_summary(db: Session, category_ids: set[int] | None = None) -> dict:
     """Per-generator + per-task coverage & vote-count disclosure (governance transparency).
 
     Read-only aggregate powering /coverage and /api/coverage.json. Surfaces, per generator,
     how many votes/outputs/tasks back its rank (+ a firm/provisional confidence flag), and per
     task, how thinly or richly it is covered — the data the post-2025 "leaderboard illusion"
-    critique asks every arena to publish, and the substrate for a future phylogenetic map."""
+    critique asks every arena to publish, and the substrate for a future phylogenetic map.
+
+    `category_ids` (when given, e.g. a kingdom's mapped category set) restricts the per-task
+    rows to that set; the per-generator rows stay global (a generator's overall vote/output
+    count is a cross-kingdom fact about the generator, not a kingdom-scoped one)."""
     names = generator_display_names(db)
     excluded = mode_a_excluded_generator_ids(db)
 
@@ -778,7 +782,10 @@ def coverage_summary(db: Session) -> dict:
     gen_rows.sort(key=lambda r: (-r["votes"], r["generator"]))
 
     task_rows = []
-    for t in db.execute(select(Task).where(Task.active.is_(True))).scalars().all():
+    _tasks_stmt = select(Task).where(Task.active.is_(True))
+    if category_ids is not None:
+        _tasks_stmt = _tasks_stmt.where(Task.category_id.in_(category_ids))
+    for t in db.execute(_tasks_stmt).scalars().all():
         outs = [o for o in t.outputs if not o.is_gold]
         cat = db.get(Category, t.category_id)
         diff = (

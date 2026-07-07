@@ -944,7 +944,8 @@ def licenses_page(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/coverage", response_class=HTMLResponse)
 def coverage_page(request: Request, db: Session = Depends(get_db)):
-    summary = service.coverage_summary(db)
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    summary = service.coverage_summary(db, category_ids=k_ids)
     return templates.TemplateResponse(
         request,
         "coverage.html",
@@ -1065,7 +1066,11 @@ def significance_page(
 
 @app.get("/tasks", response_class=HTMLResponse)
 def tasks_page(request: Request, db: Session = Depends(get_db)):
-    tasks = db.execute(select(Task)).scalars().all()
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    stmt = select(Task)
+    if k_ids is not None:
+        stmt = stmt.where(Task.category_id.in_(k_ids))
+    tasks = db.execute(stmt).scalars().all()
     rows = []
     for t in tasks:
         rows.append(
@@ -1086,6 +1091,9 @@ def spotlight_index(request: Request):
     from . import spotlight
 
     subjects = sorted(spotlight.SPOTLIGHTS, key=lambda s: (not s["featured"], s["order"]))
+    kingdom = kingdoms.normalize_kingdom(request.state.kingdom)
+    if kingdom != "all":
+        subjects = [s for s in subjects if s.get("kingdom") == kingdom]
     return templates.TemplateResponse(request, "spotlight_index.html", {"subjects": subjects})
 
 
@@ -1225,15 +1233,20 @@ def admin_rescore(token: str = Form(...), db: Session = Depends(get_db)):
     return JSONResponse({"status": "rescored", "detail": detail, "organ": organ_detail})
 
 
-def _default_benchmark_task_id(db: Session) -> int | None:
+def _default_benchmark_task_id(db: Session, category_ids: set[int] | None = None) -> int | None:
     """Return the first task_id that has a ReconTask row AND at least one ok Metric.
 
     Falls back to tasks[0].id if no scored task exists yet. Returns None if no tasks.
     Used by benchmark_page to avoid defaulting to an unscored task (P1-3 fix).
+    `category_ids` (when given) restricts candidates to the active kingdom, mirroring the
+    picker list built by benchmark_page.
     """
     from .models import Metric, ReconTask, Task
 
-    tasks = db.execute(select(Task)).scalars().all()
+    stmt = select(Task)
+    if category_ids is not None:
+        stmt = stmt.where(Task.category_id.in_(category_ids))
+    tasks = db.execute(stmt).scalars().all()
     if not tasks:
         return None
     for t in tasks:
@@ -1258,9 +1271,13 @@ def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int
     from . import recon_service
     from .models import Task
 
-    tasks = db.execute(select(Task)).scalars().all()
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    stmt = select(Task)
+    if k_ids is not None:
+        stmt = stmt.where(Task.category_id.in_(k_ids))
+    tasks = db.execute(stmt).scalars().all()
     if task_id is None and tasks:
-        task_id = _default_benchmark_task_id(db)
+        task_id = _default_benchmark_task_id(db, category_ids=k_ids)
     board = recon_service.recon_method_leaderboard(db, task_id) if task_id else []
     confounds = recon_service.recon_confounds(db, task_id) if task_id else None
     agree = (
@@ -1310,14 +1327,15 @@ def api_benchmark(db: Session = Depends(get_db), task_id: int | None = None):
 
 
 @app.get("/api/export.json")
-def export_dataset(db: Session = Depends(get_db)):
+def export_dataset(request: Request, db: Session = Depends(get_db)):
     """Reproducible research export: every decided comparison with full provenance.
 
-    Generators are revealed here (post-hoc), enabling offline ranking studies.
+    Generators are revealed here (post-hoc), enabling offline ranking studies. Scoped by the
+    active kingdom (query param / cookie), matching every other data page (`all` == unfiltered).
     """
     from . import dataset as dataset_mod
 
-    return dataset_mod.build_preference_records(db)
+    return dataset_mod.build_preference_records(db, kingdom=request.state.kingdom)
 
 
 @app.get("/difficulty", response_class=HTMLResponse)
@@ -1325,16 +1343,20 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
     """Render the per-tier objective scorecard + the cross-tier degradation gradient."""
     from .models import ReconTask, Task, TaskDifficulty
 
-    scorecard = difficulty.tier_scorecard(db)
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    scorecard = difficulty.tier_scorecard(db, category_ids=k_ids)
     tiers = list(difficulty.TIERS)
 
     # Species sitting in each tier (for the per-tier header line).
     tier_species: dict[str, list[str]] = {}
-    rows = db.execute(
+    stmt = (
         select(TaskDifficulty, Task, ReconTask)
         .join(Task, Task.id == TaskDifficulty.task_id)
         .join(ReconTask, ReconTask.task_id == TaskDifficulty.task_id, isouter=True)
-    ).all()
+    )
+    if k_ids is not None:
+        stmt = stmt.where(Task.category_id.in_(k_ids))
+    rows = db.execute(stmt).all()
     for td, task, rt in rows:
         name = (rt.species_name if rt else None) or task.title
         tier_species.setdefault(td.tier, []).append(name)
@@ -1355,9 +1377,11 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
     ]
     gradient.sort(key=lambda g: g["generator"].lower())
 
+    # perceptual/trait_tiers/reliability stay global (JudgeVote/TraitScore paths have no
+    # category-scoping wired yet — see report for the explicit scoped-vs-global split).
     perceptual = service.tier_perceptual_ranking(db)
     trait_tiers = service.tier_trait_accuracy(db)
-    paradigm_grid = difficulty.paradigm_tier_scorecard(db)
+    paradigm_grid = difficulty.paradigm_tier_scorecard(db, category_ids=k_ids)
     # Reference/capture-quality triage: taxa where recon completeness is far below text (the
     # recon INPUT is suspect). Sorted by gap desc; flagged ones shown first.
     from .completeness import recon_reliability_flags

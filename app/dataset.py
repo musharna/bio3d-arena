@@ -13,14 +13,22 @@ from sqlalchemy.orm import Session
 from .models import Comparison, Criterion, Generator, ModelOutput, Task, Vote
 
 
-def build_preference_records(db: Session, comparison_ids: set[int] | None = None) -> dict:
+def build_preference_records(
+    db: Session, comparison_ids: set[int] | None = None, kingdom: str | None = None
+) -> dict:
     """Every decided comparison with full provenance — the /api/export.json payload.
 
     When `comparison_ids` is given, only comparisons in that set are included (used by
     scripts/build_dataset_release.py to scope the release's votes to the release bundle's
     own allowlisted tasks/generators). Default `None` keeps the full unfiltered global log,
     which is what the public /api/export.json route ships.
+
+    `kingdom` (optional, e.g. "fungi") restricts to comparisons whose task's category maps to
+    that kingdom via `kingdoms.KINGDOM_OF`; `None`/"all" keeps every kingdom.
     """
+    from .kingdoms import KINGDOM_OF, normalize_kingdom
+
+    kingdom = normalize_kingdom(kingdom)
     rows = db.execute(
         select(Vote, Comparison).join(Comparison, Vote.comparison_id == Comparison.id)
     ).all()
@@ -28,9 +36,11 @@ def build_preference_records(db: Session, comparison_ids: set[int] | None = None
     for vote, comp in rows:
         if comparison_ids is not None and comp.id not in comparison_ids:
             continue
+        task = db.get(Task, comp.task_id)
+        if kingdom != "all" and KINGDOM_OF.get(task.category.slug) != kingdom:
+            continue
         out_a = db.get(ModelOutput, comp.output_a_id)
         out_b = db.get(ModelOutput, comp.output_b_id)
-        task = db.get(Task, comp.task_id)
         crit = db.get(Criterion, comp.criterion_id)
         records.append(
             {

@@ -119,14 +119,21 @@ def _scorecard_lookups(db) -> dict:
     }
 
 
-def _accumulate_scorecard(db, lookups, group_of) -> dict:
+def _accumulate_scorecard(db, lookups, group_of, category_ids: set[int] | None = None) -> dict:
     """Bucket every non-gold output into acc[(tier, group)] where group = group_of(output).
-    Reads only cached objective/completeness metrics — never the human Bradley-Terry path."""
+    Reads only cached objective/completeness metrics — never the human Bradley-Terry path.
+    `category_ids` (when given) restricts to outputs whose Task.category_id is in that set —
+    the kingdom-scoping join for the difficulty scorecards."""
     from .models import ModelOutput
 
     lk = lookups
     acc: dict[tuple[str, object], dict] = {}
-    for out in db.execute(select(ModelOutput).where(ModelOutput.is_gold.is_(False))).scalars():
+    stmt = select(ModelOutput).where(ModelOutput.is_gold.is_(False))
+    if category_ids is not None:
+        stmt = stmt.join(Task, Task.id == ModelOutput.task_id).where(
+            Task.category_id.in_(category_ids)
+        )
+    for out in db.execute(stmt).scalars():
         tier = lk["tier_by_task"].get(out.task_id, "untiered")
         a = acc.setdefault(
             (tier, group_of(out)),
@@ -180,18 +187,21 @@ def _row_stats(a: dict) -> dict:
     }
 
 
-def tier_scorecard(db) -> list[dict]:
+def tier_scorecard(db, category_ids: set[int] | None = None) -> list[dict]:
     """Per-(tier × generator) aggregate of the objective metrics + reference-free completeness.
 
     Tiers in canonical order, then an 'untiered' bucket for tasks with no TaskDifficulty row.
-    Means skip missing rows (None), never zero-fill.
+    Means skip missing rows (None), never zero-fill. `category_ids` (optional) scopes to a
+    kingdom's mapped categories, same semantics as elsewhere (None == all).
     """
     from .service import generator_display_names
 
     # Disambiguated display names (shared with the Mode-A boards) so the 8 same-named
     # XfrogPlants variants etc. are distinguishable here too.
     gen_name = generator_display_names(db)
-    acc = _accumulate_scorecard(db, _scorecard_lookups(db), lambda out: out.generator_id)
+    acc = _accumulate_scorecard(
+        db, _scorecard_lookups(db), lambda out: out.generator_id, category_ids=category_ids
+    )
     card = []
     for tier in list(TIERS) + ["untiered"]:
         rows = [
@@ -204,12 +214,13 @@ def tier_scorecard(db) -> list[dict]:
     return card
 
 
-def paradigm_tier_scorecard(db) -> list[dict]:
+def paradigm_tier_scorecard(db, category_ids: set[int] | None = None) -> list[dict]:
     """Per-(tier × paradigm) aggregate of the existing objective metrics — the headline
     cross-paradigm × difficulty grid. Same objective-metric plumbing as tier_scorecard,
     grouped by Generator.paradigm instead of generator. Means skip None (never zero-fill);
     canonical tier order + 'untiered' bucket; empty-paradigm generators bucket under
-    'unspecified'. Never recomputes Bradley-Terry; the human path is untouched."""
+    'unspecified'. Never recomputes Bradley-Terry; the human path is untouched. `category_ids`
+    (optional) scopes to a kingdom's mapped categories, same semantics as elsewhere."""
     from . import paradigms
     from .models import Generator
 
@@ -218,6 +229,7 @@ def paradigm_tier_scorecard(db) -> list[dict]:
         db,
         _scorecard_lookups(db),
         lambda out: paradigm_by_gen.get(out.generator_id, "") or "unspecified",
+        category_ids=category_ids,
     )
     pgm_order = list(paradigms.PARADIGMS) + ["unspecified"]
     card = []

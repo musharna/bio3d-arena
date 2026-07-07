@@ -44,6 +44,7 @@ def derive_flags(metric: Metric | None) -> list[tuple[str, str]]:
 SPOTLIGHTS: list[dict] = [
     {
         "slug": "tomato",
+        "kingdom": "plants",  # all current spotlight subjects are plant taxa (crop/model species); resolved by taxon identity, not a DB lookup (SPOTLIGHTS is a module-level constant, no per-request Session)
         "task_title": "Solanum lycopersicum — single-image → 3D reconstruction",
         "featured": True,
         "order": 0,
@@ -56,6 +57,7 @@ SPOTLIGHTS: list[dict] = [
     },
     {
         "slug": "maize",
+        "kingdom": "plants",  # all current spotlight subjects are plant taxa (crop/model species); resolved by taxon identity, not a DB lookup (SPOTLIGHTS is a module-level constant, no per-request Session)
         "task_title": "Zea mays — single-image → 3D reconstruction",
         "featured": True,
         "order": 1,
@@ -68,6 +70,7 @@ SPOTLIGHTS: list[dict] = [
     },
     {
         "slug": "arabidopsis",
+        "kingdom": "plants",  # all current spotlight subjects are plant taxa (crop/model species); resolved by taxon identity, not a DB lookup (SPOTLIGHTS is a module-level constant, no per-request Session)
         "task_title": "Arabidopsis thaliana — single-image → 3D reconstruction",
         "featured": False,
         "order": 2,
@@ -76,6 +79,7 @@ SPOTLIGHTS: list[dict] = [
     },
     {
         "slug": "barley-mri",
+        "kingdom": "plants",  # all current spotlight subjects are plant taxa (crop/model species); resolved by taxon identity, not a DB lookup (SPOTLIGHTS is a module-level constant, no per-request Session)
         "task_title": "Hordeum vulgare — barley root system (3D MRI)",
         "featured": False,
         "order": 3,
@@ -86,6 +90,7 @@ SPOTLIGHTS: list[dict] = [
     },
     {
         "slug": "rose",
+        "kingdom": "plants",  # all current spotlight subjects are plant taxa (crop/model species); resolved by taxon identity, not a DB lookup (SPOTLIGHTS is a module-level constant, no per-request Session)
         "task_title": "Rosa — single-image → 3D reconstruction",
         "featured": True,
         "order": 4,
@@ -101,6 +106,7 @@ SPOTLIGHTS: list[dict] = [
     },
     {
         "slug": "soybean",
+        "kingdom": "plants",  # all current spotlight subjects are plant taxa (crop/model species); resolved by taxon identity, not a DB lookup (SPOTLIGHTS is a module-level constant, no per-request Session)
         "task_title": "Glycine max — single-image → 3D reconstruction",
         "featured": True,
         "order": 5,

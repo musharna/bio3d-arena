@@ -11,7 +11,16 @@ from sqlalchemy import select
 from app import matchmaking, service
 from app.database import SessionLocal, init_db
 from app.main import _build_comparison, _build_kwise_comparison, _leaderboard_rows, app
-from app.models import Category, Comparison, Criterion, Generator, ModelOutput, Task, Vote
+from app.models import (
+    Category,
+    Comparison,
+    Criterion,
+    Generator,
+    ModelOutput,
+    Task,
+    TaskDifficulty,
+    Vote,
+)
 
 
 def setup_module(_m):
@@ -326,3 +335,165 @@ def test_compute_significance_accepts_category_ids_set(monkeypatch):
         assert sig["status"] == "ok"
         assert set(sig["labels"]) == {gf1.name, gf2.name}
         _clear_lb_fixtures(db)
+
+
+# --------------------------------------------------------------------- Task 7: remaining pages
+#
+# tasks / coverage / dataset-export / difficulty / benchmark / spotlight. Follows the same
+# monkeypatch-CATEGORY_SLUGS_IN/KINGDOM_OF pattern as the builder/leaderboard sections above.
+
+_T7PFX = "kt7"
+
+
+def _clear_t7_fixtures(db):
+    db.query(ModelOutput).filter(ModelOutput.asset_path.like(f"{_T7PFX}/%")).delete(
+        synchronize_session=False
+    )
+    db.query(Comparison).filter(Comparison.session_id.like(f"{_T7PFX}-%")).delete(
+        synchronize_session=False
+    )
+    db.query(Vote).filter(Vote.session_id.like(f"{_T7PFX}-%")).delete(synchronize_session=False)
+    db.query(Task).filter(Task.title.like("KT7 %")).delete(synchronize_session=False)
+    db.query(Generator).filter(Generator.slug.like(f"{_T7PFX}-g%")).delete(
+        synchronize_session=False
+    )
+    db.query(Category).filter(Category.slug.like(f"{_T7PFX}-%")).delete(synchronize_session=False)
+    db.commit()
+
+
+def _seed_t7_fixtures(db):
+    """A plants task + a fungi task under fresh KT7-prefixed categories, each with a real
+    output (+ one decisive vote) so coverage/dataset-export rows have something to show."""
+    _clear_t7_fixtures(db)
+    crit = db.execute(select(Criterion).where(Criterion.slug == "overall")).scalars().first()
+    if crit is None:
+        crit = Criterion(slug="overall", name="Overall")
+        db.add(crit)
+        db.flush()
+    p = Category(slug=f"{_T7PFX}-plants", name="KT7 Plants")
+    f = Category(slug=f"{_T7PFX}-fungi", name="KT7 Fungi")
+    db.add_all([p, f])
+    db.flush()
+    tp = Task(category_id=p.id, title="KT7 Plant Task", prompt="p", active=True)
+    tf = Task(category_id=f.id, title="KT7 Fungi Task", prompt="p", active=True)
+    db.add_all([tp, tf])
+    db.flush()
+
+    def _mk_output_and_vote(task, tag):
+        g1 = Generator(slug=f"{_T7PFX}-g{tag}1", name=f"KT7-G{tag}1")
+        g2 = Generator(slug=f"{_T7PFX}-g{tag}2", name=f"KT7-G{tag}2")
+        db.add_all([g1, g2])
+        db.flush()
+        o1 = ModelOutput(task_id=task.id, generator_id=g1.id, asset_path=f"{_T7PFX}/{tag}1.glb")
+        o2 = ModelOutput(task_id=task.id, generator_id=g2.id, asset_path=f"{_T7PFX}/{tag}2.glb")
+        db.add_all([o1, o2])
+        db.flush()
+        comp = Comparison(
+            task_id=task.id,
+            output_a_id=o1.id,
+            output_b_id=o2.id,
+            criterion_id=crit.id,
+            session_id=f"{_T7PFX}-s-{tag}",
+        )
+        db.add(comp)
+        db.flush()
+        db.add(Vote(comparison_id=comp.id, winner="a", session_id=f"{_T7PFX}-s-{tag}"))
+        db.commit()
+
+    _mk_output_and_vote(tp, "p")
+    _mk_output_and_vote(tf, "f")
+    return p, f, tp, tf
+
+
+def test_tasks_page_scopes_to_kingdom(monkeypatch):
+    with SessionLocal() as db:
+        p, f, tp, tf = _seed_t7_fixtures(db)
+        _patch_kingdom_to_fungi(monkeypatch, f.slug)
+
+        c = TestClient(app)
+        r = c.get("/tasks?kingdom=fungi")
+        assert r.status_code == 200
+        assert tf.title in r.text
+        assert tp.title not in r.text
+
+        _clear_t7_fixtures(db)
+
+
+def test_coverage_page_scopes_task_rows_to_kingdom(monkeypatch):
+    with SessionLocal() as db:
+        p, f, tp, tf = _seed_t7_fixtures(db)
+        _patch_kingdom_to_fungi(monkeypatch, f.slug)
+
+        c = TestClient(app)
+        r = c.get("/coverage?kingdom=fungi")
+        assert r.status_code == 200
+        assert tf.title in r.text
+        assert tp.title not in r.text
+
+        _clear_t7_fixtures(db)
+
+
+def test_difficulty_page_scopes_tier_species_to_kingdom(monkeypatch):
+    with SessionLocal() as db:
+        p, f, tp, tf = _seed_t7_fixtures(db)
+        from app import difficulty as difficulty_mod
+
+        difficulty_mod.set_task_difficulty(db, tp.id, "easy", commit=True)
+        difficulty_mod.set_task_difficulty(db, tf.id, "easy", commit=True)
+        _patch_kingdom_to_fungi(monkeypatch, f.slug)
+
+        c = TestClient(app)
+        r = c.get("/difficulty?kingdom=fungi")
+        assert r.status_code == 200
+        assert tf.title in r.text
+        assert tp.title not in r.text
+
+        db.query(TaskDifficulty).filter(TaskDifficulty.task_id.in_([tp.id, tf.id])).delete(
+            synchronize_session=False
+        )
+        db.commit()
+        _clear_t7_fixtures(db)
+
+
+def test_benchmark_page_task_picker_scopes_to_kingdom(monkeypatch):
+    with SessionLocal() as db:
+        p, f, tp, tf = _seed_t7_fixtures(db)
+        _patch_kingdom_to_fungi(monkeypatch, f.slug)
+
+        c = TestClient(app)
+        r = c.get("/benchmark?kingdom=fungi")
+        assert r.status_code == 200
+        assert tf.title in r.text
+        assert tp.title not in r.text
+
+        _clear_t7_fixtures(db)
+
+
+def test_export_dataset_scopes_votes_to_kingdom(monkeypatch):
+    with SessionLocal() as db:
+        p, f, tp, tf = _seed_t7_fixtures(db)
+        _patch_kingdom_to_fungi(monkeypatch, f.slug)
+
+        c = TestClient(app)
+        r = c.get("/api/export.json?kingdom=fungi")
+        assert r.status_code == 200
+        body = r.json()
+        tasks_seen = {row["task"] for row in body["votes"]}
+        assert tf.title in tasks_seen
+        assert tp.title not in tasks_seen
+
+        _clear_t7_fixtures(db)
+
+
+def test_spotlight_index_filters_by_kingdom(monkeypatch):
+    """spotlight_index filters SPOTLIGHTS by the active kingdom; every current subject is
+    tagged 'plants', so kingdom=fungi must hide them all while kingdom=all keeps them."""
+    c = TestClient(app)
+    r_all = c.get("/spotlight?kingdom=all")
+    assert r_all.status_code == 200
+    assert "Solanum lycopersicum" in r_all.text  # tomato spotlight visible under 'all'
+
+    r_fungi = c.get("/spotlight?kingdom=fungi")
+    assert r_fungi.status_code == 200
+    assert "Solanum lycopersicum" not in r_fungi.text
+    assert "Zea mays" not in r_fungi.text
