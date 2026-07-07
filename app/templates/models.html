@@ -11,17 +11,10 @@
   </header>
 
   {% if cards %}
-  <div class="b3d-model-list">
+  <div class="b3d-model-grid">
     {% for c in cards %}
     <a href="/models/{{ c.slug }}" class="b3d-model-card">
-      <span class="b3d-model-icon" aria-hidden="true">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-          <path d="M12 2 20 6.5 20 15.5 12 20 4 15.5 4 6.5Z" stroke="var(--accent)" stroke-width="1.4" stroke-linejoin="round" fill="color-mix(in oklch, var(--accent) 14%, transparent)"/>
-          <path d="M12 2 12 11 4 6.5" stroke="var(--accent2)" stroke-width="1.1" stroke-linejoin="round"/>
-          <path d="M12 11 20 6.5" stroke="var(--accent2)" stroke-width="1.1" stroke-linejoin="round"/>
-          <path d="M12 11 12 20" stroke="var(--accent2)" stroke-width="1.1" stroke-linejoin="round"/>
-        </svg>
-      </span>
+      <span class="b3d-model-icon lb-avatar" style="--h:{{ c.avatar_hue }}" aria-hidden="true">{{ c.avatar }}</span>
       <span class="b3d-model-main">
         <span class="b3d-model-name-row">
           <span class="b3d-model-name">{{ c.name }}</span>
@@ -30,11 +23,11 @@
         <span class="b3d-model-secondary">
           {{ c.paradigm_display or c.description or "—" }}
         </span>
-      </span>
-      <span class="b3d-model-stats mono">
-        <span title="Bradley–Terry overall score">{% if c.bt_score is not none %}<strong>{{ c.bt_score }}</strong> BT{% else %}<span class="subtle">unrated</span>{% endif %}</span>
-        <span><strong>{{ c.votes }}</strong> votes</span>
-        <span><strong>{{ c.tasks }}</strong> tasks</span>
+        <span class="b3d-model-stats mono">
+          <span title="Bradley–Terry overall score">{% if c.bt_score is not none %}<strong>{{ c.bt_score }}</strong> BT{% else %}<span class="subtle">unrated</span>{% endif %}</span>
+          <span><strong>{{ c.votes }}</strong> votes</span>
+          <span><strong>{{ c.tasks }}</strong> tasks</span>
+        </span>
       </span>
       <span class="b3d-model-arrow" aria-hidden="true">&rarr;</span>
     </a>

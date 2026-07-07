@@ -21,6 +21,14 @@
     <a href="/spotlight/{{ s.slug }}" class="sp-idx-card">
       <div class="sp-idx-stage">
         {% if s.featured %}<span class="sp-idx-featured"><span class="cat-chip">featured</span></span>{% endif %}
+        {# "N models" = count of non-gold outputs on this subject's task (same population the
+           detail page lists) — SPOTLIGHTS carries no cached count, so it's computed once
+           per request in the /spotlight route, not fabricated. Omitted when the subject's
+           task isn't in the DB yet rather than showing a wrong number. #}
+        {% if s.model_count is not none %}<span class="sp-idx-count">{{ s.model_count }} model{{ 's' if s.model_count != 1 else '' }}</span>{% endif %}
+        {# Per-subject emoji: SPOTLIGHTS has no per-subject emoji/icon field (only `kingdom`),
+           so this falls back to one emoji per kingdom — every "plants" card currently shares
+           🌿 rather than a fabricated tomato/corn/rose icon. Logged data limit, not a bug. #}
         <span class="sp-idx-emoji" aria-hidden="true">{{ kingdom_emoji.get(s.kingdom, '\U0001F9EC') }}</span>
       </div>
       <div class="sp-idx-body">

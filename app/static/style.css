@@ -1319,9 +1319,14 @@ kbd {
    no fabricated taxonomy. */
 .sp-idx-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 1.25rem;
   margin-top: 0.5rem;
+}
+@media (max-width: 760px) {
+  .sp-idx-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .sp-idx-card {
   display: block;
@@ -1360,6 +1365,23 @@ kbd {
   position: absolute;
   top: 12px;
   left: 12px;
+}
+/* "N models" badge — top-right of the stage, mirrors .cat-chip's pill treatment so it
+   reads as a sibling of the FEATURED badge rather than a new visual language. */
+.sp-idx-count {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  color: var(--text);
+  background: color-mix(in oklch, var(--panel) 70%, transparent);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(2px);
 }
 .sp-idx-emoji {
   font-size: 56px;
@@ -2398,17 +2420,23 @@ details.group[open] > summary.group-title::before {
 }
 .b3d-hero-rings-bg {
   position: absolute;
-  top: -34%;
-  right: -6%;
-  width: 520px;
-  height: 520px;
-  background: repeating-radial-gradient(
-    circle at 50% 50%,
-    transparent 0 26px,
-    color-mix(in oklch, var(--accent2) 8%, transparent) 26px 27px
-  );
-  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000, transparent 66%);
-  mask-image: radial-gradient(circle at 50% 50%, #000, transparent 66%);
+  top: -8%;
+  right: 0%;
+  width: 640px;
+  height: 640px;
+  background:
+    radial-gradient(
+      circle at 50% 46%,
+      color-mix(in oklch, var(--accent) 20%, transparent),
+      transparent 68%
+    ),
+    repeating-radial-gradient(
+      circle at 50% 46%,
+      transparent 0 52px,
+      color-mix(in oklch, var(--accent2) 14%, transparent) 52px 53px
+    );
+  -webkit-mask-image: radial-gradient(circle at 50% 46%, #000, transparent 70%);
+  mask-image: radial-gradient(circle at 50% 46%, #000, transparent 70%);
   pointer-events: none;
 }
 .b3d-hero-grid {
@@ -2547,12 +2575,66 @@ details.group[open] > summary.group-title::before {
   color: var(--muted);
 }
 
+/* Arena page hero — centered variant of the home hero (H1 + lede + inline
+   mono stat row), sitting above the task strip. */
+.arena-hero {
+  text-align: center;
+  max-width: 720px;
+  margin: 0.25rem auto 1.6rem;
+}
+.arena-hero-h1 {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 38px;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text);
+}
+.arena-hero-lede {
+  color: var(--muted);
+  font-size: 15.5px;
+  line-height: 1.6;
+  margin: 0.9rem auto 0;
+  max-width: 620px;
+}
+.arena-hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem 0.65rem;
+  margin-top: 1.1rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+.arena-hero-stats strong {
+  color: var(--accent2);
+  font-weight: 600;
+}
+
 .b3d-hero-viz {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: 0.85rem;
+}
+.b3d-hero-viz-frame {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.b3d-hero-gizmo {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  width: 40px;
+  height: 40px;
+  pointer-events: none;
 }
 .b3d-hero-viz-stage {
   /* Live-GLB variant of the hero viz: reuses .viewer-slot's arena stage look
@@ -2604,6 +2686,40 @@ details.group[open] > summary.group-title::before {
   font-family: "IBM Plex Mono", monospace;
   font-size: 10.5px;
   color: var(--faint);
+}
+.b3d-hero-kingdom-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.b3d-hero-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.b3d-hero-pill.is-soon {
+  color: var(--muted);
+  font-weight: 500;
+}
+.b3d-hero-pill-soon {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  background: color-mix(in oklch, var(--border) 60%, transparent);
+  border-radius: 999px;
+  padding: 0.15rem 0.4rem;
 }
 
 .b3d-section-head {
@@ -2719,6 +2835,7 @@ details.group[open] > summary.group-title::before {
 }
 .b3d-step-card {
   border: 1px solid var(--border);
+  border-top: 2px solid var(--accent);
   border-radius: var(--r-card);
   background: var(--panel);
   box-shadow: var(--shadowCard);
@@ -2729,13 +2846,7 @@ details.group[open] > summary.group-title::before {
   font-size: 12px;
   font-weight: 700;
   color: var(--accent);
-  border: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
-  border-radius: 999px;
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  letter-spacing: 0.03em;
 }
 .b3d-step-card h3 {
   font-family: "Space Grotesk", sans-serif;
@@ -2760,6 +2871,9 @@ details.group[open] > summary.group-title::before {
   }
   .b3d-hero-viz-stage {
     height: 300px;
+  }
+  .b3d-hero-kingdom-pills {
+    justify-content: flex-start;
   }
   .b3d-kgrid,
   .b3d-steps-grid {
@@ -3180,10 +3294,17 @@ details.group[open] > summary.group-title::before {
 }
 
 /* === Models index + detail (Task 12) — model-card family on shared tokens === */
-.b3d-model-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+/* 2-col card grid (design-parity: task-models-spotlight), collapses to 1-col on narrow
+   viewports; each card carries a colored avatar tile (shares .lb-avatar's hue formula). */
+.b3d-model-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+}
+@media (max-width: 760px) {
+  .b3d-model-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .b3d-model-card {
   display: flex;
@@ -3219,6 +3340,15 @@ details.group[open] > summary.group-title::before {
   align-items: center;
   justify-content: center;
 }
+/* Colored-initials avatar tile (same hue formula as the leaderboard's .lb-avatar), just
+   sized up for the card grid — overrides only the size-related props, keeps the color. */
+.b3d-model-icon.lb-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  border: none;
+}
 .b3d-model-main {
   flex: 1;
   min-width: 0;
@@ -3249,6 +3379,7 @@ details.group[open] > summary.group-title::before {
   color: var(--faint);
   white-space: nowrap;
   flex-shrink: 0;
+  margin-top: 0.45rem;
 }
 .b3d-model-stats strong {
   color: var(--text);
@@ -3513,6 +3644,24 @@ details.group[open] > summary.group-title::before {
   margin: 0 0 0.6rem;
   font-size: 1.05rem;
 }
+/* .ds-composition groups the by-kingdom / by-tier / by-provenance bars into one card
+   (each a .ds-comp-row) instead of one panel per bar, matching the prototype. */
+.ds-composition h3 {
+  margin: 0 0 0.9rem;
+}
+.ds-comp-row + .ds-comp-row {
+  margin-top: 1.1rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--border);
+}
+.ds-comp-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.55rem;
+  font-weight: 600;
+}
 .ds-bar-track {
   display: flex;
   width: 100%;
@@ -3660,6 +3809,7 @@ details.group[open] > summary.group-title::before {
    bottom margin); .meth-panel mirrors the .cov-panel/.ds-panel/.tk-panel card
    namespace. .meth-formula is a static inline-styled BT formula — no math lib. === */
 .meth-steps-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   margin-bottom: 1.3rem;
 }
 .meth-panel {
@@ -3710,6 +3860,17 @@ details.group[open] > summary.group-title::before {
    --panel2 inputs + accent focus rings. === */
 .sub-steps-grid {
   margin-bottom: 1.3rem;
+}
+.sub-steps-grid .b3d-step-card h3 {
+  font-family: "IBM Plex Mono", monospace;
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+.sub-steps-grid .b3d-step-card .b3d-step-num {
+  font-size: inherit;
+  font-weight: inherit;
 }
 .sub-form {
   background: var(--panel);

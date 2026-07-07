@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Difficulty · Bio 3D Arena{% endblock %}
 {% block content %}
+{# Heatmap cell tint (top-level so every table below is in scope, incl. paradigm grid + scorecard). #}
+{% macro diff_heat(value, vmin, vmax, invert) %}{% if value is not none and vmax is not none and vmin is not none and vmax > vmin %}{% set frac = (value - vmin) / (vmax - vmin) %}{% set frac = (1 - frac) if invert else frac %}{% set frac = 0 if frac < 0 else (1 if frac > 1 else frac) %}{% set pct = (24 + frac * 34) | round(1) %}{% set hcolor = 'var(--win)' if frac >= 0.66 else ('var(--amber)' if frac >= 0.33 else 'var(--bad)') %}background: color-mix(in oklch, {{ hcolor }} {{ pct }}%, var(--panel2));{% endif %}{% endmacro %}
 <section class="diff">
   <header class="b3d-page-head">
     <h1>Difficulty tiers {% include "_scope_pill.html" %}</h1>
@@ -118,10 +120,29 @@
     </svg>
   </div>
 
+  {# heat-map coloring: per numeric column, normalize within its own comparison set
+     (a tier's rows, or here a tier COLUMN across generators), better = greener. Defined
+     once here so both this table and the paradigm × difficulty grid below can reuse it. #}
+
+  {% set gt_vmin = {} %}
+  {% set gt_vmax = {} %}
+  {% for t in tiers %}
+    {% set gt_vals = [] %}
+    {% for g in gradient %}{% if g.chamfer[t] is not none %}{% set _ = gt_vals.append(g.chamfer[t]) %}{% endif %}{% endfor %}
+    {% set _ = gt_vmin.update({t: (gt_vals | min if gt_vals else none)}) %}
+    {% set _ = gt_vmax.update({t: (gt_vals | max if gt_vals else none)}) %}
+  {% endfor %}
+
   <div class="diff-panel">
     <h3>Per-generator gradient table</h3>
+    <div class="diff-legend subtle">
+      Cell shade = relative chamfer within its tier column —
+      <span class="diff-legend-swatch" style="background: color-mix(in oklch, var(--win) 45%, var(--panel2))"></span> lower/better
+      <span class="diff-legend-swatch" style="background: color-mix(in oklch, var(--amber) 45%, var(--panel2))"></span> mid
+      <span class="diff-legend-swatch" style="background: color-mix(in oklch, var(--bad) 45%, var(--panel2))"></span> higher/worse
+    </div>
     <div class="ranktable-wrap">
-      <table class="ranktable">
+      <table class="ranktable diff-heatmap">
         <thead>
           <tr>
             <th>Method</th>
@@ -134,7 +155,7 @@
           <tr>
             <td class="gen">{{ g.generator }}</td>
             {% for t in tiers %}
-            <td class="num">{{ '%.4f'|format(g.chamfer[t]) if g.chamfer[t] is not none else '—' }}</td>
+            <td class="num strong" style="{{ diff_heat(g.chamfer[t], gt_vmin[t], gt_vmax[t], true) }}">{{ '%.4f'|format(g.chamfer[t]) if g.chamfer[t] is not none else '—' }}</td>
             {% endfor %}
             {% set vals = [] %}
             {% for t in tiers %}{% if g.chamfer[t] is not none %}{% set _ = vals.append(g.chamfer[t]) %}{% endif %}{% endfor %}
@@ -151,10 +172,6 @@
   {% endif %}
 
   {% if paradigm_grid %}
-  {# heat-map coloring: per numeric column, normalize within THIS tier's rows only
-     (so "hard" cells aren't washed out by a much-easier tier's spread), better = greener. #}
-  {% macro diff_heat(value, vmin, vmax, invert) %}{% if value is not none and vmax is not none and vmin is not none and vmax > vmin %}{% set frac = (value - vmin) / (vmax - vmin) %}{% set frac = (1 - frac) if invert else frac %}{% set frac = 0 if frac < 0 else (1 if frac > 1 else frac) %}{% set pct = (24 + frac * 34) | round(1) %}{% set hcolor = 'var(--win)' if frac >= 0.66 else ('var(--amber)' if frac >= 0.33 else 'var(--bad)') %}background: color-mix(in oklch, {{ hcolor }} {{ pct }}%, var(--panel2));{% endif %}{% endmacro %}
-
   <div class="diff-panel">
     <h2>
       Paradigm × difficulty
