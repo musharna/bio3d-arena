@@ -1297,27 +1297,117 @@ def significance_page(
 
 @app.get("/tasks", response_class=HTMLResponse)
 def tasks_page(request: Request, db: Session = Depends(get_db)):
+    from sqlalchemy import func
+
+    from .models import ReconTask, TaskDifficulty
+
     roadmap = _roadmap_or_none(request, db)
     if roadmap is not None:
         return roadmap
     k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
-    stmt = select(Task)
+    stmt = select(Task).order_by(Task.id)
     if k_ids is not None:
         stmt = stmt.where(Task.category_id.in_(k_ids))
     tasks = db.execute(stmt).scalars().all()
+    task_ids = [t.id for t in tasks]
+
+    # Real vote totals per task (non-gold decisive votes) — reused for both the per-row
+    # VOTES column and the "votes across tasks" stat card, so the two numbers can never
+    # silently disagree.
+    vote_counts: dict[int, int] = (
+        dict(
+            db.execute(
+                select(Comparison.task_id, func.count(Vote.id))
+                .select_from(Vote)
+                .join(Comparison, Vote.comparison_id == Comparison.id)
+                .where(Comparison.is_gold.is_(False), Comparison.task_id.in_(task_ids))
+                .group_by(Comparison.task_id)
+            ).all()
+        )
+        if task_ids
+        else {}
+    )
+
+    # Difficulty tier, keyed by task — same table/join the /difficulty page reads from.
+    # Tasks without a curated row simply have no tier (shown as "—"), never a guess.
+    tier_by_task: dict[int, str] = (
+        dict(
+            db.execute(
+                select(TaskDifficulty.task_id, TaskDifficulty.tier).where(
+                    TaskDifficulty.task_id.in_(task_ids)
+                )
+            ).all()
+        )
+        if task_ids
+        else {}
+    )
+
+    # Latin binomial, keyed by task — same ReconTask.species_name the /difficulty page's
+    # tier_species header line reads. Tasks with no recon-GT bundle fall back to the title.
+    species_by_task: dict[int, str] = (
+        dict(
+            db.execute(
+                select(ReconTask.task_id, ReconTask.species_name).where(
+                    ReconTask.task_id.in_(task_ids)
+                )
+            ).all()
+        )
+        if task_ids
+        else {}
+    )
+
+    # Distinct paradigms actually exercised by non-gold outputs in scope — the third stat
+    # card. Omitted entirely (not zeroed) if nothing is tagged, so the card never fakes 0.
+    paradigm_stmt = (
+        (
+            select(Generator.paradigm)
+            .distinct()
+            .join(ModelOutput, ModelOutput.generator_id == Generator.id)
+            .where(ModelOutput.is_gold.is_(False), ModelOutput.task_id.in_(task_ids))
+        )
+        if task_ids
+        else None
+    )
+    paradigms_exercised = (
+        {p for p in db.execute(paradigm_stmt).scalars().all() if p}
+        if paradigm_stmt is not None
+        else set()
+    )
+
+    def _paradigm_label(t: Task) -> str:
+        tagged = {o.generator.paradigm for o in t.outputs if not o.is_gold and o.generator.paradigm}
+        if len(tagged) == 1:
+            return paradigms.DISPLAY_NAMES.get(next(iter(tagged)), next(iter(tagged)))
+        if len(tagged) > 1:
+            return "Multiple"
+        return "—"
+
     rows = []
     for t in tasks:
+        cat = t.category
+        kingdom = kingdoms.KINGDOM_OF.get(cat.slug, "all")
+        species_name = species_by_task.get(t.id) or ""
         rows.append(
             {
                 "id": t.id,
                 "title": t.title,
                 "prompt": t.prompt,
-                "category": t.category.name,
+                "category": cat.name,
                 "n_outputs": len(t.outputs),
                 "active": t.active,
+                "kingdom_emoji": kingdoms.KINGDOM_EMOJI.get(kingdom, kingdoms.KINGDOM_EMOJI["all"]),
+                "species_name": species_name,
+                "paradigm": _paradigm_label(t),
+                "tier": tier_by_task.get(t.id),
+                "votes": vote_counts.get(t.id, 0),
             }
         )
-    return templates.TemplateResponse(request, "tasks.html", {"tasks": rows})
+    stats = {
+        "live_tasks": sum(1 for t in tasks if t.active),
+        "votes_total": sum(vote_counts.values()) if vote_counts else None,
+        "n_paradigms": len(paradigms_exercised) if paradigms_exercised else None,
+    }
+    return templates.TemplateResponse(request, "tasks.html", {"tasks": rows, "stats": stats})
 
 
 @app.get("/spotlight", response_class=HTMLResponse)

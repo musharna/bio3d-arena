@@ -1,34 +1,71 @@
-{% extends "base.html" %} {% block title %}Tasks · Bio 3D Arena{% endblock %} {%
-block content %}
+{% extends "base.html" %}
+{% block title %}Task catalog · Bio 3D Arena{% endblock %}
+{% block content %}
 <section class="board">
-  <h2>Benchmark Tasks</h2>
-  <p class="subtle">
-    {{ tasks|length }} tasks. Each task collects 3D outputs from multiple
-    generators for head-to-head comparison.
-  </p>
-  <table class="ranktable">
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Title</th>
-        <th>Category</th>
-        <th>Outputs</th>
-        <th>Active</th>
-        <th>Prompt</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for t in tasks %}
-      <tr>
-        <td>{{ t.id }}</td>
-        <td class="gen">{{ t.title }}</td>
-        <td><span class="cat-chip">{{ t.category }}</span></td>
-        <td class="num">{{ t.n_outputs }}</td>
-        <td>{{ "✓" if t.active else "—" }}</td>
-        <td class="subtle">{{ t.prompt }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <header class="b3d-page-head">
+    <h1>Task catalog {% include "_scope_pill.html" %}</h1>
+    <p class="b3d-page-lede">
+      Every benchmarked task: the source organism, the reconstruction paradigm it
+      exercises, its difficulty tier, and the votes it's drawn.
+    </p>
+  </header>
+
+  <div class="tk-stat-grid">
+    <div class="tk-stat-card">
+      <span class="tk-stat-num mono">{{ stats.live_tasks }}</span>
+      <span class="tk-stat-label">Live tasks</span>
+    </div>
+    {% if stats.votes_total is not none %}
+    <div class="tk-stat-card">
+      <span class="tk-stat-num mono">{{ "{:,}".format(stats.votes_total) }}</span>
+      <span class="tk-stat-label">Votes across tasks</span>
+    </div>
+    {% endif %}
+    {% if stats.n_paradigms is not none %}
+    <div class="tk-stat-card">
+      <span class="tk-stat-num mono">{{ stats.n_paradigms }}</span>
+      <span class="tk-stat-label">Paradigms exercised</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="tk-panel">
+    <div class="ranktable-wrap">
+      <table class="ranktable">
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>Subject</th>
+            <th>Paradigm</th>
+            <th>Tier</th>
+            <th>Votes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in tasks %}
+          <tr>
+            <td class="num mono">T-{{ "%02d"|format(loop.index) }}</td>
+            <td class="gen">
+              <span aria-hidden="true">{{ t.kingdom_emoji }}</span>
+              {% if t.species_name %}<i>{{ t.species_name }}</i>{% else %}{{ t.title }}{% endif %}
+            </td>
+            <td class="subtle">{{ t.paradigm }}</td>
+            <td>
+              {% if t.tier %}<span class="tk-tier tk-tier-{{ t.tier }}">{{ t.tier }}</span>{% else %}<span class="subtle">—</span>{% endif %}
+            </td>
+            <td class="num">{{ t.votes }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if not tasks %}
+    <p class="subtle">No tasks in this scope yet.</p>
+    {% endif %}
+  </div>
+
+  <p class="subtle">{{ tasks|length }} task{{ "s" if tasks|length != 1 else "" }} in scope.
+    Each row's prompt and full metadata seed the reconstruction and drive vote
+    matchmaking for that task.</p>
 </section>
 {% endblock %}

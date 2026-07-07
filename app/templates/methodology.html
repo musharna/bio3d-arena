@@ -1,53 +1,115 @@
 {% extends "base.html" %}
 {% block title %}Methodology · Bio 3D Arena{% endblock %}
 {% block content %}
-<section class="board prose">
-  <h2>Methodology &amp; integrity</h2>
-  <p class="subtle">How rankings are computed and how vote quality is protected.</p>
+<section class="board">
+  <header class="b3d-page-head">
+    <h1>How the arena works {% include "_scope_pill.html" %}</h1>
+    <p class="b3d-page-lede">
+      Every ranking traces back to a simple, auditable loop: a real specimen,
+      identical inputs, anonymous pairwise votes, and a statistical model that turns
+      those votes into a score.
+    </p>
+  </header>
 
-  <h3>Ranking</h3>
-  <ul>
-    <li><b>Online Elo</b> (K=32, ties = 0.5) updates live on every decisive vote —
-      the fast, approximate signal shown next to each generator.</li>
-    <li><b>Bradley–Terry MLE</b> over the full pairwise win record is the
-      authoritative leaderboard, fit by minorization–maximization and rescaled to
-      an Elo-like range. <b>Bootstrap resampling</b> gives 95% confidence intervals.</li>
-    <li><b>Significance</b>: a paired bootstrap reports P(A ranks above B) for every
-      pair, so we can say whether A is <i>meaningfully</i> ahead — not just nominally.</li>
-    <li><b>Rank (UB)</b>: models whose 95% bootstrap confidence intervals overlap
-      share a rank; a model outranks another only when its lower bound strictly
-      exceeds the other's upper bound. Equal-CI models are co-ranked rather than
-      arbitrarily ordered.</li>
-    <li><b>Ties</b> are credited as a split — one win in each direction — so they
-      inform Bradley-Terry symmetrically without a separate tie parameter. Comparisons
-      marked "both bad" are recorded for audit but excluded from the fit entirely.
-      Comparisons are drawn within a task, so the two outputs share a prompt and format.</li>
-  </ul>
+  <div class="b3d-steps-grid meth-steps-grid">
+    <div class="b3d-step-card">
+      <div class="b3d-step-num">01</div>
+      <h3>Reference</h3>
+      <p>A real organism is captured or sourced — CT scan, photogrammetry, or a
+        licensed reference image.</p>
+    </div>
+    <div class="b3d-step-card">
+      <div class="b3d-step-num">02</div>
+      <h3>Generate</h3>
+      <p>Every model reconstructs a 3D asset from the same single input, under
+        identical conditions.</p>
+    </div>
+    <div class="b3d-step-card">
+      <div class="b3d-step-num">03</div>
+      <h3>Pair</h3>
+      <p>Two outputs for one task are sampled anonymously and shown side by side.</p>
+    </div>
+    <div class="b3d-step-card">
+      <div class="b3d-step-num">04</div>
+      <h3>Vote</h3>
+      <p>You inspect both in the live viewer and pick the better reconstruction —
+        or call a tie.</p>
+    </div>
+    <div class="b3d-step-card">
+      <div class="b3d-step-num">05</div>
+      <h3>Bradley–Terry</h3>
+      <p>Pairwise votes fit a Bradley–Terry model, turning wins into a latent skill
+        score for each model.</p>
+    </div>
+    <div class="b3d-step-card">
+      <div class="b3d-step-num">06</div>
+      <h3>Rank</h3>
+      <p>Ratings and 95% intervals produce the leaderboard, refreshed as votes
+        accumulate.</p>
+    </div>
+  </div>
 
-  <h3>Vote integrity</h3>
-  <ul>
-    <li><b>Anonymity</b>: generator identities are never sent to the browser during
-      voting; sides (A/B) are randomized to neutralize position bias.</li>
-    <li><b>Gold attention checks</b>: ~{{ (gold_rate * 100) | round(0) | int }}% of
-      comparisons are calibration pairs with a known-good vs. an obviously-bad asset.
-      A voter's <b>trust</b> is the Laplace-smoothed pass rate
-      (gold_passed + 1)/(gold_seen + 1). Votes from sessions below trust
-      {{ trust_threshold }} are excluded from the Bradley–Terry leaderboard
-      (still recorded for audit).</li>
-    <li><b>Rate limiting</b>: at most {{ rate_limit }} votes per {{ rate_window }}s per
-      session.</li>
-    <li><b>Dedup</b>: a session cannot re-vote the same pairing for the same criterion.</li>
-    <li><b>Human verification</b>: captcha is {% if require_captcha %}<b>enabled</b>{% else %}available but
-      disabled in this deployment{% endif %} (Turnstile/hCaptcha integration point).</li>
-  </ul>
+  <div class="meth-panel">
+    <h3>The Bradley&ndash;Terry model</h3>
+    <div class="meth-formula" role="math" aria-label="P of i beats j equals sigma of beta sub i minus beta sub j">
+      <span class="meth-formula-lhs">P(i&nbsp;beats&nbsp;j)</span>
+      <span class="meth-formula-eq">=</span>
+      <span class="meth-formula-rhs">&sigma;(&beta;<sub>i</sub> &minus; &beta;<sub>j</sub>)</span>
+    </div>
+    <p class="subtle">&sigma; is the logistic sigmoid; &beta;<sub>i</sub> and &beta;<sub>j</sub>
+      are the fitted latent skill of models <i>i</i> and <i>j</i>. The model that wins more
+      often than its rating predicts pulls its own &beta; up; the leaderboard is these
+      &beta; values rescaled to an Elo-like range.</p>
+  </div>
 
-  <h3>Bias audit</h3>
-  <p>The <a href="/significance">significance page</a> publishes a live bias audit:
-    the left(A) win rate (≈0.50 means no position bias), tie/bad rates, gold
-    pass-rate, low-trust session count, and any cross-format comparisons (a
-    format-confound risk).</p>
+  <div class="meth-panel prose">
+    <h3>Ranking</h3>
+    <ul>
+      <li><b>Online Elo</b> (K=32, ties = 0.5) updates live on every decisive vote —
+        the fast, approximate signal shown next to each generator.</li>
+      <li><b>Bradley–Terry MLE</b> over the full pairwise win record is the
+        authoritative leaderboard, fit by minorization–maximization and rescaled to
+        an Elo-like range. <b>Bootstrap resampling</b> gives 95% confidence intervals.</li>
+      <li><b>Significance</b>: a paired bootstrap reports P(A ranks above B) for every
+        pair, so we can say whether A is <i>meaningfully</i> ahead — not just nominally.</li>
+      <li><b>Rank (UB)</b>: models whose 95% bootstrap confidence intervals overlap
+        share a rank; a model outranks another only when its lower bound strictly
+        exceeds the other's upper bound. Equal-CI models are co-ranked rather than
+        arbitrarily ordered.</li>
+      <li><b>Ties</b> are credited as a split — one win in each direction — so they
+        inform Bradley-Terry symmetrically without a separate tie parameter. Comparisons
+        marked "both bad" are recorded for audit but excluded from the fit entirely.
+        Comparisons are drawn within a task, so the two outputs share a prompt and format.</li>
+    </ul>
+  </div>
 
-  <p class="subtle">Gold/decoy assets are excluded from matchmaking and from all
-    rankings — they exist only to measure voter trust.</p>
+  <div class="meth-panel prose">
+    <h3>Vote integrity</h3>
+    <ul>
+      <li><b>Anonymity</b>: generator identities are never sent to the browser during
+        voting; sides (A/B) are randomized to neutralize position bias.</li>
+      <li><b>Gold attention checks</b>: ~{{ (gold_rate * 100) | round(0) | int }}% of
+        comparisons are calibration pairs with a known-good vs. an obviously-bad asset.
+        A voter's <b>trust</b> is the Laplace-smoothed pass rate
+        (gold_passed + 1)/(gold_seen + 1). Votes from sessions below trust
+        {{ trust_threshold }} are excluded from the Bradley–Terry leaderboard
+        (still recorded for audit).</li>
+      <li><b>Rate limiting</b>: at most {{ rate_limit }} votes per {{ rate_window }}s per
+        session.</li>
+      <li><b>Dedup</b>: a session cannot re-vote the same pairing for the same criterion.</li>
+      <li><b>Human verification</b>: captcha is {% if require_captcha %}<b>enabled</b>{% else %}available but
+        disabled in this deployment{% endif %} (Turnstile/hCaptcha integration point).</li>
+    </ul>
+  </div>
+
+  <div class="meth-panel prose">
+    <h3>Bias audit</h3>
+    <p>The <a href="/significance">significance page</a> publishes a live bias audit:
+      the left(A) win rate (≈0.50 means no position bias), tie/bad rates, gold
+      pass-rate, low-trust session count, and any cross-format comparisons (a
+      format-confound risk).</p>
+    <p class="subtle">Gold/decoy assets are excluded from matchmaking and from all
+      rankings — they exist only to measure voter trust.</p>
+  </div>
 </section>
 {% endblock %}
