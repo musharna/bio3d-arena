@@ -2921,3 +2921,119 @@ details.group[open] > summary.group-title::before {
   color: var(--win);
   font-weight: 700;
 }
+
+/* === Dataset (Task 17) — stat-card grid (own namespace so a future Coverage restyle
+   doesn't ripple here) + segmented composition bars for "by kingdom" / "by tier",
+   server-computed widths (no JS). === */
+.ds-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.85rem;
+  margin: 0 0 1.3rem;
+}
+.ds-stat-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadowCard);
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.ds-stat-num {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+.ds-stat-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.ds-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadowCard);
+  padding: 1.1rem 1.25rem;
+  margin: 0 0 1.3rem;
+}
+.ds-panel h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1.05rem;
+}
+.ds-bar-track {
+  display: flex;
+  width: 100%;
+  height: 22px;
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+}
+.ds-bar-seg {
+  height: 100%;
+  min-width: 2px;
+}
+.ds-bar-seg:not(:last-child) {
+  border-right: 1px solid var(--panel);
+}
+/* Kingdom segment colors reuse the shared accent/semantic tokens so a new kingdom
+   only needs a new .ds-seg-<slug> rule, not a new palette. */
+.ds-seg-plants {
+  background: var(--accent);
+}
+.ds-seg-fungi {
+  background: var(--accent2);
+}
+.ds-seg-animals {
+  background: var(--amber);
+}
+/* Tier segment colors mirror the difficulty gradient (easy=win, moderate=amber,
+   hard=bad) used on /difficulty's heat-map legend. */
+.ds-seg-easy {
+  background: var(--win);
+}
+.ds-seg-moderate {
+  background: var(--amber);
+}
+.ds-seg-hard {
+  background: var(--bad);
+}
+.ds-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  margin-top: 0.6rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.ds-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.ds-legend-swatch {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+}
+.ds-release-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.ds-release-list pre {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-ctl);
+  padding: 0.6rem 0.8rem;
+  font-size: 0.8rem;
+  overflow-x: auto;
+  margin: 0.4rem 0 0;
+}

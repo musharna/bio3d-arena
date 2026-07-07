@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from . import (
     config,
+    dataset,
     difficulty,
     fidelity,
     ingest,
@@ -1116,7 +1117,11 @@ def dataset_page(request: Request, db: Session = Depends(get_db)):
             vf = d / "VERSION"
             if d.is_dir() and vf.is_file():
                 releases.append({"version": d.name, "version_text": vf.read_text()})
-    return templates.TemplateResponse(request, "dataset.html", {"releases": releases})
+    k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    composition = dataset.dataset_composition(db, k_ids)
+    return templates.TemplateResponse(
+        request, "dataset.html", {"releases": releases, "composition": composition}
+    )
 
 
 @app.get("/methodology", response_class=HTMLResponse)

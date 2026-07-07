@@ -1,29 +1,94 @@
-{% extends "base.html" %} {% block title %}Dataset · Bio 3D Arena{% endblock %}
+{% extends "base.html" %}
+{% block title %}Dataset · Bio 3D Arena{% endblock %}
 {% block content %}
-<h1>Benchmark Dataset</h1>
-<p>
-  A citable, licensed release of the biological-3D generation benchmark: tasks,
-  3D outputs, baked GT reference renders, and objective metrics. Held-out raw GT
-  is withheld for integrity. Human preference votes ship as a secondary file.
-</p>
-{% if releases %}
-<ul>
-  {% for r in releases %}
-  <li>
-    <b>{{ r.version }}</b> —
-    <a href="/api/export.json">preference records (live)</a>
-    <pre>{{ r.version_text }}</pre>
-  </li>
-  {% endfor %}
-</ul>
-<p>
-  See each release's <code>DATASHEET.md</code> and <code>LICENSE</code> for
-  contents and citation. API: <a href="/openapi.json">/openapi.json</a>.
-</p>
-{% else %}
-<p>
-  <em>No release published yet.</em> The live API is available at
-  <a href="/api/export.json">/api/export.json</a> and
-  <a href="/api/leaderboard">/api/leaderboard</a>.
-</p>
-{% endif %} {% endblock %}
+<section class="board ds">
+  <header class="b3d-page-head">
+    <h1>Dataset {% include "_scope_pill.html" %}</h1>
+    <p class="b3d-page-lede">
+      A citable, licensed release of the biological-3D generation benchmark: tasks, 3D
+      outputs, baked GT reference renders, and objective metrics. Held-out raw GT is
+      withheld for integrity. Human preference votes ship as a secondary file.
+    </p>
+  </header>
+
+  <div class="ds-stat-grid">
+    <div class="ds-stat-card">
+      <span class="ds-stat-num mono">{{ composition.ref_specimens }}</span>
+      <span class="ds-stat-label">Reference specimens</span>
+    </div>
+    <div class="ds-stat-card">
+      <span class="ds-stat-num mono">{{ composition.kingdoms_represented }}</span>
+      <span class="ds-stat-label">Kingdoms represented</span>
+    </div>
+    <div class="ds-stat-card">
+      <span class="ds-stat-num mono">{{ composition.n_outputs }}</span>
+      <span class="ds-stat-label">Model outputs collected</span>
+    </div>
+    <div class="ds-stat-card">
+      <span class="ds-stat-num mono">{{ composition.provenance_types }}</span>
+      <span class="ds-stat-label">Provenance types</span>
+    </div>
+  </div>
+
+  {% set kingdom_label = {"plants": "Plants", "fungi": "Fungi", "animals": "Animals"} %}
+  {% set kingdom_emoji = {"plants": "\U0001F33F", "fungi": "\U0001F344", "animals": "\U0001F43E"} %}
+  {% if composition.n_outputs %}
+  <div class="ds-panel">
+    <h3>By kingdom <span class="subtle">— {{ composition.n_outputs }} model output{{ 's' if composition.n_outputs != 1 else '' }}</span></h3>
+    <div class="ds-bar-track">
+      {% for seg in composition.by_kingdom %}{% if seg.count %}
+      <div class="ds-bar-seg ds-seg-{{ seg.key }}" style="width: {{ seg.pct }}%" title="{{ kingdom_label.get(seg.key, seg.key) }}: {{ seg.count }} ({{ seg.pct }}%)"></div>
+      {% endif %}{% endfor %}
+    </div>
+    <div class="ds-legend">
+      {% for seg in composition.by_kingdom %}
+      <span class="ds-legend-chip"><span class="ds-legend-swatch ds-seg-{{ seg.key }}"></span>{{ kingdom_emoji.get(seg.key, '') }} {{ kingdom_label.get(seg.key, seg.key) }} <span class="mono">{{ seg.count }}</span></span>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if composition.by_tier | sum(attribute='count') %}
+  <div class="ds-panel">
+    <h3>By difficulty tier <span class="subtle">— {{ composition.by_tier | sum(attribute='count') }} tiered output{{ 's' if (composition.by_tier | sum(attribute='count')) != 1 else '' }}</span></h3>
+    <div class="ds-bar-track">
+      {% for seg in composition.by_tier %}{% if seg.count %}
+      <div class="ds-bar-seg ds-seg-{{ seg.key }}" style="width: {{ seg.pct }}%" title="{{ seg.key | capitalize }}: {{ seg.count }} ({{ seg.pct }}%)"></div>
+      {% endif %}{% endfor %}
+    </div>
+    <div class="ds-legend">
+      {% for seg in composition.by_tier %}
+      <span class="ds-legend-chip"><span class="ds-legend-swatch ds-seg-{{ seg.key }}"></span>{{ seg.key | capitalize }} <span class="mono">{{ seg.count }}</span></span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% else %}
+  <p class="subtle">No outputs at this scope yet.</p>
+  {% endif %}
+
+  <div class="ds-panel">
+    <h3>Releases</h3>
+    {% if releases %}
+    <ul class="ds-release-list">
+      {% for r in releases %}
+      <li>
+        <b>{{ r.version }}</b> —
+        <a href="/api/export.json">preference records (live)</a>
+        <pre>{{ r.version_text }}</pre>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="subtle">
+      See each release's <code>DATASHEET.md</code> and <code>LICENSE</code> for contents
+      and citation. API: <a href="/openapi.json">/openapi.json</a>.
+    </p>
+    {% else %}
+    <p class="subtle">
+      <em>No release published yet.</em> The live API is available at
+      <a href="/api/export.json">/api/export.json</a> and
+      <a href="/api/leaderboard">/api/leaderboard</a>.
+    </p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
