@@ -854,10 +854,18 @@ def _leaderboard_rows(
     k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
     if k_ids is not None:
         # A kingdom (≠ "all") is active: the cached `Rating` table is keyed by a single
-        # category_id and cannot represent a SET of categories, so compute live instead
-        # (mirrors verified_leaderboard_rows's on-demand-BT path — see kingdom_leaderboard_rows).
+        # category_id and cannot represent a SET of categories. `KingdomRating` (keyed by the
+        # kingdom STRING) covers the whole-kingdom scope and is refreshed by /admin/recompute;
+        # read it first and only fall back to live BT (kingdom_leaderboard_rows) on a cache miss
+        # (nothing cached yet) — the page must be correct before the first recompute, just slow
+        # that once. A narrower `?category=` selector WITHIN the kingdom has no cached
+        # counterpart (the cache is whole-kingdom only), so it always computes live.
         ids = _effective_category_ids(k_ids, category_id)
-        rows = service.kingdom_leaderboard_rows(db, criterion_slug, ids)
+        rows = None
+        if category_id is None:
+            rows = service.cached_kingdom_leaderboard_rows(db, criterion_slug, kingdom)
+        if rows is None:
+            rows = service.kingdom_leaderboard_rows(db, criterion_slug, ids)
         rows = [r for r in rows if not paradigm or r["paradigm"] == paradigm]
     else:
         scope = (
@@ -974,11 +982,24 @@ def _kingdom_judge_leaderboard_rows(
     db: Session,
     criterion_slug: str,
     view_condition: str,
+    kingdom: str,
     category_ids: set[int] | None,
+    category_id: int | None = None,
 ) -> list[dict]:
-    """Live (uncached) VLM-judge board for an active kingdom — mirrors _leaderboard_rows'
-    kingdom branch (service.kingdom_leaderboard_rows) but over JudgeVote/JudgeRating."""
-    rows = service.kingdom_judge_leaderboard_rows(db, criterion_slug, view_condition, category_ids)
+    """VLM-judge board for an active kingdom — mirrors _leaderboard_rows' kingdom branch: read
+    the `KingdomJudgeRating` cache (refreshed by /admin/recompute) first, falling back to live BT
+    (service.kingdom_judge_leaderboard_rows) on a cache miss or when a narrower `?category=`
+    selector within the kingdom is active (the cache is whole-kingdom only, same convention as
+    the human board)."""
+    rows = None
+    if category_id is None:
+        rows = service.cached_kingdom_judge_leaderboard_rows(
+            db, criterion_slug, view_condition, kingdom
+        )
+    if rows is None:
+        rows = service.kingdom_judge_leaderboard_rows(
+            db, criterion_slug, view_condition, category_ids
+        )
     return _group_rank_judge_rows(rows)
 
 
@@ -997,11 +1018,8 @@ def leaderboard(
     paradigm = paradigm or None  # "" (unset <select>) and None both mean "no filter"
     kingdom = request.state.kingdom
     k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
-    cat_ids = (
-        _effective_category_ids(k_ids, _resolve_category_id(db, category))
-        if k_ids is not None
-        else None
-    )
+    category_id_sel = _resolve_category_id(db, category)
+    cat_ids = _effective_category_ids(k_ids, category_id_sel) if k_ids is not None else None
     if verified:
         rows = service.verified_leaderboard_rows(db, criterion, category, category_ids=cat_ids)
     else:
@@ -1048,12 +1066,15 @@ def leaderboard(
             "sel_criterion": criterion,
             "sel_category": category,
             # The cached JudgeRating table is global-only (category_id.is_(None)) and can't
-            # represent a kingdom (a SET of categories), so under an active kingdom the judge
-            # board is computed live over kingdom-filtered JudgeVotes instead (mirrors the
-            # human on-the-fly path — service.kingdom_judge_leaderboard_rows). `kingdom=all`
-            # keeps the cached path unchanged.
+            # represent a kingdom (a SET of categories); under an active kingdom the judge board
+            # instead reads the `KingdomJudgeRating` cache (refreshed by /admin/recompute), with
+            # kingdom-filtered live JudgeVote BT as the cache-miss fallback (mirrors the human
+            # path — see _kingdom_judge_leaderboard_rows). `kingdom=all` keeps the cached
+            # (global) JudgeRating path unchanged.
             "judge_rows": (
-                _kingdom_judge_leaderboard_rows(db, criterion, "multi4", cat_ids)
+                _kingdom_judge_leaderboard_rows(
+                    db, criterion, "multi4", kingdom, cat_ids, category_id_sel
+                )
                 if k_ids is not None
                 else _judge_leaderboard_rows(db, criterion, "multi4")
             ),

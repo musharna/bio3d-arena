@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from . import config, ranking
+from . import config, kingdoms, ranking
 from .calibration import cohens_kappa
 from .scope import is_assessable
 from .paradigms import same_paradigm
@@ -26,6 +26,8 @@ from .models import (
     JudgeRating,
     JudgeVote,
     KBallot,
+    KingdomJudgeRating,
+    KingdomRating,
     Metric,
     ModelOutput,
     ModelScope,
@@ -387,6 +389,95 @@ def recompute_scope(
     return {"matches": len(matches), "players": len(players)}
 
 
+def recompute_kingdom_scope(
+    db: Session,
+    criterion: Criterion,
+    kingdom: str,
+    category_ids: set[int] | None,
+    *,
+    commit: bool = False,
+) -> dict:
+    """Refit Bradley-Terry for a kingdom scope (a SET of categories) and cache KingdomRating
+    rows. Mirrors `kingdom_leaderboard_rows`'s on-the-fly BT + n_games>0 inclusion rule, so the
+    cache and the fallback are byte-for-byte the same computation.
+
+    Unlike `recompute_scope` (which get-or-creates and keeps every historical player forever),
+    this delete-then-reinserts the scope's rows every time: a kingdom's player set can shrink
+    between recomputes (a generator's only in-kingdom game could later fall out of the decisive
+    record), and the cache must not keep serving a stale n_games>0 row for a player that no
+    longer has one.
+    """
+    players = _players_for_scope(db, category_ids=category_ids)
+    matches, groups = _matches_for_scope(db, criterion.id, category_ids=category_ids)
+    result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP, groups=groups)
+    db.execute(
+        delete(KingdomRating).where(
+            KingdomRating.kingdom == kingdom, KingdomRating.criterion_id == criterion.id
+        )
+    )
+    n = 0
+    for gid in players:
+        n_games = int(result.n_games.get(gid, 0))
+        if n_games <= 0:
+            continue  # only generators with an actual in-kingdom game are cached
+        db.add(
+            KingdomRating(
+                generator_id=gid,
+                kingdom=kingdom,
+                criterion_id=criterion.id,
+                bt_score=result.scores.get(gid, ranking.BT_BASE),
+                bt_lower=result.lower.get(gid, ranking.BT_BASE),
+                bt_upper=result.upper.get(gid, ranking.BT_BASE),
+                n_games=n_games,
+            )
+        )
+        n += 1
+    if commit:
+        db.commit()
+    return {"matches": len(matches), "players": n}
+
+
+def cached_kingdom_leaderboard_rows(
+    db: Session, criterion_slug: str, kingdom: str
+) -> list[dict] | None:
+    """Read cached `KingdomRating` rows for (kingdom, criterion), shaped exactly like
+    `kingdom_leaderboard_rows`'s on-the-fly output. Returns None on a cache MISS (no rows yet
+    for this scope) — the caller's signal to fall back to the on-the-fly path, which must stay
+    correct even before the first `/admin/recompute`."""
+    crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+    if crit is None:
+        return None
+    cached = (
+        db.execute(
+            select(KingdomRating).where(
+                KingdomRating.kingdom == kingdom, KingdomRating.criterion_id == crit.id
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not cached:
+        return None
+    names = generator_display_names(db)
+    rows = []
+    for r in cached:
+        gen = db.get(Generator, r.generator_id)
+        if gen is None:
+            continue  # stale cache row (generator deleted); skip rather than crash
+        rows.append(
+            {
+                "generator": names.get(r.generator_id, gen.name),
+                "kind": gen.kind,
+                "paradigm": gen.paradigm,
+                "bt_score": round(r.bt_score, 1),
+                "bt_lower": round(r.bt_lower, 1),
+                "bt_upper": round(r.bt_upper, 1),
+                "n_games": r.n_games,
+            }
+        )
+    return rows
+
+
 def recompute_leaderboard(db: Session, criterion_slug: str = "overall") -> dict:
     """Backward-compatible single-criterion GLOBAL recompute."""
     criterion = (
@@ -399,7 +490,8 @@ def recompute_leaderboard(db: Session, criterion_slug: str = "overall") -> dict:
 
 
 def recompute_all(db: Session) -> dict:
-    """Recompute every (criterion × {global + each category}) leaderboard scope."""
+    """Recompute every (criterion × {global + each category}) leaderboard scope, plus every
+    (criterion × kingdom) scope for the kingdom leaderboard cache."""
     criteria = db.execute(select(Criterion)).scalars().all()
     categories = db.execute(select(Category)).scalars().all()
     n_scopes = 0
@@ -408,6 +500,12 @@ def recompute_all(db: Session) -> dict:
         n_scopes += 1
         for cat in categories:
             recompute_scope(db, criterion, category_id=cat.id, commit=False)
+            n_scopes += 1
+        for kingdom in kingdoms.KINGDOMS:
+            cat_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
+            if not cat_ids:
+                continue  # kingdom has no mapped categories (yet) -> nothing to cache
+            recompute_kingdom_scope(db, criterion, kingdom, cat_ids, commit=False)
             n_scopes += 1
     db.commit()
     return {
@@ -527,11 +625,108 @@ def recompute_judge_scope(
     return {"matches": len(matches), "players": len(players)}
 
 
+def recompute_kingdom_judge_scope(
+    db: Session,
+    criterion: Criterion,
+    kingdom: str,
+    view_condition: str,
+    category_ids: set[int] | None,
+    *,
+    commit: bool = False,
+) -> dict:
+    """Refit VLM-judge Bradley-Terry for a kingdom scope and cache `KingdomJudgeRating` rows —
+    the judge-board analog of `recompute_kingdom_scope`. Mirrors
+    `kingdom_judge_leaderboard_rows`'s on-the-fly BT + n_games>0 inclusion rule, so the cache and
+    the fallback are byte-for-byte the same computation. Delete-then-reinsert per scope, same
+    rationale as `recompute_kingdom_scope` (a kingdom's judge player set can shrink)."""
+    players = _players_for_scope(db, category_ids=category_ids)
+    matches = _judge_matches_for_scope(db, criterion.id, view_condition, category_ids=category_ids)
+    result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP)
+    db.execute(
+        delete(KingdomJudgeRating).where(
+            KingdomJudgeRating.kingdom == kingdom,
+            KingdomJudgeRating.criterion_id == criterion.id,
+            KingdomJudgeRating.view_condition == view_condition,
+        )
+    )
+    n = 0
+    for gid in players:
+        n_games = int(result.n_games.get(gid, 0))
+        if n_games <= 0:
+            continue  # only generators with an actual in-kingdom judge game are cached
+        db.add(
+            KingdomJudgeRating(
+                generator_id=gid,
+                kingdom=kingdom,
+                criterion_id=criterion.id,
+                view_condition=view_condition,
+                bt_score=result.scores.get(gid, ranking.BT_BASE),
+                bt_lower=result.lower.get(gid, ranking.BT_BASE),
+                bt_upper=result.upper.get(gid, ranking.BT_BASE),
+                n_games=n_games,
+            )
+        )
+        n += 1
+    if commit:
+        db.commit()
+    return {"matches": len(matches), "players": n}
+
+
+def cached_kingdom_judge_leaderboard_rows(
+    db: Session, criterion_slug: str, view_condition: str, kingdom: str
+) -> list[dict] | None:
+    """Read cached `KingdomJudgeRating` rows for (kingdom, criterion, view_condition), shaped
+    exactly like `kingdom_judge_leaderboard_rows`'s on-the-fly output. Returns None on a cache
+    MISS — the caller's signal to fall back to the on-the-fly path."""
+    crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+    if crit is None:
+        return None
+    cached = (
+        db.execute(
+            select(KingdomJudgeRating).where(
+                KingdomJudgeRating.kingdom == kingdom,
+                KingdomJudgeRating.criterion_id == crit.id,
+                KingdomJudgeRating.view_condition == view_condition,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not cached:
+        return None
+    names = generator_display_names(db)
+    rows = []
+    for r in cached:
+        gen = db.get(Generator, r.generator_id)
+        if gen is None:
+            continue  # stale cache row (generator deleted); skip rather than crash
+        rows.append(
+            {
+                "generator": names.get(r.generator_id, gen.name),
+                "kind": gen.kind,
+                "paradigm": gen.paradigm,
+                "bt_score": round(r.bt_score, 1),
+                "bt_lower": round(r.bt_lower, 1),
+                "bt_upper": round(r.bt_upper, 1),
+                "n_games": r.n_games,
+            }
+        )
+    return rows
+
+
 def recompute_judge_all(db: Session, view_condition: str = "multi4") -> dict:
-    """Recompute the VLM leaderboard for every criterion under one view condition."""
+    """Recompute the VLM leaderboard for every criterion under one view condition, plus every
+    (criterion × kingdom) scope for the kingdom judge-board cache."""
     criteria = db.execute(select(Criterion)).scalars().all()
     for criterion in criteria:
         recompute_judge_scope(db, criterion, view_condition, commit=False)
+        for kingdom in kingdoms.KINGDOMS:
+            cat_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
+            if not cat_ids:
+                continue  # kingdom has no mapped categories (yet) -> nothing to cache
+            recompute_kingdom_judge_scope(
+                db, criterion, kingdom, view_condition, cat_ids, commit=False
+            )
     db.commit()
     return {"status": "ok", "view_condition": view_condition, "criteria": len(criteria)}
 

@@ -205,6 +205,28 @@ class Rating(Base):
     updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
+class KingdomRating(Base):
+    """Cached kingdom-scoped human BT (kingdom = a SET of categories, which Rating's single
+    category_id FK can't represent). Refreshed by recompute_all; read by the leaderboard route.
+    Only holds rows for generators with an actual in-kingdom game (n_games > 0) — see
+    service.recompute_kingdom_scope."""
+
+    __tablename__ = "kingdom_rating"
+    __table_args__ = (
+        UniqueConstraint("generator_id", "kingdom", "criterion_id", name="uq_kingdom_rating_scope"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    generator_id: Mapped[int] = mapped_column(ForeignKey("generator.id"), index=True)
+    kingdom: Mapped[str] = mapped_column(String(32), index=True)  # plants|fungi|animals
+    criterion_id: Mapped[int] = mapped_column(ForeignKey("criterion.id"), index=True)
+    bt_score: Mapped[float] = mapped_column(Float, default=1000.0)
+    bt_lower: Mapped[float] = mapped_column(Float, default=1000.0)
+    bt_upper: Mapped[float] = mapped_column(Float, default=1000.0)
+    n_games: Mapped[int] = mapped_column(Integer, default=0)
+    updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
 class User(Base):
     """A verified voter, identified by their Hugging Face account (OAuth)."""
 
@@ -492,6 +514,34 @@ class JudgeRating(Base):
     bt_upper: Mapped[float] = mapped_column(Float, default=1000.0)
     n_games: Mapped[int] = mapped_column(Integer, default=0)
     judge_model: Mapped[str] = mapped_column(String(48), default="")
+    updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class KingdomJudgeRating(Base):
+    """Cached kingdom-scoped VLM-judge BT — the judge-board analog of `KingdomRating`. Refreshed
+    by recompute_judge_all; read by the judge-board route. Only holds rows for generators with an
+    actual in-kingdom judge game (n_games > 0) — see service.recompute_kingdom_judge_scope."""
+
+    __tablename__ = "kingdom_judge_rating"
+    __table_args__ = (
+        UniqueConstraint(
+            "generator_id",
+            "kingdom",
+            "criterion_id",
+            "view_condition",
+            name="uq_kingdom_judge_scope",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    generator_id: Mapped[int] = mapped_column(ForeignKey("generator.id"), index=True)
+    kingdom: Mapped[str] = mapped_column(String(32), index=True)  # plants|fungi|animals
+    criterion_id: Mapped[int] = mapped_column(ForeignKey("criterion.id"), index=True)
+    view_condition: Mapped[str] = mapped_column(String(16), index=True)
+    bt_score: Mapped[float] = mapped_column(Float, default=1000.0)
+    bt_lower: Mapped[float] = mapped_column(Float, default=1000.0)
+    bt_upper: Mapped[float] = mapped_column(Float, default=1000.0)
+    n_games: Mapped[int] = mapped_column(Integer, default=0)
     updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
