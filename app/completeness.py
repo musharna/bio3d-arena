@@ -13,25 +13,37 @@ from app.organ_inventory import TaxonInventory
 
 
 def derive(inventory: TaxonInventory, organs_present: list[dict]) -> tuple[str, float]:
-    """Map a per-organ present/absent/uncertain checklist to (category, score).
-
-    Required organs = the vegetative body; score = required-present / required-total.
-    Categories are total + mutually exclusive over present_count in {0, 1, >=2}."""
-    status = {o["key"]: o.get("status") for o in organs_present}
-    required = [o.key for o in inventory.organs if o.required]
-    req_present = sum(1 for k in required if status.get(k) == "present")
+    """Map a per-part present/absent/uncertain checklist (with optional `complement` status for
+    multi-part organs) to (category, score). Categories: fragment / isolated-organ /
+    partial-organism / malformed / complete. `malformed` = every required part-TYPE present but a
+    part's expected complement is not `full` (a 3-legged dog); the anatomical-completeness signal
+    geometry misses. score = required part-type coverage (a malformed output still scores 1.0)."""
+    by_key = {o["key"]: o for o in organs_present}
+    required = [o for o in inventory.organs if o.required]
+    req_present = sum(1 for o in required if by_key.get(o.key, {}).get("status") == "present")
     score = req_present / len(required) if required else 0.0
-    present_count = sum(1 for o in inventory.organs if status.get(o.key) == "present")
+    present_count = sum(
+        1 for o in inventory.organs if by_key.get(o.key, {}).get("status") == "present"
+    )
 
-    # 'complete' (all required organs present) is checked BEFORE the present_count==1
-    # 'isolated-organ' branch so a single-required-organ body plan — a fungal fruiting body
-    # that IS the whole organism — reads as complete, not a lone detached fragment. For the
-    # 2-required plant inventories this reorder is behavior-identical: present_count==1 can
-    # never satisfy req_present==len(required)==2, so plants never reach 'complete' here.
+    def _complement_ok(o) -> bool:
+        # A part with expected complement <= 1 (all plants/fungi, singular animal parts) is
+        # trivially satisfied; a multi-part organ must report complement `full`.
+        if o.complement <= 1:
+            return True
+        return by_key.get(o.key, {}).get("complement", "full") == "full"
+
+    all_required_present = req_present == len(required)
+    complements_full = all(
+        _complement_ok(o) for o in required if by_key.get(o.key, {}).get("status") == "present"
+    )
+
     if present_count == 0:
         category = "fragment"
-    elif req_present == len(required):
+    elif all_required_present and complements_full:
         category = "complete"
+    elif all_required_present:  # every part-type present but a limb/wing complement is off
+        category = "malformed"
     elif present_count == 1:
         category = "isolated-organ"
     else:
@@ -52,6 +64,10 @@ COMPLETENESS_TOOL = {
                     "properties": {
                         "key": {"type": "string"},
                         "status": {"type": "string", "enum": ["present", "absent", "uncertain"]},
+                        "complement": {
+                            "type": "string",
+                            "enum": ["full", "missing_some", "extra", "uncertain"],
+                        },
                     },
                     "required": ["key", "status"],
                 },
@@ -69,13 +85,19 @@ def _img_block(png: bytes) -> dict:
 
 
 def _build_messages(png: bytes, inventory: TaxonInventory) -> list[dict]:
-    lines = "\n".join(f"- {o.key}: {o.visual}" for o in inventory.organs)
+    lines = "\n".join(
+        f"- {o.key}: {o.visual}" + (f" (expect {o.complement})" if o.complement > 1 else "")
+        for o in inventory.organs
+    )
     text = (
         f"This is a contact sheet of a generated 3D model of {inventory.taxon}, "
-        "rendered from several angles. For EACH expected organ below, mark whether it is "
-        "visibly present in the model (present / absent / uncertain). Judge only what you can "
-        "see; a rendering of a single detached organ should mark the others absent.\n\n"
-        f"Expected organs:\n{lines}\n\nThen call record_completeness."
+        "rendered from several angles. For EACH expected part below, mark whether it is visibly "
+        "present in the model (present / absent / uncertain). For any part with an expected count "
+        "(e.g. 'expect 4'), ALSO set `complement`: `full` if the whole set is present, "
+        "`missing_some` if one or more are clearly missing, `extra` if there are clearly more than "
+        "expected, or `uncertain`. Do NOT count exactly — judge whether the full set is there. "
+        "Judge only what you can see; a rendering of a single detached part should mark the others "
+        f"absent.\n\nExpected parts:\n{lines}\n\nThen call record_completeness."
     )
     return [{"role": "user", "content": [{"type": "text", "text": text}, _img_block(png)]}]
 

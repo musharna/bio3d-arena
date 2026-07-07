@@ -25,6 +25,7 @@ class Organ:
     key: str
     visual: str
     required: bool
+    complement: int = 1  # expected count of this part (legs=4, wings=2); 1 = a singular part
 
 
 @dataclass(frozen=True)
@@ -65,6 +66,14 @@ def _body_inv(taxon: str, body_key: str, body: str, *optional: tuple[str, str]) 
     organs = [Organ(body_key, body, True)]
     organs += [Organ(k, v, False) for k, v in optional]
     return TaxonInventory(taxon=taxon, organs=tuple(organs))
+
+
+def _animal_inv(taxon: str, *parts: tuple[str, str, int]) -> TaxonInventory:
+    """Bilaterian animal body plan: several required parts, each with an expected complement
+    (leg x4, wing x2). A part is satisfied only if present AND its full complement is present; an
+    all-part-types-present body with a missing limb reads `malformed` (see completeness.derive).
+    UNCALIBRATED cross-kingdom extension of the plant-calibrated completeness metric."""
+    return TaxonInventory(taxon=taxon, organs=tuple(Organ(k, v, True, c) for k, v, c in parts))
 
 
 ORGAN_INVENTORY: dict[str, TaxonInventory] = {
@@ -161,6 +170,37 @@ ORGAN_INVENTORY: dict[str, TaxonInventory] = {
         "a fan- or shelf-shaped bracket, or a rosette of overlapping brackets",
         ("zonation", "concentric coloured bands across the bracket surface"),
         ("substrate", "attachment to wood, a log, or a stump"),
+    ),
+    "Canis lupus familiaris": _animal_inv(
+        "Canis lupus familiaris",
+        ("head", "a head with muzzle, eyes, and ears", 1),
+        ("trunk", "a four-legged body/torso", 1),
+        ("leg", "a leg", 4),
+        ("tail", "a tail", 1),
+    ),
+    "Anas platyrhynchos": _animal_inv(
+        "Anas platyrhynchos",
+        ("head", "a head with a flat bill and eyes", 1),
+        ("body", "a plump body/torso", 1),
+        ("wing", "a wing", 2),
+        ("leg", "a webbed leg/foot", 2),
+        ("tail", "a short tail", 1),
+    ),
+    "Danaus plexippus": _animal_inv(
+        "Danaus plexippus",
+        ("head", "a head with two antennae", 1),
+        ("thorax", "the thorax (mid-body segment)", 1),
+        ("abdomen", "the abdomen (rear body segment)", 1),
+        ("wing", "a wing", 4),
+        ("leg", "a leg", 6),
+    ),
+    "Carassius auratus": _animal_inv(
+        "Carassius auratus",
+        ("head", "a head with eyes and mouth", 1),
+        ("body", "a streamlined fish body", 1),
+        ("caudal_fin", "the tail/caudal fin", 1),
+        ("pectoral_fin", "a side (pectoral) fin", 2),
+        ("dorsal_fin", "the top (dorsal) fin", 1),
     ),
 }
 
