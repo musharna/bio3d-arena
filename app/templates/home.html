@@ -45,18 +45,21 @@ reconstruction benchmark{% endblock %} {% block content %}
          below are chrome around the viewer slot -- they don't touch #hero-slot. -->
     <div class="b3d-hero-viz">
       <div class="b3d-hero-viz-frame">
-        {% if hero_asset %}
-        <div class="viewer-slot b3d-hero-viz-stage" id="hero-slot"></div>
-        {% else %}
+        {#- Design: the reconstructed mesh floats INSIDE the dashed radar rings (no card
+           chrome). Rings render always; the live GLB viewer sits transparently on top,
+           falling back to the leaf motif when no hero asset is available. -#}
         <div class="b3d-hero-viz-ring-wrap">
           <div class="b3d-hero-viz-ring-outer" aria-hidden="true"></div>
           <div class="b3d-hero-viz-ring-dashed" aria-hidden="true"></div>
           <div class="b3d-hero-viz-glow" aria-hidden="true"></div>
+          {% if hero_asset %}
+          <div class="viewer-slot b3d-hero-viz-stage" id="hero-slot"></div>
+          {% else %}
           <div class="b3d-hero-viz-mark" role="img" aria-label="Reconstructed 3D specimen motif">
             &#127807;
           </div>
+          {% endif %}
         </div>
-        {% endif %}
         <svg
           class="b3d-hero-gizmo"
           viewBox="0 0 44 44"
