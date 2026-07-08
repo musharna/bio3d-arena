@@ -70,3 +70,27 @@ def test_significance_page_renders():
     assert r.status_code == 200
     assert "significance" in r.text.lower()
     assert "Bias audit" in r.text
+
+
+def test_significance_rated_only_hides_never_voted_generators():
+    """compute_significance defaults to rated-only: a generator that never appears in a
+    comparison has no significance signal and floods the forest/matrix, so it's excluded
+    (and counted in n_unrated) unless rated_only=False."""
+    from app import service
+    from app.database import SessionLocal
+
+    _cast_biased_votes()
+    with SessionLocal() as db:
+        rated = service.compute_significance(db, "overall")
+        every = service.compute_significance(db, "overall", rated_only=False)
+
+    assert rated["status"] == "ok" and every["status"] == "ok"
+    # n_unrated / n_total are properties of the data — identical regardless of rated_only.
+    assert rated["n_unrated"] == every["n_unrated"]
+    assert rated["n_total"] == every["n_total"]
+    # rated_only shows exactly (total - unrated); showing all shows every generator.
+    assert len(rated["labels"]) == rated["n_total"] - rated["n_unrated"]
+    assert len(every["labels"]) == every["n_total"]
+    assert len(rated["labels"]) <= len(every["labels"])
+    if rated["n_unrated"] > 0:  # only a strict inequality when something was actually hidden
+        assert len(every["labels"]) > len(rated["labels"])

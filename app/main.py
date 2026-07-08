@@ -1541,18 +1541,24 @@ def significance_page(
     db: Session = Depends(get_db),
     criterion: str = "overall",
     category: str = "all",
+    show_all: bool = False,
 ):
     roadmap = _roadmap_or_none(request, db)
     if roadmap is not None:
         return roadmap
     category_id = _resolve_category_id(db, category)
     k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    # Rated-only by default: a never-voted generator has no significance signal and floods the
+    # forest plot + P(A>B) matrix. `?show_all=true` includes them.
     if k_ids is not None:
         sig = service.compute_significance(
-            db, criterion, category_ids=_effective_category_ids(k_ids, category_id)
+            db,
+            criterion,
+            category_ids=_effective_category_ids(k_ids, category_id),
+            rated_only=not show_all,
         )
     else:
-        sig = service.compute_significance(db, criterion, category_id)
+        sig = service.compute_significance(db, criterion, category_id, rated_only=not show_all)
     # Forest-plot CI bounds: REUSE the leaderboard's cached BT confidence interval per
     # generator (same kingdom scoping the leaderboard route branches on) rather than
     # computing new stats — bt_lower/bt_upper are absolute values so merging rows across
@@ -1588,6 +1594,9 @@ def significance_page(
             "category_options": category_options,
             "criterion_options": criterion_options,
             "ci_map": ci_map,
+            "show_all": show_all,
+            "sel_criterion": criterion,
+            "sel_category": category,
         },
     )
 

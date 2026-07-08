@@ -3555,6 +3555,14 @@ details.group[open] > summary.group-title::before {
 .lb-judge-section {
   margin-top: 1.5rem;
 }
+/* Collapsed deep-dive on /difficulty — separated from the curated gradient above. */
+.diff-deep {
+  margin-top: 1.6rem;
+}
+/* Rated-only toggle riding inline in the /significance intro line. */
+.sig-toggle {
+  margin-left: 0.6rem;
+}
 /* Colored-initials avatar tile (same hue formula as the leaderboard's .lb-avatar), just
    sized up for the card grid — overrides only the size-related props, keeps the color. */
 .b3d-model-icon.lb-avatar {

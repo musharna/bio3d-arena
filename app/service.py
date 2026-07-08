@@ -1023,21 +1023,27 @@ def compute_significance(
     category_id: int | None = None,
     *,
     category_ids: set[int] | None = None,
+    rated_only: bool = True,
 ) -> dict:
     """Pairwise P(A ranks above B) for a scope — "is A *meaningfully* ahead of B?".
 
     category_ids, when given (a kingdom's category-id set), takes precedence over category_id —
-    same convention as _matches_for_scope/_players_for_scope."""
+    same convention as _matches_for_scope/_players_for_scope.
+
+    rated_only (default True): include only generators that actually appear in a comparison.
+    A never-voted generator has no significance signal — it sits at the default BT_BASE and
+    floods the forest plot + P(A>B) matrix with meaningless rows. `n_unrated` reports how many
+    were hidden so the page can offer a "show all" toggle."""
     criterion = (
         db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
     )
     if criterion is None:
         return {"status": "no-such-criterion"}
     matches, groups = _matches_for_scope(db, criterion.id, category_id, category_ids=category_ids)
-    players = sorted(
-        set(_players_for_scope(db, category_id, category_ids=category_ids))
-        | {p for m in matches for p in m}
-    )
+    voted = {p for m in matches for p in m}
+    all_players = set(_players_for_scope(db, category_id, category_ids=category_ids)) | voted
+    n_unrated = len(all_players - voted)
+    players = sorted(voted if rated_only else all_players)
     result = ranking.significance_matrix(
         players, matches, bootstrap=config.BT_BOOTSTRAP, groups=groups
     )
@@ -1068,6 +1074,8 @@ def compute_significance(
         "labels": labels,
         "ranked": ranked,
         "matrix": matrix,  # matrix[i][j] = P(labels[i] ranks above labels[j])
+        "n_unrated": n_unrated,  # never-voted generators hidden unless rated_only=False
+        "n_total": len(all_players),
     }
 
 

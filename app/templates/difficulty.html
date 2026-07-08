@@ -171,6 +171,12 @@
   </div>
   {% endif %}
 
+  {# Deep dive — the page leads with the degradation curve + per-generator gradient (the design's
+     view); the objective-metric grids, capture-quality triage, perceptual & botanical rankings,
+     and full per-tier tables are collapsed so the page isn't a ~14k-px wall. #}
+  <details class="lb-filters-audit diff-deep">
+    <summary>Deep dive — paradigm × difficulty grids, capture-quality triage, perceptual & botanical rankings, full per-tier tables</summary>
+
   {% if paradigm_grid %}
   <div class="diff-panel">
     <h2>
@@ -379,5 +385,6 @@
     arena. "—" is honest N/A (unscored output, or a method with no declared structure). Tiers are
     curated per task; reference scans and untiered subjects are omitted here.
   </p>
+  </details>
 </section>
 {% endblock %}
