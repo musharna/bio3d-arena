@@ -71,6 +71,24 @@ init_db()
 APP_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 
+_STATIC_DIR = APP_DIR / "static"
+
+
+def _asset_url(path: str) -> str:
+    """Cache-busting static URL. Appends the file's mtime as ?v= so a changed
+    asset gets a fresh URL — this stops a browser from pairing freshly-deployed
+    HTML with a stale cached JS/CSS (which throws null-element errors when the
+    markup and script drift apart)."""
+    rel = path.lstrip("/")
+    try:
+        version = int((_STATIC_DIR / rel).stat().st_mtime)
+    except OSError:
+        return f"/static/{rel}"
+    return f"/static/{rel}?v={version}"
+
+
+templates.env.globals["asset"] = _asset_url
+
 app = FastAPI(title="Bio 3D Arena", version="0.1.0")
 app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
 # Local backend serves assets from disk; the S3 backend serves them from the bucket/CDN.

@@ -22,8 +22,8 @@
         document.documentElement.setAttribute("data-theme", effective);
       } catch (e) {}
     </script>
-    <link rel="stylesheet" href="/static/style.css" />
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <link rel="stylesheet" href="{{ asset('style.css') }}" />
+    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}" />
     <!-- Viewer registry (loaded once, used per asset format):
          model-viewer → GLB/GLTF meshes; 3Dmol.js → PDB/mmCIF molecular structures -->
     <script
@@ -31,8 +31,8 @@
       src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"
     ></script>
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.4.2/build/3Dmol-min.js"></script>
-    <script src="/static/viewer.js"></script>
-    <script defer src="/static/shell.js"></script>
+    <script src="{{ asset('viewer.js') }}"></script>
+    <script defer src="{{ asset('shell.js') }}"></script>
   </head>
   <body>
     {% set path = request.url.path %} {% set kingdom = request.state.kingdom |
