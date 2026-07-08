@@ -3105,6 +3105,17 @@ details.group[open] > summary.group-title::before {
   /* Small staggered second beat of the page-head entrance (parent uses b3d-rise). */
   animation: b3d-rise-sm 0.35s ease-out 0.08s both;
 }
+/* Design: a lighter em-dash tagline beside the H1 (e.g. benchmark), with the scope pill
+   on its own line below the title rather than inline with it. */
+.b3d-head-tagline {
+  font-weight: 400;
+  font-size: 0.62em;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+.b3d-head-pill {
+  margin: 0 0 0.5rem;
+}
 .lb-votecount {
   color: var(--faint);
   font-size: 0.85em;
@@ -4070,16 +4081,12 @@ details.group[open] > summary.group-title::before {
    .b3d-steps-grid/.b3d-step-card/.b3d-step-num verbatim (meth-steps-grid only adds
    bottom margin); .meth-panel mirrors the .cov-panel/.ds-panel/.tk-panel card
    namespace. .meth-formula is a static inline-styled BT formula — no math lib. === */
-/* Six process steps in a single row (falls back to 3 then 2 as width tightens). */
+/* Design ref (11-methodology.png): 6 process steps in a 4-column grid (4 top, 2 bottom)
+   at the 924px canvas — not 3-up. Falls back to 2-up only on phones. */
 .meth-steps-grid {
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.75rem;
   margin-bottom: 1.3rem;
-}
-@media (max-width: 1000px) {
-  .meth-steps-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
 }
 @media (max-width: 560px) {
   .meth-steps-grid {

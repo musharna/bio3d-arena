@@ -8,8 +8,9 @@ from app.main import app
 def _kbar_active_label(html: str) -> str | None:
     """Read back the active kingdom shown by the kbar dropdown pill (`b3d-kdrop-label`).
 
-    The kbar renders on every page — including the kingdom-roadmap fallback shown
-    for a not-yet-live kingdom (e.g. plants/fungi in a schema-only test DB) — so
+    The kbar renders on every data page (not the home landing, which per design has
+    no topbar) — including the kingdom-roadmap fallback shown for a not-yet-live
+    kingdom (e.g. plants/fungi in a schema-only test DB) — so
     this is a reliable, content-independent signal that kingdom scoping reached
     the shell, unlike the page-body `_scope_pill.html` badge which only renders
     on the real (non-roadmap) page for that kingdom.

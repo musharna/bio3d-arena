@@ -532,6 +532,9 @@
       </aside>
 
       <div class="b3d-content">
+        {#- Design: the home/landing route has NO topbar — no kingdom scope pill and no
+           secondary nav; content starts at the hero eyebrow. The kbar is a data-page chrome. -#}
+        {% if path != '/' %}
         <div class="b3d-kbar">
           <div class="b3d-kbar-left">
             <span class="b3d-kbar-label">Kingdom</span>
@@ -594,6 +597,7 @@
             </nav>
           </div>
         </div>
+        {% endif %}
 
         <main class="b3d-main">{% block content %}{% endblock %}</main>
 

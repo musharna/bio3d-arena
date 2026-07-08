@@ -24,10 +24,12 @@ def test_models_index_200_lists_known_generator():
     assert "Generator Alpha" in r.text
 
 
-def test_models_index_has_scope_pill_and_stats():
+def test_models_index_omits_scope_pill_per_design():
+    # Design (04-models.png): the Models title carries NO kingdom scope pill — the pill is
+    # data-page chrome, and Models spans all generators regardless of kingdom scope.
     r = client.get("/models")
     assert r.status_code == 200
-    assert "b3d-scope-pill" in r.text
+    assert "b3d-scope-pill" not in r.text
 
 
 def test_model_detail_200_for_known_slug():
