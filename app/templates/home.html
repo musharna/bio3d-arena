@@ -52,6 +52,20 @@ reconstruction benchmark{% endblock %} {% block content %}
           </div>
           {% endif %}
         </div>
+        <!-- Orientation gizmo (axes only, no X/Y/Z labels): Y stays world-up; X/Z sweep in
+             the ground plane, driven by the live camera azimuth (see hero mount script). -->
+        <svg
+          id="b3d-hero-gizmo"
+          class="b3d-hero-gizmo"
+          viewBox="0 0 44 44"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <circle cx="18" cy="26" r="2" fill="var(--faint)" />
+          <line x1="18" y1="26" x2="18" y2="10" stroke="#e5484d" stroke-width="2" stroke-linecap="round" />
+          <line id="gz-x-line" x1="18" y1="26" x2="33" y2="26" stroke="#30a46c" stroke-width="2" stroke-linecap="round" />
+          <line id="gz-z-line" x1="18" y1="26" x2="8" y2="32" stroke="#0091ff" stroke-width="2" stroke-linecap="round" />
+        </svg>
       </div>
       <span class="b3d-hero-viz-caption"
         >drag to rotate &middot; reconstructed mesh</span
@@ -79,6 +93,27 @@ reconstruction benchmark{% endblock %} {% block content %}
       mv.setAttribute("auto-rotate", "");
       mv.setAttribute("auto-rotate-delay", "0");
       mv.setAttribute("rotation-per-second", "16deg");
+
+      // Sweep the gizmo's X/Z axes with the live camera azimuth (Y stays world-up), so the
+      // gizmo tracks the rotating mesh. Auto-rotate and user drag both fire camera-change.
+      var ox = 18, oy = 26, L = 15, k = 0.5;
+      var xLine = document.getElementById("gz-x-line");
+      var zLine = document.getElementById("gz-z-line");
+      function axis(el, ang) {
+        el.setAttribute("x2", (ox + L * Math.cos(ang)).toFixed(1));
+        el.setAttribute("y2", (oy - L * k * Math.sin(ang)).toFixed(1));
+      }
+      var raf = 0;
+      function sync() {
+        raf = 0;
+        if (!xLine) return;
+        var theta = mv.getCameraOrbit().theta; // radians, azimuth
+        axis(xLine, -theta);
+        axis(zLine, -theta + Math.PI / 2);
+      }
+      mv.addEventListener("camera-change", function () {
+        if (!raf) raf = requestAnimationFrame(sync);
+      });
     }
   })();
 </script>
