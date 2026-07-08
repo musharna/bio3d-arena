@@ -39,7 +39,8 @@
       class="lb-ptab{{ ' is-active' if opt.selected else '' }}"
       role="tab"
       aria-selected="{{ 'true' if opt.selected else 'false' }}"
-      >{{ opt.display }}</a
+      title="{{ opt.display }}"
+      >{{ opt.tab or opt.display }}</a
     >
     {% endfor %}
   </nav>

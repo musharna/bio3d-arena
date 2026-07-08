@@ -36,8 +36,11 @@
            carries a curated `lineage`; otherwise the kingdom label. #}
         {% if s.lineage %}<span class="sp-idx-breadcrumb">{{ s.lineage }}</span>
         {% elif s.kingdom %}<span class="sp-idx-breadcrumb">{{ s.kingdom | capitalize }}</span>{% endif %}
-        <span class="sp-idx-name">{{ parts[0] }}</span>
-        {% if parts | length > 1 %}<span class="sp-idx-sub">{{ parts[1] }}</span>{% endif %}
+        {# Design leads with the COMMON name; the latin binomial (parts[0], from task_title) is the
+           italic subtitle. Falls back to the latin name as the title when no common name is set. #}
+        <span class="sp-idx-name">{{ s.common or parts[0] }}</span>
+        {% if s.common %}<span class="sp-idx-latin">{{ parts[0] }}</span>
+        {% elif parts | length > 1 %}<span class="sp-idx-sub">{{ parts[1] }}</span>{% endif %}
         <p class="sp-idx-blurb">{{ s.blurb }}</p>
       </div>
     </a>

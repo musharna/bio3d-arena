@@ -1216,9 +1216,14 @@ def leaderboard(
     # paradigm-filtered) `rows` would make every non-active tab vanish after the first click.
     paradigms_in_rows = sorted({r["paradigm"] for r in all_rows if r.get("paradigm")})
     paradigm_options = [
-        {"value": None, "display": "All paradigms", "selected": paradigm is None}
+        {"value": None, "display": "All paradigms", "tab": "All", "selected": paradigm is None}
     ] + [
-        {"value": p, "display": paradigms.DISPLAY_NAMES.get(p, p), "selected": paradigm == p}
+        {
+            "value": p,
+            "display": paradigms.DISPLAY_NAMES.get(p, p),
+            "tab": paradigms.SHORT_NAMES.get(p, p),
+            "selected": paradigm == p,
+        }
         for p in paradigms_in_rows
     ]
     return templates.TemplateResponse(

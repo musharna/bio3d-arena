@@ -48,6 +48,7 @@ SPOTLIGHTS: list[dict] = [
         "task_title": "Solanum lycopersicum — single-image → 3D reconstruction",
         "emoji": "\U0001f345",  # 🍅
         "lineage": "Plantae › Solanales › Solanaceae › Solanum",
+        "common": "Tomato",
         "featured": True,
         "order": 0,
         "blurb": "How current image→3D models handle a whole tomato plant.",
@@ -63,6 +64,7 @@ SPOTLIGHTS: list[dict] = [
         "task_title": "Zea mays — single-image → 3D reconstruction",
         "emoji": "\U0001f33d",  # 🌽
         "lineage": "Plantae › Poales › Poaceae › Zea",
+        "common": "Maize",
         "featured": True,
         "order": 1,
         "blurb": "How current image→3D models handle a whole maize plant — a tall, two-ranked "
@@ -78,6 +80,7 @@ SPOTLIGHTS: list[dict] = [
         "task_title": "Arabidopsis thaliana — single-image → 3D reconstruction",
         "emoji": "\U0001f331",  # 🌱
         "lineage": "Plantae › Brassicales › Brassicaceae › Arabidopsis",
+        "common": "Thale cress",
         "featured": False,
         "order": 2,
         "blurb": "Thale cress rosette — fine structure stress test.",
@@ -89,6 +92,7 @@ SPOTLIGHTS: list[dict] = [
         "task_title": "Hordeum vulgare — barley root system (3D MRI)",
         "emoji": "\U0001f33e",  # 🌾
         "lineage": "Plantae › Poales › Poaceae › Hordeum",
+        "common": "Barley root",
         "featured": False,
         "order": 3,
         "blurb": "The volumetric sensor axis: a real 3D MRI of a barley root system, surfaced via "
@@ -102,6 +106,7 @@ SPOTLIGHTS: list[dict] = [
         "task_title": "Rosa — single-image → 3D reconstruction",
         "emoji": "\U0001f339",  # 🌹
         "lineage": "Plantae › Rosales › Rosaceae › Rosa",
+        "common": "Rose",
         "featured": True,
         "order": 4,
         "blurb": "How 3D methods handle a rose (Rosa) — the 3rd crop spotlight. Spans a real CC0 "
@@ -120,6 +125,7 @@ SPOTLIGHTS: list[dict] = [
         "task_title": "Glycine max — single-image → 3D reconstruction",
         "emoji": "\U0001fad8",  # 🫘
         "lineage": "Plantae › Fabales › Fabaceae › Glycine",
+        "common": "Soybean",
         "featured": True,
         "order": 5,
         "blurb": "How 3D methods handle soybean (Glycine max) — the Track-A2 legume spotlight. "
