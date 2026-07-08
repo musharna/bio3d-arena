@@ -593,6 +593,27 @@ def _pick_hero_asset(db: Session, spotlight_subjects: list[dict]) -> dict | None
     Spotlight poster-child subjects (most-voted among those); else the
     most-voted visible non-gold GLB in the whole DB; else `None`.
     """
+    # Keep the hero turntable LIGHT so it loads and spins instantly — some recon GLBs are
+    # tens of MB, which makes the whole hero (and the orientation gizmo) lag. Prefer the
+    # most-voted candidate whose on-disk mesh is small; fall back through heavier ones only
+    # if nothing light exists. (Local backend only; a remote backend skips the size gate.)
+    MAX_HERO_BYTES = 1_500_000
+    root = getattr(storage, "root", None)
+
+    def _light_enough(asset_path: str) -> bool:
+        if root is None:
+            return True
+        try:
+            return (root / asset_path).stat().st_size <= MAX_HERO_BYTES
+        except OSError:
+            return False
+
+    def _first_light(query):
+        for out in db.execute(query).scalars():
+            if _light_enough(out.asset_path):
+                return out
+        return None
+
     base = select(ModelOutput).where(
         ModelOutput.is_gold.is_(False),
         ModelOutput.hidden_at.is_(None),
@@ -600,18 +621,14 @@ def _pick_hero_asset(db: Session, spotlight_subjects: list[dict]) -> dict | None
     )
     spotlight_titles = [s["task_title"] for s in spotlight_subjects]
     if spotlight_titles:
-        out = (
-            db.execute(
-                base.join(Task, ModelOutput.task_id == Task.id)
-                .where(Task.title.in_(spotlight_titles))
-                .order_by(ModelOutput.n_comparisons.desc())
-            )
-            .scalars()
-            .first()
+        out = _first_light(
+            base.join(Task, ModelOutput.task_id == Task.id)
+            .where(Task.title.in_(spotlight_titles))
+            .order_by(ModelOutput.n_comparisons.desc())
         )
         if out is not None:
             return {"url": storage.url_for(out.asset_path), "format": out.asset_format}
-    out = db.execute(base.order_by(ModelOutput.n_comparisons.desc())).scalars().first()
+    out = _first_light(base.order_by(ModelOutput.n_comparisons.desc()))
     if out is None:
         return None
     return {"url": storage.url_for(out.asset_path), "format": out.asset_format}

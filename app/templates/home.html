@@ -52,8 +52,9 @@ reconstruction benchmark{% endblock %} {% block content %}
           </div>
           {% endif %}
         </div>
-        <!-- Orientation gizmo (axes + end-dots, no letters): Y stays world-up; X/Z sweep in
-             the ground plane, locked to the live camera each frame (see hero mount script). -->
+        <!-- Full 3D orientation gizmo (axes + end-dots, no letters): all three axes are
+             projected from the live camera azimuth+polar each frame, so it tracks the mesh
+             on every axis (drag included). Positions are set by the hero mount script. -->
         <svg
           id="b3d-hero-gizmo"
           class="b3d-hero-gizmo"
@@ -61,13 +62,13 @@ reconstruction benchmark{% endblock %} {% block content %}
           aria-hidden="true"
           focusable="false"
         >
-          <circle cx="18" cy="26" r="2" fill="var(--faint)" />
-          <line x1="18" y1="26" x2="18" y2="10" stroke="#e5484d" stroke-width="2" stroke-linecap="round" />
-          <circle cx="18" cy="10" r="2.6" fill="#e5484d" />
-          <line id="gz-x-line" x1="18" y1="26" x2="33" y2="26" stroke="#30a46c" stroke-width="2" stroke-linecap="round" />
-          <circle id="gz-x-dot" cx="33" cy="26" r="2.6" fill="#30a46c" />
-          <line id="gz-z-line" x1="18" y1="26" x2="8" y2="32" stroke="#0091ff" stroke-width="2" stroke-linecap="round" />
-          <circle id="gz-z-dot" cx="8" cy="32" r="2.6" fill="#0091ff" />
+          <circle cx="22" cy="22" r="2" fill="var(--faint)" />
+          <line id="gz-x-line" x1="22" y1="22" x2="37" y2="22" stroke="#e5484d" stroke-width="2" stroke-linecap="round" />
+          <circle id="gz-x-dot" cx="37" cy="22" r="2.6" fill="#e5484d" />
+          <line id="gz-y-line" x1="22" y1="22" x2="22" y2="7" stroke="#30a46c" stroke-width="2" stroke-linecap="round" />
+          <circle id="gz-y-dot" cx="22" cy="7" r="2.6" fill="#30a46c" />
+          <line id="gz-z-line" x1="22" y1="22" x2="10" y2="30" stroke="#0091ff" stroke-width="2" stroke-linecap="round" />
+          <circle id="gz-z-dot" cx="10" cy="30" r="2.6" fill="#0091ff" />
         </svg>
       </div>
       <span class="b3d-hero-viz-caption"
@@ -93,41 +94,59 @@ reconstruction benchmark{% endblock %} {% block content %}
     window.Bio3DViewer.mount(slot, {{ hero_asset | tojson }});
     var mv = slot.querySelector("model-viewer");
     if (mv) {
-      mv.setAttribute("auto-rotate", "");
-      mv.setAttribute("auto-rotate-delay", "0");
-      mv.setAttribute("rotation-per-second", "16deg");
+      // We drive the turntable OURSELVES by advancing the camera orbit, so the model AND the
+      // gizmo read one shared angle — no drift/lag, and the gizmo tracks on every axis.
+      // (model-viewer's own auto-rotate spins the mesh turntable, which getCameraOrbit()
+      // does NOT report, so the gizmo could never follow it.)
+      mv.removeAttribute("auto-rotate");
+      var ox = 22, oy = 22, L = 15;
+      var SPEED = (16 * Math.PI) / 180; // rad/s
 
-      // Lock the gizmo to the mesh. IMPORTANT: model-viewer's auto-rotate spins the model
-      // TURNTABLE, not the camera orbit — so reading getCameraOrbit().theta can't track it.
-      // Instead advance the gizmo at the same angular rate as the auto-rotation (16deg/s),
-      // and while the user is dragging, follow the camera-orbit delta instead. Y is world-up.
-      var ox = 18, oy = 26, L = 15, k = 0.5;
-      var SPEED = (16 * Math.PI) / 180; // rad/s — matches rotation-per-second
-      var xLine = document.getElementById("gz-x-line");
-      var xDot = document.getElementById("gz-x-dot");
-      var zLine = document.getElementById("gz-z-line");
-      var zDot = document.getElementById("gz-z-dot");
-      function place(line, dot, ang) {
-        var ex = ox + L * Math.cos(ang), ey = oy - L * k * Math.sin(ang);
-        line.setAttribute("x2", ex.toFixed(1));
-        line.setAttribute("y2", ey.toFixed(1));
-        dot.setAttribute("cx", ex.toFixed(1));
-        dot.setAttribute("cy", ey.toFixed(1));
+      var axes = {
+        x: [document.getElementById("gz-x-line"), document.getElementById("gz-x-dot"), [1, 0, 0]],
+        y: [document.getElementById("gz-y-line"), document.getElementById("gz-y-dot"), [0, 1, 0]],
+        z: [document.getElementById("gz-z-line"), document.getElementById("gz-z-dot"), [0, 0, 1]],
+      };
+      // Project the three world axes as the camera at (azimuth theta, polar phi) sees them.
+      function draw(theta, phi) {
+        var st = Math.sin(theta), ct = Math.cos(theta), sp = Math.sin(phi), cp = Math.cos(phi);
+        var cam = [sp * st, cp, sp * ct];              // unit dir origin->camera
+        var rl = Math.hypot(cam[2], cam[0]) || 1;
+        var r = [cam[2] / rl, 0, -cam[0] / rl];        // screen-right  = norm(up x cam)
+        var u = [                                       // screen-up     = cam x right
+          cam[1] * r[2] - cam[2] * r[1],
+          cam[2] * r[0] - cam[0] * r[2],
+          cam[0] * r[1] - cam[1] * r[0],
+        ];
+        for (var kk in axes) {
+          var a = axes[kk], v = a[2];
+          var sx = v[0] * r[0] + v[1] * r[1] + v[2] * r[2];
+          var sy = v[0] * u[0] + v[1] * u[1] + v[2] * u[2];
+          var ex = ox + L * sx, ey = oy - L * sy;
+          a[0].setAttribute("x2", ex.toFixed(1)); a[0].setAttribute("y2", ey.toFixed(1));
+          a[1].setAttribute("cx", ex.toFixed(1)); a[1].setAttribute("cy", ey.toFixed(1));
+        }
       }
-      var angle = 0, last = null, lastTheta = null, dragging = false;
+
+      var last = null, elapsed = 0, dragging = false, basePhi = null;
       mv.addEventListener("pointerdown", function () { dragging = true; });
       window.addEventListener("pointerup", function () { dragging = false; });
       function loop(ts) {
-        if (xLine) {
-          if (last === null) last = ts;
-          var dt = (ts - last) / 1000; last = ts;
-          var theta = mv.getCameraOrbit ? mv.getCameraOrbit().theta : 0;
-          if (lastTheta === null) lastTheta = theta;
-          if (dragging) angle += theta - lastTheta; // follow the drag
-          else angle += dt * SPEED;                 // match the auto-rotation
-          lastTheta = theta;
-          place(xLine, xDot, angle);
-          place(zLine, zDot, angle + Math.PI / 2);
+        if (last === null) last = ts;
+        var dt = (ts - last) / 1000; last = ts;
+        if (mv.getCameraOrbit) {
+          var o = mv.getCameraOrbit();
+          if (basePhi === null) basePhi = o.phi;
+          if (!dragging) {
+            elapsed += dt;
+            // Yaw the turntable + a gentle polar nod, so the mesh (and the gizmo, which tracks
+            // it exactly) tumbles in 3D and every axis responds — not just a flat spin. The
+            // mesh follows the camera and getCameraOrbit() reports the same angles we draw from.
+            var phi = basePhi + 0.28 * Math.sin(elapsed * 0.7);
+            mv.cameraOrbit = (o.theta + dt * SPEED) + "rad " + phi + "rad " + o.radius + "m";
+            o = mv.getCameraOrbit();
+          }
+          draw(o.theta, o.phi);
         }
         requestAnimationFrame(loop);
       }
