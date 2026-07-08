@@ -31,7 +31,7 @@
   --gridDot: oklch(0.5 0.03 205 / 0.05);
   /* shape scale */
   --r-card: 14px;
-  --r-ctl: 9px;
+  --r-ctl: 8px;
   --r-pill: 999px;
 }
 :root[data-theme="light"] {
@@ -156,7 +156,7 @@ kbd,
   display: inline-block;
   width: 0.9rem;
   height: 0.9rem;
-  border-radius: 3px;
+  border-radius: 4px;
   margin-right: 0.35rem;
   vertical-align: -0.12rem;
   border: 1px solid var(--border);
@@ -209,7 +209,7 @@ kbd,
   height: 1.6rem;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   background: color-mix(in oklch, var(--accent) 18%, transparent);
   color: var(--accent);
   font-weight: 700;
@@ -331,7 +331,7 @@ kbd,
 .mod-actions button {
   padding: 0.5rem 0.7rem;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   font-weight: 700;
   cursor: pointer;
 }
@@ -420,7 +420,7 @@ textarea:focus-visible,
 .filter-row select {
   background: var(--panel2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   color: var(--text);
   padding: 0.45rem 0.6rem;
   font-size: 0.9rem;
@@ -1096,7 +1096,7 @@ kbd {
   justify-content: center;
   min-height: 40px;
   padding: 0.3rem 0.45rem;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   border: 1px solid var(--border);
   background: var(--panel2);
 }
@@ -1110,7 +1110,7 @@ kbd {
   font-weight: 600;
   letter-spacing: 0.02em;
   padding: 0.1rem 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   border: 1px solid color-mix(in oklch, currentColor 40%, transparent);
   background: color-mix(in oklch, currentColor 14%, transparent);
 }
@@ -1140,7 +1140,7 @@ kbd {
   height: 8px;
   background: var(--panel2);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   margin-bottom: 0.3rem;
 }
 .ci-range {
@@ -1151,7 +1151,7 @@ kbd {
   margin-top: -3px;
   height: 6px;
   background: color-mix(in oklch, var(--accent) 45%, transparent);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   transform-origin: left center;
   animation: b3d-grow-x 0.4s ease-out both;
 }
@@ -1191,7 +1191,7 @@ kbd {
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-card);
   padding: 1rem;
   display: flex;
   flex-direction: column;
@@ -1206,7 +1206,7 @@ kbd {
 .card textarea {
   background: var(--panel2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   color: var(--text);
   padding: 0.5rem;
   font-size: 0.9rem;
@@ -1219,7 +1219,7 @@ kbd {
 .card button {
   margin-top: 0.3rem;
   padding: 0.55rem;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   border: none;
   background: var(--accent);
   color: #06281b;
@@ -1268,7 +1268,7 @@ kbd {
     flex: 1;
     padding: 0.75rem;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--r-ctl);
     background: var(--panel2);
     color: var(--muted);
     font-weight: 600;
@@ -1305,7 +1305,7 @@ kbd {
   background: var(--panel2);
   border: 1px solid var(--accent);
   color: var(--text);
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   padding: 0.4rem 0.8rem;
   font-weight: 600;
 }
@@ -1340,7 +1340,7 @@ kbd {
   border: 1px solid var(--border);
   /* Recon pane reads as "the candidate" via an accent hairline; GT pane overrides to --win below. */
   border-top: 2px solid color-mix(in oklch, var(--accent) 55%, var(--border));
-  border-radius: 12px;
+  border-radius: var(--r-card);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1392,7 +1392,7 @@ kbd {
 .bm-pick select {
   background: var(--panel2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   color: var(--text);
   padding: 0.45rem 0.6rem;
   font-size: 0.9rem;
@@ -1588,7 +1588,7 @@ kbd {
 }
 .reference-panel .ref-img {
   max-height: 160px;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   border: 1px solid var(--border);
 }
 .reference-panel .ref-credit {
@@ -1623,7 +1623,7 @@ kbd {
   padding: 0.6rem 0.75rem;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-ctl);
 }
 .filter-chips {
   display: flex;
@@ -1634,7 +1634,7 @@ kbd {
   background: var(--panel2);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 0.25rem 0.7rem;
   font-size: 0.85rem;
   cursor: pointer;
@@ -1666,7 +1666,7 @@ kbd {
   min-width: 140px;
   background: var(--panelDeep);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   color: var(--text);
   padding: 0.3rem 0.6rem;
   font-size: 0.85rem;
@@ -1688,7 +1688,7 @@ kbd {
   background: transparent;
   border: 1px dashed var(--border);
   color: var(--accent2);
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   padding: 0.3rem 0.8rem;
   font-size: 0.85rem;
   cursor: pointer;
@@ -1714,7 +1714,7 @@ kbd {
 .spotlight-card .thumb {
   cursor: pointer;
   background: #fff;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   overflow: hidden;
 }
 .spotlight-card .thumb img {
@@ -1733,7 +1733,7 @@ kbd {
      not as a missing/failed render. */
   background: var(--panelDeep);
   border: 1px dashed var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   color: var(--muted);
   font-size: 0.85rem;
   text-align: center;
@@ -1745,7 +1745,7 @@ kbd {
 .card-badge {
   display: inline-block;
   margin: 0.15rem 0 0.1rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 0.08rem 0.55rem;
   font-size: 0.7rem;
   font-weight: 600;
@@ -1775,7 +1775,7 @@ kbd {
 }
 .flag {
   display: inline-block;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 0.08rem 0.55rem;
   font-size: 0.72rem;
   font-weight: 600;
@@ -1903,7 +1903,7 @@ details.group[open] > summary.group-title::before {
   display: inline-block;
   font-family: "IBM Plex Mono", monospace;
   padding: 0.08rem 0.55rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -1958,7 +1958,7 @@ details.group[open] > summary.group-title::before {
   width: 150px;
   height: 150px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   border: 1px solid rgba(128, 128, 128, 0.35);
   background: rgba(128, 128, 128, 0.08);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
@@ -1995,7 +1995,7 @@ details.group[open] > summary.group-title::before {
   max-width: 95vw;
   max-height: 92vh;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.55);
 }
 .reference-lightbox .rl-credit {
@@ -2007,7 +2007,7 @@ details.group[open] > summary.group-title::before {
   font-size: 0.85rem;
   background: rgba(0, 0, 0, 0.55);
   padding: 0.3rem 0.7rem;
-  border-radius: 6px;
+  border-radius: 5px;
   max-width: 90vw;
   text-align: center;
 }
@@ -2079,7 +2079,7 @@ details.group[open] > summary.group-title::before {
   width: 32px;
   height: 32px;
   flex-shrink: 0;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   background: color-mix(in oklch, var(--accent) 15%, var(--panel2));
   border: 1px solid color-mix(in oklch, var(--accent) 42%, var(--border));
   display: flex;
@@ -2113,7 +2113,7 @@ details.group[open] > summary.group-title::before {
   justify-content: center;
   background: var(--panel2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   color: var(--muted);
   font-size: 13px;
   cursor: pointer;
@@ -2141,7 +2141,7 @@ details.group[open] > summary.group-title::before {
   align-items: center;
   gap: 11px;
   padding: 8px 11px;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   text-decoration: none;
   cursor: pointer;
   font-size: 13.5px;
@@ -2281,7 +2281,7 @@ details.group[open] > summary.group-title::before {
   color: var(--accent);
   background: color-mix(in oklch, var(--accent) 12%, transparent);
   border: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 3px 10px;
 }
 /* Kingdom scope dropdown pill (replaces the old 4-chip segmented control) */
@@ -2340,7 +2340,7 @@ details.group[open] > summary.group-title::before {
   align-items: center;
   gap: 6px;
   white-space: nowrap;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   padding: 5px 12px;
   cursor: pointer;
   color: var(--muted);
@@ -2372,7 +2372,7 @@ details.group[open] > summary.group-title::before {
   font-size: 13px;
   font-weight: 500;
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
 }
 .b3d-topnav-link:hover {
   background: color-mix(in oklch, var(--accent) 12%, transparent);
@@ -2426,7 +2426,7 @@ details.group[open] > summary.group-title::before {
   color: var(--muted);
   text-decoration: none;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   padding: 4px 10px;
 }
 .b3d-footer-chip:hover {
@@ -2899,7 +2899,7 @@ details.group[open] > summary.group-title::before {
   align-items: center;
   gap: 0.4rem;
   padding: 0.4rem 0.75rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   border: 1px solid var(--border);
   background: var(--panel2);
   font-family: "IBM Plex Sans", sans-serif;
@@ -2919,7 +2919,7 @@ details.group[open] > summary.group-title::before {
   text-transform: uppercase;
   color: var(--faint);
   background: color-mix(in oklch, var(--border) 60%, transparent);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 0.15rem 0.4rem;
 }
 
@@ -2976,7 +2976,7 @@ details.group[open] > summary.group-title::before {
   width: 48px;
   height: 48px;
   flex-shrink: 0;
-  border-radius: 14px;
+  border-radius: var(--r-card);
   border: 1px solid var(--border);
   background: radial-gradient(
     circle at 50% 40%,
@@ -2993,7 +2993,7 @@ details.group[open] > summary.group-title::before {
   font-family: "IBM Plex Mono", monospace;
   font-size: 10.5px;
   font-weight: 600;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 2px 9px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -3249,7 +3249,7 @@ details.group[open] > summary.group-title::before {
   align-items: center;
   white-space: nowrap;
   padding: 0.4rem 0.85rem;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
@@ -3418,7 +3418,7 @@ details.group[open] > summary.group-title::before {
   justify-content: center;
   width: 26px;
   height: 26px;
-  border-radius: 7px;
+  border-radius: var(--r-ctl);
   background: oklch(0.6 0.12 var(--h, 200));
   color: white;
   font-family: "IBM Plex Mono", monospace;
@@ -3471,7 +3471,7 @@ details.group[open] > summary.group-title::before {
 .lb-prov {
   font-size: 0.62rem;
   padding: 0.02rem 0.4rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   border: 1px solid var(--border);
   color: var(--faint);
   letter-spacing: 0.03em;
@@ -3594,7 +3594,7 @@ details.group[open] > summary.group-title::before {
   width: 48px;
   height: 48px;
   flex-shrink: 0;
-  border-radius: 14px;
+  border-radius: var(--r-card);
   border: 1px solid var(--border);
   background: radial-gradient(
     circle at 50% 40%,
@@ -3626,7 +3626,7 @@ details.group[open] > summary.group-title::before {
   color: var(--accent2);
   text-decoration: none;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 0.28rem 0.75rem;
   white-space: nowrap;
 }
@@ -3655,7 +3655,7 @@ details.group[open] > summary.group-title::before {
 .b3d-model-icon.lb-avatar {
   width: 48px;
   height: 48px;
-  border-radius: 14px;
+  border-radius: var(--r-card);
   font-size: 0.95rem;
   border: none;
 }
@@ -3722,7 +3722,7 @@ details.group[open] > summary.group-title::before {
 .b3d-model-sample model-viewer {
   width: 150px;
   height: 110px;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   border: 1px solid var(--border);
   background: var(--panel2);
   display: block;
@@ -3731,7 +3731,7 @@ details.group[open] > summary.group-title::before {
   display: block;
   width: 150px;
   height: 110px;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   border: 1px dashed var(--border);
   background: var(--panel2);
   color: var(--accent2);
@@ -3826,7 +3826,7 @@ details.group[open] > summary.group-title::before {
   display: inline-block;
   width: 12px;
   height: 12px;
-  border-radius: 3px;
+  border-radius: 4px;
   border: 1px solid var(--border);
   margin-left: 0.4rem;
 }
@@ -4031,7 +4031,7 @@ details.group[open] > summary.group-title::before {
   display: inline-block;
   width: 11px;
   height: 11px;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 .ds-release-list {
   list-style: none;
@@ -4105,7 +4105,7 @@ details.group[open] > summary.group-title::before {
   letter-spacing: 0.03em;
   text-transform: capitalize;
   padding: 0.15rem 0.55rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
 }
 .tk-tier-easy {
   color: var(--win);
