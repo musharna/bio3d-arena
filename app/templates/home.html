@@ -123,6 +123,7 @@ reconstruction benchmark{% endblock %} {% block content %}
       >
     </div>
     <div class="b3d-kcard-name">{{ k.name }}</div>
+    {% if k.latin %}<div class="b3d-kcard-latin">{{ k.latin }}</div>{% endif %}
     <p class="b3d-kcard-blurb">{{ k.blurb }}</p>
     <div class="b3d-kcard-stat">{{ k.task_count }} task{{ "" if k.task_count == 1 else "s" }}</div>
   </a>

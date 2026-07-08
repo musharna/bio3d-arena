@@ -2,7 +2,7 @@
 {% block title %}Difficulty · Bio 3D Arena{% endblock %}
 {% block content %}
 {# Heatmap cell tint (top-level so every table below is in scope, incl. paradigm grid + scorecard). #}
-{% macro diff_heat(value, vmin, vmax, invert) %}{% if value is not none and vmax is not none and vmin is not none and vmax > vmin %}{% set frac = (value - vmin) / (vmax - vmin) %}{% set frac = (1 - frac) if invert else frac %}{% set frac = 0 if frac < 0 else (1 if frac > 1 else frac) %}{% set pct = (24 + frac * 34) | round(1) %}{% set hcolor = 'var(--win)' if frac >= 0.66 else ('var(--amber)' if frac >= 0.33 else 'var(--bad)') %}background: color-mix(in oklch, {{ hcolor }} {{ pct }}%, var(--panel2));{% endif %}{% endmacro %}
+{% macro diff_heat(value, vmin, vmax, invert) %}{% if value is not none and vmax is not none and vmin is not none and vmax > vmin %}{% set frac = (value - vmin) / (vmax - vmin) %}{% set frac = (1 - frac) if invert else frac %}{% set frac = 0 if frac < 0 else (1 if frac > 1 else frac) %}{% set pct = (24 + frac * 34) | round(1) %}{% set hcolor = 'var(--win)' if frac >= 0.66 else ('var(--amber)' if frac >= 0.33 else 'var(--bad)') %}background: color-mix(in oklch, {{ hcolor }} {{ pct }}%, var(--panel2)); border-color: color-mix(in oklch, {{ hcolor }} 34%, var(--border));{% endif %}{% endmacro %}
 <section class="diff">
   <header class="b3d-page-head">
     <h1>Difficulty tiers {% include "_scope_pill.html" %}</h1>
@@ -155,7 +155,7 @@
           <tr>
             <td class="gen">{{ g.generator }}</td>
             {% for t in tiers %}
-            <td class="num strong" style="{{ diff_heat(g.chamfer[t], gt_vmin[t], gt_vmax[t], true) }}">{{ '%.4f'|format(g.chamfer[t]) if g.chamfer[t] is not none else '—' }}</td>
+            <td class="num strong"><span class="diff-chip" style="{{ diff_heat(g.chamfer[t], gt_vmin[t], gt_vmax[t], true) }}">{{ '%.4f'|format(g.chamfer[t]) if g.chamfer[t] is not none else '—' }}</span></td>
             {% endfor %}
             {% set vals = [] %}
             {% for t in tiers %}{% if g.chamfer[t] is not none %}{% set _ = vals.append(g.chamfer[t]) %}{% endif %}{% endfor %}
@@ -217,24 +217,12 @@
             <td class="gen">{{ r.paradigm_display }}</td>
             <td class="num">{{ r.n_outputs }}</td>
             <td class="num">{{ r.n_scored }}</td>
-            <td class="num strong" style="{{ diff_heat(r.mean_chamfer, (chamfer_vals|min if chamfer_vals else none), (chamfer_vals|max if chamfer_vals else none), true) }}">
-              {{ '%.4f'|format(r.mean_chamfer) if r.mean_chamfer is not none else '—' }}
-            </td>
-            <td class="num" style="{{ diff_heat(r.mean_fscore, (fscore_vals|min if fscore_vals else none), (fscore_vals|max if fscore_vals else none), false) }}">
-              {{ '%.3f'|format(r.mean_fscore) if r.mean_fscore is not none else '—' }}
-            </td>
-            <td class="num" style="{{ diff_heat(r.mean_structural, (structural_vals|min if structural_vals else none), (structural_vals|max if structural_vals else none), false) }}">
-              {{ '%.2f'|format(r.mean_structural) if r.mean_structural is not none else '—' }}
-            </td>
-            <td class="num" style="{{ diff_heat(r.species_pass_rate, (species_vals|min if species_vals else none), (species_vals|max if species_vals else none), false) }}">
-              {{ '%.0f%%'|format(r.species_pass_rate * 100) if r.species_pass_rate is not none else '—' }}
-            </td>
-            <td class="num strong" style="{{ diff_heat(r.mean_completeness, (complete_vals|min if complete_vals else none), (complete_vals|max if complete_vals else none), false) }}">
-              {{ '%.2f'|format(r.mean_completeness) if r.mean_completeness is not none else '—' }}
-            </td>
-            <td class="num" style="{{ diff_heat(r.pct_complete, (pctcomplete_vals|min if pctcomplete_vals else none), (pctcomplete_vals|max if pctcomplete_vals else none), false) }}">
-              {{ '%.0f%%'|format(r.pct_complete * 100) if r.pct_complete is not none else '—' }}{% if r.completeness_n %}<span class="subtle"> ({{ r.completeness_n }})</span>{% endif %}
-            </td>
+            <td class="num strong"><span class="diff-chip" style="{{ diff_heat(r.mean_chamfer, (chamfer_vals|min if chamfer_vals else none), (chamfer_vals|max if chamfer_vals else none), true) }}">{{ '%.4f'|format(r.mean_chamfer) if r.mean_chamfer is not none else '—' }}</span></td>
+            <td class="num"><span class="diff-chip" style="{{ diff_heat(r.mean_fscore, (fscore_vals|min if fscore_vals else none), (fscore_vals|max if fscore_vals else none), false) }}">{{ '%.3f'|format(r.mean_fscore) if r.mean_fscore is not none else '—' }}</span></td>
+            <td class="num"><span class="diff-chip" style="{{ diff_heat(r.mean_structural, (structural_vals|min if structural_vals else none), (structural_vals|max if structural_vals else none), false) }}">{{ '%.2f'|format(r.mean_structural) if r.mean_structural is not none else '—' }}</span></td>
+            <td class="num"><span class="diff-chip" style="{{ diff_heat(r.species_pass_rate, (species_vals|min if species_vals else none), (species_vals|max if species_vals else none), false) }}">{{ '%.0f%%'|format(r.species_pass_rate * 100) if r.species_pass_rate is not none else '—' }}</span></td>
+            <td class="num strong"><span class="diff-chip" style="{{ diff_heat(r.mean_completeness, (complete_vals|min if complete_vals else none), (complete_vals|max if complete_vals else none), false) }}">{{ '%.2f'|format(r.mean_completeness) if r.mean_completeness is not none else '—' }}</span></td>
+            <td class="num"><span class="diff-chip" style="{{ diff_heat(r.pct_complete, (pctcomplete_vals|min if pctcomplete_vals else none), (pctcomplete_vals|max if pctcomplete_vals else none), false) }}">{{ '%.0f%%'|format(r.pct_complete * 100) if r.pct_complete is not none else '—' }}{% if r.completeness_n %}<span class="subtle"> ({{ r.completeness_n }})</span>{% endif %}</span></td>
           </tr>
           {% endfor %}
         </tbody>

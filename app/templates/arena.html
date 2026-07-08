@@ -36,34 +36,34 @@ block content %}
     </button>
   </div>
 
-  <div id="task-card" class="task-card">
-    <div class="task-card-main">
+  <div id="task-card" class="task-strip">
+    <!-- Subject thumbnail: the first reference photo(s), populated by arena.js into
+         #reference-gallery. Doubles as the prototype's "subject thumbnail avatar" and stays
+         click-to-zoom. Hidden when a task has no reference on record. -->
+    <figure id="reference-panel" class="task-strip-thumb" hidden>
+      <div id="reference-gallery" class="reference-gallery"></div>
+    </figure>
+    <div class="task-strip-main">
       <div class="task-card-heading">
         <span class="cat-chip" id="task-cat">…</span>
         <h2 id="task-title">Loading a comparison…</h2>
       </div>
-      <p id="task-prompt" class="prompt"></p>
-      <figure id="reference-panel" class="reference-panel" hidden>
-        <div id="reference-gallery" class="reference-gallery"></div>
-        <figcaption class="reference-cap">
-          Reference — what this organism should look like. Judge each model's fidelity to it.
-        </figcaption>
-      </figure>
       <p class="criterion">
-        Vote on: <strong id="criterion-name">overall</strong> — rotate, zoom, and
-        pan each model, then pick the better one.
+        Judge fidelity to the reference · vote on
+        <strong id="criterion-name">overall</strong>
       </p>
+      <p id="task-prompt" class="prompt"></p>
     </div>
     <div class="filter-row">
       <label
         >Category
-        <select id="sel-category">
+        <select id="sel-category" class="b3d-select">
           <option value="all">All categories</option>
         </select>
       </label>
       <label
         >Judge on
-        <select id="sel-criterion"></select>
+        <select id="sel-criterion" class="b3d-select"></select>
       </label>
       <a href="/arena?set=calibration" class="muted" title="Vote the calibration subset"
         >calibration set</a

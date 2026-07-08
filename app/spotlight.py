@@ -46,6 +46,8 @@ SPOTLIGHTS: list[dict] = [
         "slug": "tomato",
         "kingdom": "plants",  # all current spotlight subjects are plant taxa (crop/model species); resolved by taxon identity, not a DB lookup (SPOTLIGHTS is a module-level constant, no per-request Session)
         "task_title": "Solanum lycopersicum — single-image → 3D reconstruction",
+        "emoji": "\U0001f345",  # 🍅
+        "lineage": "Plantae › Solanales › Solanaceae › Solanum",
         "featured": True,
         "order": 0,
         "blurb": "How current image→3D models handle a whole tomato plant.",
@@ -59,6 +61,8 @@ SPOTLIGHTS: list[dict] = [
         "slug": "maize",
         "kingdom": "plants",  # all current spotlight subjects are plant taxa (crop/model species); resolved by taxon identity, not a DB lookup (SPOTLIGHTS is a module-level constant, no per-request Session)
         "task_title": "Zea mays — single-image → 3D reconstruction",
+        "emoji": "\U0001f33d",  # 🌽
+        "lineage": "Plantae › Poales › Poaceae › Zea",
         "featured": True,
         "order": 1,
         "blurb": "How current image→3D models handle a whole maize plant — a tall, two-ranked "
@@ -72,6 +76,8 @@ SPOTLIGHTS: list[dict] = [
         "slug": "arabidopsis",
         "kingdom": "plants",  # all current spotlight subjects are plant taxa (crop/model species); resolved by taxon identity, not a DB lookup (SPOTLIGHTS is a module-level constant, no per-request Session)
         "task_title": "Arabidopsis thaliana — single-image → 3D reconstruction",
+        "emoji": "\U0001f331",  # 🌱
+        "lineage": "Plantae › Brassicales › Brassicaceae › Arabidopsis",
         "featured": False,
         "order": 2,
         "blurb": "Thale cress rosette — fine structure stress test.",
@@ -81,6 +87,8 @@ SPOTLIGHTS: list[dict] = [
         "slug": "barley-mri",
         "kingdom": "plants",  # all current spotlight subjects are plant taxa (crop/model species); resolved by taxon identity, not a DB lookup (SPOTLIGHTS is a module-level constant, no per-request Session)
         "task_title": "Hordeum vulgare — barley root system (3D MRI)",
+        "emoji": "\U0001f33e",  # 🌾
+        "lineage": "Plantae › Poales › Poaceae › Hordeum",
         "featured": False,
         "order": 3,
         "blurb": "The volumetric sensor axis: a real 3D MRI of a barley root system, surfaced via "
@@ -92,6 +100,8 @@ SPOTLIGHTS: list[dict] = [
         "slug": "rose",
         "kingdom": "plants",  # all current spotlight subjects are plant taxa (crop/model species); resolved by taxon identity, not a DB lookup (SPOTLIGHTS is a module-level constant, no per-request Session)
         "task_title": "Rosa — single-image → 3D reconstruction",
+        "emoji": "\U0001f339",  # 🌹
+        "lineage": "Plantae › Rosales › Rosaceae › Rosa",
         "featured": True,
         "order": 4,
         "blurb": "How 3D methods handle a rose (Rosa) — the 3rd crop spotlight. Spans a real CC0 "
@@ -108,6 +118,8 @@ SPOTLIGHTS: list[dict] = [
         "slug": "soybean",
         "kingdom": "plants",  # all current spotlight subjects are plant taxa (crop/model species); resolved by taxon identity, not a DB lookup (SPOTLIGHTS is a module-level constant, no per-request Session)
         "task_title": "Glycine max — single-image → 3D reconstruction",
+        "emoji": "\U0001fad8",  # 🫘
+        "lineage": "Plantae › Fabales › Fabaceae › Glycine",
         "featured": True,
         "order": 5,
         "blurb": "How 3D methods handle soybean (Glycine max) — the Track-A2 legume spotlight. "
