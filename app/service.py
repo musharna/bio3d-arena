@@ -731,7 +731,16 @@ def recompute_judge_scope(
     matches = _judge_matches_for_scope(db, criterion.id, view_condition)
     judge_model = _judge_model_for_scope(db, criterion.id, view_condition)
     players = sorted(set(_players_for_scope(db, None)) | {p for m in matches for p in m})
-    result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP)
+    # VLM-judge fit: evidence-scaled center prior (see config.JUDGE_PRIOR_FRAC) keeps the
+    # disconnected-by-construction, near-deterministic judge graph finite. Human boards don't
+    # pass it (they keep the unpenalized MLE).
+    result = ranking.bradley_terry(
+        players,
+        matches,
+        bootstrap=config.BT_BOOTSTRAP,
+        prior_frac=config.JUDGE_PRIOR_FRAC,
+        prior_floor=config.JUDGE_PRIOR_FLOOR,
+    )
     for gid in players:
         r = _get_or_create_judge_rating(db, gid, criterion.id, view_condition)
         r.bt_score = result.scores.get(gid, ranking.BT_BASE)
@@ -760,7 +769,16 @@ def recompute_kingdom_judge_scope(
     rationale as `recompute_kingdom_scope` (a kingdom's judge player set can shrink)."""
     players = _players_for_scope(db, category_ids=category_ids)
     matches = _judge_matches_for_scope(db, criterion.id, view_condition, category_ids=category_ids)
-    result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP)
+    # VLM-judge fit: evidence-scaled center prior (see config.JUDGE_PRIOR_FRAC) keeps the
+    # disconnected-by-construction, near-deterministic judge graph finite. Human boards don't
+    # pass it (they keep the unpenalized MLE).
+    result = ranking.bradley_terry(
+        players,
+        matches,
+        bootstrap=config.BT_BOOTSTRAP,
+        prior_frac=config.JUDGE_PRIOR_FRAC,
+        prior_floor=config.JUDGE_PRIOR_FLOOR,
+    )
     db.execute(
         delete(KingdomJudgeRating).where(
             KingdomJudgeRating.kingdom == kingdom,
@@ -863,7 +881,16 @@ def kingdom_judge_leaderboard_rows(
         return []
     players = _players_for_scope(db, category_ids=category_ids)
     matches = _judge_matches_for_scope(db, crit.id, view_condition, category_ids=category_ids)
-    result = ranking.bradley_terry(players, matches, bootstrap=config.BT_BOOTSTRAP)
+    # VLM-judge fit: evidence-scaled center prior (see config.JUDGE_PRIOR_FRAC) keeps the
+    # disconnected-by-construction, near-deterministic judge graph finite. Human boards don't
+    # pass it (they keep the unpenalized MLE).
+    result = ranking.bradley_terry(
+        players,
+        matches,
+        bootstrap=config.BT_BOOTSTRAP,
+        prior_frac=config.JUDGE_PRIOR_FRAC,
+        prior_floor=config.JUDGE_PRIOR_FLOOR,
+    )
     names = generator_display_names(db)
     rows = []
     for gid in players:
