@@ -60,19 +60,22 @@ reconstruction benchmark{% endblock %} {% block content %}
           </div>
           {% endif %}
         </div>
+        <!-- Orientation gizmo: Y stays world-up; X/Z sweep in the ground plane, driven by
+             the live camera azimuth (see hero mount script) so it tracks the rotating mesh. -->
         <svg
+          id="b3d-hero-gizmo"
           class="b3d-hero-gizmo"
           viewBox="0 0 44 44"
           aria-hidden="true"
           focusable="false"
         >
-          <circle cx="10" cy="34" r="2" fill="var(--faint)" />
-          <line x1="10" y1="34" x2="10" y2="10" stroke="#e5484d" stroke-width="2" stroke-linecap="round" />
-          <text x="10" y="7" fill="#e5484d" font-size="7" font-family="IBM Plex Mono, monospace" text-anchor="middle">Y</text>
-          <line x1="10" y1="34" x2="34" y2="34" stroke="#30a46c" stroke-width="2" stroke-linecap="round" />
-          <text x="38" y="37" fill="#30a46c" font-size="7" font-family="IBM Plex Mono, monospace" text-anchor="middle">X</text>
-          <line x1="10" y1="34" x2="20" y2="22" stroke="#0091ff" stroke-width="2" stroke-linecap="round" />
-          <text x="23" y="19" fill="#0091ff" font-size="7" font-family="IBM Plex Mono, monospace" text-anchor="middle">Z</text>
+          <circle cx="18" cy="26" r="2" fill="var(--faint)" />
+          <line x1="18" y1="26" x2="18" y2="10" stroke="#e5484d" stroke-width="2" stroke-linecap="round" />
+          <text x="18" y="7" fill="#e5484d" font-size="7" font-family="IBM Plex Mono, monospace" text-anchor="middle">Y</text>
+          <line id="gz-x-line" x1="18" y1="26" x2="33" y2="26" stroke="#30a46c" stroke-width="2" stroke-linecap="round" />
+          <text id="gz-x-label" x="37" y="28" fill="#30a46c" font-size="7" font-family="IBM Plex Mono, monospace" text-anchor="middle">X</text>
+          <line id="gz-z-line" x1="18" y1="26" x2="8" y2="32" stroke="#0091ff" stroke-width="2" stroke-linecap="round" />
+          <text id="gz-z-label" x="5" y="35" fill="#0091ff" font-size="7" font-family="IBM Plex Mono, monospace" text-anchor="middle">Z</text>
         </svg>
       </div>
       <span class="b3d-hero-viz-caption"
@@ -101,6 +104,33 @@ reconstruction benchmark{% endblock %} {% block content %}
       mv.setAttribute("auto-rotate", "");
       mv.setAttribute("auto-rotate-delay", "0");
       mv.setAttribute("rotation-per-second", "16deg");
+
+      // Drive the XYZ gizmo from the live camera azimuth so it tracks the rotating mesh
+      // (auto-rotate AND user drag both fire camera-change). Y is world-up (fixed); X/Z
+      // sweep in the ground plane, foreshortened for a 3/4 view.
+      var ox = 18, oy = 26, L = 15, k = 0.5;
+      var xLine = document.getElementById("gz-x-line");
+      var xLabel = document.getElementById("gz-x-label");
+      var zLine = document.getElementById("gz-z-line");
+      var zLabel = document.getElementById("gz-z-label");
+      function axis(el, lbl, ang) {
+        var ex = ox + L * Math.cos(ang), ey = oy - L * k * Math.sin(ang);
+        el.setAttribute("x2", ex.toFixed(1));
+        el.setAttribute("y2", ey.toFixed(1));
+        lbl.setAttribute("x", (ox + (L + 4) * Math.cos(ang)).toFixed(1));
+        lbl.setAttribute("y", (oy - (L + 4) * k * Math.sin(ang) + 2.4).toFixed(1));
+      }
+      var raf = 0;
+      function sync() {
+        raf = 0;
+        if (!xLine) return;
+        var theta = mv.getCameraOrbit().theta; // radians, azimuth
+        axis(xLine, xLabel, -theta);
+        axis(zLine, zLabel, -theta + Math.PI / 2);
+      }
+      mv.addEventListener("camera-change", function () {
+        if (!raf) raf = requestAnimationFrame(sync);
+      });
     }
   })();
 </script>
