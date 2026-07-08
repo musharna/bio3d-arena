@@ -53,13 +53,11 @@ const qs = () => {
   const p = new URLSearchParams();
   if (cat && cat !== "all") p.set("category", cat);
   if (crit) p.set("criterion", crit);
-  // Thread ?set=... from the page URL when present (e.g. ?set=calibration scopes a session);
-  // otherwise default every fetch to K-wise so 4-up ballots are served where available.
-  // _build_kwise_comparison falls back to a transparent pairwise payload when no task has an
-  // admitted same-paradigm quad, and render() already branches on the resulting shape, so
-  // this default is always safe.
-  const urlSet = new URLSearchParams(location.search).get("set") || "kwise";
-  p.set("set", urlSet);
+  // Baseline arena is plain 1v1 pairwise (matches the design). K-wise 4-up is opt-in only:
+  // thread ?set=... from the page URL when present (e.g. ?set=kwise or ?set=calibration);
+  // with no ?set, /api/next serves a pairwise comparison.
+  const urlSet = new URLSearchParams(location.search).get("set");
+  if (urlSet) p.set("set", urlSet);
   const s = p.toString();
   return s ? "?" + s : "";
 };

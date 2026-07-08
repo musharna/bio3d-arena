@@ -1420,11 +1420,12 @@ kbd {
    kingdom emoji "specimen", breadcrumb/name/blurb below). Only fields present on
    the SPOTLIGHTS dicts are ever rendered (slug/task_title/featured/blurb/kingdom) —
    no fabricated taxonomy. */
-/* Design ref (13-spotlight.png): full-width single-column feature cards, one per row —
-   each spotlight is a wide hero, not a 2-up grid cell. */
+/* Prototype: 2-column card grid at desktop, collapsing to a single column on narrow
+   widths (the 924px PNG showed 1-up only because it's below the collapse point). auto-fit
+   matches the prototype at every width. */
 .sp-idx-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
   gap: 1.25rem;
   margin-top: 0.5rem;
 }
@@ -2055,8 +2056,16 @@ details.group[open] > summary.group-title::before {
 .b3d-app.is-collapsed .b3d-sidebar .b3d-theme-btn {
   justify-content: center;
 }
+/* Collapsed: the wordmark is hidden, so the navhead stacks (logo over the toggle, both
+   centered) exactly like the prototype — otherwise the toggle stays pinned right and gets
+   clipped by the narrow rail. */
+.b3d-app.is-collapsed .b3d-navhead {
+  flex-direction: column;
+  gap: 9px;
+}
 .b3d-app.is-collapsed .b3d-collapse-btn {
   transform: rotate(180deg);
+  margin-left: 0;
 }
 
 .b3d-navhead {
@@ -2077,14 +2086,16 @@ details.group[open] > summary.group-title::before {
   align-items: center;
   justify-content: center;
 }
-/* Design ref: wordmark stacks "Bio" over "3D" beside the logo tile (two lines), not inline. */
+/* Prototype (source of truth): wordmark is INLINE "Bio 3D" at all widths — Bio in text
+   color, 3D in accent. (The 924px PNG showed it stacked, but the interactive prototype
+   renders it inline; the PNG and the prototype disagree, and the prototype governs.) */
 .b3d-wordmark {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
   font-family: "Space Grotesk", sans-serif;
   font-weight: 700;
-  font-size: 15px;
-  line-height: 0.98;
+  font-size: 16px;
   letter-spacing: -0.01em;
   color: var(--text);
   white-space: nowrap;
@@ -4103,8 +4114,11 @@ details.group[open] > summary.group-title::before {
    namespace. .meth-formula is a static inline-styled BT formula — no math lib. === */
 /* Design ref (11-methodology.png): 6 process steps in a 4-column grid (4 top, 2 bottom)
    at the 924px canvas — not 3-up. Falls back to 2-up only on phones. */
+/* Design is RESPONSIVE: the 6 step cards sit in one row of 6 at desktop (~1280) and
+   reflow to 4 / 2 as width tightens — auto-fit matches the prototype at every width
+   (hard-coding a single column count matched one PNG but broke the others). */
 .meth-steps-grid {
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 0.75rem;
   margin-bottom: 1.3rem;
 }
