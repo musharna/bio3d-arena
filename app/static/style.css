@@ -712,18 +712,6 @@ textarea:focus-visible,
   padding: 0 0.4rem;
   vertical-align: middle;
 }
-.ai-badge {
-  font-size: 0.6rem;
-  font-weight: 700;
-  color: var(--amber);
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  padding: 0 0.4rem;
-  vertical-align: middle;
-  margin-left: 0.3rem;
-  cursor: help;
-}
-
 /* Arena — vote bar (floating pill) */
 .vote-bar {
   display: flex;

@@ -158,19 +158,13 @@ function renderPair(data) {
     refPanel.hidden = refs.length === 0;
   }
   // Shared viewer registry (viewer.js) picks model-viewer vs 3Dmol by format.
-  el("fmt-a").textContent = window.Bio3DViewer.mount(
-    el("slot-a"),
-    data.a,
-    (btn) => flagOutput(data.a.output_id, btn),
-  ).toUpperCase();
-  el("fmt-b").textContent = window.Bio3DViewer.mount(
-    el("slot-b"),
-    data.b,
-    (btn) => flagOutput(data.b.output_id, btn),
-  ).toUpperCase();
+  window.Bio3DViewer.mount(el("slot-a"), data.a, (btn) =>
+    flagOutput(data.a.output_id, btn),
+  );
+  window.Bio3DViewer.mount(el("slot-b"), data.b, (btn) =>
+    flagOutput(data.b.output_id, btn),
+  );
   window.Bio3DViewer.syncPair(el("slot-a"), el("slot-b"));
-  setMachineGeneratedBadge("a", data.a);
-  setMachineGeneratedBadge("b", data.b);
   setAB("a"); // each new pair starts on Model A
   setStatus("");
 }
@@ -208,21 +202,7 @@ function renderKwise(data) {
     cell.className = "model-col kwise-cell";
     const label = document.createElement("div");
     label.className = "model-label";
-    label.textContent = "Model " + "ABCD"[i] + " ";
-    const fmtChip = document.createElement("span");
-    fmtChip.className = "fmt-chip";
-    label.appendChild(fmtChip);
-    // AUP labeling is display-posture-wide: a commercial-model output must carry the
-    // machine-generated badge in the 4-up grid exactly as it does in the 2-up pair view.
-    if (o.machine_generated) {
-      const badge = document.createElement("span");
-      badge.className = "ai-badge";
-      badge.textContent = "🤖 AI-generated";
-      badge.title = o.attribution
-        ? `Machine-generated — ${o.attribution}`
-        : "Machine-generated";
-      label.appendChild(badge);
-    }
+    label.textContent = "Model " + "ABCD"[i];
     const slot = document.createElement("div");
     slot.className = "viewer-slot";
     const pickBtn = document.createElement("button");
@@ -240,9 +220,7 @@ function renderKwise(data) {
     // Shared viewer registry (viewer.js) picks model-viewer vs 3Dmol by format — same
     // {url, format, output_id} shape _serialize uses for a/b, so the flag callback reuses
     // flagOutput unchanged.
-    fmtChip.textContent = window.Bio3DViewer.mount(slot, o, (btn) =>
-      flagOutput(o.output_id, btn),
-    ).toUpperCase();
+    window.Bio3DViewer.mount(slot, o, (btn) => flagOutput(o.output_id, btn));
   });
   el("kwise-allbad").onclick = () => submitKvote(data.ballot_id, null);
   setStatus("");
@@ -294,17 +272,6 @@ async function submitKvote(ballotId, bestOutputId) {
   } finally {
     busy = false;
   }
-}
-
-// AUP labeling: badge + attribution tooltip on any output produced by a commercial
-// generation model (never on our own assets or redistributable-license scans).
-function setMachineGeneratedBadge(side, output) {
-  const badge = el(`ai-badge-${side}`);
-  if (!badge) return;
-  badge.hidden = !output.machine_generated;
-  badge.title = output.attribution
-    ? `Machine-generated — ${output.attribution}`
-    : "Machine-generated";
 }
 
 async function vote(winner) {

@@ -20,7 +20,7 @@ block content %}
 
   <div class="onboard-banner" id="onboard-banner" hidden>
     <span
-      >👋 New here? <strong>Rotate &amp; zoom</strong> each model, then vote for
+      >New here? <strong>Rotate &amp; zoom</strong> each model, then vote for
       the better one. Keys: <kbd>←</kbd> A · <kbd>→</kbd> B · <kbd>T</kbd> tie ·
       <kbd>X</kbd> both-bad.</span
     >
@@ -93,10 +93,7 @@ block content %}
   <div class="pair">
     <div class="model-col is-active">
       <div class="model-label">
-        Model A <span class="fmt-chip" id="fmt-a"></span>
-        <span class="ai-badge" id="ai-badge-a" hidden title="Machine-generated"
-          >🤖 AI-generated</span
-        >
+        Model A
       </div>
       <!-- Post-vote reveal (Feature C): hidden until arena.js's showReveal() populates + shows
            these after a non-gold vote is committed. Never present before that. -->
@@ -106,10 +103,7 @@ block content %}
     </div>
     <div class="model-col">
       <div class="model-label">
-        Model B <span class="fmt-chip" id="fmt-b"></span>
-        <span class="ai-badge" id="ai-badge-b" hidden title="Machine-generated"
-          >🤖 AI-generated</span
-        >
+        Model B
       </div>
       <div class="reveal-name" id="reveal-name-b" hidden></div>
       <div class="rank-chip" id="rank-chip-b" hidden></div>
@@ -125,12 +119,12 @@ block content %}
 
   <div class="vote-bar">
     <button class="vote-btn win" data-winner="a">
-      <span class="win-dot" aria-hidden="true"></span>👈 A is better <kbd>←</kbd>
+      <span class="win-dot" aria-hidden="true"></span>A is better <kbd>←</kbd>
     </button>
-    <button class="vote-btn tie" data-winner="tie">🤝 Tie <kbd>T</kbd></button>
-    <button class="vote-btn bad" data-winner="bad">👎 Both bad <kbd>X</kbd></button>
+    <button class="vote-btn tie" data-winner="tie">Tie <kbd>T</kbd></button>
+    <button class="vote-btn bad" data-winner="bad">Both bad <kbd>X</kbd></button>
     <button class="vote-btn win" data-winner="b">
-      <span class="win-dot" aria-hidden="true"></span>B is better 👉 <kbd>→</kbd>
+      <span class="win-dot" aria-hidden="true"></span>B is better <kbd>→</kbd>
     </button>
   </div>
   <button
@@ -139,7 +133,7 @@ block content %}
     class="vote-btn bad"
     hidden
   >
-    🤷 Can't tell / all bad
+    Can't tell / all bad
   </button>
   <!-- Post-vote reveal (Feature C): shown by arena.js after a vote commits, in place of the
        vote bar. Hidden by default; never present before a vote. -->
