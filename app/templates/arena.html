@@ -9,13 +9,11 @@ block content %}
       Bradley&ndash;Terry leaderboards &mdash; across Plants, Fungi, and
       Animals.
     </p>
+    {# Design (02-arena.png): stats separated by plain spacing, not middot dividers. #}
     <div class="arena-hero-stats">
-      <span><strong>{{ "{:,}".format(total_votes) }}</strong> votes cast</span
-      ><span aria-hidden="true">&middot;</span>
-      <span><strong>{{ models_count }}</strong> models</span
-      ><span aria-hidden="true">&middot;</span>
-      <span><strong>{{ tasks_count }}</strong> tasks</span
-      ><span aria-hidden="true">&middot;</span>
+      <span><strong>{{ "{:,}".format(total_votes) }}</strong> votes cast</span>
+      <span><strong>{{ models_count }}</strong> models</span>
+      <span><strong>{{ tasks_count }}</strong> tasks</span>
       <span><strong>{{ kingdoms_live }}</strong> kingdoms live</span>
     </div>
   </div>
