@@ -3368,13 +3368,14 @@ details.group[open] > summary.group-title::before {
   font-weight: 700;
   letter-spacing: 0.01em;
 }
-/* Name + provisional + provenance chips on ONE line (the design keeps rows compact — a
-   stacked chip row made every leaderboard row two lines tall). */
+/* Name + provisional + provenance chips on ONE line — the design keeps rows compact by
+   TRUNCATING a long generator name (nowrap + ellipsis) rather than wrapping it, so a narrow
+   window can't blow each row up to 3-4 lines. */
 .lb-gen-body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.4rem 0.5rem;
   min-width: 0;
 }
@@ -3382,7 +3383,18 @@ details.group[open] > summary.group-title::before {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.gen-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.ranktable td.gen {
+  align-items: center;
 }
 .lb-prov-row {
   display: flex;
