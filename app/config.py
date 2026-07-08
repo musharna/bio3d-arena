@@ -22,6 +22,15 @@ ELO_K = float(os.environ.get("BIO3D_ELO_K", "32"))
 # Number of bootstrap resamples for Bradley-Terry confidence intervals.
 BT_BOOTSTRAP = int(os.environ.get("BIO3D_BT_BOOTSTRAP", "200"))
 
+# Evidence-scaled neutral-center prior for the VLM-JUDGE Bradley-Terry fit only
+# (the human pairwise board keeps the unpenalized MLE). The judge's K-wise ballots are
+# same-paradigm quads, so the comparison graph is disconnected by construction and full of
+# all-win/all-loss records — an unpenalized MLE drives Elo to ±thousands. A prior that scales
+# with each player's game count (a_p = max(FLOOR, FRAC*games_p) virtual wins+losses vs the
+# strength-1 center) bounds every player toward the center regardless of volume/connectivity.
+JUDGE_PRIOR_FRAC = float(os.environ.get("BIO3D_JUDGE_PRIOR_FRAC", "0.25"))
+JUDGE_PRIOR_FLOOR = float(os.environ.get("BIO3D_JUDGE_PRIOR_FLOOR", "0.5"))
+
 # --- Public-arena integrity / anti-abuse ---
 # Rate limiting: at most VOTE_RATE_LIMIT votes per VOTE_RATE_WINDOW seconds per session.
 VOTE_RATE_LIMIT = int(os.environ.get("BIO3D_VOTE_RATE_LIMIT", "60"))

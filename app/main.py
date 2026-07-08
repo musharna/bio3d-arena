@@ -1143,6 +1143,7 @@ def leaderboard(
     category: str = "all",
     paradigm: str | None = None,
     verified: bool = False,
+    show_all: bool = False,
 ):
     roadmap = _roadmap_or_none(request, db)
     if roadmap is not None:
@@ -1185,6 +1186,14 @@ def leaderboard(
             category_ids=cat_ids,
         )
     rows = _enrich_leaderboard_rows(rows, trend_by_gid)
+    # Rated-only by default: hide generators with zero comparisons (never voted on — they carry
+    # only the default prior BT and flood the board). A "Show all" toggle reveals them. If nothing
+    # is rated yet (fresh slice), fall back to showing all so the board is never spuriously empty.
+    total_generators = len(rows)
+    rated_rows = [r for r in rows if r.get("n_games", 0) > 0]
+    unrated_count = total_generators - len(rated_rows)
+    if not show_all and rated_rows:
+        rows = rated_rows
     # Precompute `selected` flags in Python so the template avoids `==` (which the
     # HTML formatter mangles inside Jinja tags).
     category_options = [
@@ -1207,9 +1216,14 @@ def leaderboard(
     # paradigm-filtered) `rows` would make every non-active tab vanish after the first click.
     paradigms_in_rows = sorted({r["paradigm"] for r in all_rows if r.get("paradigm")})
     paradigm_options = [
-        {"value": None, "display": "All paradigms", "selected": paradigm is None}
+        {"value": None, "display": "All paradigms", "tab": "All", "selected": paradigm is None}
     ] + [
-        {"value": p, "display": paradigms.DISPLAY_NAMES.get(p, p), "selected": paradigm == p}
+        {
+            "value": p,
+            "display": paradigms.DISPLAY_NAMES.get(p, p),
+            "tab": paradigms.SHORT_NAMES.get(p, p),
+            "selected": paradigm == p,
+        }
         for p in paradigms_in_rows
     ]
     return templates.TemplateResponse(
@@ -1225,6 +1239,9 @@ def leaderboard(
             "bias": service.compute_bias(db),
             "sel_criterion": criterion,
             "sel_category": category,
+            "show_all": show_all,
+            "unrated_count": unrated_count,
+            "total_generators": total_generators,
             "firm_vote_threshold": service.FIRM_VOTE_THRESHOLD,
             # The cached JudgeRating table is global-only (category_id.is_(None)) and can't
             # represent a kingdom (a SET of categories); under an active kingdom the judge board
@@ -1309,15 +1326,28 @@ def _model_cards(db: Session, k_ids: set[int] | None) -> list[dict]:
 
 
 @app.get("/models", response_class=HTMLResponse)
-def models_index(request: Request, db: Session = Depends(get_db)):
+def models_index(request: Request, db: Session = Depends(get_db), show_all: bool = False):
     roadmap = _roadmap_or_none(request, db)
     if roadmap is not None:
         return roadmap
     k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    cards = _model_cards(db, k_ids)
+    # Rated-only by default: generators never voted on (votes == 0) carry only the default prior
+    # BT and flood the grid — hide them behind a "Show all" toggle. Fall back to all if none rated.
+    total_generators = len(cards)
+    rated_cards = [c for c in cards if c.get("votes", 0) > 0]
+    unrated_count = total_generators - len(rated_cards)
+    if not show_all and rated_cards:
+        cards = rated_cards
     return templates.TemplateResponse(
         request,
         "models.html",
-        {"cards": _model_cards(db, k_ids)},
+        {
+            "cards": cards,
+            "show_all": show_all,
+            "unrated_count": unrated_count,
+            "total_generators": total_generators,
+        },
     )
 
 
@@ -1511,18 +1541,24 @@ def significance_page(
     db: Session = Depends(get_db),
     criterion: str = "overall",
     category: str = "all",
+    show_all: bool = False,
 ):
     roadmap = _roadmap_or_none(request, db)
     if roadmap is not None:
         return roadmap
     category_id = _resolve_category_id(db, category)
     k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
+    # Rated-only by default: a never-voted generator has no significance signal and floods the
+    # forest plot + P(A>B) matrix. `?show_all=true` includes them.
     if k_ids is not None:
         sig = service.compute_significance(
-            db, criterion, category_ids=_effective_category_ids(k_ids, category_id)
+            db,
+            criterion,
+            category_ids=_effective_category_ids(k_ids, category_id),
+            rated_only=not show_all,
         )
     else:
-        sig = service.compute_significance(db, criterion, category_id)
+        sig = service.compute_significance(db, criterion, category_id, rated_only=not show_all)
     # Forest-plot CI bounds: REUSE the leaderboard's cached BT confidence interval per
     # generator (same kingdom scoping the leaderboard route branches on) rather than
     # computing new stats — bt_lower/bt_upper are absolute values so merging rows across
@@ -1558,6 +1594,9 @@ def significance_page(
             "category_options": category_options,
             "criterion_options": criterion_options,
             "ci_map": ci_map,
+            "show_all": show_all,
+            "sel_criterion": criterion,
+            "sel_category": category,
         },
     )
 

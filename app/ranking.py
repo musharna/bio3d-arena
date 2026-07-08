@@ -68,6 +68,8 @@ def _fit_strengths(
     players: list[int],
     matches: list[tuple[int, int]],
     reg: float = 0.1,
+    prior_frac: float = 0.0,
+    prior_floor: float = 0.0,
     max_iter: int = 500,
     tol: float = 1e-9,
 ) -> dict[int, float]:
@@ -75,16 +77,32 @@ def _fit_strengths(
 
     matches: list of (winner_id, loser_id). Ties should be excluded by the caller.
     reg: symmetric pseudo-count added to each ordered player pair that played, to
-         keep strengths finite when a player has only wins or only losses.
+         keep co-played strengths finite when a player has only wins or only losses.
+    prior_frac / prior_floor: an optional EVIDENCE-SCALED neutral-center prior
+         (penalized MLE / MAP). Each player also plays `a_p = max(prior_floor,
+         prior_frac * games_p)` virtual wins AND `a_p` virtual losses against a
+         fictitious opponent of fixed strength 1 (the geometric-mean normalization
+         center). Because the virtual game count scales WITH a player's real games,
+         the prior does not wash out at high volume — it bounds every player's
+         strength toward the center regardless of game count OR graph connectivity.
+         This is what keeps the K-wise VLM-judge board finite: its ballots are
+         same-paradigm quads, so the comparison graph is disconnected by construction
+         (paradigms never cross-play) and full of all-win/all-loss records, which a
+         plain MLE (and a fixed-count prior) drives to ±thousands of Elo. Both default
+         to 0.0 → the prior is OFF and the fit is the exact unpenalized MLE (the human
+         pairwise board is unchanged; only the judge path opts in).
     Returns multiplicative strengths (un-normalized).
     """
     if not players:
         return {}
 
     wins: dict[int, float] = defaultdict(float)  # total wins per player
+    games: dict[int, float] = defaultdict(float)  # decisive games per player (for the prior)
     pair_games: dict[tuple[int, int], float] = defaultdict(float)  # unordered pair -> games
     for w, loser in matches:
         wins[w] += 1.0
+        games[w] += 1.0
+        games[loser] += 1.0
         key = (min(w, loser), max(w, loser))
         pair_games[key] += 1.0
 
@@ -95,22 +113,33 @@ def _fit_strengths(
         wins[j] += reg
         pair_games[(i, j)] += 2.0 * reg
 
+    # Per-player evidence-scaled center-anchor strength (0.0 everywhere when the prior is off).
+    prior_on = prior_frac > 0.0 or prior_floor > 0.0
+    anchor: dict[int, float] = (
+        {p: max(prior_floor, prior_frac * games.get(p, 0.0)) for p in players} if prior_on else {}
+    )
+
     strength = {p: 1.0 for p in players}
     for _ in range(max_iter):
         new_strength: dict[int, float] = {}
         max_change = 0.0
         for p in players:
-            denom = 0.0
+            # Neutral-center prior: `a_p` virtual wins + `a_p` virtual losses vs a fixed
+            # strength-1 opponent → 2*a_p games in the denominator, a_p in the win count.
+            a_p = anchor.get(p, 0.0)
+            denom = (2.0 * a_p / (strength[p] + 1.0)) if a_p else 0.0
             for (i, j), n in pair_games.items():
                 if i == p:
                     denom += n / (strength[p] + strength[j])
                 elif j == p:
                     denom += n / (strength[p] + strength[i])
-            if denom <= 0.0 or wins[p] <= 0.0:
+            eff_wins = wins[p] + a_p
+            if denom <= 0.0 or eff_wins <= 0.0:
                 new_strength[p] = strength[p]  # untouched (no games) — stays at prior
             else:
-                new_strength[p] = wins[p] / denom
-        # Renormalize to geometric mean 1 to prevent drift.
+                new_strength[p] = eff_wins / denom
+        # Renormalize to geometric mean 1 to prevent drift (keeps the anchor's fixed
+        # strength-1 opponent AT the center, so the prior stays self-consistent).
         log_mean = sum(math.log(max(v, 1e-12)) for v in new_strength.values()) / len(new_strength)
         norm = math.exp(log_mean)
         for p in players:
@@ -129,6 +158,8 @@ def _bootstrap_scores(
     reg: float = 0.1,
     seed: int = 12345,
     groups: list[int] | None = None,
+    prior_frac: float = 0.0,
+    prior_floor: float = 0.0,
 ) -> dict[int, list[float]]:
     """Resample the match list `bootstrap` times; return per-player Elo-score samples.
 
@@ -150,14 +181,22 @@ def _bootstrap_scores(
             resampled: list[tuple[int, int]] = []
             for _ in range(gk):
                 resampled.extend(by_group[keys[rng.randrange(gk)]])
-            elo = _strength_to_elo(_fit_strengths(players, resampled, reg=reg))
+            elo = _strength_to_elo(
+                _fit_strengths(
+                    players, resampled, reg=reg, prior_frac=prior_frac, prior_floor=prior_floor
+                )
+            )
             for pid, val in elo.items():
                 samples[pid].append(val)
         return samples
     n = len(matches)
     for _ in range(bootstrap):
         resampled = [matches[rng.randrange(n)] for _ in range(n)]
-        elo = _strength_to_elo(_fit_strengths(players, resampled, reg=reg))
+        elo = _strength_to_elo(
+            _fit_strengths(
+                players, resampled, reg=reg, prior_frac=prior_frac, prior_floor=prior_floor
+            )
+        )
         for pid, val in elo.items():
             samples[pid].append(val)
     return samples
@@ -170,13 +209,21 @@ def bradley_terry(
     reg: float = 0.1,
     seed: int = 12345,
     groups: list[int] | None = None,
+    prior_frac: float = 0.0,
+    prior_floor: float = 0.0,
 ) -> BTResult:
     """Fit Bradley-Terry and bootstrap a 95% CI on the Elo-scaled scores.
 
     players: all generator ids that should appear (even with 0 games).
     matches: decisive (winner, loser) pairs; ties/bad excluded by caller.
+    prior_frac / prior_floor: evidence-scaled neutral-center prior — see
+        `_fit_strengths`. Both default to 0.0 (OFF → exact MLE) so the human
+        pairwise board is unchanged; the VLM-judge path opts in to keep its
+        disconnected-by-construction, near-deterministic fit finite.
     """
-    point = _strength_to_elo(_fit_strengths(players, matches, reg=reg))
+    point = _strength_to_elo(
+        _fit_strengths(players, matches, reg=reg, prior_frac=prior_frac, prior_floor=prior_floor)
+    )
 
     # Game counts (decisive games only).
     n_games: dict[int, float] = defaultdict(float)
@@ -186,7 +233,16 @@ def bradley_terry(
 
     lower: dict[int, float] = dict(point)
     upper: dict[int, float] = dict(point)
-    samples = _bootstrap_scores(players, matches, bootstrap, reg=reg, seed=seed, groups=groups)
+    samples = _bootstrap_scores(
+        players,
+        matches,
+        bootstrap,
+        reg=reg,
+        seed=seed,
+        groups=groups,
+        prior_frac=prior_frac,
+        prior_floor=prior_floor,
+    )
     for pid in players:
         vals = sorted(samples.get(pid, []))
         if vals:

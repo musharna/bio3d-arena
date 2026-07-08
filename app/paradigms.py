@@ -29,6 +29,21 @@ DISPLAY_NAMES: dict[str, str] = {
     "sketch": "Sketch→3D",
 }
 
+# Short labels for the compact segmented tab control on /leaderboard — the full DISPLAY_NAMES
+# are long enough that 7 of them wrap the pill row onto two lines (the design's is one tight row).
+SHORT_NAMES: dict[str, str] = {
+    "image_recon": "Image→3D",
+    "capture_scan": "Scan",
+    "procedural_llm": "LLM proc.",
+    "procedural_expert": "Expert proc.",
+    "retrieval": "Retrieved",
+    "text_native": "Text→3D",
+    "video": "Video→3D",
+    "texturing": "Texturing",
+    "agentic": "Agentic",
+    "sketch": "Sketch→3D",
+}
+
 
 def is_valid_paradigm(p: str) -> bool:
     return p in PARADIGMS

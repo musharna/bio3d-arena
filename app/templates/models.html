@@ -10,11 +10,21 @@
     </p>
   </header>
 
+  {% if unrated_count > 0 or show_all %}
+  {# Rated-only by default (never-voted generators show only the default prior BT and flood the
+     grid); this toggle reveals/hides them. #}
+  <div class="b3d-model-toolbar">
+    <span class="subtle">Showing {{ cards|length }} of {{ total_generators }} generators</span>
+    <a class="lb-showall-toggle" href="/models{% if not show_all %}?show_all=true{% endif %}"
+      >{% if show_all %}Show rated only{% else %}Show all {{ total_generators }} <span class="subtle">· {{ unrated_count }} unrated</span>{% endif %}</a>
+  </div>
+  {% endif %}
+
   {% if cards %}
   <div class="b3d-model-grid">
     {% for c in cards %}
     <a href="/models/{{ c.slug }}" class="b3d-model-card">
-      <span class="b3d-model-icon lb-avatar" style="--h:{{ c.avatar_hue }}" aria-hidden="true">{{ c.avatar }}</span>
+      <span class="b3d-model-icon" style="--h:{{ c.avatar_hue }}" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M12 2.6 20.4 7.2v9.6L12 21.4 3.6 16.8V7.2z"/><path d="M12 2.6v18.8M3.6 7.2 12 12l8.4-4.8"/></svg></span>
       <span class="b3d-model-main">
         <span class="b3d-model-name-row">
           <span class="b3d-model-name">{{ c.name }}</span>

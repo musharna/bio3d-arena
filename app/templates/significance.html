@@ -28,9 +28,15 @@
   </form>
 
   {% if sig.status == 'ok' and sig.labels %}
-  <p class="subtle">
+  <p class="subtle sig-intro">
     From {{ sig.n_matches }} decisive comparisons via paired bootstrap. A generator is
     <b>significantly</b> ahead of the next rank when it wins ≥95% of resamples.
+    {% if sig.n_unrated and sig.n_unrated > 0 or show_all %}
+    {# Rated-only by default — never-voted generators have no significance signal. #}
+    <a class="lb-showall-toggle sig-toggle"
+      href="/significance?criterion={{ sel_criterion }}&category={{ sel_category }}{% if not show_all %}&show_all=true{% endif %}"
+      >{% if show_all %}Show rated only{% else %}Show all {{ sig.n_total }} <span class="subtle">· {{ sig.n_unrated }} unrated</span>{% endif %}</a>
+    {% endif %}
   </p>
 
   {# ---- Shared per-row "separation" pass, used by both the sigma callout and the
