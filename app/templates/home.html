@@ -52,8 +52,8 @@ reconstruction benchmark{% endblock %} {% block content %}
           </div>
           {% endif %}
         </div>
-        <!-- Orientation gizmo (axes only, no X/Y/Z labels): Y stays world-up; X/Z sweep in
-             the ground plane, driven by the live camera azimuth (see hero mount script). -->
+        <!-- Orientation gizmo (axes + end-dots, no letters): Y stays world-up; X/Z sweep in
+             the ground plane, locked to the live camera each frame (see hero mount script). -->
         <svg
           id="b3d-hero-gizmo"
           class="b3d-hero-gizmo"
@@ -63,8 +63,11 @@ reconstruction benchmark{% endblock %} {% block content %}
         >
           <circle cx="18" cy="26" r="2" fill="var(--faint)" />
           <line x1="18" y1="26" x2="18" y2="10" stroke="#e5484d" stroke-width="2" stroke-linecap="round" />
+          <circle cx="18" cy="10" r="2.6" fill="#e5484d" />
           <line id="gz-x-line" x1="18" y1="26" x2="33" y2="26" stroke="#30a46c" stroke-width="2" stroke-linecap="round" />
+          <circle id="gz-x-dot" cx="33" cy="26" r="2.6" fill="#30a46c" />
           <line id="gz-z-line" x1="18" y1="26" x2="8" y2="32" stroke="#0091ff" stroke-width="2" stroke-linecap="round" />
+          <circle id="gz-z-dot" cx="8" cy="32" r="2.6" fill="#0091ff" />
         </svg>
       </div>
       <span class="b3d-hero-viz-caption"
@@ -94,26 +97,41 @@ reconstruction benchmark{% endblock %} {% block content %}
       mv.setAttribute("auto-rotate-delay", "0");
       mv.setAttribute("rotation-per-second", "16deg");
 
-      // Sweep the gizmo's X/Z axes with the live camera azimuth (Y stays world-up), so the
-      // gizmo tracks the rotating mesh. Auto-rotate and user drag both fire camera-change.
+      // Lock the gizmo to the mesh. IMPORTANT: model-viewer's auto-rotate spins the model
+      // TURNTABLE, not the camera orbit — so reading getCameraOrbit().theta can't track it.
+      // Instead advance the gizmo at the same angular rate as the auto-rotation (16deg/s),
+      // and while the user is dragging, follow the camera-orbit delta instead. Y is world-up.
       var ox = 18, oy = 26, L = 15, k = 0.5;
+      var SPEED = (16 * Math.PI) / 180; // rad/s — matches rotation-per-second
       var xLine = document.getElementById("gz-x-line");
+      var xDot = document.getElementById("gz-x-dot");
       var zLine = document.getElementById("gz-z-line");
-      function axis(el, ang) {
-        el.setAttribute("x2", (ox + L * Math.cos(ang)).toFixed(1));
-        el.setAttribute("y2", (oy - L * k * Math.sin(ang)).toFixed(1));
+      var zDot = document.getElementById("gz-z-dot");
+      function place(line, dot, ang) {
+        var ex = ox + L * Math.cos(ang), ey = oy - L * k * Math.sin(ang);
+        line.setAttribute("x2", ex.toFixed(1));
+        line.setAttribute("y2", ey.toFixed(1));
+        dot.setAttribute("cx", ex.toFixed(1));
+        dot.setAttribute("cy", ey.toFixed(1));
       }
-      var raf = 0;
-      function sync() {
-        raf = 0;
-        if (!xLine) return;
-        var theta = mv.getCameraOrbit().theta; // radians, azimuth
-        axis(xLine, -theta);
-        axis(zLine, -theta + Math.PI / 2);
+      var angle = 0, last = null, lastTheta = null, dragging = false;
+      mv.addEventListener("pointerdown", function () { dragging = true; });
+      window.addEventListener("pointerup", function () { dragging = false; });
+      function loop(ts) {
+        if (xLine) {
+          if (last === null) last = ts;
+          var dt = (ts - last) / 1000; last = ts;
+          var theta = mv.getCameraOrbit ? mv.getCameraOrbit().theta : 0;
+          if (lastTheta === null) lastTheta = theta;
+          if (dragging) angle += theta - lastTheta; // follow the drag
+          else angle += dt * SPEED;                 // match the auto-rotation
+          lastTheta = theta;
+          place(xLine, xDot, angle);
+          place(zLine, zDot, angle + Math.PI / 2);
+        }
+        requestAnimationFrame(loop);
       }
-      mv.addEventListener("camera-change", function () {
-        if (!raf) raf = requestAnimationFrame(sync);
-      });
+      requestAnimationFrame(loop);
     }
   })();
 </script>
