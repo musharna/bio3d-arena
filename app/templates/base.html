@@ -538,7 +538,7 @@
         <div class="b3d-kbar">
           <div class="b3d-kbar-left">
             <span class="b3d-kbar-label">Kingdom</span>
-            {% set kingdom_meta = {"all": ("\U0001F9EC", "All kingdoms"),
+            {% set kingdom_meta = {"all": ("\U0001F9EC", "All"),
             "plants": ("\U0001F33F", "Plants"), "fungi": ("\U0001F344",
             "Fungi"), "animals": ("\U0001F43E", "Animals")} %} {% set
             active_kingdom = kingdom if kingdom in kingdom_meta else "all" %}
@@ -557,7 +557,7 @@
                   >{{ active_meta[1] }}</span
                 >
                 <span class="b3d-kdrop-caret" aria-hidden="true"
-                  >&#9662;</span
+                  >&#9656;</span
                 >
               </button>
               <div
