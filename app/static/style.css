@@ -3445,9 +3445,19 @@ details.group[open] > summary.group-title::before {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  flex: 0 1 auto;
 }
 .ranktable td.gen {
   align-items: center;
+}
+/* Prototype: provenance/provisional tags right-aligned against the score column. */
+.lb-gen-tags {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  padding-left: 0.5rem;
 }
 .lb-prov-row {
   display: flex;

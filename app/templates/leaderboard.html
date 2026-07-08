@@ -93,17 +93,15 @@
             </td>
             <td class="gen">
               <span class="lb-avatar" style="--h:{{ r.avatar_hue }}" aria-hidden="true">{{ r.avatar }}</span>
-              <span class="lb-gen-body">
-                <span class="lb-gen-name-row">
-                  <span class="gen-name">{{ r.generator }}</span>
-                  {% if r.provisional %}<span class="cov-badge cov-prov" title="Fewer than {{ firm_vote_threshold }} votes — rank may still shift">provisional</span>{% endif %}
-                </span>
-                {% if r.provenance %}
-                <span class="lb-prov-row">
-                  {% for p in r.provenance %}<span class="lb-prov mono">{{ p }}</span>{% endfor %}
-                </span>
-                {% endif %}
+              <span class="gen-name">{{ r.generator }}</span>
+              {# Prototype: provenance + provisional tags are right-aligned against the BT-score
+                 column, not crammed after the name (which crowds/overflows the row). #}
+              {% if r.provisional or r.provenance %}
+              <span class="lb-gen-tags">
+                {% if r.provisional %}<span class="cov-badge cov-prov" title="Fewer than {{ firm_vote_threshold }} votes — rank may still shift">provisional</span>{% endif %}
+                {% for p in r.provenance %}<span class="lb-prov mono">{{ p }}</span>{% endfor %}
               </span>
+              {% endif %}
             </td>
             <td class="num mono{% if r.rank == 1 %} strong{% endif %}">{{ r.bt_score }}</td>
             <td class="ci-cell">
