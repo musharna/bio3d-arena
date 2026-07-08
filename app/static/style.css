@@ -2319,33 +2319,35 @@ details.group[open] > summary.group-title::before {
 }
 .b3d-kdrop-menu {
   display: none;
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  min-width: 190px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  box-shadow: var(--shadowCard);
-  padding: 4px;
-  z-index: 30;
+}
+/* Open state (design demo): the pill EXPANDS IN PLACE into a horizontal segmented control
+   — All · Plants · Fungi · Animals in one row — not a vertical dropdown. */
+.b3d-kdrop.is-open .b3d-kdrop-btn {
+  display: none;
 }
 .b3d-kdrop.is-open .b3d-kdrop-menu {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  background: var(--panel2);
+  border: 1px solid color-mix(in oklch, var(--accent) 45%, var(--border));
+  border-radius: 999px;
+  z-index: 30;
 }
 .b3d-kdrop-item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   white-space: nowrap;
-  border-radius: 8px;
-  padding: 8px 11px;
+  border-radius: 999px;
+  padding: 5px 12px;
   cursor: pointer;
   color: var(--muted);
   text-decoration: none;
   font-family: "IBM Plex Sans", sans-serif;
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 600;
   transition:
     background 0.12s,
     color 0.12s;
@@ -2356,8 +2358,8 @@ details.group[open] > summary.group-title::before {
 }
 .b3d-kdrop-item.is-active {
   color: var(--text);
-  font-weight: 600;
-  background: color-mix(in oklch, var(--accent) 18%, transparent);
+  background: var(--panel);
+  box-shadow: var(--shadowCard);
 }
 .b3d-topnav {
   display: flex;
