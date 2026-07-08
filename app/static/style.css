@@ -432,13 +432,20 @@ textarea:focus-visible,
 .task-strip {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  flex-wrap: wrap;
+  gap: 0.7rem 1rem;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--r-card);
   box-shadow: var(--shadowCard);
   padding: 0.85rem 1.15rem;
   margin-bottom: 1.1rem;
+}
+/* Keep the title/criterion block a usable width; when the selects can't fit beside it they
+   wrap to the next line instead of crushing the text to one-word-per-line. */
+.task-strip-main {
+  flex: 1 1 280px;
+  min-width: 0;
 }
 /* Subject-thumbnail avatar — a fixed 56px circle framing the reference photo(s). */
 .task-strip-thumb {
@@ -470,10 +477,6 @@ textarea:focus-visible,
   border-radius: 0;
   border: none;
   box-shadow: none;
-}
-.task-strip-main {
-  min-width: 0;
-  flex: 1;
 }
 .task-card-heading {
   display: flex;
@@ -3493,7 +3496,9 @@ details.group[open] > summary.group-title::before {
    viewports; each card carries a colored avatar tile (shares .lb-avatar's hue formula). */
 .b3d-model-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* auto-fill so the grid drops to one column when two ~320px cards can't fit — a fixed
+     1fr 1fr overflowed (right column cut off) on narrow windows. Matches the design. */
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 0.9rem;
 }
 @media (max-width: 760px) {
