@@ -80,6 +80,18 @@ kbd,
   font-family: "IBM Plex Mono", monospace;
   font-variant-numeric: tabular-nums;
 }
+/* Visually-hidden but screen-reader-accessible (e.g. arena select labels rendered as bare chips). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* === Significance (Task 16) — heat-scale H2H matrix + inline-SVG forest plot,
    card-wrapped on the shared .diff-panel/.diff-axis-* tokens from Task 13. Cell
@@ -1853,6 +1865,16 @@ details.group[open] > summary.group-title::before {
   text-align: center;
   display: block;
 }
+/* The ID rule above (specificity 1,0,0) otherwise beats the [hidden] attribute, so arena.js
+   hiding the strip thumbnail on K-wise ballots had no visual effect — restore it explicitly.
+   In the compact strip the thumbnail is a fixed avatar, not a stacked panel, so drop the margins. */
+#reference-panel[hidden] {
+  display: none;
+}
+.task-strip #reference-panel {
+  margin: 0;
+  text-align: initial;
+}
 /* Fixed-footprint strip: a constant width + single row (no wrap, scroll on overflow) so the
    panel occupies the SAME space for 1 image or 5 — the vote UI below never shifts with ref count. */
 .reference-gallery {
@@ -3420,9 +3442,46 @@ details.group[open] > summary.group-title::before {
     color-mix(in oklch, var(--accent) 16%, var(--panel2)),
     var(--panel)
   );
+  color: var(--accent2);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.b3d-model-icon svg {
+  display: block;
+}
+/* Toolbar above the model grid — showing-N-of-M + rated-only toggle. */
+.b3d-model-toolbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0 0 1rem;
+}
+/* Rated-only / show-all toggle (leaderboard + models) — a quiet accent-outlined pill. */
+.lb-showall-toggle {
+  margin-left: auto;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent2);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.28rem 0.75rem;
+  white-space: nowrap;
+}
+.lb-showall-toggle:hover {
+  border-color: color-mix(in oklch, var(--accent) 55%, var(--border));
+  color: var(--accent);
+  text-decoration: none;
+}
+.b3d-model-toolbar .lb-showall-toggle {
+  margin-left: 0;
+}
+/* Collapsed secondary board (LLM-judge) — separated from the human board above. */
+.lb-judge-section {
+  margin-top: 1.5rem;
 }
 /* Colored-initials avatar tile (same hue formula as the leaderboard's .lb-avatar), just
    sized up for the card grid — overrides only the size-related props, keeps the color. */

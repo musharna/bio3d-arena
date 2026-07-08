@@ -195,6 +195,10 @@ function setKwiseVisible(active) {
 function renderKwise(data) {
   current = null; // pairwise vote()/keyboard shortcuts must no-op while a K-wise ballot is shown
   setKwiseVisible(true);
+  // K-wise ballots carry no reference gallery — hide the strip thumbnail so it doesn't render as
+  // an empty circle (only 2-up pairs populate the subject thumbnail from data.task.references).
+  const kRefPanel = el("reference-panel");
+  if (kRefPanel) kRefPanel.hidden = true;
   el("task-cat").textContent = "K-wise"; // kwise task payload has no `category` field
   el("task-title").textContent = data.task.title;
   el("task-prompt").textContent = data.task.prompt;

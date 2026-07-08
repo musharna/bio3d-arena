@@ -39,3 +39,17 @@ def test_model_detail_200_for_known_slug():
 def test_model_detail_404_for_unknown_slug():
     r = client.get("/models/nonexistent-generator-slug")
     assert r.status_code == 404
+
+
+def test_models_rated_only_default_with_show_all_toggle():
+    """Default grid hides never-voted (0-vote) generators; ?show_all=true reveals them, and
+    the toggle is offered whenever anything is hidden."""
+    default = client.get("/models")
+    show_all = client.get("/models?show_all=true")
+    assert default.status_code == 200 and show_all.status_code == 200
+    n_default = default.text.count('class="b3d-model-card"')
+    n_all = show_all.text.count('class="b3d-model-card"')
+    assert n_all >= n_default
+    if n_all > n_default:
+        assert "Show all" in default.text
+        assert "Show rated only" in show_all.text

@@ -54,16 +54,16 @@ block content %}
       </p>
       <p id="task-prompt" class="prompt"></p>
     </div>
-    <div class="filter-row">
+    <div class="filter-row filter-row-chips">
       <label
-        >Category
-        <select id="sel-category" class="b3d-select">
+        ><span class="sr-only">Category</span>
+        <select id="sel-category" class="b3d-select" aria-label="Category">
           <option value="all">All categories</option>
         </select>
       </label>
       <label
-        >Judge on
-        <select id="sel-criterion" class="b3d-select"></select>
+        ><span class="sr-only">Judge on</span>
+        <select id="sel-criterion" class="b3d-select" aria-label="Judge on"></select>
       </label>
       <a href="/arena?set=calibration" class="muted" title="Vote the calibration subset"
         >calibration set</a

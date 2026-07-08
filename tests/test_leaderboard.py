@@ -286,3 +286,23 @@ def test_enrich_leaderboard_rows_avatar_provenance_momentum():
     assert romi["provenance"] == ["data"]
     assert romi["trend"] == []  # no trend series supplied for this generator_id
     assert romi["provisional"] is False  # 100 >= FIRM_VOTE_THRESHOLD
+
+
+def test_leaderboard_rated_only_default_with_show_all_toggle():
+    """The board defaults to generators with ≥1 comparison; ?show_all=true reveals the
+    never-voted ones (which carry only the default prior BT). Toggle offered when any hidden."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    default = client.get("/leaderboard")
+    show_all = client.get("/leaderboard?show_all=true")
+    assert default.status_code == 200 and show_all.status_code == 200
+    # One `lb-avatar` per main-board row (the collapsed judge sub-boards use plain text cells).
+    n_default = default.text.count("lb-avatar")
+    n_all = show_all.text.count("lb-avatar")
+    assert n_all >= n_default
+    if n_all > n_default:
+        assert "Show all" in default.text
+        assert "Show rated only" in show_all.text
