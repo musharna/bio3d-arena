@@ -3780,11 +3780,10 @@ details.group[open] > summary.group-title::before {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--r-card);
-  box-shadow: var(--shadowCard);
-  padding: 1.1rem 1.25rem;
+  padding: 0.8rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.25rem;
   animation: b3d-pop 0.35s ease-out both;
 }
 .cov-stat-num {
@@ -3832,11 +3831,10 @@ details.group[open] > summary.group-title::before {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--r-card);
-  box-shadow: var(--shadowCard);
-  padding: 1.1rem 1.25rem;
+  padding: 0.8rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.25rem;
   animation: b3d-pop 0.35s ease-out both;
 }
 .ds-stat-num {
@@ -3971,11 +3969,10 @@ details.group[open] > summary.group-title::before {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--r-card);
-  box-shadow: var(--shadowCard);
-  padding: 1.1rem 1.25rem;
+  padding: 0.8rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.25rem;
   animation: b3d-pop 0.35s ease-out both;
 }
 .tk-stat-num {
