@@ -1420,16 +1420,13 @@ kbd {
    kingdom emoji "specimen", breadcrumb/name/blurb below). Only fields present on
    the SPOTLIGHTS dicts are ever rendered (slug/task_title/featured/blurb/kingdom) —
    no fabricated taxonomy. */
+/* Design ref (13-spotlight.png): full-width single-column feature cards, one per row —
+   each spotlight is a wide hero, not a 2-up grid cell. */
 .sp-idx-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 1.25rem;
   margin-top: 0.5rem;
-}
-@media (max-width: 760px) {
-  .sp-idx-grid {
-    grid-template-columns: 1fr;
-  }
 }
 .sp-idx-card {
   display: block;
@@ -1494,6 +1491,11 @@ kbd {
   top: 12px;
   left: 12px;
   z-index: 2;
+}
+/* Design ref shows the badge upper-cased ("FEATURED"); .cat-chip is shared so scope it here. */
+.sp-idx-featured .cat-chip {
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
 }
 /* "N models" badge — BOTTOM-right of the stage (design places it below the subject). */
 .sp-idx-count {
@@ -2075,10 +2077,14 @@ details.group[open] > summary.group-title::before {
   align-items: center;
   justify-content: center;
 }
+/* Design ref: wordmark stacks "Bio" over "3D" beside the logo tile (two lines), not inline. */
 .b3d-wordmark {
+  display: flex;
+  flex-direction: column;
   font-family: "Space Grotesk", sans-serif;
-  font-weight: 600;
-  font-size: 16px;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 0.98;
   letter-spacing: -0.01em;
   color: var(--text);
   white-space: nowrap;
@@ -2359,7 +2365,9 @@ details.group[open] > summary.group-title::before {
 .b3d-topnav-link.is-active {
   color: var(--accent);
 }
-@media (max-width: 1120px) {
+/* Design ref shows the Arena|Leaderboard|Models top-nav at the 924px canvas width, so hide
+   it only on true phone widths — not on tablet/narrow-desktop where the ref clearly has it. */
+@media (max-width: 760px) {
   .b3d-topnav {
     display: none;
   }
@@ -4024,6 +4032,12 @@ details.group[open] > summary.group-title::before {
   box-shadow: var(--shadowCard);
   padding: 0.4rem 1.25rem 1rem;
   margin: 0 0 1rem;
+}
+/* Design ref (10-tasks.png): compact single-line rows — the T-NN id must not break at the
+   hyphen, and the italic species name stays on one line (the wrap scrolls, not stacks). */
+.tk-panel .ranktable td.num,
+.tk-panel .ranktable td.gen {
+  white-space: nowrap;
 }
 .tk-tier {
   display: inline-flex;
