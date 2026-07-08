@@ -2247,7 +2247,10 @@ details.group[open] > summary.group-title::before {
   background: var(--navBg);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(10px);
-  overflow-x: auto;
+  /* NOT overflow:auto — that would establish a clip context and hide the kingdom dropdown
+     menu (which extends below the bar). Wrap instead so narrow widths don't overflow. */
+  flex-wrap: wrap;
+  row-gap: 8px;
 }
 .b3d-kbar-left {
   display: flex;
