@@ -415,19 +415,51 @@ textarea:focus-visible,
   min-width: 180px;
 }
 
-/* Arena — task strip */
-.task-card {
+/* Arena — compact single-row task strip (subject thumbnail · title/criterion · inline selects).
+   Kept slim so the Model A/B viewers sit above the fold. */
+.task-strip {
   display: flex;
-  align-items: flex-start;
-  gap: 1.25rem;
+  align-items: center;
+  gap: 1rem;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--r-card);
   box-shadow: var(--shadowCard);
-  padding: 1rem 1.25rem;
+  padding: 0.85rem 1.15rem;
   margin-bottom: 1.1rem;
 }
-.task-card-main {
+/* Subject-thumbnail avatar — a fixed 56px circle framing the reference photo(s). */
+.task-strip-thumb {
+  flex: 0 0 auto;
+  margin: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: radial-gradient(
+    circle at 50% 42%,
+    color-mix(in oklch, var(--accent) 14%, var(--panel2)),
+    var(--panel)
+  );
+}
+.task-strip-thumb .reference-gallery {
+  width: 56px;
+  height: 56px;
+  min-height: 0;
+  margin: 0;
+  gap: 0;
+  overflow: hidden;
+}
+.task-strip-thumb .reference-img {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+}
+.task-strip-main {
   min-width: 0;
   flex: 1;
 }
@@ -437,19 +469,22 @@ textarea:focus-visible,
   gap: 0.6rem;
   flex-wrap: wrap;
 }
-.task-card h2 {
-  margin: 0.2rem 0 0;
-  font-size: 1.25rem;
+.task-strip h2 {
+  margin: 0;
+  font-size: 1.2rem;
 }
 .prompt {
-  color: var(--muted);
-  font-size: 0.85rem;
-  margin: 0.35rem 0 0;
+  color: var(--faint);
+  font-size: 0.78rem;
+  margin: 0.2rem 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .criterion {
   color: var(--muted);
-  font-size: 0.85rem;
-  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  margin: 0.25rem 0 0;
 }
 .criterion strong {
   color: var(--text);
@@ -465,9 +500,17 @@ textarea:focus-visible,
   font-weight: 600;
 }
 /* Selects + calibration link ride alongside the task strip, not stacked above it. */
-.task-card .filter-row {
+.task-strip .filter-row {
   margin-bottom: 0;
   flex-shrink: 0;
+  align-items: center;
+}
+/* Compact inline selects in the strip — label sits above a small pill select. */
+.task-strip .filter-row label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--faint);
 }
 
 /* Arena — stages (the two/four viewer cells) */
@@ -1009,6 +1052,22 @@ kbd {
   gap: 0.5rem;
   font-weight: 600;
 }
+/* Difficulty heatmap: each metric renders as a gapped, rounded, outlined pill chip
+   inside its cell (the td padding supplies the gap) — not an edge-to-edge fill. The
+   per-cell background + border-color come inline from the diff_heat macro. */
+.diff-heatmap td:has(.diff-chip) {
+  padding: 0.28rem 0.3rem;
+}
+.diff-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0.3rem 0.45rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel2);
+}
 .ranktable td.strong {
   font-weight: 700;
   color: var(--accent);
@@ -1140,12 +1199,12 @@ kbd {
 }
 
 @media (max-width: 720px) {
-  .task-card {
-    flex-direction: column;
-    align-items: stretch;
+  .task-strip {
+    flex-wrap: wrap;
+    align-items: center;
     gap: 0.8rem;
   }
-  .task-card .filter-row {
+  .task-strip .filter-row {
     width: 100%;
   }
   .pair {
@@ -1245,17 +1304,29 @@ kbd {
   margin: 0.5rem 0 1.5rem;
 }
 .recon-pane {
-  background: var(--panel);
+  background: var(--stageFrame);
   border: 1px solid var(--border);
+  /* Recon pane reads as "the candidate" via an accent hairline; GT pane overrides to --win below. */
+  border-top: 2px solid color-mix(in oklch, var(--accent) 55%, var(--border));
   border-radius: 12px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
+/* Titled header bar (panel2 strip, title left · type chip right) — a static header,
+   not the arena's floating overlay pill (which the base .model-label defaults to). */
 .recon-pane .model-label {
+  position: static;
+  inset: auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.6rem;
+  background: var(--panel2);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 0.6rem 0.9rem;
 }
 .recon-pane .gt-note {
   font-size: 0.7rem;
@@ -1296,7 +1367,7 @@ kbd {
   min-width: 220px;
 }
 .recon-pane-gt {
-  border-top: 3px solid var(--win);
+  border-top: 2px solid color-mix(in oklch, var(--win) 55%, var(--border));
 }
 /* Cross-species agreement — colored ± Spearman (mono via td.num already) */
 .bm-pos {
@@ -1394,13 +1465,15 @@ kbd {
   gap: 0.2rem;
   padding: 1rem 1.15rem 1.15rem;
 }
+/* Taxonomic breadcrumb (Plantae › Order › Family › Genus). Tight mono, not
+   uppercased — a full lineage string, not a single kingdom label. */
 .sp-idx-breadcrumb {
   font-family: "IBM Plex Mono", monospace;
-  font-size: 0.68rem;
+  font-size: 0.63rem;
   font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
   color: var(--faint);
+  margin-bottom: 0.15rem;
 }
 .sp-idx-name {
   font-family: "Space Grotesk", sans-serif;
@@ -2813,6 +2886,14 @@ details.group[open] > summary.group-title::before {
   color: var(--text);
   margin: 1rem 0 0.05rem;
 }
+/* Italic latin (taxonomic-kingdom) name under the card title. */
+.b3d-kcard-latin {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--accent2);
+  margin: 0 0 0.5rem;
+}
 .b3d-kcard-blurb {
   color: var(--muted);
   font-size: 13.5px;
@@ -2999,28 +3080,30 @@ details.group[open] > summary.group-title::before {
    bottom-border on the active one, not a boxed segmented-pill group, so the table below
    leads the page instead of a "big bordered box". Wraps to a 2nd line gracefully if the
    real paradigm vocabulary (7 values) doesn't fit one row at narrow widths. */
+/* Segmented pill control (paradigm filter) — a padded panel2 track holding the paradigm
+   pills; the active pill lifts to a filled panel chip. */
 .lb-ptabs {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: 1.35rem;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0;
-  width: 100%;
+  gap: 3px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 3px;
   margin-bottom: 1.1rem;
 }
 .lb-ptab {
   display: inline-flex;
   align-items: center;
-  padding: 0 0 0.55rem;
-  margin-bottom: -1px;
-  border-bottom: 2px solid transparent;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
   color: var(--muted);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   text-decoration: none;
   transition:
     color 0.12s,
-    border-color 0.12s;
+    background 0.12s;
 }
 .lb-ptab:hover {
   color: var(--text);
@@ -3028,7 +3111,8 @@ details.group[open] > summary.group-title::before {
 }
 .lb-ptab.is-active {
   color: var(--text);
-  border-bottom-color: var(--accent);
+  background: var(--panel);
+  box-shadow: var(--shadowCard);
 }
 
 /* Trusted / Verified scope toggle */
@@ -3573,8 +3657,10 @@ details.group[open] > summary.group-title::before {
   animation: b3d-pop 0.35s ease-out both;
 }
 .cov-stat-num {
-  font-size: 2rem;
-  font-weight: 700;
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.9rem;
+  font-weight: 600;
   color: var(--accent);
   line-height: 1;
 }
@@ -3623,8 +3709,10 @@ details.group[open] > summary.group-title::before {
   animation: b3d-pop 0.35s ease-out both;
 }
 .ds-stat-num {
-  font-size: 2rem;
-  font-weight: 700;
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.9rem;
+  font-weight: 600;
   color: var(--accent);
   line-height: 1;
 }
@@ -3760,8 +3848,10 @@ details.group[open] > summary.group-title::before {
   animation: b3d-pop 0.35s ease-out both;
 }
 .tk-stat-num {
-  font-size: 2rem;
-  font-weight: 700;
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.9rem;
+  font-weight: 600;
   color: var(--accent);
   line-height: 1;
 }
@@ -3808,9 +3898,36 @@ details.group[open] > summary.group-title::before {
    .b3d-steps-grid/.b3d-step-card/.b3d-step-num verbatim (meth-steps-grid only adds
    bottom margin); .meth-panel mirrors the .cov-panel/.ds-panel/.tk-panel card
    namespace. .meth-formula is a static inline-styled BT formula — no math lib. === */
+/* Six process steps in a single row (falls back to 3 then 2 as width tightens). */
 .meth-steps-grid {
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.75rem;
   margin-bottom: 1.3rem;
+}
+@media (max-width: 1000px) {
+  .meth-steps-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  .meth-steps-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+/* Detail cards paired 2-up (BT model + Ranking; Vote integrity + Bias audit). */
+.meth-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.1rem;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .meth-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.meth-detail-grid .meth-panel {
+  margin: 0;
 }
 .meth-panel {
   background: var(--panel);
@@ -3925,6 +4042,39 @@ details.group[open] > summary.group-title::before {
 .sub-field input[type="file"] {
   padding: 0.5rem 0.6rem;
   cursor: pointer;
+}
+/* Custom-styled file button — replaces the browser-default "Choose File" chrome. */
+.sub-field input[type="file"]::file-selector-button {
+  margin-right: 0.8rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+.sub-field input[type="file"]::file-selector-button:hover {
+  border-color: color-mix(in oklch, var(--accent) 55%, var(--border));
+  color: var(--accent);
+}
+
+/* Custom-styled selects: strip the native OS chevron and paint the design-system caret so
+   dropdowns match the dark form language on every page (submit + arena strip). */
+.sub-field select,
+.filter-row select,
+select.b3d-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' stroke='%23889099' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  padding-right: 2rem;
 }
 .sub-submit {
   align-self: flex-start;

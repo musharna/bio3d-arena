@@ -21,6 +21,8 @@ KINGDOM_OF: dict[str, str] = {
 }
 KINGDOM_EMOJI = {"all": "🧬", "plants": "🌿", "fungi": "🍄", "animals": "🐾"}
 KINGDOM_LABEL = {"all": "All kingdoms", "plants": "Plants", "fungi": "Fungi", "animals": "Animals"}
+# Latin (taxonomic-kingdom) name shown as the italic subtitle on the home kingdom cards.
+KINGDOM_LATIN = {"plants": "Plantae", "fungi": "Fungi", "animals": "Animalia"}
 
 
 def normalize_kingdom(value: str | None) -> str:

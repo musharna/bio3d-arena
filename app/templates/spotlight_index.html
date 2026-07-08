@@ -26,13 +26,16 @@
            per request in the /spotlight route, not fabricated. Omitted when the subject's
            task isn't in the DB yet rather than showing a wrong number. #}
         {% if s.model_count is not none %}<span class="sp-idx-count">{{ s.model_count }} model{{ 's' if s.model_count != 1 else '' }}</span>{% endif %}
-        {# Per-subject emoji: SPOTLIGHTS has no per-subject emoji/icon field (only `kingdom`),
-           so this falls back to one emoji per kingdom — every "plants" card currently shares
-           🌿 rather than a fabricated tomato/corn/rose icon. Logged data limit, not a bug. #}
-        <span class="sp-idx-emoji" aria-hidden="true">{{ kingdom_emoji.get(s.kingdom, '\U0001F9EC') }}</span>
+        {# Per-subject emoji: SPOTLIGHTS carries a curated per-taxon `emoji` (the design-handoff
+           icon for each subject); falls back to one emoji per kingdom for any subject that
+           predates the field. #}
+        <span class="sp-idx-emoji" aria-hidden="true">{{ s.emoji or kingdom_emoji.get(s.kingdom, '\U0001F9EC') }}</span>
       </div>
       <div class="sp-idx-body">
-        {% if s.kingdom %}<span class="sp-idx-breadcrumb">{{ s.kingdom | capitalize }}</span>{% endif %}
+        {# Multi-level taxonomic breadcrumb (Plantae › Order › Family › Genus) when SPOTLIGHTS
+           carries a curated `lineage`; otherwise the kingdom label. #}
+        {% if s.lineage %}<span class="sp-idx-breadcrumb">{{ s.lineage }}</span>
+        {% elif s.kingdom %}<span class="sp-idx-breadcrumb">{{ s.kingdom | capitalize }}</span>{% endif %}
         <span class="sp-idx-name">{{ parts[0] }}</span>
         {% if parts | length > 1 %}<span class="sp-idx-sub">{{ parts[1] }}</span>{% endif %}
         <p class="sp-idx-blurb">{{ s.blurb }}</p>

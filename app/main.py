@@ -674,6 +674,7 @@ def home(request: Request, db: Session = Depends(get_db)):
                 "slug": k,
                 "emoji": kingdoms.KINGDOM_EMOJI[k],
                 "name": kingdoms.KINGDOM_LABEL[k],
+                "latin": kingdoms.KINGDOM_LATIN.get(k, ""),
                 "live": _kingdom_is_live(db, k),
                 "blurb": kingdom_blurbs[k],
                 "task_count": k_task_count,
