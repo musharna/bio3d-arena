@@ -2294,7 +2294,7 @@ details.group[open] > summary.group-title::before {
   gap: 8px;
   background: var(--panel2);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 11px;
   padding: 6px 13px;
   cursor: pointer;
   color: var(--text);
@@ -2332,7 +2332,7 @@ details.group[open] > summary.group-title::before {
   padding: 3px;
   background: var(--panel2);
   border: 1px solid color-mix(in oklch, var(--accent) 45%, var(--border));
-  border-radius: 999px;
+  border-radius: 11px;
   z-index: 30;
 }
 .b3d-kdrop-item {
@@ -2340,7 +2340,7 @@ details.group[open] > summary.group-title::before {
   align-items: center;
   gap: 6px;
   white-space: nowrap;
-  border-radius: 999px;
+  border-radius: 8px;
   padding: 5px 12px;
   cursor: pointer;
   color: var(--muted);
