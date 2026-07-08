@@ -432,13 +432,20 @@ textarea:focus-visible,
 .task-strip {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  flex-wrap: wrap;
+  gap: 0.7rem 1rem;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--r-card);
   box-shadow: var(--shadowCard);
   padding: 0.85rem 1.15rem;
   margin-bottom: 1.1rem;
+}
+/* Keep the title/criterion block a usable width; when the selects can't fit beside it they
+   wrap to the next line instead of crushing the text to one-word-per-line. */
+.task-strip-main {
+  flex: 1 1 280px;
+  min-width: 0;
 }
 /* Subject-thumbnail avatar — a fixed 56px circle framing the reference photo(s). */
 .task-strip-thumb {
@@ -470,10 +477,6 @@ textarea:focus-visible,
   border-radius: 0;
   border: none;
   box-shadow: none;
-}
-.task-strip-main {
-  min-width: 0;
-  flex: 1;
 }
 .task-card-heading {
   display: flex;
@@ -3027,6 +3030,15 @@ details.group[open] > summary.group-title::before {
 }
 
 @media (max-width: 900px) {
+  .b3d-kgrid,
+  .b3d-steps-grid {
+    grid-template-columns: 1fr;
+  }
+}
+/* Hero stays a two-column text/viz split down to mobile — the design keeps it side-by-side at
+   tablet/narrow-desktop widths (it doesn't reflow the viz on top until the viewport is genuinely
+   narrow). Collapsing at 900px put the 3D viz above the headline on half-width windows. */
+@media (max-width: 640px) {
   .b3d-hero-grid {
     grid-template-columns: 1fr;
   }
@@ -3038,10 +3050,6 @@ details.group[open] > summary.group-title::before {
   }
   .b3d-hero-kingdom-pills {
     justify-content: flex-start;
-  }
-  .b3d-kgrid,
-  .b3d-steps-grid {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -3363,13 +3371,14 @@ details.group[open] > summary.group-title::before {
   font-weight: 700;
   letter-spacing: 0.01em;
 }
-/* Name + provisional + provenance chips on ONE line (the design keeps rows compact — a
-   stacked chip row made every leaderboard row two lines tall). */
+/* Name + provisional + provenance chips on ONE line — the design keeps rows compact by
+   TRUNCATING a long generator name (nowrap + ellipsis) rather than wrapping it, so a narrow
+   window can't blow each row up to 3-4 lines. */
 .lb-gen-body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.4rem 0.5rem;
   min-width: 0;
 }
@@ -3377,7 +3386,18 @@ details.group[open] > summary.group-title::before {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.gen-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.ranktable td.gen {
+  align-items: center;
 }
 .lb-prov-row {
   display: flex;
@@ -3476,7 +3496,9 @@ details.group[open] > summary.group-title::before {
    viewports; each card carries a colored avatar tile (shares .lb-avatar's hue formula). */
 .b3d-model-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* auto-fill so the grid drops to one column when two ~320px cards can't fit — a fixed
+     1fr 1fr overflowed (right column cut off) on narrow windows. Matches the design. */
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 0.9rem;
 }
 @media (max-width: 760px) {
