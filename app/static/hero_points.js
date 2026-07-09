@@ -125,6 +125,22 @@
     pausedFor = 0,
     pauseStart = 0;
 
+  // ---- kingdom pills that light up with the model currently on the turntable ----
+  var pills = {};
+  Array.prototype.forEach.call(
+    document.querySelectorAll(".b3d-hero-pill[data-kingdom]"),
+    function (el) {
+      pills[el.getAttribute("data-kingdom")] = el;
+    },
+  );
+  var activeKingdom = null;
+  function setActivePill(k) {
+    if (k === activeKingdom) return;
+    activeKingdom = k;
+    for (var key in pills) pills[key].classList.toggle("is-active", key === k);
+  }
+  setActivePill("plants"); // initial highlight, before the clouds finish loading
+
   function sizeCanvas() {
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
     var w = canvas.clientWidth,
@@ -150,6 +166,7 @@
     if (reduce) {
       if (ready("plants")) drawCloud(clouds.plants, 0.7 + dragTheta, 0.42, 1);
       drawGizmo(0.7 + dragTheta, 0.42);
+      setActivePill("plants");
       return; // no rAF loop under reduced motion
     }
 
@@ -161,22 +178,29 @@
     if (dragging) {
       drawIfReady(cur, rot, phi, 1);
       drawGizmo(rot, phi);
+      setActivePill(cur);
       requestAnimationFrame(frame);
       return;
     }
 
     if (e < DWELL) {
       drawIfReady(cur, rot, phi, 1);
+      setActivePill(cur);
     } else if (e < DWELL + FADE) {
       var f = (e - DWELL) / FADE;
-      if (f < 0.5)
+      if (f < 0.5) {
         drawIfReady(cur, rot, phi, 1 - f / 0.5); // dissolve out
-      else drawIfReady(ORDER[(idx + 1) % 3], rot, phi, (f - 0.5) / 0.5); // dissolve in
+        setActivePill(cur);
+      } else {
+        drawIfReady(ORDER[(idx + 1) % 3], rot, phi, (f - 0.5) / 0.5); // dissolve in
+        setActivePill(ORDER[(idx + 1) % 3]); // pill switches at the crossover
+      }
     } else {
       idx = (idx + 1) % 3;
       phaseStart = ts;
       pausedFor = 0;
       drawIfReady(ORDER[idx], rot, phi, 1);
+      setActivePill(ORDER[idx]);
     }
     drawGizmo(rot, phi);
     requestAnimationFrame(frame);

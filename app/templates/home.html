@@ -61,10 +61,11 @@ reconstruction benchmark{% endblock %} {% block content %}
       <span class="b3d-hero-viz-caption"
         >drag to rotate &middot; real point cloud</span
       >
+      {#- hero_points.js lights up the pill matching the kingdom currently on the turntable. -#}
       <div class="b3d-hero-kingdom-pills">
-        <span class="b3d-hero-pill"><span aria-hidden="true">&#127807;</span> Plants</span>
-        <span class="b3d-hero-pill"><span aria-hidden="true">&#127812;</span> Fungi</span>
-        <span class="b3d-hero-pill"><span aria-hidden="true">&#128062;</span> Animals</span>
+        <span class="b3d-hero-pill" data-kingdom="plants"><span aria-hidden="true">&#127807;</span> Plants</span>
+        <span class="b3d-hero-pill" data-kingdom="fungi"><span aria-hidden="true">&#127812;</span> Fungi</span>
+        <span class="b3d-hero-pill" data-kingdom="animals"><span aria-hidden="true">&#128062;</span> Animals</span>
       </div>
     </div>
   </div>

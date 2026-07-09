@@ -2897,7 +2897,29 @@ details.group[open] > summary.group-title::before {
   font-family: "IBM Plex Sans", sans-serif;
   font-size: 12.5px;
   font-weight: 600;
+  color: var(--muted);
+  opacity: 0.72;
+  transition:
+    opacity 0.45s ease,
+    border-color 0.45s ease,
+    background 0.45s ease,
+    color 0.45s ease,
+    box-shadow 0.45s ease;
+}
+/* The kingdom currently on the hero turntable — lit by hero_points.js. */
+.b3d-hero-pill.is-active {
   color: var(--text);
+  opacity: 1;
+  border-color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 14%, var(--panel2));
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 0 16px color-mix(in oklch, var(--accent) 32%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .b3d-hero-pill {
+    transition: none;
+  }
 }
 
 .b3d-section-head {
