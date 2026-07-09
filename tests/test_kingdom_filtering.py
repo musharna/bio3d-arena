@@ -355,10 +355,9 @@ def test_leaderboard_rows_all_kingdom_keeps_cached_path_unaffected(monkeypatch):
 
 
 def test_leaderboard_route_kingdom_query_param_scopes_rows(monkeypatch):
-    """End-to-end: GET /leaderboard?kingdom=fungi renders only the fungi generators' names. This
-    fixture has no JudgeVotes, so the (now live, Feature A) judge board correctly comes back
-    empty and the section stays hidden — see test_leaderboard_route_kingdom_renders_judge_board
-    below for the case where judge votes exist."""
+    """End-to-end: GET /leaderboard?kingdom=fungi renders only the fungi generators' names. The
+    judge board is lazy-loaded (GET /leaderboard/judge on expand) so it is never fitted on the
+    main render — its <details> container is always present, but no judge rows are inlined."""
     with SessionLocal() as db:
         p, f, gp1, gp2, gf1, gf2 = _seed_lb_fixtures(db)
         fungi_slug = f.slug
@@ -373,7 +372,9 @@ def test_leaderboard_route_kingdom_query_param_scopes_rows(monkeypatch):
     assert gf2.name in body
     assert gp1.name not in body
     assert gp2.name not in body
-    assert "VLM judge" not in body  # no judge votes in this fixture -> empty judge_rows
+    # Judge board is lazy: its container ships on every render, but the board itself (and any
+    # generator rows) is fetched from /leaderboard/judge only on expand — never inlined here.
+    assert 'data-judge-url="/leaderboard/judge' in body
 
     with SessionLocal() as db:
         _clear_lb_fixtures(db)
@@ -424,8 +425,9 @@ def test_kingdom_judge_leaderboard_rows_all_kingdom_keeps_cached_path_unaffected
 
 
 def test_leaderboard_route_kingdom_renders_judge_board(monkeypatch):
-    """End-to-end (Feature A): GET /leaderboard?kingdom=fungi now renders a live judge board
-    scoped to the fungi kingdom instead of hiding it, once judge votes exist for that kingdom."""
+    """End-to-end (Feature A, now lazy): the main /leaderboard?kingdom=fungi render ships the
+    lazy judge container, and GET /leaderboard/judge fits the fungi-scoped board on demand —
+    surfacing the fungi generators' judge rows, not the plants pair."""
     with SessionLocal() as db:
         p, f, gp1, gp2, gf1, gf2 = _seed_lb_judge_fixtures(db)
         fungi_slug = f.slug
@@ -435,8 +437,12 @@ def test_leaderboard_route_kingdom_renders_judge_board(monkeypatch):
     c = TestClient(app)
     r = c.get("/leaderboard?kingdom=fungi")
     assert r.status_code == 200
-    body = r.text
-    assert "VLM judge" in body  # Feature A: no longer hidden under an active kingdom
+    assert 'data-judge-url="/leaderboard/judge' in r.text  # lazy container present on main render
+
+    frag = c.get("/leaderboard/judge?criterion=overall&category=all")
+    assert frag.status_code == 200
+    assert gf1.name in frag.text and gf2.name in frag.text  # fungi judge rows fitted on demand
+    assert gp1.name not in frag.text and gp2.name not in frag.text  # plants pair excluded by scope
 
     with SessionLocal() as db:
         _clear_lb_fixtures(db)

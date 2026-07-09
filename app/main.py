@@ -1236,21 +1236,39 @@ def leaderboard(
             "unrated_count": unrated_count,
             "total_generators": total_generators,
             "firm_vote_threshold": service.FIRM_VOTE_THRESHOLD,
-            # The cached JudgeRating table is global-only (category_id.is_(None)) and can't
-            # represent a kingdom (a SET of categories); under an active kingdom the judge board
-            # instead reads the `KingdomJudgeRating` cache (refreshed by /admin/recompute), with
-            # kingdom-filtered live JudgeVote BT as the cache-miss fallback (mirrors the human
-            # path — see _kingdom_judge_leaderboard_rows). `kingdom=all` keeps the cached
-            # (global) JudgeRating path unchanged.
-            "judge_rows": (
-                _kingdom_judge_leaderboard_rows(
-                    db, criterion, "multi4", kingdom, cat_ids, category_id_sel
-                )
-                if k_ids is not None
-                else _judge_leaderboard_rows(db, criterion, "multi4")
-            ),
+            # The judge board is NOT computed here — it is fitted lazily by GET /leaderboard/judge
+            # when the collapsed <details> is expanded (leaderboard.js), so the main render never
+            # blocks on the ~11s judge BT fit for a kingdom on a cold cache.
             "verified": verified,
         },
+    )
+
+
+@app.get("/leaderboard/judge", response_class=HTMLResponse)
+def leaderboard_judge(
+    request: Request,
+    db: Session = Depends(get_db),
+    criterion: str = "overall",
+    category: str = "all",
+    verified: bool = False,
+):
+    """VLM-judge board fragment for the current (criterion, category, kingdom) scope — fetched
+    lazily by leaderboard.js when the collapsed judge <details> is expanded. Same cache-first,
+    live-fallback path the main route used to run inline (see _kingdom_judge_leaderboard_rows).
+    `verified` is accepted for URL symmetry with the human board; the judge board is unaffected."""
+    kingdom = request.state.kingdom
+    k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
+    category_id_sel = _resolve_category_id(db, category)
+    cat_ids = _effective_category_ids(k_ids, category_id_sel) if k_ids is not None else None
+    judge_rows = (
+        _kingdom_judge_leaderboard_rows(db, criterion, "multi4", kingdom, cat_ids, category_id_sel)
+        if k_ids is not None
+        else _judge_leaderboard_rows(db, criterion, "multi4")
+    )
+    return templates.TemplateResponse(
+        request,
+        "_leaderboard_judge.html",
+        {"judge_rows": judge_rows, "paradigm_display_names": paradigms.DISPLAY_NAMES},
     )
 
 
