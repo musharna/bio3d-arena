@@ -48,11 +48,16 @@ def test_own_llm_procedural_get_cc0():
         db.rollback()
 
 
-def test_crops3d_relabelled_to_cc0():
+def test_crops3d_left_nonredistributable():
+    """crops3d must NOT be force-relabelled to CC0: no source supports CC0 (Figshare dataset
+    reads CC-BY-4.0, the Sci Data article boilerplate reads CC-BY-NC-ND). It falls through to
+    normalize-only, keeping a non-allowlisted license so the export gate excludes it until the
+    NC-ND/CC-BY ambiguity is resolved by counsel."""
     with SessionLocal() as db:
         c = _out(db, "crops3d", license_="CC-BY-NC-ND 4.0")
         backfill_licenses(db, objaverse_license_for=lambda uid: None)
-        assert c.license == CC0
+        assert c.license != CC0
+        assert c.license == "CC-BY-NC-ND-4.0"  # normalized only, stays gate-excluded
         db.rollback()
 
 
