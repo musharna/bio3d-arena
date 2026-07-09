@@ -181,7 +181,6 @@ function setKwiseVisible(active) {
   if (voteBar) voteBar.style.display = active ? "none" : "";
   if (abToggle) abToggle.style.display = active ? "none" : "";
   el("kwise-grid").hidden = !active;
-  el("kwise-allbad").hidden = !active;
 }
 
 function renderKwise(data) {
@@ -222,7 +221,6 @@ function renderKwise(data) {
     // flagOutput unchanged.
     window.Bio3DViewer.mount(slot, o, (btn) => flagOutput(o.output_id, btn));
   });
-  el("kwise-allbad").onclick = () => submitKvote(data.ballot_id, null);
   setStatus("");
 }
 
@@ -443,8 +441,6 @@ function showKwiseReveal(reveal) {
       cell.classList.add("is-winner");
     }
   });
-  const allBad = el("kwise-allbad");
-  if (allBad) allBad.disabled = true;
   const btn = el("next-pair-btn");
   if (btn) btn.hidden = false;
   maybeFireConfetti();
@@ -473,8 +469,6 @@ function clearReveal() {
   document
     .querySelectorAll(".kwise-pick-btn")
     .forEach((b) => (b.disabled = false));
-  const allBad = el("kwise-allbad");
-  if (allBad) allBad.disabled = false;
   const btn = el("next-pair-btn");
   if (btn) btn.hidden = true;
   const layer = el("confetti-layer");
