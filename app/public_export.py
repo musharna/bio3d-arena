@@ -32,7 +32,7 @@ REDISTRIBUTABLE_LICENSES = frozenset(
 # allowlist. Demeter + Helios are internal procedural_expert testers (agrigen) whose outputs are
 # inconsistent on the public arena (some render untextured/colorless); kept internal-only. A
 # deny-list here makes the exclusion durable — an operator can't accidentally publish them.
-PUBLIC_EXCLUDED_GENERATORS = frozenset({"demeter", "helios"})
+PUBLIC_EXCLUDED_GENERATORS = frozenset({"agrigen", "demeter", "helios"})
 
 
 HARD_EXCLUDE_SOURCES = frozenset({"found:xfrog", "procedural:demeter", "procedural:agrigen"})

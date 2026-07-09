@@ -145,10 +145,27 @@ def untextured_generator_ids(db: Session) -> set[int]:
     return {gid for gid, (u, t) in flagged.items() if t > 0 and u == t}
 
 
+def app_hidden_generator_ids(db: Session) -> set[int]:
+    """Generators hidden from the whole app UI (config.APP_HIDDEN_GENERATOR_SLUGS — AgriGen's
+    internal procedural-expert testers). Kept in the DB for internal analysis, never displayed."""
+    if not config.APP_HIDDEN_GENERATOR_SLUGS:
+        return set()
+    return set(
+        db.execute(
+            select(Generator.id).where(Generator.slug.in_(config.APP_HIDDEN_GENERATOR_SLUGS))
+        ).scalars()
+    )
+
+
 def mode_a_excluded_generator_ids(db: Session) -> set[int]:
     """Generators excluded from the Mode-A perceptual ranking: GT reference scans (not generative
-    methods) ∪ fully-untextured generators (flat-grey-blob renders confound perceptual votes)."""
-    return reference_scan_generator_ids(db) | untextured_generator_ids(db)
+    methods) ∪ fully-untextured generators (flat-grey-blob renders confound perceptual votes) ∪
+    app-hidden internal testers (config.APP_HIDDEN_GENERATOR_SLUGS)."""
+    return (
+        reference_scan_generator_ids(db)
+        | untextured_generator_ids(db)
+        | app_hidden_generator_ids(db)
+    )
 
 
 def generator_display_names(db: Session) -> dict[int, str]:
