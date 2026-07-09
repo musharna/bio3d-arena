@@ -1,7 +1,9 @@
 """Correct/assign model_output.license on a DB COPY before public export (idempotent, fail-loud).
-NEVER run against the real study DB. Own/LLM/procedural -> CC0; crops3d -> CC0 (verified Figshare
-data-record); Objaverse -> resolved per-uid license; space-form CC -> normalized SPDX. The three
-hard-excludes (xfrog/demeter/agrigen) are left untouched (stay non-redistributable)."""
+NEVER run against the real study DB. Own/LLM/procedural -> CC0; Objaverse -> resolved per-uid
+license; space-form CC -> normalized SPDX. The three hard-excludes (xfrog/demeter/agrigen) are
+left untouched (stay non-redistributable). crops3d is NOT force-cleared: no source supports the
+CC0 the tool once assumed (the Figshare dataset card reads CC-BY-4.0, the Sci Data article
+boilerplate reads CC-BY-NC-ND), so it normalizes only and stays gate-excluded pending counsel."""
 
 from __future__ import annotations
 
@@ -56,13 +58,6 @@ def backfill_licenses(db, *, objaverse_license_for: Callable[[str], str | None])
                 disp[f"objaverse:{norm}"] += 1
             else:
                 disp["objaverse_unresolved"] += 1  # stays as-is -> non-allowlisted -> gate excludes
-            continue
-        if src == "crops3d":
-            o.license = CC0
-            o.attribution = (
-                o.attribution or ""
-            ) or "Crops3D — Figshare data-record CC0 (art. 27313272)"
-            disp["crops3d->CC0"] += 1
             continue
         if _is_own_cc0(src):
             o.license = CC0
