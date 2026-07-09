@@ -125,7 +125,7 @@
     pausedFor = 0,
     pauseStart = 0;
 
-  // ---- kingdom pills that light up with the model currently on the turntable ----
+  // ---- kingdom pills + scientific name that track the model currently on the turntable ----
   var pills = {};
   Array.prototype.forEach.call(
     document.querySelectorAll(".b3d-hero-pill[data-kingdom]"),
@@ -133,11 +133,48 @@
       pills[el.getAttribute("data-kingdom")] = el;
     },
   );
+  // Per-kingdom { sci, common } from the canvas data-*-species / data-*-common attrs.
+  var species = {
+    plants: {
+      sci: canvas.getAttribute("data-plants-species"),
+      common: canvas.getAttribute("data-plants-common"),
+    },
+    fungi: {
+      sci: canvas.getAttribute("data-fungi-species"),
+      common: canvas.getAttribute("data-fungi-common"),
+    },
+    animals: {
+      sci: canvas.getAttribute("data-animals-species"),
+      common: canvas.getAttribute("data-animals-common"),
+    },
+  };
+  var speciesEl = document.getElementById("hero-species");
+  function setActiveSpecies(k) {
+    var sp = species[k];
+    if (!speciesEl || !sp || !sp.sci) return;
+    var em = document.createElement("em");
+    em.textContent = sp.sci;
+    speciesEl.textContent = "";
+    speciesEl.appendChild(em);
+    if (sp.common) {
+      var c = document.createElement("span");
+      c.className = "b3d-hero-species-common";
+      c.textContent = " " + sp.common;
+      speciesEl.appendChild(c);
+    }
+    if (!reduce) {
+      // retrigger the fade-in each swap
+      speciesEl.classList.remove("is-in");
+      void speciesEl.offsetWidth;
+      speciesEl.classList.add("is-in");
+    }
+  }
   var activeKingdom = null;
   function setActivePill(k) {
     if (k === activeKingdom) return;
     activeKingdom = k;
     for (var key in pills) pills[key].classList.toggle("is-active", key === k);
+    setActiveSpecies(k); // scientific name swaps in lock-step with the pill highlight
   }
   setActivePill("plants"); // initial highlight, before the clouds finish loading
 
