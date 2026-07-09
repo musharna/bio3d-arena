@@ -2828,6 +2828,14 @@ details.group[open] > summary.group-title::before {
   --poster-color: transparent;
   background-color: transparent;
 }
+/* Point-cloud hero canvas (hero_points.js). Fills the stage; touch-action:none so a
+   pointer-drag rotates the specimen instead of scrolling the page on touch. */
+.b3d-hero-canvas {
+  display: block;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
 .b3d-hero-viz-ring-wrap {
   position: relative;
   width: 360px;

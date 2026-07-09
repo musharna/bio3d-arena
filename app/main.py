@@ -614,56 +614,6 @@ def require_internal_pages() -> None:
 # ------------------------------------------------------------------- arena UI
 
 
-def _pick_hero_asset(db: Session, spotlight_subjects: list[dict]) -> dict | None:
-    """Pick a featured GLB for the Home hero turntable — query-driven, never a
-    hardcoded output id (the seed DB differs per env, and a fresh/empty DB must
-    fall back to `None` so the template renders the ring-motif placeholder).
-
-    Preference order: a visible, non-gold GLB whose task is one of the curated
-    Spotlight poster-child subjects (most-voted among those); else the
-    most-voted visible non-gold GLB in the whole DB; else `None`.
-    """
-    # Keep the hero turntable LIGHT so it loads and spins instantly — some recon GLBs are
-    # tens of MB, which makes the whole hero (and the orientation gizmo) lag. Prefer the
-    # most-voted candidate whose on-disk mesh is small; fall back through heavier ones only
-    # if nothing light exists. (Local backend only; a remote backend skips the size gate.)
-    MAX_HERO_BYTES = 1_500_000
-    root = getattr(storage, "root", None)
-
-    def _light_enough(asset_path: str) -> bool:
-        if root is None:
-            return True
-        try:
-            return (root / asset_path).stat().st_size <= MAX_HERO_BYTES
-        except OSError:
-            return False
-
-    def _first_light(query):
-        for out in db.execute(query).scalars():
-            if _light_enough(out.asset_path):
-                return out
-        return None
-
-    base = select(ModelOutput).where(
-        ModelOutput.is_gold.is_(False),
-        ModelOutput.hidden_at.is_(None),
-        ModelOutput.asset_format == "glb",
-    )
-    spotlight_titles = [s["task_title"] for s in spotlight_subjects]
-    if spotlight_titles:
-        out = _first_light(
-            base.join(Task, ModelOutput.task_id == Task.id)
-            .where(Task.title.in_(spotlight_titles))
-            .order_by(ModelOutput.n_comparisons.desc())
-        )
-        if out is not None:
-            return {"url": storage.url_for(out.asset_path), "format": out.asset_format}
-    out = _first_light(base.order_by(ModelOutput.n_comparisons.desc()))
-    if out is None:
-        return None
-    return {"url": storage.url_for(out.asset_path), "format": out.asset_format}
-
-
 def _hero_stats(db: Session) -> dict:
     """Cheap headline counts shared by the home hero and the arena hero, so both
     pages report the same numbers (votes cast / distinct models / active tasks /
@@ -688,9 +638,6 @@ def home(request: Request, db: Session = Depends(get_db)):
     it's the one screen every visitor should be able to load regardless of scope."""
     from sqlalchemy import func
 
-    from . import spotlight
-
-    hero_asset = _pick_hero_asset(db, spotlight.SPOTLIGHTS)
     stats = _hero_stats(db)
     total_votes = stats["total_votes"]
     models_count = stats["models_count"]
@@ -737,7 +684,6 @@ def home(request: Request, db: Session = Depends(get_db)):
             "tasks_count": tasks_count,
             "kingdoms_live": kingdoms_live,
             "kingdom_cards": kingdom_cards,
-            "hero_asset": hero_asset,
         },
     )
 
