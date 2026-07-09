@@ -50,6 +50,45 @@ def test_prepare_cloud_is_clean_normalized_and_capped():
     assert all(len(p) == 3 for p in cloud)
 
 
+def test_largest_component_isolates_the_bigger_cluster():
+    # two well-separated blobs — a multi-object recon (e.g. a mushroom cluster)
+    rng = np.random.default_rng(1)
+    big = rng.normal([0, 0, 0], 0.05, (800, 3))
+    small = rng.normal([5, 0, 0], 0.05, (200, 3))  # far away -> its own component
+    keep = hp.largest_component(np.vstack([big, small]), eps_mult=6.0)
+    assert 700 < len(keep) <= 800  # only the big blob survives
+    assert keep[:, 0].max() < 1.0  # the distant small blob (x~5) is gone
+
+
+def test_prepare_cloud_isolate_main_keeps_one_object():
+    # a big blob of triangles + a distant small blob; isolate_main drops the small one
+    rng = np.random.default_rng(4)
+    big = rng.normal([0, 0, 0], 0.1, (1500, 3))
+    small = rng.normal([10, 0, 0], 0.1, (400, 3))
+    positions = np.vstack([big, small])
+    triangles = np.vstack([rng.integers(0, 1500, (3000, 3)), rng.integers(1500, 1900, (800, 3))])
+    cloud = np.array(hp.prepare_cloud(positions, triangles, n=8000, isolate_main=True, seed=5))
+    # after isolating + normalizing, all points sit in the unit box around the big blob
+    assert abs(float(np.abs(cloud).max()) - 1.0) < 1e-6
+    assert len(cloud) > 0
+
+
+def test_crop_base_removes_low_end_and_keeps_cap():
+    # a dense wide cap at high Y + a sparse stem/foot descending to low Y
+    rng = np.random.default_rng(6)
+    cap = np.column_stack(
+        [rng.uniform(-1, 1, 2000), 1.0 + rng.normal(0, 0.02, 2000), rng.uniform(-1, 1, 2000)]
+    )
+    stem = np.column_stack(
+        [rng.normal(0, 0.1, 600), rng.uniform(-1, 0.8, 600), rng.normal(0, 0.1, 600)]
+    )
+    pts = np.vstack([cap, stem])
+    ylo, yhi = pts[:, 1].min(), pts[:, 1].max()
+    out = hp.crop_base(pts, frac=0.2)
+    assert out[:, 1].min() >= ylo + 0.2 * (yhi - ylo) - 1e-9  # bottom 20% gone
+    assert (out[:, 1] > 0.9).sum() > 1800  # dense cap preserved
+
+
 @pytest.mark.skipif(
     not os.path.exists(os.path.join(str(config.ASSET_DIR), "gt", "zea_mays.glb")),
     reason="GT asset bundle not present in this data dir",

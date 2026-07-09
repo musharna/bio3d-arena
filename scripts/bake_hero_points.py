@@ -36,9 +36,14 @@ PLANT_GT = "gt/zea_mays.glb"
 # so we pin clean, recognizable specimens that were vetted visually. Falls back to
 # _top_reconstruction_glb() if a pinned asset isn't present in this data dir.
 CURATED_RECON = {
-    "fungi": "uploads/c47cda03f97345e5adc7ff92a7f0c941.glb",  # Lycoperdon perlatum (puffball)
+    "fungi": "uploads/051288ec3ef84bc987ff730ebb22dae6.glb",  # Amanita muscaria (fly agaric)
     "animals": "uploads/d6ad21678b1c4a2e9d6bca59ec63f4df.glb",  # Canis lupus familiaris (dog)
 }
+
+# Kingdoms whose curated recon is a multi-specimen scene — keep only the largest connected
+# component so the hero shows one specimen. The fly-agaric recon is a cluster of three
+# mushrooms; isolating leaves the central mature cap-and-stem one.
+ISOLATE_MAIN = {"fungi"}
 
 
 def _top_reconstruction_glb(db, kingdom: str) -> tuple[str, int] | None:
@@ -96,7 +101,18 @@ def main() -> int:
                     return 1
                 rel, nverts = pick
             positions, triangles = hero_points.mesh_arrays((root / rel).read_bytes())
-            cloud = hero_points.prepare_cloud(positions, triangles)
+            iso = kingdom in ISOLATE_MAIN
+            # sample more when isolating, so the kept component still yields a full 5k cloud;
+            # a tighter eps (3x) also severs thin artifact tails weakly bridged to the body.
+            cloud = hero_points.prepare_cloud(
+                positions,
+                triangles,
+                n=14000 if iso else 6000,
+                isolate_main=iso,
+                isolate_eps_mult=3.0 if iso else 6.0,
+                # crop the sparse stem base/foot that reads as a stray tail (fungi only)
+                crop_base_frac=0.15 if iso else 0.0,
+            )
             (OUT_DIR / f"{kingdom}.json").write_text(json.dumps(cloud, separators=(",", ":")))
             print(f"{kingdom:7s} <- {rel} (recon, {nverts} verts) -> {len(cloud)} pts")
 

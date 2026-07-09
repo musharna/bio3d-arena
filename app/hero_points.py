@@ -129,6 +129,46 @@ def normalize(pts: np.ndarray) -> np.ndarray:
     return centered / scale
 
 
+def largest_component(pts: np.ndarray, eps_mult: float = 6.0, min_size: int = 50) -> np.ndarray:
+    """Keep only the largest spatially-connected component (points within eps of a neighbour,
+    eps = eps_mult * median nearest-neighbour spacing). Isolates a single specimen from a
+    multi-object reconstruction — e.g. the central mature mushroom out of a fly-agaric cluster.
+    Returns `pts` unchanged if it's too small or forms one component already."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    from scipy.spatial import cKDTree
+
+    if len(pts) < min_size:
+        return pts
+    tree = cKDTree(pts)
+    d, _ = tree.query(pts, k=2)
+    eps = float(np.median(d[:, 1])) * eps_mult
+    pairs = np.array(list(tree.query_pairs(eps)))
+    if len(pairs) == 0:
+        return pts
+    n = len(pts)
+    graph = coo_matrix((np.ones(len(pairs)), (pairs[:, 0], pairs[:, 1])), shape=(n, n))
+    _ncomp, labels = connected_components(graph, directed=False)
+    biggest = np.bincount(labels).argmax()
+    return pts[labels == biggest]
+
+
+def crop_base(pts: np.ndarray, frac: float, up_axis: int | None = None) -> np.ndarray:
+    """Remove the bottom `frac` of the specimen's up-axis extent — the sparse stem base / foot
+    of a mushroom recon that reads as a stray tail. The up-axis defaults to the largest-extent
+    axis; the dense ('cap') end is detected and kept, the opposite end is cropped."""
+    if frac <= 0 or len(pts) == 0:
+        return pts
+    ax = int(np.argmax(pts.max(0) - pts.min(0))) if up_axis is None else up_axis
+    v = pts[:, ax]
+    lo, hi = float(v.min()), float(v.max())
+    band = 0.25 * (hi - lo)
+    cap_at_high = (v >= hi - band).sum() >= (v <= lo + band).sum()
+    if cap_at_high:
+        return pts[v >= lo + frac * (hi - lo)]
+    return pts[v <= hi - frac * (hi - lo)]
+
+
 def prepare_cloud(
     positions: np.ndarray,
     triangles: np.ndarray | None,
@@ -136,10 +176,20 @@ def prepare_cloud(
     target: int = 5000,
     seed: int = 3,
     decimals: int = 3,
+    isolate_main: bool = False,
+    isolate_eps_mult: float = 6.0,
+    crop_base_frac: float = 0.0,
 ) -> list[list[float]]:
     """Full pipeline -> JSON-ready [[x,y,z], ...]. `triangles=None` means `positions` is
-    already a point cloud (a GT scan); otherwise surface-sample the mesh first."""
+    already a point cloud (a GT scan); otherwise surface-sample the mesh first.
+    `isolate_main=True` keeps only the largest connected component (drops secondary objects
+    in a multi-specimen reconstruction) before outlier removal; lower `isolate_eps_mult`
+    also severs thin artifact tails weakly bridged to the main body."""
     pts = positions if triangles is None else sample_surface(positions, triangles, n, seed)
+    if isolate_main:
+        pts = largest_component(pts, eps_mult=isolate_eps_mult)
+    if crop_base_frac > 0:
+        pts = crop_base(pts, crop_base_frac)
     pts = remove_outliers(pts)
     if len(pts) > target:
         rng = np.random.default_rng(seed + 1)
