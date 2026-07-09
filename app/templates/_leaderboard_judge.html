@@ -1,0 +1,43 @@
+{# VLM-judge board fragment — rendered by GET /leaderboard/judge and injected into the collapsed
+   <details> on the leaderboard page when it's first expanded (never on the main render, so the
+   page can't block on the ~11s judge BT fit). Context: judge_rows, paradigm_display_names. #}
+{% if judge_rows %}
+{% for pgm, group_rows in judge_rows|groupby('paradigm') %}
+<div class="lb-panel">
+  <div class="lb-panel-head">
+    <h3 class="paradigm-heading">{{ paradigm_display_names.get(pgm, pgm) if pgm else "Untagged" }}</h3>
+    <span class="subtle">Scores are only comparable within a paradigm.</span>
+  </div>
+  <div class="ranktable-wrap">
+    <table class="ranktable">
+      <thead>
+        <tr>
+          <th class="lb-th-rank">Rank (UB)</th>
+          <th>Generator</th>
+          <th class="num">BT score</th>
+          <th class="num">Votes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in group_rows %}
+        <tr>
+          <td class="lb-rank">
+            {% if loop.index <= 3 %}
+            <span class="lb-medal lb-medal-{{ ['gold', 'silver', 'bronze'][loop.index0] }}">{{ loop.index }}</span>
+            {% else %}
+            <span class="lb-rank-num mono">{{ loop.index }}</span>
+            {% endif %}
+          </td>
+          <td class="gen">{{ r.generator }}</td>
+          <td class="num{% if loop.index == 1 %} strong{% endif %}">{{ r.bt_score }}</td>
+          <td class="num">{{ r.n_games }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endfor %}
+{% else %}
+<p class="subtle" style="padding: 0.4rem 0.1rem">No automated LLM-judge rankings for this selection yet.</p>
+{% endif %}

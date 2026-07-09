@@ -185,48 +185,19 @@
     </div>
   </details>
 
-  {% if judge_rows %}
   {# Secondary board — collapsed by default so the page leads with the human-vote leaderboard
-     (matches the design). Expand for the automated LLM-judge rankings, split by paradigm. #}
-  <details class="lb-filters-audit lb-judge-section">
+     (matches the design). The judge BT fit is expensive (~11s for plants on a cold cache), so it
+     is NOT computed on the main render: leaderboard.js fetches data-judge-url into the panel the
+     first time this <details> is expanded. #}
+  <details
+    class="lb-filters-audit lb-judge-section"
+    data-judge-url="/leaderboard/judge?criterion={{ sel_criterion }}&category={{ sel_category }}{% if verified %}&verified=1{% endif %}"
+  >
     <summary>VLM judge (Sonnet 4.6, multi-view) — automated LLM-judge rankings by paradigm</summary>
-  {% for pgm, group_rows in judge_rows|groupby('paradigm') %}
-  <div class="lb-panel">
-    <div class="lb-panel-head">
-      <h3 class="paradigm-heading">{{ paradigm_display_names.get(pgm, pgm) if pgm else "Untagged" }}</h3>
-      <span class="subtle">Scores are only comparable within a paradigm.</span>
+    <div class="lb-judge-body" data-loaded="0">
+      <p class="subtle" style="padding: 0.4rem 0.1rem">Loading automated rankings…</p>
     </div>
-    <div class="ranktable-wrap">
-      <table class="ranktable">
-        <thead>
-          <tr>
-            <th class="lb-th-rank">Rank (UB)</th>
-            <th>Generator</th>
-            <th class="num">BT score</th>
-            <th class="num">Votes</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in group_rows %}
-          <tr>
-            <td class="lb-rank">
-              {% if loop.index <= 3 %}
-              <span class="lb-medal lb-medal-{{ ['gold', 'silver', 'bronze'][loop.index0] }}">{{ loop.index }}</span>
-              {% else %}
-              <span class="lb-rank-num mono">{{ loop.index }}</span>
-              {% endif %}
-            </td>
-            <td class="gen">{{ r.generator }}</td>
-            <td class="num{% if loop.index == 1 %} strong{% endif %}">{{ r.bt_score }}</td>
-            <td class="num">{{ r.n_games }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  {% endfor %}
   </details>
-  {% endif %}
 </section>
+<script defer src="{{ asset('leaderboard.js') }}"></script>
 {% endblock %}
