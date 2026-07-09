@@ -202,6 +202,7 @@
               ></span>
               <span class="b3d-nav-label">Models</span>
             </a>
+            {% if internal_pages() %}
             <a
               href="/difficulty"
               class="b3d-nav-link{{ ' is-active' if path == '/difficulty' else '' }}"
@@ -237,10 +238,12 @@
               ></span>
               <span class="b3d-nav-label">Difficulty</span>
             </a>
+            {% endif %}
           </div>
 
           <div class="b3d-navgroup">
             <div class="b3d-navheading">Analysis</div>
+            {% if internal_pages() %}
             <a
               href="/benchmark"
               class="b3d-nav-link{{ ' is-active' if path == '/benchmark' else '' }}"
@@ -284,6 +287,7 @@
               ></span>
               <span class="b3d-nav-label">Benchmark</span>
             </a>
+            {% endif %}
             <a
               href="/coverage"
               class="b3d-nav-link{{ ' is-active' if path == '/coverage' else '' }}"
@@ -319,6 +323,7 @@
               ></span>
               <span class="b3d-nav-label">Coverage</span>
             </a>
+            {% if internal_pages() %}
             <a
               href="/significance"
               class="b3d-nav-link{{ ' is-active' if path == '/significance' else '' }}"
@@ -348,6 +353,7 @@
               ></span>
               <span class="b3d-nav-label">Significance</span>
             </a>
+            {% endif %}
           </div>
 
           <div class="b3d-navgroup">

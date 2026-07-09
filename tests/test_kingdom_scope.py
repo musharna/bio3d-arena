@@ -25,7 +25,8 @@ def test_kingdom_defaults_to_all():
     assert r.status_code == 200
     # scope pill shows ALL KINGDOMS by default
     assert b"ALL KINGDOMS" in r.content
-    assert _kbar_active_label(r.text) == "All kingdoms"
+    # The kbar selector pill was shortened to just "All" (design: top selector reads "All").
+    assert _kbar_active_label(r.text) == "All"
 
 
 def test_kingdom_query_param_sets_scope_and_cookie():

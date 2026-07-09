@@ -88,6 +88,9 @@ def _asset_url(path: str) -> str:
 
 
 templates.env.globals["asset"] = _asset_url
+# Read live (not the value at import) so tests/deploys can toggle config.INTERNAL_PAGES_ENABLED
+# and both the route guard and the nav conditionals see the same current value.
+templates.env.globals["internal_pages"] = lambda: config.INTERNAL_PAGES_ENABLED
 
 app = FastAPI(title="Bio 3D Arena", version="0.1.0")
 app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
@@ -597,6 +600,15 @@ def require_admin_query(token: str | None = None) -> None:
     admin/moderation data (incl. submitter PII + un-vetted asset URLs), so they must not be
     world-readable even though the mutating POSTs are already token-gated."""
     _require_admin(token)
+
+
+def require_internal_pages() -> None:
+    """Dependency for the internal research/analytics pages. On the public instance
+    (config.INTERNAL_PAGES_ENABLED is False) they hard-404, so novel methodology is
+    unpublished — not merely admin-gated — on the public deploy. Read live so a deploy/test
+    toggle of config.INTERNAL_PAGES_ENABLED takes effect without re-importing."""
+    if not config.INTERNAL_PAGES_ENABLED:
+        raise HTTPException(status_code=404, detail="Not Found")
 
 
 # ------------------------------------------------------------------- arena UI
@@ -1519,7 +1531,11 @@ def api_coverage(db: Session = Depends(get_db)):
     return service.coverage_summary(db)
 
 
-@app.get("/procedural", response_class=HTMLResponse)
+@app.get(
+    "/procedural",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def procedural_page(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         request,
@@ -1548,7 +1564,11 @@ def api_fidelity(db: Session = Depends(get_db)):
     return fidelity.fidelity_scorecard(db)
 
 
-@app.get("/fidelity", response_class=HTMLResponse)
+@app.get(
+    "/fidelity",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def fidelity_board(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         request, "fidelity.html", {"board": fidelity.fidelity_scorecard(db)}
@@ -1570,7 +1590,11 @@ def api_bias(db: Session = Depends(get_db)):
     return service.compute_bias(db)
 
 
-@app.get("/significance", response_class=HTMLResponse)
+@app.get(
+    "/significance",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def significance_page(
     request: Request,
     db: Session = Depends(get_db),
@@ -1936,7 +1960,11 @@ def _default_benchmark_task_id(db: Session, category_ids: set[int] | None = None
     return tasks[0].id
 
 
-@app.get("/benchmark", response_class=HTMLResponse)
+@app.get(
+    "/benchmark",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int | None = None):
     from . import recon_service
     from .models import Task
@@ -2011,7 +2039,11 @@ def export_dataset(request: Request, db: Session = Depends(get_db)):
     return dataset_mod.build_preference_records(db, kingdom=request.state.kingdom)
 
 
-@app.get("/difficulty", response_class=HTMLResponse)
+@app.get(
+    "/difficulty",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def difficulty_page(request: Request, db: Session = Depends(get_db)):
     """Render the per-tier objective scorecard + the cross-tier degradation gradient."""
     from .models import ReconTask, Task, TaskDifficulty
@@ -2129,7 +2161,11 @@ def api_traits(db: Session = Depends(get_db)):
     return {"rubrics": rubrics}
 
 
-@app.get("/trait/{output_id}", response_class=HTMLResponse)
+@app.get(
+    "/trait/{output_id}",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def trait_scorecard_page(output_id: int, request: Request, db: Session = Depends(get_db)):
     """Per-output Mode-C scorecard: each verdict joined to its rubric trait + the score."""
     from .models import TraitRubric, TraitScore, TraitVerdict

@@ -113,6 +113,17 @@ RECON_SCORER_URL = os.environ.get("BIO3D_RECON_SCORER_URL", "http://127.0.0.1:88
 # never recomputed). Keeps the public deploy free of the Agrigen scoring microservice.
 SCORING_ENABLED = bool(RECON_SCORER_URL.strip())
 
+# Internal research/analytics pages: /benchmark, /significance, /difficulty, /fidelity,
+# /procedural, /trait/{id}. Served only on the internal instance; the public deploy hard-404s
+# them and strips them from nav + cross-links, so novel methodology never reaches the public
+# surface (same Agrigen-decoupling rationale as SCORING_ENABLED). Defaults to SCORING_ENABLED —
+# the existing public-vs-internal signal — so no extra config is needed on either deploy;
+# override with BIO3D_INTERNAL_PAGES=true/false.
+_internal_pages_env = os.environ.get("BIO3D_INTERNAL_PAGES", "").strip().lower()
+INTERNAL_PAGES_ENABLED = (
+    _internal_pages_env in ("1", "true", "yes") if _internal_pages_env else SCORING_ENABLED
+)
+
 # Held-out GT scan bundle (the scorer's gt_bundle_prod). Read ONCE at build time by
 # scripts/render_gt.py to bake per-species reference GLBs into bio3d's own asset store;
 # the running server never touches this path (stays decoupled from the scorer's FS).
