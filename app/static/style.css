@@ -447,36 +447,15 @@ textarea:focus-visible,
   flex: 1 1 280px;
   min-width: 0;
 }
-/* Subject-thumbnail avatar — a fixed 56px circle framing the reference photo(s). */
-.task-strip-thumb {
-  flex: 0 0 auto;
-  margin: 0;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  overflow: hidden;
-  background: radial-gradient(
-    circle at 50% 42%,
-    color-mix(in oklch, var(--accent) 14%, var(--panel2)),
-    var(--panel)
-  );
+/* Reference gallery panel — its own centered row below the task header (the CC species photos of
+   what the organism should look like). The inner .reference-gallery keeps its fixed-footprint
+   scrollable-strip styling (defined further below). */
+.reference-panel {
+  margin: 0.25rem auto 0.75rem;
+  text-align: center;
 }
-.task-strip-thumb .reference-gallery {
-  width: 56px;
-  height: 56px;
-  min-height: 0;
-  margin: 0;
-  gap: 0;
-  overflow: hidden;
-}
-.task-strip-thumb .reference-img {
-  flex: 0 0 56px;
-  width: 56px;
-  height: 56px;
-  border-radius: 0;
-  border: none;
-  box-shadow: none;
+.reference-panel .reference-cap {
+  margin: 0 0 0.5rem;
 }
 .task-card-heading {
   display: flex;

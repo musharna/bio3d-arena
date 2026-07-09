@@ -425,12 +425,15 @@ def _build_comparison(
     # completeness category (config.POOL_EXCLUDED_COMPLETENESS_CATEGORIES).
     # Same predicate for task AND pair selection so pick_task never returns a task whose
     # only outputs pick_pair then excludes (which caused intermittent /api/next 404s).
+    _app_hidden_gids = service.app_hidden_generator_ids(db)
+
     def _vote_excluded(o):
         return (
             is_reference_scan(o.source)
             or is_untextured_output(o)
             or o.hidden_at is not None
             or o.id in _gated
+            or o.generator_id in _app_hidden_gids  # AgriGen internal testers: never in the pool
         )
 
     # Pairings this session already voted on: the /api/vote guard 409s a re-vote of any of
@@ -493,6 +496,7 @@ def _build_kwise_comparison(
 
     category_id = _resolve_category_id(db, category_slug)
     _gated = admissibility.non_admitted_output_ids(db)
+    _app_hidden_gids = service.app_hidden_generator_ids(db)
 
     def _vote_excluded(o):
         return (
@@ -500,6 +504,7 @@ def _build_kwise_comparison(
             or is_untextured_output(o)
             or o.hidden_at is not None
             or o.id in _gated
+            or o.generator_id in _app_hidden_gids  # AgriGen internal testers: never in the pool
         )
 
     seen = integrity.seen_quads_for(db, session_id, crit.id)
@@ -1305,9 +1310,12 @@ def _model_cards(db: Session, k_ids: set[int] | None) -> list[dict]:
         r["generator"]: r for r in service.coverage_summary(db, category_ids=k_ids)["generators"]
     }
     bt_by_name = {r["generator"]: r for r in _leaderboard_rows(db, "overall", "all", None)}
+    app_hidden = service.app_hidden_generator_ids(db)
 
     cards = []
     for g in db.execute(select(Generator)).scalars().all():
+        if g.id in app_hidden:
+            continue  # AgriGen internal testers: hidden from the app UI (kept in DB for analysis)
         disp_name = names.get(g.id, g.name)
         cov = cov_by_name.get(disp_name)
         if cov is None:
@@ -1368,8 +1376,8 @@ def model_detail(slug: str, request: Request, db: Session = Depends(get_db)):
     if roadmap is not None:
         return roadmap
     gen = db.execute(select(Generator).where(Generator.slug == slug)).scalars().first()
-    if gen is None:
-        raise HTTPException(404, "Unknown generator")
+    if gen is None or gen.id in service.app_hidden_generator_ids(db):
+        raise HTTPException(404, "Unknown generator")  # app-hidden testers: not reachable by URL
     k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
     cards = _model_cards(db, k_ids)
     card = next((c for c in cards if c["slug"] == slug), None)

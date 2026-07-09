@@ -141,6 +141,12 @@ RELEASES_DIR = DATA_DIR / "releases"
 # showing its input as the reference rather than being left with no anchor at all.
 INPUT_REFERENCE_EXEMPT_SLUGS = {"hordeum_vulgare"}
 
+# AgriGen's internal procedural-expert testers. Their outputs stay in the DB for internal
+# analysis, but are hidden everywhere in the app UI — dropped from the perceptual boards
+# (mode_a_excluded_generator_ids) and the arena vote pool, on every instance (public + internal).
+# This is stricter than the public-export gate, which drops them only from the public bundle.
+APP_HIDDEN_GENERATOR_SLUGS = frozenset({"agrigen", "demeter", "helios"})
+
 
 def is_safe_test_db_target(value: str | None) -> bool:
     """True if a DB URL/path is a throwaway that's safe for the test suite to drop/recreate.
