@@ -29,14 +29,6 @@ reconstruction benchmark{% endblock %} {% block content %}
         <span><strong>{{ tasks_count }}</strong> tasks</span>
         <span><strong>{{ kingdoms_live }}</strong> kingdoms live</span>
       </div>
-      <div class="b3d-hero-generators">
-        <span class="b3d-hero-generators-label">Generators from</span>
-        <span class="b3d-hero-generators-list">
-          <span>Microsoft</span><span>Tencent</span><span>Google</span
-          ><span>OpenAI</span><span>Tripo&nbsp;AI</span><span>Deemos</span
-          ><span>Inria</span>
-        </span>
-      </div>
     </div>
 
     <!-- Hero viz: a live rotating specimen when a featured GLB is available
@@ -45,63 +37,41 @@ reconstruction benchmark{% endblock %} {% block content %}
          below are chrome around the viewer slot -- they don't touch #hero-slot. -->
     <div class="b3d-hero-viz">
       <div class="b3d-hero-viz-frame">
-        {% if hero_asset %}
-        <div class="viewer-slot b3d-hero-viz-stage" id="hero-slot"></div>
-        {% else %}
+        {#- Design: the reconstructed mesh floats INSIDE the dashed radar rings (no card
+           chrome). Rings render always; the live GLB viewer sits transparently on top,
+           falling back to the leaf motif when no hero asset is available. -#}
         <div class="b3d-hero-viz-ring-wrap">
           <div class="b3d-hero-viz-ring-outer" aria-hidden="true"></div>
           <div class="b3d-hero-viz-ring-dashed" aria-hidden="true"></div>
           <div class="b3d-hero-viz-glow" aria-hidden="true"></div>
-          <div class="b3d-hero-viz-mark" role="img" aria-label="Reconstructed 3D specimen motif">
-            &#127807;
-          </div>
+          {#- Rotating real 3D specimen: the baked per-kingdom point clouds (real GT scan for
+             plants, surface-sampled reconstructions for fungi/animals — scripts/bake_hero_points.py),
+             rendered + cycled + gizmo-drawn by hero_points.js. Always present; no GLB to 404. -#}
+          <canvas
+            id="hero-canvas"
+            class="b3d-hero-viz-stage b3d-hero-canvas"
+            role="img"
+            aria-label="Rotating 3D specimen — a real point cloud cycling through Plants, Fungi, and Animals"
+            data-plants="{{ asset('hero/plants.json') }}"
+            data-fungi="{{ asset('hero/fungi.json') }}"
+            data-animals="{{ asset('hero/animals.json') }}"
+          ></canvas>
         </div>
-        {% endif %}
-        <svg
-          class="b3d-hero-gizmo"
-          viewBox="0 0 44 44"
-          aria-hidden="true"
-          focusable="false"
-        >
-          <circle cx="10" cy="34" r="2" fill="var(--faint)" />
-          <line x1="10" y1="34" x2="10" y2="10" stroke="#e5484d" stroke-width="2" stroke-linecap="round" />
-          <text x="10" y="7" fill="#e5484d" font-size="7" font-family="IBM Plex Mono, monospace" text-anchor="middle">Y</text>
-          <line x1="10" y1="34" x2="34" y2="34" stroke="#30a46c" stroke-width="2" stroke-linecap="round" />
-          <text x="38" y="37" fill="#30a46c" font-size="7" font-family="IBM Plex Mono, monospace" text-anchor="middle">X</text>
-          <line x1="10" y1="34" x2="20" y2="22" stroke="#0091ff" stroke-width="2" stroke-linecap="round" />
-          <text x="23" y="19" fill="#0091ff" font-size="7" font-family="IBM Plex Mono, monospace" text-anchor="middle">Z</text>
-        </svg>
       </div>
       <span class="b3d-hero-viz-caption"
-        >drag to rotate &middot; reconstructed mesh</span
+        >drag to rotate &middot; real point cloud</span
       >
+      {#- hero_points.js lights up the pill matching the kingdom currently on the turntable. -#}
       <div class="b3d-hero-kingdom-pills">
-        <span class="b3d-hero-pill"><span aria-hidden="true">&#127807;</span> Plants</span>
-        <span class="b3d-hero-pill"><span aria-hidden="true">&#127804;</span> Fungi</span>
-        <span class="b3d-hero-pill is-soon"
-          ><span aria-hidden="true">&#128062;</span> Animals
-          <span class="b3d-hero-pill-soon">soon</span></span
-        >
+        <span class="b3d-hero-pill" data-kingdom="plants"><span aria-hidden="true">&#127807;</span> Plants</span>
+        <span class="b3d-hero-pill" data-kingdom="fungi"><span aria-hidden="true">&#127812;</span> Fungi</span>
+        <span class="b3d-hero-pill" data-kingdom="animals"><span aria-hidden="true">&#128062;</span> Animals</span>
       </div>
     </div>
   </div>
 </section>
 
-{% if hero_asset %}
-<script>
-  (function () {
-    var slot = document.getElementById("hero-slot");
-    if (!slot || !window.Bio3DViewer) return;
-    window.Bio3DViewer.mount(slot, {{ hero_asset | tojson }});
-    var mv = slot.querySelector("model-viewer");
-    if (mv) {
-      mv.setAttribute("auto-rotate", "");
-      mv.setAttribute("auto-rotate-delay", "0");
-      mv.setAttribute("rotation-per-second", "16deg");
-    }
-  })();
-</script>
-{% endif %}
+<script defer src="{{ asset('hero_points.js') }}"></script>
 
 <div class="b3d-section-head">
   <h2>Choose a kingdom</h2>

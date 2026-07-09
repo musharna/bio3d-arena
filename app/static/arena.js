@@ -53,13 +53,11 @@ const qs = () => {
   const p = new URLSearchParams();
   if (cat && cat !== "all") p.set("category", cat);
   if (crit) p.set("criterion", crit);
-  // Thread ?set=... from the page URL when present (e.g. ?set=calibration scopes a session);
-  // otherwise default every fetch to K-wise so 4-up ballots are served where available.
-  // _build_kwise_comparison falls back to a transparent pairwise payload when no task has an
-  // admitted same-paradigm quad, and render() already branches on the resulting shape, so
-  // this default is always safe.
-  const urlSet = new URLSearchParams(location.search).get("set") || "kwise";
-  p.set("set", urlSet);
+  // Baseline arena is plain 1v1 pairwise (matches the design). K-wise 4-up is opt-in only:
+  // thread ?set=... from the page URL when present (e.g. ?set=kwise or ?set=calibration);
+  // with no ?set, /api/next serves a pairwise comparison.
+  const urlSet = new URLSearchParams(location.search).get("set");
+  if (urlSet) p.set("set", urlSet);
   const s = p.toString();
   return s ? "?" + s : "";
 };
@@ -160,19 +158,13 @@ function renderPair(data) {
     refPanel.hidden = refs.length === 0;
   }
   // Shared viewer registry (viewer.js) picks model-viewer vs 3Dmol by format.
-  el("fmt-a").textContent = window.Bio3DViewer.mount(
-    el("slot-a"),
-    data.a,
-    (btn) => flagOutput(data.a.output_id, btn),
-  ).toUpperCase();
-  el("fmt-b").textContent = window.Bio3DViewer.mount(
-    el("slot-b"),
-    data.b,
-    (btn) => flagOutput(data.b.output_id, btn),
-  ).toUpperCase();
+  window.Bio3DViewer.mount(el("slot-a"), data.a, (btn) =>
+    flagOutput(data.a.output_id, btn),
+  );
+  window.Bio3DViewer.mount(el("slot-b"), data.b, (btn) =>
+    flagOutput(data.b.output_id, btn),
+  );
   window.Bio3DViewer.syncPair(el("slot-a"), el("slot-b"));
-  setMachineGeneratedBadge("a", data.a);
-  setMachineGeneratedBadge("b", data.b);
   setAB("a"); // each new pair starts on Model A
   setStatus("");
 }
@@ -189,7 +181,6 @@ function setKwiseVisible(active) {
   if (voteBar) voteBar.style.display = active ? "none" : "";
   if (abToggle) abToggle.style.display = active ? "none" : "";
   el("kwise-grid").hidden = !active;
-  el("kwise-allbad").hidden = !active;
 }
 
 function renderKwise(data) {
@@ -210,21 +201,7 @@ function renderKwise(data) {
     cell.className = "model-col kwise-cell";
     const label = document.createElement("div");
     label.className = "model-label";
-    label.textContent = "Model " + "ABCD"[i] + " ";
-    const fmtChip = document.createElement("span");
-    fmtChip.className = "fmt-chip";
-    label.appendChild(fmtChip);
-    // AUP labeling is display-posture-wide: a commercial-model output must carry the
-    // machine-generated badge in the 4-up grid exactly as it does in the 2-up pair view.
-    if (o.machine_generated) {
-      const badge = document.createElement("span");
-      badge.className = "ai-badge";
-      badge.textContent = "🤖 AI-generated";
-      badge.title = o.attribution
-        ? `Machine-generated — ${o.attribution}`
-        : "Machine-generated";
-      label.appendChild(badge);
-    }
+    label.textContent = "Model " + "ABCD"[i];
     const slot = document.createElement("div");
     slot.className = "viewer-slot";
     const pickBtn = document.createElement("button");
@@ -242,11 +219,8 @@ function renderKwise(data) {
     // Shared viewer registry (viewer.js) picks model-viewer vs 3Dmol by format — same
     // {url, format, output_id} shape _serialize uses for a/b, so the flag callback reuses
     // flagOutput unchanged.
-    fmtChip.textContent = window.Bio3DViewer.mount(slot, o, (btn) =>
-      flagOutput(o.output_id, btn),
-    ).toUpperCase();
+    window.Bio3DViewer.mount(slot, o, (btn) => flagOutput(o.output_id, btn));
   });
-  el("kwise-allbad").onclick = () => submitKvote(data.ballot_id, null);
   setStatus("");
 }
 
@@ -296,17 +270,6 @@ async function submitKvote(ballotId, bestOutputId) {
   } finally {
     busy = false;
   }
-}
-
-// AUP labeling: badge + attribution tooltip on any output produced by a commercial
-// generation model (never on our own assets or redistributable-license scans).
-function setMachineGeneratedBadge(side, output) {
-  const badge = el(`ai-badge-${side}`);
-  if (!badge) return;
-  badge.hidden = !output.machine_generated;
-  badge.title = output.attribution
-    ? `Machine-generated — ${output.attribution}`
-    : "Machine-generated";
 }
 
 async function vote(winner) {
@@ -478,8 +441,6 @@ function showKwiseReveal(reveal) {
       cell.classList.add("is-winner");
     }
   });
-  const allBad = el("kwise-allbad");
-  if (allBad) allBad.disabled = true;
   const btn = el("next-pair-btn");
   if (btn) btn.hidden = false;
   maybeFireConfetti();
@@ -508,8 +469,6 @@ function clearReveal() {
   document
     .querySelectorAll(".kwise-pick-btn")
     .forEach((b) => (b.disabled = false));
-  const allBad = el("kwise-allbad");
-  if (allBad) allBad.disabled = false;
   const btn = el("next-pair-btn");
   if (btn) btn.hidden = true;
   const layer = el("confetti-layer");

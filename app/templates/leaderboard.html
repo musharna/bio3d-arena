@@ -51,10 +51,13 @@
       <h3 class="paradigm-heading">
         {% if sel_paradigm_value %}{{ sel_paradigm_display }}{% else %}Overall — all paradigms{% endif %}
       </h3>
-      <span class="subtle">
+      {# Design (03-leaderboard.png): compact single-line header — title + generator count,
+         with the rated-only toggle pushed to the right. The within-paradigm caveat lives in
+         the "How ranking works" panel, not here. #}
+      <span class="subtle lb-panel-count">
         {{ rows|length }} generator{{ 's' if rows|length != 1 else '' }}
-        {% if sel_paradigm_value %}· scores comparable only within this paradigm{% else %}· within-paradigm comparison is the rigorous read{% endif %}
       </span>
+      {% if total_votes %}<span class="subtle lb-panel-votes mono">&bull; {{ "{:,}".format(total_votes) }} votes</span>{% endif %}
       {% if unrated_count > 0 or show_all %}
       {# Rated-only by default (0-vote generators carry only the default prior BT and flood the
          board); this toggle reveals/hides them. #}
@@ -90,17 +93,15 @@
             </td>
             <td class="gen">
               <span class="lb-avatar" style="--h:{{ r.avatar_hue }}" aria-hidden="true">{{ r.avatar }}</span>
-              <span class="lb-gen-body">
-                <span class="lb-gen-name-row">
-                  <span class="gen-name">{{ r.generator }}</span>
-                  {% if r.provisional %}<span class="cov-badge cov-prov" title="Fewer than {{ firm_vote_threshold }} votes — rank may still shift">provisional</span>{% endif %}
-                </span>
-                {% if r.provenance %}
-                <span class="lb-prov-row">
-                  {% for p in r.provenance %}<span class="lb-prov mono">{{ p }}</span>{% endfor %}
-                </span>
-                {% endif %}
+              <span class="gen-name">{{ r.generator }}</span>
+              {# Prototype: provenance + provisional tags are right-aligned against the BT-score
+                 column, not crammed after the name (which crowds/overflows the row). #}
+              {% if r.provisional or r.provenance %}
+              <span class="lb-gen-tags">
+                {% if r.provisional %}<span class="cov-badge cov-prov" title="Fewer than {{ firm_vote_threshold }} votes — rank may still shift">provisional</span>{% endif %}
+                {% for p in r.provenance %}<span class="lb-prov mono">{{ p }}</span>{% endfor %}
               </span>
+              {% endif %}
             </td>
             <td class="num mono{% if r.rank == 1 %} strong{% endif %}">{{ r.bt_score }}</td>
             <td class="ci-cell">
@@ -178,8 +179,8 @@
       <p class="subtle bias-line">
         Bias audit — left(A) win rate
         <b>{% if bias.left_win_rate is none %}—{% else %}{{ bias.left_win_rate }}{% endif %}</b>
-        (≈0.50 = unbiased) · tie {% if bias.tie_rate is none %}—{% else %}{{ bias.tie_rate }}{% endif %} · bad {% if bias.bad_rate is none %}—{% else %}{{ bias.bad_rate }}{% endif %} ·
-        <a href="/significance?criterion={{ sel_criterion }}&category={{ sel_category }}">significance &amp; full audit →</a>
+        (≈0.50 = unbiased) · tie {% if bias.tie_rate is none %}—{% else %}{{ bias.tie_rate }}{% endif %} · bad {% if bias.bad_rate is none %}—{% else %}{{ bias.bad_rate }}{% endif %}{% if internal_pages() %} ·
+        <a href="/significance?criterion={{ sel_criterion }}&category={{ sel_category }}">significance &amp; full audit →</a>{% endif %}
       </p>
     </div>
   </details>

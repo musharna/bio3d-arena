@@ -71,6 +71,27 @@ init_db()
 APP_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 
+_STATIC_DIR = APP_DIR / "static"
+
+
+def _asset_url(path: str) -> str:
+    """Cache-busting static URL. Appends the file's mtime as ?v= so a changed
+    asset gets a fresh URL — this stops a browser from pairing freshly-deployed
+    HTML with a stale cached JS/CSS (which throws null-element errors when the
+    markup and script drift apart)."""
+    rel = path.lstrip("/")
+    try:
+        version = int((_STATIC_DIR / rel).stat().st_mtime)
+    except OSError:
+        return f"/static/{rel}"
+    return f"/static/{rel}?v={version}"
+
+
+templates.env.globals["asset"] = _asset_url
+# Read live (not the value at import) so tests/deploys can toggle config.INTERNAL_PAGES_ENABLED
+# and both the route guard and the nav conditionals see the same current value.
+templates.env.globals["internal_pages"] = lambda: config.INTERNAL_PAGES_ENABLED
+
 app = FastAPI(title="Bio 3D Arena", version="0.1.0")
 app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
 # Local backend serves assets from disk; the S3 backend serves them from the bucket/CDN.
@@ -581,40 +602,16 @@ def require_admin_query(token: str | None = None) -> None:
     _require_admin(token)
 
 
+def require_internal_pages() -> None:
+    """Dependency for the internal research/analytics pages. On the public instance
+    (config.INTERNAL_PAGES_ENABLED is False) they hard-404, so novel methodology is
+    unpublished — not merely admin-gated — on the public deploy. Read live so a deploy/test
+    toggle of config.INTERNAL_PAGES_ENABLED takes effect without re-importing."""
+    if not config.INTERNAL_PAGES_ENABLED:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
 # ------------------------------------------------------------------- arena UI
-
-
-def _pick_hero_asset(db: Session, spotlight_subjects: list[dict]) -> dict | None:
-    """Pick a featured GLB for the Home hero turntable — query-driven, never a
-    hardcoded output id (the seed DB differs per env, and a fresh/empty DB must
-    fall back to `None` so the template renders the ring-motif placeholder).
-
-    Preference order: a visible, non-gold GLB whose task is one of the curated
-    Spotlight poster-child subjects (most-voted among those); else the
-    most-voted visible non-gold GLB in the whole DB; else `None`.
-    """
-    base = select(ModelOutput).where(
-        ModelOutput.is_gold.is_(False),
-        ModelOutput.hidden_at.is_(None),
-        ModelOutput.asset_format == "glb",
-    )
-    spotlight_titles = [s["task_title"] for s in spotlight_subjects]
-    if spotlight_titles:
-        out = (
-            db.execute(
-                base.join(Task, ModelOutput.task_id == Task.id)
-                .where(Task.title.in_(spotlight_titles))
-                .order_by(ModelOutput.n_comparisons.desc())
-            )
-            .scalars()
-            .first()
-        )
-        if out is not None:
-            return {"url": storage.url_for(out.asset_path), "format": out.asset_format}
-    out = db.execute(base.order_by(ModelOutput.n_comparisons.desc())).scalars().first()
-    if out is None:
-        return None
-    return {"url": storage.url_for(out.asset_path), "format": out.asset_format}
 
 
 def _hero_stats(db: Session) -> dict:
@@ -641,9 +638,6 @@ def home(request: Request, db: Session = Depends(get_db)):
     it's the one screen every visitor should be able to load regardless of scope."""
     from sqlalchemy import func
 
-    from . import spotlight
-
-    hero_asset = _pick_hero_asset(db, spotlight.SPOTLIGHTS)
     stats = _hero_stats(db)
     total_votes = stats["total_votes"]
     models_count = stats["models_count"]
@@ -690,7 +684,6 @@ def home(request: Request, db: Session = Depends(get_db)):
             "tasks_count": tasks_count,
             "kingdoms_live": kingdoms_live,
             "kingdom_cards": kingdom_cards,
-            "hero_asset": hero_asset,
         },
     )
 
@@ -1216,7 +1209,7 @@ def leaderboard(
     # paradigm-filtered) `rows` would make every non-active tab vanish after the first click.
     paradigms_in_rows = sorted({r["paradigm"] for r in all_rows if r.get("paradigm")})
     paradigm_options = [
-        {"value": None, "display": "All paradigms", "tab": "All", "selected": paradigm is None}
+        {"value": None, "display": "All paradigms", "tab": "Overall", "selected": paradigm is None}
     ] + [
         {
             "value": p,
@@ -1484,7 +1477,11 @@ def api_coverage(db: Session = Depends(get_db)):
     return service.coverage_summary(db)
 
 
-@app.get("/procedural", response_class=HTMLResponse)
+@app.get(
+    "/procedural",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def procedural_page(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         request,
@@ -1493,7 +1490,7 @@ def procedural_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
-@app.get("/api/procedural.json")
+@app.get("/api/procedural.json", dependencies=[Depends(require_internal_pages)])
 def api_procedural(db: Session = Depends(get_db)):
     return service.procedural_scorecard(db)
 
@@ -1508,12 +1505,16 @@ def api_dgen(db: Session = Depends(get_db)):
     return service.dgen_trajectory(db)
 
 
-@app.get("/api/fidelity.json")
+@app.get("/api/fidelity.json", dependencies=[Depends(require_internal_pages)])
 def api_fidelity(db: Session = Depends(get_db)):
     return fidelity.fidelity_scorecard(db)
 
 
-@app.get("/fidelity", response_class=HTMLResponse)
+@app.get(
+    "/fidelity",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def fidelity_board(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         request, "fidelity.html", {"board": fidelity.fidelity_scorecard(db)}
@@ -1523,19 +1524,23 @@ def fidelity_board(request: Request, db: Session = Depends(get_db)):
 # --------------------------------------------------------- significance + bias
 
 
-@app.get("/api/significance")
+@app.get("/api/significance", dependencies=[Depends(require_internal_pages)])
 def api_significance(
     db: Session = Depends(get_db), criterion: str = "overall", category: str = "all"
 ):
     return service.compute_significance(db, criterion, _resolve_category_id(db, category))
 
 
-@app.get("/api/bias")
+@app.get("/api/bias", dependencies=[Depends(require_internal_pages)])
 def api_bias(db: Session = Depends(get_db)):
     return service.compute_bias(db)
 
 
-@app.get("/significance", response_class=HTMLResponse)
+@app.get(
+    "/significance",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def significance_page(
     request: Request,
     db: Session = Depends(get_db),
@@ -1901,7 +1906,11 @@ def _default_benchmark_task_id(db: Session, category_ids: set[int] | None = None
     return tasks[0].id
 
 
-@app.get("/benchmark", response_class=HTMLResponse)
+@app.get(
+    "/benchmark",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int | None = None):
     from . import recon_service
     from .models import Task
@@ -1945,7 +1954,7 @@ def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int
     )
 
 
-@app.get("/api/benchmark")
+@app.get("/api/benchmark", dependencies=[Depends(require_internal_pages)])
 def api_benchmark(db: Session = Depends(get_db), task_id: int | None = None):
     from . import recon_service
 
@@ -1976,7 +1985,11 @@ def export_dataset(request: Request, db: Session = Depends(get_db)):
     return dataset_mod.build_preference_records(db, kingdom=request.state.kingdom)
 
 
-@app.get("/difficulty", response_class=HTMLResponse)
+@app.get(
+    "/difficulty",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def difficulty_page(request: Request, db: Session = Depends(get_db)):
     """Render the per-tier objective scorecard + the cross-tier degradation gradient."""
     from .models import ReconTask, Task, TaskDifficulty
@@ -2046,7 +2059,7 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
-@app.get("/api/difficulty.json")
+@app.get("/api/difficulty.json", dependencies=[Depends(require_internal_pages)])
 def api_difficulty(db: Session = Depends(get_db)):
     """Per-tier objective scorecard (× generator and × paradigm) over existing metrics, plus the
     recon-reliability triage flags (taxa whose recon completeness is far below text→3D)."""
@@ -2062,7 +2075,7 @@ def api_difficulty(db: Session = Depends(get_db)):
 # ----------------------------------------------------------- Mode-C trait scoring
 
 
-@app.get("/api/trait_scores.json")
+@app.get("/api/trait_scores.json", dependencies=[Depends(require_internal_pages)])
 def api_trait_scores(db: Session = Depends(get_db)):
     """Mode-C botanical-accuracy: generator leaderboard + per-output scores."""
     from .models import TraitScore
@@ -2079,7 +2092,7 @@ def api_trait_scores(db: Session = Depends(get_db)):
     return {"generators": service.trait_leaderboard(db), "outputs": outputs}
 
 
-@app.get("/api/traits.json")
+@app.get("/api/traits.json", dependencies=[Depends(require_internal_pages)])
 def api_traits(db: Session = Depends(get_db)):
     """The literature-sourced trait rubrics (one per taxon/task)."""
     from .models import TraitRubric
@@ -2094,7 +2107,11 @@ def api_traits(db: Session = Depends(get_db)):
     return {"rubrics": rubrics}
 
 
-@app.get("/trait/{output_id}", response_class=HTMLResponse)
+@app.get(
+    "/trait/{output_id}",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def trait_scorecard_page(output_id: int, request: Request, db: Session = Depends(get_db)):
     """Per-output Mode-C scorecard: each verdict joined to its rubric trait + the score."""
     from .models import TraitRubric, TraitScore, TraitVerdict

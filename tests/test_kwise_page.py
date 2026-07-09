@@ -9,4 +9,5 @@ def test_arena_page_has_kwise_scaffold():
     r = c.get("/arena")
     assert r.status_code == 200
     assert "kwise-grid" in r.text  # the 4-up container the JS toggles
-    assert "kwise-allbad" in r.text  # the all-bad button
+    # (the "all-bad" button was removed as off-design; K-wise voters pick a best via
+    # the per-cell "Pick this one" buttons rendered by arena.js)

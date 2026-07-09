@@ -3,11 +3,14 @@
 {% block content %}
 <section class="board bm">
   <header class="b3d-page-head">
-    <h1>Recon benchmark {% include "_scope_pill.html" %}</h1>
+    <h1>Recon benchmark
+      <span class="b3d-head-tagline">— objective accuracy vs ground-truth scan</span>
+    </h1>
+    <div class="b3d-head-pill">{% include "_scope_pill.html" %}</div>
     <p class="b3d-page-lede">
-      Mode-B: single-image→3D scored against held-out GT plant scans (chamfer /
-      F-score / coverage). Distinct from the Mode-A perceptual vote; the
-      <b>agreement</b> table shows where the metric and the votes disagree.
+      Single-image → 3D scored against held-out GT plant scans (chamfer / F-score /
+      coverage). The <b>agreement</b> column shows where the geometric metric and the
+      perceptual vote disagree.
     </p>
   </header>
 

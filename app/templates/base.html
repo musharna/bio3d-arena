@@ -22,8 +22,8 @@
         document.documentElement.setAttribute("data-theme", effective);
       } catch (e) {}
     </script>
-    <link rel="stylesheet" href="/static/style.css" />
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <link rel="stylesheet" href="{{ asset('style.css') }}" />
+    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}" />
     <!-- Viewer registry (loaded once, used per asset format):
          model-viewer → GLB/GLTF meshes; 3Dmol.js → PDB/mmCIF molecular structures -->
     <script
@@ -31,8 +31,8 @@
       src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"
     ></script>
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.4.2/build/3Dmol-min.js"></script>
-    <script src="/static/viewer.js"></script>
-    <script defer src="/static/shell.js"></script>
+    <script src="{{ asset('viewer.js') }}"></script>
+    <script defer src="{{ asset('shell.js') }}"></script>
   </head>
   <body>
     {% set path = request.url.path %} {% set kingdom = request.state.kingdom |
@@ -72,7 +72,8 @@
             </svg>
           </a>
           <span class="b3d-wordmark"
-            >Bio <span class="b3d-accent-text">3D</span></span
+            ><span class="b3d-word-main">Bio</span
+            ><span class="b3d-accent-text">3D</span></span
           >
           <button
             id="b3d-collapse"
@@ -201,6 +202,7 @@
               ></span>
               <span class="b3d-nav-label">Models</span>
             </a>
+            {% if internal_pages() %}
             <a
               href="/difficulty"
               class="b3d-nav-link{{ ' is-active' if path == '/difficulty' else '' }}"
@@ -236,10 +238,12 @@
               ></span>
               <span class="b3d-nav-label">Difficulty</span>
             </a>
+            {% endif %}
           </div>
 
           <div class="b3d-navgroup">
             <div class="b3d-navheading">Analysis</div>
+            {% if internal_pages() %}
             <a
               href="/benchmark"
               class="b3d-nav-link{{ ' is-active' if path == '/benchmark' else '' }}"
@@ -283,6 +287,7 @@
               ></span>
               <span class="b3d-nav-label">Benchmark</span>
             </a>
+            {% endif %}
             <a
               href="/coverage"
               class="b3d-nav-link{{ ' is-active' if path == '/coverage' else '' }}"
@@ -318,6 +323,7 @@
               ></span>
               <span class="b3d-nav-label">Coverage</span>
             </a>
+            {% if internal_pages() %}
             <a
               href="/significance"
               class="b3d-nav-link{{ ' is-active' if path == '/significance' else '' }}"
@@ -347,6 +353,7 @@
               ></span>
               <span class="b3d-nav-label">Significance</span>
             </a>
+            {% endif %}
           </div>
 
           <div class="b3d-navgroup">
@@ -531,10 +538,13 @@
       </aside>
 
       <div class="b3d-content">
+        {#- Design: the home/landing route has NO topbar — no kingdom scope pill and no
+           secondary nav; content starts at the hero eyebrow. The kbar is a data-page chrome. -#}
+        {% if path != '/' %}
         <div class="b3d-kbar">
           <div class="b3d-kbar-left">
             <span class="b3d-kbar-label">Kingdom</span>
-            {% set kingdom_meta = {"all": ("\U0001F9EC", "All kingdoms"),
+            {% set kingdom_meta = {"all": ("\U0001F9EC", "All"),
             "plants": ("\U0001F33F", "Plants"), "fungi": ("\U0001F344",
             "Fungi"), "animals": ("\U0001F43E", "Animals")} %} {% set
             active_kingdom = kingdom if kingdom in kingdom_meta else "all" %}
@@ -553,7 +563,7 @@
                   >{{ active_meta[1] }}</span
                 >
                 <span class="b3d-kdrop-caret" aria-hidden="true"
-                  >&#9662;</span
+                  >&#9656;</span
                 >
               </button>
               <div
@@ -593,6 +603,7 @@
             </nav>
           </div>
         </div>
+        {% endif %}
 
         <main class="b3d-main">{% block content %}{% endblock %}</main>
 

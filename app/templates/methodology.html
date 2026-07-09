@@ -3,7 +3,7 @@
 {% block content %}
 <section class="board">
   <header class="b3d-page-head">
-    <h1>How the arena works {% include "_scope_pill.html" %}</h1>
+    <h1>How the arena works</h1>
     <p class="b3d-page-lede">
       Every ranking traces back to a simple, auditable loop: a real specimen,
       identical inputs, anonymous pairwise votes, and a statistical model that turns
@@ -105,10 +105,12 @@
 
   <div class="meth-panel prose">
     <h3>Bias audit</h3>
+    {% if internal_pages() %}
     <p>The <a href="/significance">significance page</a> publishes a live bias audit:
       the left(A) win rate (≈0.50 means no position bias), tie/bad rates, gold
       pass-rate, low-trust session count, and any cross-format comparisons (a
       format-confound risk).</p>
+    {% endif %}
     <p class="subtle">Gold/decoy assets are excluded from matchmaking and from all
       rankings — they exist only to measure voter trust.</p>
   </div>
