@@ -55,9 +55,17 @@ reconstruction benchmark{% endblock %} {% block content %}
             data-plants="{{ asset('hero/plants.json') }}"
             data-fungi="{{ asset('hero/fungi.json') }}"
             data-animals="{{ asset('hero/animals.json') }}"
+            data-plants-species="Zea mays"
+            data-fungi-species="Amanita muscaria"
+            data-animals-species="Canis lupus familiaris"
           ></canvas>
         </div>
       </div>
+      {#- Scientific name of the specimen currently on the turntable; hero_points.js swaps it
+         in sync with the model/pill cycle (data-*-species / data-*-common on the canvas). -#}
+      <p class="b3d-hero-species" id="hero-species" aria-live="polite">
+        <em>Zea mays</em>
+      </p>
       <span class="b3d-hero-viz-caption"
         >drag to rotate &middot; real point cloud</span
       >

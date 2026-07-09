@@ -2880,6 +2880,39 @@ details.group[open] > summary.group-title::before {
   font-size: 10.5px;
   color: var(--faint);
 }
+/* Scientific name of the specimen on the turntable; swapped by hero_points.js in lock-step
+   with the model/pill cycle. */
+.b3d-hero-species {
+  margin: 0;
+  text-align: center;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--faint);
+}
+.b3d-hero-species em {
+  font-style: italic;
+  font-weight: 600;
+  color: var(--text);
+}
+.b3d-hero-species.is-in {
+  animation: b3dHeroSpeciesIn 0.5s ease;
+}
+@keyframes b3dHeroSpeciesIn {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .b3d-hero-species.is-in {
+    animation: none;
+  }
+}
 .b3d-hero-kingdom-pills {
   display: flex;
   flex-wrap: wrap;

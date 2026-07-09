@@ -125,7 +125,7 @@
     pausedFor = 0,
     pauseStart = 0;
 
-  // ---- kingdom pills that light up with the model currently on the turntable ----
+  // ---- kingdom pills + scientific name that track the model currently on the turntable ----
   var pills = {};
   Array.prototype.forEach.call(
     document.querySelectorAll(".b3d-hero-pill[data-kingdom]"),
@@ -133,11 +133,33 @@
       pills[el.getAttribute("data-kingdom")] = el;
     },
   );
+  // Per-kingdom scientific name from the canvas data-*-species attrs.
+  var species = {
+    plants: canvas.getAttribute("data-plants-species"),
+    fungi: canvas.getAttribute("data-fungi-species"),
+    animals: canvas.getAttribute("data-animals-species"),
+  };
+  var speciesEl = document.getElementById("hero-species");
+  function setActiveSpecies(k) {
+    var sci = species[k];
+    if (!speciesEl || !sci) return;
+    var em = document.createElement("em");
+    em.textContent = sci;
+    speciesEl.textContent = "";
+    speciesEl.appendChild(em);
+    if (!reduce) {
+      // retrigger the fade-in each swap
+      speciesEl.classList.remove("is-in");
+      void speciesEl.offsetWidth;
+      speciesEl.classList.add("is-in");
+    }
+  }
   var activeKingdom = null;
   function setActivePill(k) {
     if (k === activeKingdom) return;
     activeKingdom = k;
     for (var key in pills) pills[key].classList.toggle("is-active", key === k);
+    setActiveSpecies(k); // scientific name swaps in lock-step with the pill highlight
   }
   setActivePill("plants"); // initial highlight, before the clouds finish loading
 
