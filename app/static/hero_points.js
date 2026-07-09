@@ -251,5 +251,8 @@
         clouds[k] = null;
       });
   });
-  if (!reduce) requestAnimationFrame(frame);
+  // Always draw at least one frame up front: non-reduce starts the loop; reduce paints the
+  // gizmo (and plants if already loaded) immediately, so a failed plants fetch never leaves
+  // a permanently blank canvas. The reduce path re-fires above once plants resolves.
+  requestAnimationFrame(frame);
 })();

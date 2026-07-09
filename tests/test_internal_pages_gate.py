@@ -15,6 +15,19 @@ from app.main import app
 # The six Tier-C page routes (trait/{id} tested separately — it takes a path param).
 INTERNAL_PATHS = ["/benchmark", "/significance", "/difficulty", "/fidelity", "/procedural"]
 
+# The JSON APIs backing those pages carry the SAME sensitive data, so they must be gated too —
+# otherwise the page 404s but `curl /api/fidelity.json` still leaks the full scorecard.
+INTERNAL_APIS = [
+    "/api/procedural.json",
+    "/api/fidelity.json",
+    "/api/significance",
+    "/api/bias",
+    "/api/benchmark",
+    "/api/difficulty.json",
+    "/api/trait_scores.json",
+    "/api/traits.json",
+]
+
 
 @pytest.fixture
 def client():
@@ -32,6 +45,21 @@ def test_trait_route_404_on_public_instance(client, monkeypatch):
     monkeypatch.setattr(config, "INTERNAL_PAGES_ENABLED", False, raising=False)
     # Guard runs before the handler, so it 404s regardless of whether output 1 exists.
     assert client.get("/trait/1").status_code == 404
+
+
+def test_internal_apis_404_on_public_instance(client, monkeypatch):
+    # The data endpoints must be gated, not just the HTML pages — else the page 404s but the
+    # backing /api/*.json still returns the full scorecard on the public deploy.
+    monkeypatch.setattr(config, "INTERNAL_PAGES_ENABLED", False, raising=False)
+    for path in INTERNAL_APIS:
+        r = client.get(path)
+        assert r.status_code == 404, f"{path} must 404 on public instance, got {r.status_code}"
+
+
+def test_internal_apis_served_on_internal_instance(client, monkeypatch):
+    monkeypatch.setattr(config, "INTERNAL_PAGES_ENABLED", True, raising=False)
+    for path in INTERNAL_APIS:
+        assert client.get(path).status_code != 404, f"{path} must be served on internal instance"
 
 
 def test_internal_pages_served_on_internal_instance(client, monkeypatch):

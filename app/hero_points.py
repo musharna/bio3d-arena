@@ -43,7 +43,15 @@ def _accessor(js: dict, binb: bytes, idx: int) -> np.ndarray:
     bv = js["bufferViews"][a["bufferView"]]
     off = bv.get("byteOffset", 0) + a.get("byteOffset", 0)
     nc = _NC[a["type"]]
-    arr = np.frombuffer(binb, dtype=_CT[a["componentType"]], count=a["count"] * nc, offset=off)
+    dtype = _CT[a["componentType"]]
+    # This reader assumes tightly-packed accessors. Fail loud on an interleaved bufferView
+    # (POSITION sharing a strided view with NORMAL/UV) rather than silently reading wrong bytes.
+    stride = bv.get("byteStride")
+    if stride and stride != np.dtype(dtype).itemsize * nc:
+        raise ValueError(
+            f"interleaved GLB not supported (byteStride={stride}); accessor {idx} is strided"
+        )
+    arr = np.frombuffer(binb, dtype=dtype, count=a["count"] * nc, offset=off)
     return arr.reshape(a["count"], nc).astype(np.float64)
 
 

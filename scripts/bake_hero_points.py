@@ -92,15 +92,15 @@ def main() -> int:
         for kingdom in ("fungi", "animals"):
             pinned = CURATED_RECON.get(kingdom)
             if pinned and (root / pinned).exists():
-                positions_v, _ = hero_points.mesh_arrays((root / pinned).read_bytes())
-                rel, nverts = pinned, len(positions_v)
+                rel = pinned
             else:
                 pick = _top_reconstruction_glb(db, kingdom)
                 if pick is None:
                     print(f"FATAL: no reconstruction mesh found for {kingdom}", file=sys.stderr)
                     return 1
-                rel, nverts = pick
+                rel = pick[0]
             positions, triangles = hero_points.mesh_arrays((root / rel).read_bytes())
+            nverts = len(positions)
             iso = kingdom in ISOLATE_MAIN
             # sample more when isolating, so the kept component still yields a full 5k cloud;
             # a tighter eps (3x) also severs thin artifact tails weakly bridged to the body.

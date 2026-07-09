@@ -1490,7 +1490,7 @@ def procedural_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
-@app.get("/api/procedural.json")
+@app.get("/api/procedural.json", dependencies=[Depends(require_internal_pages)])
 def api_procedural(db: Session = Depends(get_db)):
     return service.procedural_scorecard(db)
 
@@ -1505,7 +1505,7 @@ def api_dgen(db: Session = Depends(get_db)):
     return service.dgen_trajectory(db)
 
 
-@app.get("/api/fidelity.json")
+@app.get("/api/fidelity.json", dependencies=[Depends(require_internal_pages)])
 def api_fidelity(db: Session = Depends(get_db)):
     return fidelity.fidelity_scorecard(db)
 
@@ -1524,14 +1524,14 @@ def fidelity_board(request: Request, db: Session = Depends(get_db)):
 # --------------------------------------------------------- significance + bias
 
 
-@app.get("/api/significance")
+@app.get("/api/significance", dependencies=[Depends(require_internal_pages)])
 def api_significance(
     db: Session = Depends(get_db), criterion: str = "overall", category: str = "all"
 ):
     return service.compute_significance(db, criterion, _resolve_category_id(db, category))
 
 
-@app.get("/api/bias")
+@app.get("/api/bias", dependencies=[Depends(require_internal_pages)])
 def api_bias(db: Session = Depends(get_db)):
     return service.compute_bias(db)
 
@@ -1954,7 +1954,7 @@ def benchmark_page(request: Request, db: Session = Depends(get_db), task_id: int
     )
 
 
-@app.get("/api/benchmark")
+@app.get("/api/benchmark", dependencies=[Depends(require_internal_pages)])
 def api_benchmark(db: Session = Depends(get_db), task_id: int | None = None):
     from . import recon_service
 
@@ -2059,7 +2059,7 @@ def difficulty_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
-@app.get("/api/difficulty.json")
+@app.get("/api/difficulty.json", dependencies=[Depends(require_internal_pages)])
 def api_difficulty(db: Session = Depends(get_db)):
     """Per-tier objective scorecard (× generator and × paradigm) over existing metrics, plus the
     recon-reliability triage flags (taxa whose recon completeness is far below text→3D)."""
@@ -2075,7 +2075,7 @@ def api_difficulty(db: Session = Depends(get_db)):
 # ----------------------------------------------------------- Mode-C trait scoring
 
 
-@app.get("/api/trait_scores.json")
+@app.get("/api/trait_scores.json", dependencies=[Depends(require_internal_pages)])
 def api_trait_scores(db: Session = Depends(get_db)):
     """Mode-C botanical-accuracy: generator leaderboard + per-output scores."""
     from .models import TraitScore
@@ -2092,7 +2092,7 @@ def api_trait_scores(db: Session = Depends(get_db)):
     return {"generators": service.trait_leaderboard(db), "outputs": outputs}
 
 
-@app.get("/api/traits.json")
+@app.get("/api/traits.json", dependencies=[Depends(require_internal_pages)])
 def api_traits(db: Session = Depends(get_db)):
     """The literature-sourced trait rubrics (one per taxon/task)."""
     from .models import TraitRubric
