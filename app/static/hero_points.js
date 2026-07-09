@@ -133,35 +133,20 @@
       pills[el.getAttribute("data-kingdom")] = el;
     },
   );
-  // Per-kingdom { sci, common } from the canvas data-*-species / data-*-common attrs.
+  // Per-kingdom scientific name from the canvas data-*-species attrs.
   var species = {
-    plants: {
-      sci: canvas.getAttribute("data-plants-species"),
-      common: canvas.getAttribute("data-plants-common"),
-    },
-    fungi: {
-      sci: canvas.getAttribute("data-fungi-species"),
-      common: canvas.getAttribute("data-fungi-common"),
-    },
-    animals: {
-      sci: canvas.getAttribute("data-animals-species"),
-      common: canvas.getAttribute("data-animals-common"),
-    },
+    plants: canvas.getAttribute("data-plants-species"),
+    fungi: canvas.getAttribute("data-fungi-species"),
+    animals: canvas.getAttribute("data-animals-species"),
   };
   var speciesEl = document.getElementById("hero-species");
   function setActiveSpecies(k) {
-    var sp = species[k];
-    if (!speciesEl || !sp || !sp.sci) return;
+    var sci = species[k];
+    if (!speciesEl || !sci) return;
     var em = document.createElement("em");
-    em.textContent = sp.sci;
+    em.textContent = sci;
     speciesEl.textContent = "";
     speciesEl.appendChild(em);
-    if (sp.common) {
-      var c = document.createElement("span");
-      c.className = "b3d-hero-species-common";
-      c.textContent = " " + sp.common;
-      speciesEl.appendChild(c);
-    }
     if (!reduce) {
       // retrigger the fade-in each swap
       speciesEl.classList.remove("is-in");
