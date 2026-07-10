@@ -385,6 +385,12 @@ function flash(msg) {
 // already committed server-side.
 
 function disableVoteBar(disabled) {
+  // During the post-vote reveal the vote bar is HIDDEN, so "Next pair →" replaces it (per the
+  // arena.html "in place of" intent). Disabling alone left the buttons on screen looking
+  // clickable — nothing visibly happened after a vote. Also flip the `disabled` state so a
+  // still-focused button can't be keyboard-activated while hidden.
+  const bar = document.querySelector(".vote-bar");
+  if (bar) bar.style.display = disabled ? "none" : "";
   document
     .querySelectorAll(".vote-bar .vote-btn")
     .forEach((b) => (b.disabled = disabled));
