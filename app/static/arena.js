@@ -12,11 +12,10 @@ const el = (id) => document.getElementById(id);
 const canFlag = () =>
   document.querySelector(".arena")?.dataset.canFlag === "true";
 
-// First-visit onboarding banner: shown once, state persisted in localStorage. Fail-quiet.
+// First-visit onboarding card: shown once, state persisted in localStorage. Fail-quiet.
 (function initOnboarding() {
   const banner = document.getElementById("onboard-banner");
-  const dismiss = document.getElementById("onboard-dismiss");
-  if (!banner || !dismiss) return;
+  if (!banner) return;
   let seen = true;
   try {
     seen = !!localStorage.getItem("bio3d_onboarded");
@@ -24,13 +23,18 @@ const canFlag = () =>
     seen = true; // localStorage unavailable → don't show, never break the arena
   }
   if (!seen) banner.hidden = false;
-  dismiss.addEventListener("click", () => {
+  const close = () => {
     banner.hidden = true;
     try {
       localStorage.setItem("bio3d_onboarded", "1");
     } catch (e) {
       /* ignore */
     }
+  };
+  // Either the ✕ or the "Start voting" CTA dismisses it.
+  ["onboard-dismiss", "onboard-start"].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.addEventListener("click", close);
   });
 })();
 

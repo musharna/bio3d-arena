@@ -963,30 +963,102 @@ textarea:focus-visible,
     opacity: 0.55;
   }
 }
-.onboard-banner:not([hidden]) {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+/* First-run onboarding card — inline, non-blocking, shown once (arena.js initOnboarding). */
+.onboard-card:not([hidden]) {
+  position: relative;
   background: var(--panel);
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
   border-radius: var(--r-card);
-  padding: 0.7rem 1rem;
-  margin-bottom: 1rem;
-  color: var(--muted);
-  font-size: 0.95rem;
+  padding: 1.1rem 1.3rem 1.2rem;
+  margin-bottom: 1.1rem;
 }
-.onboard-banner strong {
+.onboard-eyebrow {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+  margin: 0 0 0.2rem;
+}
+.onboard-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1.15rem;
+  margin: 0 0 0.35rem;
   color: var(--text);
 }
+.onboard-lede {
+  margin: 0 0 0.8rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  max-width: 62ch;
+}
+.onboard-steps {
+  list-style: none;
+  margin: 0 0 0.9rem;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+.onboard-steps li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.onboard-steps strong {
+  color: var(--text);
+}
+.onboard-step-n {
+  flex-shrink: 0;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--accent) 18%, var(--panel2));
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.75rem;
+  font-family: "IBM Plex Mono", monospace;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+}
+.onboard-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.onboard-keys {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.onboard-start {
+  background: var(--accent);
+  border: none;
+  border-radius: var(--r-ctl);
+  color: oklch(0.98 0.01 258);
+  font-weight: 600;
+  font-size: 0.88rem;
+  padding: 0.5rem 1.05rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.onboard-start:hover {
+  filter: brightness(1.08);
+}
 .onboard-dismiss {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.7rem;
   background: none;
   border: none;
   color: var(--muted);
   font-size: 1.1rem;
   cursor: pointer;
-  flex-shrink: 0;
 }
 .onboard-dismiss:hover {
   color: var(--text);
