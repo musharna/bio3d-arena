@@ -388,7 +388,10 @@ function flash(msg) {
 // Post-vote engagement: append the model's current overall leaderboard standing to the revealed
 // name when known (unrated models omit it) — e.g. "TRELLIS via fal · #2/24".
 function revLabel(info) {
-  return info.rank ? `${info.name} · #${info.rank}/${info.of}` : info.name;
+  if (!info.rank) return info.name;
+  // "provisional" when the rank is backed by few votes — don't let an early rank read as settled.
+  const prov = info.provisional ? " · provisional" : "";
+  return `${info.name} · #${info.rank}/${info.of}${prov}`;
 }
 
 // Running "votes cast in this browser" counter — a light progress loop. Fail-quiet: a blocked
