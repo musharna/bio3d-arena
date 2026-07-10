@@ -271,10 +271,10 @@ async function submitKvote(ballotId, bestOutputId) {
       // each card in place with its real name and marks the pick, same grid stays on screen.
       pendingNext = data.next;
       showKwiseReveal(data.reveal);
-      flash("Pick recorded ✓");
+      flashVoted("Pick recorded");
     } else if (data.next) {
       render(data.next);
-      flash("Pick recorded ✓");
+      flashVoted("Pick recorded");
     } else {
       setStatus("Pick recorded. No more comparisons for this filter.");
       setKwiseVisible(false);
@@ -314,7 +314,7 @@ async function vote(winner) {
       // regular (unscoped) builder, so ignore it and re-fetch through the
       // mode-aware path (qs threads ?set). loadNext handles the `done` payload.
       // No reveal in session mode — it re-fetches straight through.
-      flash("Vote recorded ✓");
+      flashVoted();
       await loadNext();
     } else if (data.reveal) {
       // Non-gold vote: hold `next` until "Next pair" is clicked, and clear `current` so a
@@ -323,10 +323,10 @@ async function vote(winner) {
       current = null;
       pendingNext = data.next;
       showReveal(data.reveal);
-      flash("Vote recorded ✓");
+      flashVoted();
     } else if (data.next) {
       render(data.next);
-      flash("Vote recorded ✓");
+      flashVoted();
     } else {
       setStatus("Vote recorded. No more comparisons for this filter.");
       current = null;
@@ -378,6 +378,31 @@ function flash(msg) {
   setTimeout(() => s.classList.remove("flash"), 700);
 }
 
+// Post-vote engagement: append the model's current overall leaderboard standing to the revealed
+// name when known (unrated models omit it) — e.g. "TRELLIS via fal · #2/24".
+function revLabel(info) {
+  return info.rank ? `${info.name} · #${info.rank}/${info.of}` : info.name;
+}
+
+// Running "votes cast in this browser" counter — a light progress loop. Fail-quiet: a blocked
+// localStorage must never break the confirmation.
+function bumpVotes() {
+  try {
+    const n =
+      (parseInt(localStorage.getItem("bio3d_votes_cast") || "0", 10) || 0) + 1;
+    localStorage.setItem("bio3d_votes_cast", String(n));
+    return n;
+  } catch (_) {
+    return 0;
+  }
+}
+
+function flashVoted(label) {
+  const n = bumpVotes();
+  const base = label || "Vote recorded";
+  flash(n ? `${base} ✓ · ${n} cast` : `${base} ✓`);
+}
+
 // ------------------------------------------------------------------ post-vote reveal (Feature C)
 // Purely additive fanfare on top of the existing vote/kvote flows: reveals the real model
 // names + rank + gold winner border, then gates advancing on an explicit "Next pair" click.
@@ -414,7 +439,7 @@ function showReveal(reveal) {
     const chipEl = el(`rank-chip-${side}`);
     const info = reveal[side];
     if (nameEl && info) {
-      nameEl.textContent = info.name;
+      nameEl.textContent = revLabel(info);
       nameEl.hidden = false;
     }
     if (chipEl) {
@@ -452,7 +477,7 @@ function showKwiseReveal(reveal) {
       if (label) label.appendChild(pill);
       else cell.appendChild(pill);
     }
-    pill.textContent = info.name;
+    pill.textContent = revLabel(info);
     pill.hidden = false;
     if (
       reveal.best_output_id != null &&
