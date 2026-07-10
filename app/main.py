@@ -102,6 +102,17 @@ if not storage.remote:
 SESSION_COOKIE = "bio3d_session"
 
 
+def _client_ip(request: Request) -> str:
+    """Resolve the client IP for per-IP rate limiting. X-Forwarded-For is trusted ONLY behind a
+    known proxy (config.TRUST_FORWARDED_FOR) — an untrusted client can spoof the header to dodge
+    the limit; otherwise the socket peer address is authoritative."""
+    if config.TRUST_FORWARDED_FOR:
+        xff = request.headers.get("x-forwarded-for", "")
+        if xff.strip():
+            return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 @app.middleware("http")
 async def ensure_session(request: Request, call_next):
     """Attach an anonymous session id (cookie) used for light dedup + history."""
@@ -110,6 +121,7 @@ async def ensure_session(request: Request, call_next):
     if is_new:
         sid = uuid.uuid4().hex
     request.state.session_id = sid
+    request.state.client_ip = _client_ip(request)
     from . import auth
 
     request.state.login_enabled = auth._login_enabled()
@@ -756,8 +768,10 @@ def api_vote(
     # 1. Human verification (no-op unless REQUIRE_CAPTCHA is enabled).
     if not integrity.verify_captcha(x_captcha_token):
         raise HTTPException(403, "Captcha verification required/failed")
-    # 2. Rate limiting.
+    # 2. Rate limiting — per session AND per IP (the IP layer caps cookie-reset farming).
     if not integrity.check_rate_limit(sid):
+        raise HTTPException(429, "Rate limit exceeded — slow down")
+    if not integrity.check_ip_rate_limit(request.state.client_ip):
         raise HTTPException(429, "Rate limit exceeded — slow down")
 
     comparison = db.get(Comparison, vote_in.comparison_id)
@@ -819,6 +833,8 @@ def api_kvote(
     if not integrity.verify_captcha(x_captcha_token):
         raise HTTPException(403, "Captcha verification required/failed")
     if not integrity.check_rate_limit(sid):
+        raise HTTPException(429, "Rate limit exceeded — slow down")
+    if not integrity.check_ip_rate_limit(request.state.client_ip):
         raise HTTPException(429, "Rate limit exceeded — slow down")
     ballot = db.get(KBallot, kvote_in.ballot_id)
     if ballot is None:

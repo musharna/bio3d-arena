@@ -28,13 +28,14 @@ class InMemoryRateLimiter:
     def __init__(self) -> None:
         self._buckets: dict[str, deque[float]] = defaultdict(deque)
 
-    def allow(self, session_id: str) -> bool:
+    def allow(self, key: str, limit: int | None = None) -> bool:
+        limit = config.VOTE_RATE_LIMIT if limit is None else limit
         now = time.monotonic()
-        dq = self._buckets[session_id]
+        dq = self._buckets[key]
         cutoff = now - config.VOTE_RATE_WINDOW
         while dq and dq[0] < cutoff:
             dq.popleft()
-        if len(dq) >= config.VOTE_RATE_LIMIT:
+        if len(dq) >= limit:
             return False
         dq.append(now)
         return True
@@ -51,15 +52,16 @@ class RedisRateLimiter:
 
         self._redis = redis.Redis.from_url(redis_url)
 
-    def allow(self, session_id: str) -> bool:
+    def allow(self, key: str, limit: int | None = None) -> bool:
+        limit = config.VOTE_RATE_LIMIT if limit is None else limit
         window = int(config.VOTE_RATE_WINDOW)
         # Bucket key per window slot → fixed-window counter with auto-expiry.
         slot = int(time.time()) // window
-        key = f"bio3d:rl:{session_id}:{slot}"
-        count = self._redis.incr(key)
+        rkey = f"bio3d:rl:{key}:{slot}"
+        count = self._redis.incr(rkey)
         if count == 1:
-            self._redis.expire(key, window)
-        return count <= config.VOTE_RATE_LIMIT
+            self._redis.expire(rkey, window)
+        return count <= limit
 
     def reset(self) -> None:  # best-effort; used by tests (not against real redis)
         pass
@@ -71,8 +73,14 @@ def _limiter():
 
 
 def check_rate_limit(session_id: str) -> bool:
-    """Returns True if the vote is allowed, False if over the limit."""
+    """Returns True if the vote is allowed, False if over the per-session limit."""
     return _limiter().allow(session_id)
+
+
+def check_ip_rate_limit(ip: str) -> bool:
+    """Per-IP limit (own `ip:` namespace, more generous cap) — caps throughput even when a farmer
+    clears their session cookie. Returns True if allowed, False if over IP_VOTE_RATE_LIMIT."""
+    return _limiter().allow(f"ip:{ip}", limit=config.IP_VOTE_RATE_LIMIT)
 
 
 def reset_rate_limits() -> None:

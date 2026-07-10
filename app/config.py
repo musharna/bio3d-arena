@@ -35,6 +35,17 @@ JUDGE_PRIOR_FLOOR = float(os.environ.get("BIO3D_JUDGE_PRIOR_FLOOR", "0.5"))
 # Rate limiting: at most VOTE_RATE_LIMIT votes per VOTE_RATE_WINDOW seconds per session.
 VOTE_RATE_LIMIT = int(os.environ.get("BIO3D_VOTE_RATE_LIMIT", "60"))
 VOTE_RATE_WINDOW = float(os.environ.get("BIO3D_VOTE_RATE_WINDOW", "60"))
+# Second rate-limit layer keyed by client IP (same window). Caps throughput even when a farmer
+# clears their session cookie to reset the per-session limit. Deliberately more generous than the
+# per-session cap so NAT'd users (office/uni sharing one IP) aren't throttled as a group.
+IP_VOTE_RATE_LIMIT = int(os.environ.get("BIO3D_IP_VOTE_RATE_LIMIT", "300"))
+# Only trust X-Forwarded-For behind a known proxy (HF Spaces, Cloudflare) — otherwise a client
+# can spoof it to dodge the per-IP limit. Off by default → use the socket peer address.
+TRUST_FORWARDED_FOR = os.environ.get("BIO3D_TRUST_FORWARDED_FOR", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 # Probability of serving a gold-standard attention-check pair instead of a real one.
 GOLD_RATE = float(os.environ.get("BIO3D_GOLD_RATE", "0.1"))
 # Sessions below this trust score are excluded from the authoritative BT leaderboard.
