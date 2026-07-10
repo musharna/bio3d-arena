@@ -20,12 +20,7 @@ leaderboards.{% endblock %} {% block content %}
     </div>
   </div>
 
-  <div class="onboard-banner" id="onboard-banner" hidden>
-    <span
-      >New here? <strong>Rotate &amp; zoom</strong> each model, then vote for
-      the better one. Keys: <kbd>←</kbd> A · <kbd>→</kbd> B · <kbd>T</kbd> tie ·
-      <kbd>X</kbd> both-bad.</span
-    >
+  <div class="onboard-card" id="onboard-banner" hidden>
     <button
       type="button"
       class="onboard-dismiss"
@@ -34,6 +29,35 @@ leaderboards.{% endblock %} {% block content %}
     >
       ✕
     </button>
+    <p class="onboard-eyebrow">First time here?</p>
+    <h2 class="onboard-title">How it works</h2>
+    <p class="onboard-lede">
+      You're comparing two AI-generated 3D reconstructions of a real organism.
+      Judge which one is more faithful — every vote sharpens the leaderboards.
+    </p>
+    <ol class="onboard-steps">
+      <li>
+        <span class="onboard-step-n">1</span>
+        <span><strong>Inspect</strong> — drag to rotate, scroll to zoom each model.</span>
+      </li>
+      <li>
+        <span class="onboard-step-n">2</span>
+        <span><strong>Compare</strong> — check each against the reference photos above.</span>
+      </li>
+      <li>
+        <span class="onboard-step-n">3</span>
+        <span><strong>Vote</strong> — pick the better one, or Tie / Both bad.</span>
+      </li>
+    </ol>
+    <div class="onboard-foot">
+      <span class="onboard-keys"
+        >Keys: <kbd>←</kbd> A · <kbd>→</kbd> B · <kbd>T</kbd> tie ·
+        <kbd>X</kbd> both-bad</span
+      >
+      <button type="button" class="onboard-start" id="onboard-start">
+        Start voting →
+      </button>
+    </div>
   </div>
 
   <div id="task-card" class="task-strip">
