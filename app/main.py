@@ -22,7 +22,13 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
@@ -61,7 +67,7 @@ from .models import (
 )
 from .models import _utcnow as _models_utcnow
 from .schemas import CategoryIn, FlagIn, GeneratorIn, KVoteIn, TaskIn, VoteIn
-from .storage import get_storage
+from .storage import content_type_for, get_storage
 
 logger = logging.getLogger(__name__)
 
@@ -294,6 +300,15 @@ def _roadmap_or_none(request: Request, db: Session) -> HTMLResponse | None:
     )
 
 
+def _arena_asset_url(o: ModelOutput) -> str:
+    """Opaque, output-scoped asset URL for the ANONYMIZED arena payloads. The raw asset_path can
+    encode gold status or generator identity (e.g. `gold/task19__bad.glb`), which a voter could
+    read in devtools to unmask the planted-bad decoy or the model — so the arena never exposes it;
+    the /media/o/{id} route (below) resolves the id back to the file. output_id is already in the
+    payload (K-wise picks reference it), so this leaks nothing new. The extension is cosmetic."""
+    return f"/media/o/{o.id}.{o.asset_format}"
+
+
 def _serialize(
     comparison: Comparison,
     task: Task,
@@ -318,14 +333,14 @@ def _serialize(
         },
         "criterion": {"slug": crit.slug, "name": crit.name},
         "a": {
-            "url": storage.url_for(out_a.asset_path),
+            "url": _arena_asset_url(out_a),
             "format": out_a.asset_format,
             "output_id": out_a.id,
             "machine_generated": is_commercial_model(out_a.source),
             "attribution": out_a.attribution or None,
         },
         "b": {
-            "url": storage.url_for(out_b.asset_path),
+            "url": _arena_asset_url(out_b),
             "format": out_b.asset_format,
             "output_id": out_b.id,
             "machine_generated": is_commercial_model(out_b.source),
@@ -344,7 +359,7 @@ def _serialize_output(o: ModelOutput) -> dict:
 
     return {
         "output_id": o.id,
-        "url": storage.url_for(o.asset_path),
+        "url": _arena_asset_url(o),
         "format": o.asset_format,
         "machine_generated": is_commercial_model(o.source),
         "attribution": o.attribution or None,
@@ -864,6 +879,24 @@ def api_flag(flag_in: FlagIn, request: Request, db: Session = Depends(get_db)):
     )
     db.commit()
     return {"status": "ok", "hidden": hidden, "flags": count}
+
+
+@app.get("/media/o/{output_id}.{ext}")
+def media_asset(output_id: int, ext: str, db: Session = Depends(get_db)):
+    """Resolve an opaque, output-scoped asset URL (emitted by _arena_asset_url) back to the real
+    file, so the anonymized arena never exposes the descriptive asset_path. Serves by output id;
+    `ext` is cosmetic (helps 3D viewers). Streams through the app on remote (S3) storage so the
+    object key — which can encode identity — is never revealed to the client either."""
+    o = db.get(ModelOutput, output_id)
+    if o is None:
+        raise HTTPException(404, "Unknown output")
+    ctype = content_type_for(o.asset_path)
+    if getattr(storage, "remote", False):
+        return Response(content=storage.read(o.asset_path), media_type=ctype)
+    path = config.ASSET_DIR / o.asset_path
+    if not path.is_file():
+        raise HTTPException(404, "Asset missing")
+    return FileResponse(path, media_type=ctype)
 
 
 # ------------------------------------------------------------------ leaderboard
