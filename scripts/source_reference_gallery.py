@@ -159,7 +159,7 @@ def source_taxon(binomial: str, n: int, force: bool) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--n", type=int, default=3, help="photos per taxon (default 3)")
+    ap.add_argument("--n", type=int, default=8, help="photos per taxon (default 8)")
     ap.add_argument("--force", action="store_true", help="re-source even if a manifest exists")
     ap.add_argument("--taxa", default="", help="comma binomials (default: all recon taxa)")
     args = ap.parse_args()
