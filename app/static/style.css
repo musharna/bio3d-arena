@@ -1911,7 +1911,7 @@ details.group[open] > summary.group-title::before {
   gap: 0.5rem;
   justify-content: center;
   align-items: center;
-  width: min(100%, 480px);
+  width: min(100%, 900px);
   margin: 0 auto;
   min-height: 158px;
   overflow-x: auto;
