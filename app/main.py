@@ -847,10 +847,11 @@ def api_kvote(
     return {"status": "ok", "next": nxt, "reveal": reveal}
 
 
-@app.post("/api/flag")
+@app.post("/api/flag", dependencies=[Depends(require_internal_pages)])
 def api_flag(flag_in: FlagIn, request: Request, db: Session = Depends(get_db)):
-    """Report an output as not the organism / failed. Rate-limited; one flag per session per output;
-    auto-hides the output at FLAG_HIDE_THRESHOLD distinct sessions. Not a vote — never advances."""
+    """Report an output as not the organism / failed. CURATOR-ONLY: gated to the internal instance
+    (the public deploy 404s here and renders no flag button), so it hides at the first flag
+    (FLAG_HIDE_THRESHOLD default 1). Rate-limited; one flag per session per output; never advances."""
     from . import flags
 
     sid = request.state.session_id

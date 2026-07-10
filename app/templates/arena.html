@@ -1,6 +1,6 @@
 {% extends "base.html" %} {% block title %}Arena · Bio 3D Arena{% endblock %} {%
 block content %}
-<section class="arena">
+<section class="arena" data-can-flag="{{ 'true' if internal_pages() else 'false' }}">
   <div class="arena-hero">
     <h1 class="arena-hero-h1">Which model rebuilds life best?</h1>
     <p class="arena-hero-lede">
