@@ -181,17 +181,48 @@ def mode_a_excluded_generator_ids(db: Session) -> set[int]:
     )
 
 
+def provider_via_label(name: str, source: str | None) -> str:
+    """Rewrite an API-hosted model's trailing provider parenthetical to a "via <provider>"
+    phrasing: "TRELLIS (fal)" → "TRELLIS via fal", "TRELLIS (Replicate)" → "TRELLIS via
+    Replicate", "TRELLIS multi-view (fal)" (recon) → "TRELLIS multi-view via fal".
+
+    Gated on the SOURCE being an `api:`/`recon:` hosted model so that non-provider parentheticals
+    — Plant3D (Salk), Blender (procedural), XfrogPlants (botanical), PartCrafter (part-based) —
+    are left untouched. The provider token is taken verbatim from the name (keeps the brand
+    casing fal / Replicate)."""
+    if source and source.startswith(("api:", "recon:")) and name.endswith(")"):
+        i = name.rfind(" (")
+        if i > 0:
+            base, provider = name[:i], name[i + 2 : -1]
+            if provider:
+                return f"{base} via {provider}"
+    return name
+
+
+def _representative_source_by_generator(db: Session) -> dict[int, str]:
+    """generator_id → a source string from one of its outputs. Generators are source-dedicated
+    (source is intrinsic to the generation pipeline), so any output's source is representative."""
+    out: dict[int, str] = {}
+    for gid, src in db.execute(select(ModelOutput.generator_id, ModelOutput.source)).all():
+        if gid is not None and src and gid not in out:
+            out[gid] = src
+    return out
+
+
 def generator_display_names(db: Session) -> dict[int, str]:
     """Map generator_id → a UNIQUE display label.
 
-    Several generators share a `name` (e.g. 8 distinct XfrogPlants variants all named
-    "XfrogPlants (botanical)"), which makes board rows indistinguishable. When a name is
-    shared, append a disambiguator derived from the (unique) slug; otherwise use the name.
+    API models render "Name via fal" / "Name via Replicate" (see provider_via_label). Several
+    generators share a `name` (e.g. 8 distinct XfrogPlants variants all named "XfrogPlants
+    (botanical)"), which makes board rows indistinguishable; when a name is shared, append a
+    disambiguator derived from the (unique) slug; otherwise use the name.
     """
     gens = db.execute(select(Generator)).scalars().all()
+    src_by_gid = _representative_source_by_generator(db)
+    eff_name = {g.id: provider_via_label(g.name, src_by_gid.get(g.id)) for g in gens}
     by_name: dict[str, list[Generator]] = {}
     for g in gens:
-        by_name.setdefault(g.name, []).append(g)
+        by_name.setdefault(eff_name[g.id], []).append(g)
     out: dict[int, str] = {}
     for name, group in by_name.items():
         if len(group) == 1:

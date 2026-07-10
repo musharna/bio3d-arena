@@ -378,7 +378,7 @@ function disableVoteBar(disabled) {
 
 function rankLabelFor(side, winner) {
   if (winner === "tie") return "tie";
-  if (winner === "bad") return "weak"; // "both bad" vote — no real winner to crown
+  if (winner === "bad") return ""; // "both bad" vote — no rank to show (chip suppressed)
   return winner === side ? "1st" : "2nd";
 }
 
@@ -401,7 +401,7 @@ function showReveal(reveal) {
       const label = rankLabelFor(side, reveal.winner);
       chipEl.textContent = label;
       chipEl.classList.toggle("is-first", label === "1st");
-      chipEl.hidden = false;
+      chipEl.hidden = !label; // both-bad → empty label → no chip
     }
     if (col && reveal.winner === side) col.classList.add("is-winner");
   }
