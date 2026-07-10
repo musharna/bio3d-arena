@@ -38,6 +38,11 @@ TAXA = [
     "Amanita muscaria",
     "Morchella esculenta",
     "Trametes versicolor",
+    # Animal kingdom taxa (3rd kingdom).
+    "Canis lupus familiaris",
+    "Anas platyrhynchos",
+    "Danaus plexippus",
+    "Carassius auratus",
 ]
 
 
