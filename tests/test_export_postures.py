@@ -57,3 +57,17 @@ def test_display_keeps_commercial_drops_hardexclude_and_gated():
         filter_include_for_posture(db, inc, "display", gated={cc.id})  # cc gated out
         assert inc.output_ids == {comm.id}  # commercial kept, xfrog + gated dropped
         db.rollback()
+
+
+def test_partcrafter_hard_excluded_from_both_postures():
+    """partcrafter is a frontier: commercial model (would survive the display posture as a
+    commercial recon), but it's internal-only — the HARD_EXCLUDE_SOURCES entry drops it from
+    BOTH postures, like xfrog."""
+    for posture in ("display", "redistribute"):
+        with SessionLocal() as db:
+            cc = _o(db, "plant3d", "CC0-1.0")
+            pc = _o(db, "frontier:partcrafter", "PartCrafter generated-asset terms")
+            inc = IncludeSet(output_ids={cc.id, pc.id})
+            filter_include_for_posture(db, inc, posture, gated=set())
+            assert pc.id not in inc.output_ids, f"partcrafter leaked into {posture} export"
+            db.rollback()
