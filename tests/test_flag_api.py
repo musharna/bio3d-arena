@@ -3,14 +3,22 @@ from __future__ import annotations
 
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
 
-from app import integrity
+from app import config, integrity
 from app.database import SessionLocal
 from app.main import app
 from app.models import Generator, ModelOutput, Task
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _curator_instance(monkeypatch):
+    """Flagging is a curator-only tool served on the internal instance — force it on so these
+    endpoint tests don't depend on the ambient public/internal signal (RECON_SCORER_URL)."""
+    monkeypatch.setattr(config, "INTERNAL_PAGES_ENABLED", True)
 
 
 def _output():
@@ -30,8 +38,9 @@ def _output():
 def test_flag_records_and_dedups():
     integrity.reset_rate_limits()
     oid = _output()
+    # Curator instance: FLAG_HIDE_THRESHOLD defaults to 1, so a single flag hides immediately.
     r = client.post("/api/flag", json={"output_id": oid, "reason": "not_the_organism"})
-    assert r.status_code == 200 and r.json() == {"status": "ok", "hidden": False, "flags": 1}
+    assert r.status_code == 200 and r.json() == {"status": "ok", "hidden": True, "flags": 1}
     # same session (same TestClient cookie) again → no double count
     r = client.post("/api/flag", json={"output_id": oid, "reason": "not_the_organism"})
     assert r.json()["flags"] == 1
@@ -59,7 +68,8 @@ def test_flag_autohide_at_threshold():
         flags.record_flag(db, oid, "other-1", "failed", threshold=99)
         flags.record_flag(db, oid, "other-2", "failed", threshold=99)
         db.commit()
-    # third flag from THIS client session crosses the default K=3
+    # the pre-seeded flags used a high threshold (not hidden); this client flag uses the real
+    # default and hides the output. count reflects all three distinct sessions.
     r = client.post("/api/flag", json={"output_id": oid, "reason": "not_the_organism"})
     assert r.json() == {"status": "ok", "hidden": True, "flags": 3}
     with SessionLocal() as db:

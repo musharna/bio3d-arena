@@ -56,8 +56,10 @@ POOL_EXCLUDED_COMPLETENESS_CATEGORIES = {
     ).split(",")
     if c.strip()
 }
-# Distinct-session flags on an output before it auto-hides (pending admin review).
-FLAG_HIDE_THRESHOLD = int(os.environ.get("BIO3D_FLAG_HIDE_THRESHOLD", "3"))
+# Distinct-session flags before an output auto-hides. Flagging is a CURATOR-ONLY tool served
+# on the internal instance (public deploy has no flag button and /api/flag 404s), so a single
+# curator flag hides immediately — default 1, not a crowd-consensus threshold. Env-overridable.
+FLAG_HIDE_THRESHOLD = int(os.environ.get("BIO3D_FLAG_HIDE_THRESHOLD", "1"))
 
 
 # --- Semantic-admissibility predicate (VLM cardinality+identity) ---

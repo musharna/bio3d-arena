@@ -11,7 +11,8 @@ def setup_module(_m):
 
 def test_config_defaults():
     assert config.POOL_EXCLUDED_COMPLETENESS_CATEGORIES == {"isolated-organ", "fragment"}
-    assert config.FLAG_HIDE_THRESHOLD == 3
+    # Curator-only flagging (internal instance) hides at the first flag.
+    assert config.FLAG_HIDE_THRESHOLD == 1
 
 
 def test_hidden_at_and_outputflag_exist():
