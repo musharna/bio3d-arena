@@ -1,7 +1,7 @@
-"""Model results read "Name via fal" / "Name via Replicate" instead of the bare parenthetical
-"Name (fal)". The provider paren is only rewritten for real API models (source starts with
-"api:"); non-provider parentheticals (Plant3D (Salk), Blender (procedural), XfrogPlants
-(botanical)) are left untouched."""
+"""The hosting provider (fal / Replicate) is shown ONLY when it disambiguates two entries — i.e.
+when the same base model runs on more than one provider (TRELLIS, Rodin text produce genuinely
+different meshes per provider). A model whose base name is already unique drops the provider as
+noise; non-provider parentheticals are left untouched; still-colliding names fall back to a slug."""
 
 from __future__ import annotations
 
@@ -12,52 +12,69 @@ from app.database import SessionLocal, init_db
 from app.models import Generator, ModelOutput, Task
 
 
-def test_provider_via_label_rewrites_only_api_sources():
-    f = service.provider_via_label
-    # API models: trailing provider paren → "via <provider>"
-    assert f("TRELLIS (fal)", "api:fal:trellis") == "TRELLIS via fal"
-    assert f("TRELLIS (Replicate)", "api:replicate:trellis") == "TRELLIS via Replicate"
-    assert (
-        f("Hunyuan3D v3 text (fal)", "api:text:fal:hunyuan3d-v3-text")
-        == "Hunyuan3D v3 text via fal"
-    )
-    assert (
-        f("Rodin text (Replicate)", "api:text:replicate:rodin-text") == "Rodin text via Replicate"
-    )
-    # recon: (multi-view) is also provider-hosted.
-    assert f("TRELLIS multi-view (fal)", "recon:trellis-mv") == "TRELLIS multi-view via fal"
-    # Non-provider parentheticals are left alone (incl. frontier:partcrafter's "(part-based)").
-    assert f("PartCrafter (part-based)", "frontier:partcrafter") == "PartCrafter (part-based)"
-    assert f("Plant3D (Salk)", "plant3d") == "Plant3D (Salk)"
-    assert f("Blender (procedural)", "procedural:blender") == "Blender (procedural)"
-    assert f("XfrogPlants (botanical)", "found:xfrog") == "XfrogPlants (botanical)"
-    # No paren / no source → unchanged.
-    assert f("Hunyuan3D", "bio3d-arena") == "Hunyuan3D"
-    assert f("TRELLIS (fal)", None) == "TRELLIS (fal)"
-
-
-def test_generator_display_names_applies_via_for_api_generator():
-    init_db()
-    db = SessionLocal()
-    try:
-        r = random.randint(0, 10**6)
-        g = Generator(slug=f"trellis-fal-{r}", name="TRELLIS (fal)")
-        db.add(g)
-        db.flush()
-        t = Task(title=f"t-via-{r}", prompt="p", category_id=1)
-        db.add(t)
-        db.flush()
-        db.add(
-            ModelOutput(
-                task_id=t.id,
-                generator_id=g.id,
-                asset_path="x.glb",
-                asset_format="glb",
-                source="api:fal:trellis",
-            )
+def _gen(db, slug: str, name: str, source: str) -> Generator:
+    g = Generator(slug=slug, name=name)
+    db.add(g)
+    db.flush()
+    t = Task(title=f"t-{random.randint(0, 10**9)}", prompt="p", category_id=1)
+    db.add(t)
+    db.flush()
+    db.add(
+        ModelOutput(
+            task_id=t.id, generator_id=g.id, asset_path="x.glb", asset_format="glb", source=source
         )
+    )
+    db.flush()
+    return g
+
+
+def test_split_provider_only_api_recon_sources():
+    f = service._split_provider
+    assert f("TRELLIS (fal)", "api:fal:trellis") == ("TRELLIS", "fal")
+    assert f("Rodin text (Replicate)", "api:text:replicate:rodin-text") == (
+        "Rodin text",
+        "Replicate",
+    )
+    assert f("TRELLIS multi-view (fal)", "recon:trellis-mv") == ("TRELLIS multi-view", "fal")
+    # non-provider parentheticals: no split
+    assert f("Plant3D (Salk)", "plant3d") == ("Plant3D (Salk)", None)
+    assert f("PartCrafter (part-based)", "frontier:partcrafter") == (
+        "PartCrafter (part-based)",
+        None,
+    )
+    assert f("XfrogPlants (botanical)", "found:xfrog") == ("XfrogPlants (botanical)", None)
+    assert f("Hunyuan3D", "bio3d-arena") == ("Hunyuan3D", None)
+
+
+def test_unique_model_drops_provider():
+    init_db()
+    with SessionLocal() as db:
+        r = random.randint(0, 10**6)
+        g = _gen(db, f"uniq-{r}", f"UniqModel{r} (fal)", "api:fal:uniq")
         db.commit()
         names = service.generator_display_names(db)
-        assert names[g.id] == "TRELLIS via fal"
-    finally:
-        db.close()
+        assert names[g.id] == f"UniqModel{r}"  # unique base → provider dropped as noise
+
+
+def test_colliding_model_keeps_provider():
+    init_db()
+    with SessionLocal() as db:
+        r = random.randint(0, 10**6)
+        a = _gen(db, f"coll-a-{r}", f"CollModel{r} (fal)", "api:fal:coll")
+        b = _gen(db, f"coll-b-{r}", f"CollModel{r} (Replicate)", "api:replicate:coll")
+        db.commit()
+        names = service.generator_display_names(db)
+        assert names[a.id] == f"CollModel{r} via fal"
+        assert names[b.id] == f"CollModel{r} via Replicate"
+
+
+def test_shared_nonprovider_name_still_gets_slug_suffix():
+    init_db()
+    with SessionLocal() as db:
+        r = random.randint(0, 10**6)
+        a = _gen(db, f"xfrog-AG15-s2-{r}", "XfrogPlants (botanical)", "found:xfrog")
+        b = _gen(db, f"xfrog-AG20-s5-{r}", "XfrogPlants (botanical)", "found:xfrog")
+        db.commit()
+        names = service.generator_display_names(db)
+        assert names[a.id] != names[b.id]
+        assert names[a.id].startswith("XfrogPlants (botanical) · ")
