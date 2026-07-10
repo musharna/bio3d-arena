@@ -4,6 +4,24 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}Bio 3D Arena{% endblock %}</title>
+    {# Social / Open Graph share cards. Per-page overrides: block description / og_title / og_image. #}
+    <meta
+      name="description"
+      content="{% block description %}{{ site_tagline }}{% endblock %}"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="{{ site_name }}" />
+    <meta property="og:title" content="{% block og_title %}{{ self.title() }}{% endblock %}" />
+    <meta property="og:description" content="{{ self.description() }}" />
+    <meta property="og:url" content="{{ abs_url(request.url.path) }}" />
+    <meta
+      property="og:image"
+      content="{% block og_image %}{{ abs_url(og_image_path) }}{% endblock %}"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{{ self.og_title() }}" />
+    <meta name="twitter:description" content="{{ self.description() }}" />
+    <meta name="twitter:image" content="{{ self.og_image() }}" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

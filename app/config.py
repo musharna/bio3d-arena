@@ -96,6 +96,14 @@ SEMANTIC_ADMISSIBILITY_MODE = _valid_semantic_mode(
 HF_CLIENT_ID = os.environ.get("BIO3D_HF_CLIENT_ID", "")
 HF_CLIENT_SECRET = os.environ.get("BIO3D_HF_CLIENT_SECRET", "")
 PUBLIC_BASE_URL = os.environ.get("BIO3D_PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+
+# Social / Open Graph share cards — a pasted link previews with a title, description and image.
+SITE_NAME = "Bio 3D Arena"
+SITE_TAGLINE = (
+    "A blind benchmark arena for 3D generative models of real organisms — vote on which "
+    "reconstruction best matches the real thing."
+)
+OG_IMAGE_PATH = os.environ.get("BIO3D_OG_IMAGE", "/static/og-default.png")
 # Set Secure flag on cookies when served over HTTPS (auto from PUBLIC_BASE_URL; env override).
 COOKIE_SECURE = os.environ.get("BIO3D_COOKIE_SECURE", "").lower() in (
     "1",

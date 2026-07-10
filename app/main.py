@@ -93,7 +93,17 @@ def _asset_url(path: str) -> str:
     return f"/static/{rel}?v={version}"
 
 
+def _abs_url(path: str) -> str:
+    """Absolute URL for Open Graph tags (og:url / og:image require an absolute URL). Joins the
+    request path onto config.PUBLIC_BASE_URL (set per deploy)."""
+    return f"{config.PUBLIC_BASE_URL}/{path.lstrip('/')}"
+
+
 templates.env.globals["asset"] = _asset_url
+templates.env.globals["abs_url"] = _abs_url
+templates.env.globals["site_name"] = config.SITE_NAME
+templates.env.globals["site_tagline"] = config.SITE_TAGLINE
+templates.env.globals["og_image_path"] = config.OG_IMAGE_PATH
 # Read live (not the value at import) so tests/deploys can toggle config.INTERNAL_PAGES_ENABLED
 # and both the route guard and the nav conditionals see the same current value.
 templates.env.globals["internal_pages"] = lambda: config.INTERNAL_PAGES_ENABLED
