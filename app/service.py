@@ -181,22 +181,16 @@ def mode_a_excluded_generator_ids(db: Session) -> set[int]:
     )
 
 
-def provider_via_label(name: str, source: str | None) -> str:
-    """Rewrite an API-hosted model's trailing provider parenthetical to a "via <provider>"
-    phrasing: "TRELLIS (fal)" → "TRELLIS via fal", "TRELLIS (Replicate)" → "TRELLIS via
-    Replicate", "TRELLIS multi-view (fal)" (recon) → "TRELLIS multi-view via fal".
-
-    Gated on the SOURCE being an `api:`/`recon:` hosted model so that non-provider parentheticals
-    — Plant3D (Salk), Blender (procedural), XfrogPlants (botanical), PartCrafter (part-based) —
-    are left untouched. The provider token is taken verbatim from the name (keeps the brand
-    casing fal / Replicate)."""
+def _split_provider(name: str, source: str | None) -> tuple[str, str | None]:
+    """Split a trailing api/recon hosting-provider parenthetical off a generator name:
+    "TRELLIS (fal)" → ("TRELLIS", "fal"). Returns (name, None) when there is no provider paren —
+    non-`api:`/`recon:` sources (Plant3D (Salk), XfrogPlants (botanical), PartCrafter (part-based))
+    and names without a paren are returned unchanged. Provider token kept verbatim (fal / Replicate)."""
     if source and source.startswith(("api:", "recon:")) and name.endswith(")"):
         i = name.rfind(" (")
-        if i > 0:
-            base, provider = name[:i], name[i + 2 : -1]
-            if provider:
-                return f"{base} via {provider}"
-    return name
+        if i > 0 and name[i + 2 : -1]:
+            return name[:i], name[i + 2 : -1]
+    return name, None
 
 
 def _representative_source_by_generator(db: Session) -> dict[int, str]:
@@ -212,14 +206,24 @@ def _representative_source_by_generator(db: Session) -> dict[int, str]:
 def generator_display_names(db: Session) -> dict[int, str]:
     """Map generator_id → a UNIQUE display label.
 
-    API models render "Name via fal" / "Name via Replicate" (see provider_via_label). Several
-    generators share a `name` (e.g. 8 distinct XfrogPlants variants all named "XfrogPlants
-    (botanical)"), which makes board rows indistinguishable; when a name is shared, append a
-    disambiguator derived from the (unique) slug; otherwise use the name.
+    The hosting provider (fal / Replicate) is shown ONLY when it's needed to tell entries apart —
+    when the same base model runs on more than one provider (TRELLIS, Rodin text, which produce
+    genuinely different meshes per provider). A model whose base name is already unique drops the
+    provider as noise ("Hunyuan3D v3 (fal)" → "Hunyuan3D v3"). Names that still collide with no
+    distinguishing provider (e.g. the 8 XfrogPlants variants) fall back to a slug disambiguator.
     """
     gens = db.execute(select(Generator)).scalars().all()
     src_by_gid = _representative_source_by_generator(db)
-    eff_name = {g.id: provider_via_label(g.name, src_by_gid.get(g.id)) for g in gens}
+    split = {g.id: _split_provider(g.name, src_by_gid.get(g.id)) for g in gens}
+    base_counts: dict[str, int] = {}
+    for base, _prov in split.values():
+        base_counts[base] = base_counts.get(base, 0) + 1
+    # Provider shown only when the base name is ambiguous (>1 generator shares it).
+    eff_name = {
+        g.id: (f"{base} via {prov}" if prov and base_counts[base] > 1 else base)
+        for g in gens
+        for base, prov in [split[g.id]]
+    }
     by_name: dict[str, list[Generator]] = {}
     for g in gens:
         by_name.setdefault(eff_name[g.id], []).append(g)
