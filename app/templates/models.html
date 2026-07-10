@@ -35,6 +35,7 @@
         </span>
         <span class="b3d-model-stats mono">
           <span title="Bradley–Terry overall score">{% if c.bt_score is not none %}<strong>{{ c.bt_score }}</strong> BT{% else %}<span class="subtle">unrated</span>{% endif %}</span>
+          {% if c.bt_score is not none and c.confidence == "provisional" %}<span class="cov-badge cov-prov" title="Fewer than {{ firm_vote_threshold }} votes — rank may still shift">provisional</span>{% endif %}
           <span><strong>{{ c.votes }}</strong> votes</span>
           <span><strong>{{ c.tasks }}</strong> tasks</span>
         </span>

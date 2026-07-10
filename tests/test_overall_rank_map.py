@@ -62,5 +62,26 @@ def test_overall_rank_map_orders_by_bt_and_excludes_refs():
         assert hi.id in rm and mid.id in rm and lo.id in rm
         # ordered by bt_score desc
         assert rm[hi.id][0] < rm[mid.id][0] < rm[lo.id][0]
-        # (rank, total) — total is the count of ranked (non-ref) generators, shared across the trio
+        # (rank, total, provisional) — total shared across the trio
         assert rm[hi.id][1] == rm[lo.id][1] >= 3
+        # n_games=5 < FIRM_VOTE_THRESHOLD (30) → provisional
+        assert rm[hi.id][2] is True
+
+
+def test_overall_rank_map_marks_firm_above_threshold():
+    from app.service import FIRM_VOTE_THRESHOLD
+
+    init_db()
+    with SessionLocal() as db:
+        crit = db.execute(select(Criterion).where(Criterion.slug == "overall")).scalars().first()
+        if crit is None:
+            crit = Criterion(slug="overall", name="Overall")
+            db.add(crit)
+            db.flush()
+        g = _rated_gen(db, "Firm", "api:fal:firm", 9_100.0, crit.id)
+        # bump n_games well past the firm threshold
+        db.query(Rating).filter(Rating.generator_id == g.id).update(
+            {"n_games": FIRM_VOTE_THRESHOLD + 5}
+        )
+        db.commit()
+        assert service.overall_rank_map(db)[g.id][2] is False  # firm

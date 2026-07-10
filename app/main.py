@@ -101,6 +101,9 @@ def _abs_url(path: str) -> str:
 
 templates.env.globals["asset"] = _asset_url
 templates.env.globals["abs_url"] = _abs_url
+# Votes below which a generator's rank is flagged "provisional" — available to every template
+# (the leaderboard route also passes it in context, which harmlessly shadows this global).
+templates.env.globals["firm_vote_threshold"] = service.FIRM_VOTE_THRESHOLD
 templates.env.globals["site_name"] = config.SITE_NAME
 templates.env.globals["site_tagline"] = config.SITE_TAGLINE
 templates.env.globals["og_image_path"] = config.OG_IMAGE_PATH
@@ -840,7 +843,10 @@ def api_vote(
         def _rev_side(o: ModelOutput | None) -> dict:
             d: dict = {"name": names.get(o.generator_id, "Unknown") if o else "Unknown"}
             if o and o.generator_id in ranks:
-                d["rank"], d["of"] = ranks[o.generator_id]
+                rank, of, prov = ranks[o.generator_id]
+                d["rank"], d["of"] = rank, of
+                if prov:
+                    d["provisional"] = True
             return d
 
         reveal = {"a": _rev_side(out_a), "b": _rev_side(out_b), "winner": vote_in.winner}
@@ -890,7 +896,10 @@ def api_kvote(
             continue  # defensive: dangling id, shouldn't happen but never 500 the reveal
         entry = {"output_id": oid, "name": names.get(out.generator_id, "Unknown")}
         if out.generator_id in ranks:
-            entry["rank"], entry["of"] = ranks[out.generator_id]
+            rank, of, prov = ranks[out.generator_id]
+            entry["rank"], entry["of"] = rank, of
+            if prov:
+                entry["provisional"] = True
         reveal_outputs.append(entry)
     reveal = {"outputs": reveal_outputs, "best_output_id": kvote_in.best_output_id}
     return {"status": "ok", "next": nxt, "reveal": reveal}
