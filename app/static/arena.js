@@ -340,7 +340,7 @@ async function vote(winner) {
 
 async function flagOutput(outputId, btn) {
   if (!outputId || btn.disabled) return;
-  if (!confirm("Flag this model as not the organism / failed?")) return;
+  if (!confirm("Hide this output from the arena?")) return;
   btn.disabled = true;
   try {
     const res = await fetch("/api/flag", {
@@ -359,8 +359,11 @@ async function flagOutput(outputId, btn) {
       setStatus("Could not flag: " + detail);
       return;
     }
-    btn.textContent = "✓";
-    flash("Flag recorded ✓");
+    // Curator quick-hide: /api/flag hid this output (threshold 1 on the internal instance), so
+    // advance to a fresh comparison rather than leaving the just-hidden model on screen.
+    flash("Hidden ✓ — next");
+    clearReveal();
+    loadNext();
   } catch (e) {
     btn.disabled = false;
     setStatus("Error flagging: " + e);
