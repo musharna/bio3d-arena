@@ -1904,14 +1904,17 @@ details.group[open] > summary.group-title::before {
   text-align: initial;
 }
 /* Fixed-footprint strip: a constant width + single row (no wrap, scroll on overflow) so the
-   panel occupies the SAME space for 1 image or 5 — the vote UI below never shifts with ref count. */
+   panel occupies the SAME space for 1 image or 5 — the vote UI below never shifts with ref count.
+   On a full window the cap fills the content column (.b3d-main is max-width 1180px − 2×30px
+   padding ≈ 1120px inner), so ~7 thumbnails show at once; min(100%, …) still shrinks it on
+   narrow windows without introducing a wrap. */
 .reference-gallery {
   display: flex;
   flex-wrap: nowrap;
   gap: 0.5rem;
   justify-content: center;
   align-items: center;
-  width: min(100%, 900px);
+  width: min(100%, 1120px);
   margin: 0 auto;
   min-height: 158px;
   overflow-x: auto;
