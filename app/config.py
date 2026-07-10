@@ -147,6 +147,14 @@ INPUT_REFERENCE_EXEMPT_SLUGS = {"hordeum_vulgare"}
 # This is stricter than the public-export gate, which drops them only from the public bundle.
 APP_HIDDEN_GENERATOR_SLUGS = frozenset({"agrigen", "demeter", "helios"})
 
+# Same internal-data-only posture as APP_HIDDEN_GENERATOR_SLUGS, but keyed by output SOURCE
+# rather than generator slug. xfrog uses one variant generator slug per crop (all named
+# "XfrogPlants (botanical)"), so a slug list can't catch it cleanly; partcrafter is a single
+# generator but a frontier: commercial model that would otherwise survive the display export.
+# Both are kept in the DB for internal analysis but hidden from the whole app UI and never
+# promoted to a public bundle (public_export.HARD_EXCLUDE_SOURCES carries the export gate).
+APP_HIDDEN_SOURCES = frozenset({"found:xfrog", "frontier:partcrafter"})
+
 
 def is_safe_test_db_target(value: str | None) -> bool:
     """True if a DB URL/path is a throwaway that's safe for the test suite to drop/recreate.

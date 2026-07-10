@@ -35,7 +35,13 @@ REDISTRIBUTABLE_LICENSES = frozenset(
 PUBLIC_EXCLUDED_GENERATORS = frozenset({"agrigen", "demeter", "helios"})
 
 
-HARD_EXCLUDE_SOURCES = frozenset({"found:xfrog", "procedural:demeter", "procedural:agrigen"})
+# Sources never promoted to a public bundle, in EITHER posture (checked before the posture
+# predicate). found:xfrog = licensed commercial botanical assets; frontier:partcrafter is a
+# frontier: commercial model that would otherwise survive the display posture — both are
+# internal-data-only (see config.APP_HIDDEN_SOURCES, which hides them from the app UI too).
+HARD_EXCLUDE_SOURCES = frozenset(
+    {"found:xfrog", "frontier:partcrafter", "procedural:demeter", "procedural:agrigen"}
+)
 _COMMERCIAL_MODEL_PREFIXES = ("api:", "recon:", "frontier:")
 
 
