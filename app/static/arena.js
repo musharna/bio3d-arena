@@ -385,15 +385,6 @@ function flash(msg) {
   setTimeout(() => s.classList.remove("flash"), 700);
 }
 
-// Post-vote engagement: append the model's current overall leaderboard standing to the revealed
-// name when known (unrated models omit it) — e.g. "TRELLIS via fal · #2/24".
-function revLabel(info) {
-  if (!info.rank) return info.name;
-  // "provisional" when the rank is backed by few votes — don't let an early rank read as settled.
-  const prov = info.provisional ? " · provisional" : "";
-  return `${info.name} · #${info.rank}/${info.of}${prov}`;
-}
-
 // Running "votes cast in this browser" counter — a light progress loop. Fail-quiet: a blocked
 // localStorage must never break the confirmation.
 function bumpVotes() {
@@ -449,7 +440,7 @@ function showReveal(reveal) {
     const chipEl = el(`rank-chip-${side}`);
     const info = reveal[side];
     if (nameEl && info) {
-      nameEl.textContent = revLabel(info);
+      nameEl.textContent = info.name;
       nameEl.hidden = false;
     }
     if (chipEl) {
@@ -487,7 +478,7 @@ function showKwiseReveal(reveal) {
       if (label) label.appendChild(pill);
       else cell.appendChild(pill);
     }
-    pill.textContent = revLabel(info);
+    pill.textContent = info.name;
     pill.hidden = false;
     if (
       reveal.best_output_id != null &&

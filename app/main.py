@@ -836,20 +836,13 @@ def api_vote(
         out_a = db.get(ModelOutput, comparison.output_a_id)
         out_b = db.get(ModelOutput, comparison.output_b_id)
         names = service.generator_display_names(db)
-        ranks = service.overall_rank_map(db)  # cheap cached read — "this model ranks #N"
-
         # Defensive: an output deleted between comparison-build and vote would be None here;
         # never 500 the (already-committed) vote's reveal — mirror the kvote guard below.
-        def _rev_side(o: ModelOutput | None) -> dict:
-            d: dict = {"name": names.get(o.generator_id, "Unknown") if o else "Unknown"}
-            if o and o.generator_id in ranks:
-                rank, of, prov = ranks[o.generator_id]
-                d["rank"], d["of"] = rank, of
-                if prov:
-                    d["provisional"] = True
-            return d
-
-        reveal = {"a": _rev_side(out_a), "b": _rev_side(out_b), "winner": vote_in.winner}
+        reveal = {
+            "a": {"name": names.get(out_a.generator_id, "Unknown") if out_a else "Unknown"},
+            "b": {"name": names.get(out_b.generator_id, "Unknown") if out_b else "Unknown"},
+            "winner": vote_in.winner,
+        }
     return {"status": "ok", "next": nxt, "reveal": reveal}
 
 
@@ -888,19 +881,12 @@ def api_kvote(
     # which one was picked, so the grid can label each card. K-wise never serves gold (see
     # _build_kwise_comparison docstring), so no omission case is needed here.
     names = service.generator_display_names(db)
-    ranks = service.overall_rank_map(db)
     reveal_outputs = []
     for oid in ids:
         out = db.get(ModelOutput, oid)
         if out is None:
             continue  # defensive: dangling id, shouldn't happen but never 500 the reveal
-        entry = {"output_id": oid, "name": names.get(out.generator_id, "Unknown")}
-        if out.generator_id in ranks:
-            rank, of, prov = ranks[out.generator_id]
-            entry["rank"], entry["of"] = rank, of
-            if prov:
-                entry["provisional"] = True
-        reveal_outputs.append(entry)
+        reveal_outputs.append({"output_id": oid, "name": names.get(out.generator_id, "Unknown")})
     reveal = {"outputs": reveal_outputs, "best_output_id": kvote_in.best_output_id}
     return {"status": "ok", "next": nxt, "reveal": reveal}
 
