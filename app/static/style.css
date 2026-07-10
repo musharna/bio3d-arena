@@ -745,6 +745,18 @@ textarea:focus-visible,
   filter: brightness(0.94);
   transform: translateY(1px);
 }
+/* Post-vote: the 2-up vote bar is hidden outright, but the K-wise "Pick this one" buttons stay
+   on screen during their reveal — give the disabled state a clear inert look so a voted ballot
+   never reads as still-clickable. */
+.vote-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
+.vote-btn:disabled:hover {
+  filter: none;
+}
 .vote-btn.win {
   background: color-mix(in oklch, var(--win) 16%, var(--panel2));
 }
