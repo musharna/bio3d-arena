@@ -239,6 +239,29 @@ def generator_display_names(db: Session) -> dict[int, str]:
     return out
 
 
+def overall_rank_map(db: Session) -> dict[int, tuple[int, int]]:
+    """generator_id → (rank, total) on the OVERALL Mode-A board — cached Rating rows (criterion
+    'overall', category=None) sorted by bt_score desc, excluding reference/hidden generators. A
+    cheap read powering the post-vote reveal's "this model ranks #N" touch; unrated generators
+    (no Rating row yet) are simply absent."""
+    crit = db.execute(select(Criterion).where(Criterion.slug == "overall")).scalars().first()
+    if crit is None:
+        return {}
+    ref = mode_a_excluded_generator_ids(db)
+    ratings = (
+        db.execute(
+            select(Rating).where(Rating.criterion_id == crit.id, Rating.category_id.is_(None))
+        )
+        .scalars()
+        .all()
+    )
+    ranked = sorted(
+        (r for r in ratings if r.generator_id not in ref), key=lambda r: r.bt_score, reverse=True
+    )
+    total = len(ranked)
+    return {r.generator_id: (i + 1, total) for i, r in enumerate(ranked)}
+
+
 def _matches_for_scope(
     db: Session,
     criterion_id: int,
