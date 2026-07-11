@@ -467,6 +467,23 @@ PROVIDERS: dict[str, tuple] = {
         "FAL_KEY",
         "Rodin/Hyper3D (fal)",
     ),
+    # Newer image→3D models (2026 catalog). Input field / output key verified live per model at
+    # impl (fal schemas differ); default image_field="image_url" unless a probe showed otherwise.
+    "fal:meshy-v6": (
+        functools.partial(generate_fal, model="fal-ai/meshy/v6/image-to-3d", timeout_s=600),
+        "FAL_KEY",
+        "Meshy 6 (fal)",
+    ),
+    "fal:sam-3d": (
+        functools.partial(generate_fal, model="fal-ai/sam-3/3d-objects", timeout_s=600),
+        "FAL_KEY",
+        "SAM 3D (fal)",
+    ),
+    "fal:pixal3d": (
+        functools.partial(generate_fal, model="fal-ai/pixal3d", timeout_s=600),
+        "FAL_KEY",
+        "Pixal3D (fal)",
+    ),
     # Replicate (one REPLICATE_API_TOKEN) — verify exact model ids/versions at impl
     "replicate:hunyuan3d-3.1": (
         functools.partial(generate_replicate, model="tencent/hunyuan-3d-3.1"),
