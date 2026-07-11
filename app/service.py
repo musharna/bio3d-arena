@@ -147,9 +147,10 @@ def untextured_generator_ids(db: Session) -> set[int]:
 
 def app_hidden_generator_ids(db: Session) -> set[int]:
     """Generators hidden from the whole app UI. Kept in the DB for internal analysis, never
-    displayed. Two keys: by generator slug (config.APP_HIDDEN_GENERATOR_SLUGS — AgriGen's
-    procedural-expert testers) and by output source (config.APP_HIDDEN_SOURCES — xfrog, whose
-    per-crop variant slugs a slug list can't catch, and partcrafter). Both are internal-only."""
+    displayed. Three keys: by generator slug (config.APP_HIDDEN_GENERATOR_SLUGS — AgriGen's
+    procedural-expert testers), by output source (config.APP_HIDDEN_SOURCES — xfrog / partcrafter),
+    and by paradigm (config.APP_HIDDEN_PARADIGMS — retrieval + procedural_expert, which aren't what
+    the arena tests). All internal-only."""
     ids: set[int] = set()
     if config.APP_HIDDEN_GENERATOR_SLUGS:
         ids |= set(
@@ -165,6 +166,12 @@ def app_hidden_generator_ids(db: Session) -> set[int]:
                 select(ModelOutput.generator_id).where(
                     ModelOutput.source.in_(config.APP_HIDDEN_SOURCES)
                 )
+            ).scalars()
+        )
+    if config.APP_HIDDEN_PARADIGMS:
+        ids |= set(
+            db.execute(
+                select(Generator.id).where(Generator.paradigm.in_(config.APP_HIDDEN_PARADIGMS))
             ).scalars()
         )
     return ids

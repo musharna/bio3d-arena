@@ -176,6 +176,16 @@ APP_HIDDEN_GENERATOR_SLUGS = frozenset({"agrigen", "demeter", "helios"})
 # promoted to a public bundle (public_export.HARD_EXCLUDE_SOURCES carries the export gate).
 APP_HIDDEN_SOURCES = frozenset({"found:xfrog", "frontier:partcrafter"})
 
+# Same internal-data-only posture, but keyed by generator PARADIGM. These paradigms are kept in
+# the DB for internal analysis but excluded from the whole app UI (arena pool, leaderboard,
+# models, spotlight):
+#   retrieval — found human-made assets (Sketchfab/Objaverse). Not a generative model; ranking
+#     them here muddies "which model rebuilds life best" (that's a separate GT-creation benchmark).
+#   procedural_expert — hand-authored rule-based generators (Blender/Infinigen/L-Py/AgriGen…),
+#     which we can't meaningfully scale beyond the current handful. (procedural_llm, the
+#     LLM-authored path, STAYS — it scales and is a core differentiator.)
+APP_HIDDEN_PARADIGMS = frozenset({"retrieval", "procedural_expert"})
+
 
 def is_safe_test_db_target(value: str | None) -> bool:
     """True if a DB URL/path is a throwaway that's safe for the test suite to drop/recreate.
