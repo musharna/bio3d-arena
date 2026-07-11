@@ -162,11 +162,15 @@ RELEASES_DIR = DATA_DIR / "releases"
 # showing its input as the reference rather than being left with no anchor at all.
 INPUT_REFERENCE_EXEMPT_SLUGS = {"hordeum_vulgare"}
 
-# AgriGen's internal procedural-expert testers. Their outputs stay in the DB for internal
-# analysis, but are hidden everywhere in the app UI — dropped from the perceptual boards
-# (mode_a_excluded_generator_ids) and the arena vote pool, on every instance (public + internal).
-# This is stricter than the public-export gate, which drops them only from the public bundle.
-APP_HIDDEN_GENERATOR_SLUGS = frozenset({"agrigen", "demeter", "helios"})
+# Generators hidden everywhere in the app UI by slug (kept in the DB for internal analysis) —
+# dropped from the perceptual boards (mode_a_excluded_generator_ids) and the arena vote pool on
+# every instance. Stricter than the public-export gate (which only drops them from the bundle).
+#   agrigen/demeter/helios — AgriGen internal procedural-expert testers (also covered by the
+#     procedural_expert paradigm hide, kept here belt-and-suspenders).
+#   trellis/hunyuan3d — the bio3d-arena SELF-HOSTED early recon runs. They duplicate the
+#     API-served TRELLIS/Hunyuan3D (fal/Replicate), aren't API-reproducible, and were the
+#     low-quality early runs — pruned. (Self-hosted InstantMesh stays: it's the only InstantMesh.)
+APP_HIDDEN_GENERATOR_SLUGS = frozenset({"agrigen", "demeter", "helios", "trellis", "hunyuan3d"})
 
 # Same internal-data-only posture as APP_HIDDEN_GENERATOR_SLUGS, but keyed by output SOURCE
 # rather than generator slug. xfrog uses one variant generator slug per crop (all named
@@ -175,6 +179,16 @@ APP_HIDDEN_GENERATOR_SLUGS = frozenset({"agrigen", "demeter", "helios"})
 # Both are kept in the DB for internal analysis but hidden from the whole app UI and never
 # promoted to a public bundle (public_export.HARD_EXCLUDE_SOURCES carries the export gate).
 APP_HIDDEN_SOURCES = frozenset({"found:xfrog", "frontier:partcrafter"})
+
+# Same internal-data-only posture, but keyed by generator PARADIGM. These paradigms are kept in
+# the DB for internal analysis but excluded from the whole app UI (arena pool, leaderboard,
+# models, spotlight):
+#   retrieval — found human-made assets (Sketchfab/Objaverse). Not a generative model; ranking
+#     them here muddies "which model rebuilds life best" (that's a separate GT-creation benchmark).
+#   procedural_expert — hand-authored rule-based generators (Blender/Infinigen/L-Py/AgriGen…),
+#     which we can't meaningfully scale beyond the current handful. (procedural_llm, the
+#     LLM-authored path, STAYS — it scales and is a core differentiator.)
+APP_HIDDEN_PARADIGMS = frozenset({"retrieval", "procedural_expert"})
 
 
 def is_safe_test_db_target(value: str | None) -> bool:
