@@ -2,9 +2,74 @@
 {% block title %}Leaderboard · Bio 3D Arena{% endblock %}
 {% block description %}Bradley–Terry rankings of 3D generative models, scored by blind human votes on how faithfully each reconstructs real plants, fungi, and animals.{% endblock %}
 {% block content %}
-{% set sel_paradigm_matches = paradigm_options | selectattr('selected') | list %}
+{% set sel_paradigm_matches = paradigm_options | selectattr('selected') | selectattr('mode', 'equalto', 'paradigm') | list %}
 {% set sel_paradigm_value = sel_paradigm_matches[0].value if sel_paradigm_matches else None %}
-{% set sel_paradigm_display = sel_paradigm_matches[0].display if sel_paradigm_matches else "All paradigms" %}
+{# Query string for the CURRENT view (minus show_all) — so the Show-all toggle keeps the view. #}
+{% set view_qs = "criterion=" ~ sel_criterion ~ "&category=" ~ sel_category ~ (("&paradigm=" ~ sel_paradigm_value) if sel_paradigm_value else "") ~ ("&overall=true" if overall else "") ~ ("&verified=true" if verified else "") %}
+{# One ranked board (header + table). Legend + Show-all live outside so they render once. #}
+{% macro lb_board(brows, title) %}
+<div class="lb-panel">
+  <div class="lb-panel-head">
+    <h3 class="paradigm-heading">{{ title }}</h3>
+    <span class="subtle lb-panel-count">{{ brows|length }} generator{{ 's' if brows|length != 1 else '' }}</span>
+  </div>
+  <div class="ranktable-wrap">
+    <table class="ranktable lb-ranktable">
+      <thead>
+        <tr>
+          <th class="lb-th-rank" title="Models with overlapping 95% CIs share a rank">Rank</th>
+          <th>Generator</th>
+          <th class="num">BT score <span class="lb-sort mono" aria-hidden="true">↓</span></th>
+          <th>95% interval</th>
+          <th>Trend</th>
+          <th class="num">Votes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in brows %}
+        <tr>
+          <td class="lb-rank">
+            <span class="lb-momentum lb-momentum-{{ r.momentum }}" aria-hidden="true">{{ {"up": "▲", "down": "▽", "flat": "−"}[r.momentum] }}</span>
+            {% if loop.index <= 3 %}
+            <span class="lb-medal lb-medal-{{ ['gold', 'silver', 'bronze'][loop.index0] }}">{{ loop.index }}</span>
+            {% else %}
+            <span class="lb-rank-num mono">{{ loop.index }}</span>
+            {% endif %}
+          </td>
+          <td class="gen">
+            <span class="lb-avatar" style="--h:{{ r.avatar_hue }}" aria-hidden="true">{{ r.avatar }}</span>
+            <span class="gen-name">{{ r.generator }}</span>
+            {% if r.provisional or r.provenance %}
+            <span class="lb-gen-tags">
+              {% if r.provisional %}<span class="cov-badge cov-prov" title="Fewer than {{ firm_vote_threshold }} votes — rank may still shift">provisional</span>{% endif %}
+              {% for p in r.provenance %}<span class="lb-prov mono">{{ p }}</span>{% endfor %}
+            </span>
+            {% endif %}
+          </td>
+          <td class="num mono{% if r.rank == 1 %} strong{% endif %}">{{ r.bt_score }}</td>
+          <td class="ci-cell">
+            <div class="ci-bar" title="95% bootstrap CI [{{ r.bt_lower }}, {{ r.bt_upper }}]">
+              <span class="ci-range" style="left: {{ r.ci_left }}%; width: {{ r.ci_width }}%;"></span>
+              <span class="ci-dot" style="left: {{ r.ci_point }}%;"></span>
+            </div>
+            <span class="ci-nums mono">[{{ r.bt_lower }}, {{ r.bt_upper }}]</span>
+          </td>
+          <td class="lb-trend-cell" title="Win-rate over time, in 8 buckets derived from real vote timestamps">
+            <svg class="lb-spark lb-spark-{{ r.momentum }}" viewBox="0 0 64 20" width="64" height="20" aria-hidden="true">
+              <polyline points="{{ r.trend_points }}" fill="none" stroke-width="1.5" />
+            </svg>
+          </td>
+          <td class="num lb-votes-cell">
+            {{ r.n_games }}
+            <a class="lb-chevron" href="{{ r.detail_url }}" aria-label="View {{ r.generator }} detail">►</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endmacro %}
 <section class="lb">
   <div class="lb-head-row">
     <header class="b3d-page-head">
@@ -33,117 +98,43 @@
     </details>
   </div>
 
-  <nav class="lb-ptabs" role="tablist" aria-label="Paradigm">
+  <nav class="lb-ptabs" role="tablist" aria-label="Board view">
     {% for opt in paradigm_options %}
     <a
-      href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}{% if opt.value %}&paradigm={{ opt.value }}{% endif %}{% if verified %}&verified=true{% endif %}"
+      href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}{% if opt.mode == 'paradigm' %}&paradigm={{ opt.value }}{% endif %}{% if opt.mode == 'overall' %}&overall=true{% endif %}{% if verified %}&verified=true{% endif %}"
       class="lb-ptab{{ ' is-active' if opt.selected else '' }}"
       role="tab"
       aria-selected="{{ 'true' if opt.selected else 'false' }}"
-      title="{{ opt.display }}"
-      >{{ opt.tab or opt.display }}</a
+      title="{{ opt.display or opt.tab }}"
+      >{{ opt.tab }}</a
     >
     {% endfor %}
   </nav>
 
-  {% if rows %}
-  <div class="lb-panel">
-    <div class="lb-panel-head">
-      <h3 class="paradigm-heading">
-        {% if sel_paradigm_value %}{{ sel_paradigm_display }}{% else %}Overall — all paradigms{% endif %}
-      </h3>
-      {# Design (03-leaderboard.png): compact single-line header — title + generator count,
-         with the rated-only toggle pushed to the right. The within-paradigm caveat lives in
-         the "How ranking works" panel, not here. #}
-      <span class="subtle lb-panel-count">
-        {{ rows|length }} generator{{ 's' if rows|length != 1 else '' }}
-      </span>
-      {% if total_votes %}<span class="subtle lb-panel-votes mono">&bull; {{ "{:,}".format(total_votes) }} votes</span>{% endif %}
-      {% if unrated_count > 0 or show_all %}
-      {# Rated-only by default (0-vote generators carry only the default prior BT and flood the
-         board); this toggle reveals/hides them. #}
-      <a class="lb-showall-toggle"
-        href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}{% if sel_paradigm_value %}&paradigm={{ sel_paradigm_value }}{% endif %}{% if verified %}&verified=true{% endif %}{% if not show_all %}&show_all=true{% endif %}"
-        >{% if show_all %}Show rated only{% else %}Show all {{ total_generators }} <span class="subtle">· {{ unrated_count }} unrated</span>{% endif %}</a>
-      {% endif %}
-    </div>
-    <div class="ranktable-wrap">
-      <table class="ranktable lb-ranktable">
-        <thead>
-          <tr>
-            <th class="lb-th-rank" title="Models with overlapping 95% CIs share a rank">Rank</th>
-            <th>Generator</th>
-            <th class="num">BT score <span class="lb-sort mono" aria-hidden="true">↓</span></th>
-            <th>95% interval</th>
-            <th>Trend</th>
-            <th class="num">Votes <span class="lb-sort mono lb-sort-inactive" aria-hidden="true">↕</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in rows %}
-          <tr>
-            <td class="lb-rank">
-              <span class="lb-momentum lb-momentum-{{ r.momentum }}" aria-hidden="true"
-                >{{ {"up": "▲", "down": "▽", "flat": "−"}[r.momentum] }}</span
-              >
-              {% if loop.index <= 3 %}
-              <span class="lb-medal lb-medal-{{ ['gold', 'silver', 'bronze'][loop.index0] }}">{{ loop.index }}</span>
-              {% else %}
-              <span class="lb-rank-num mono">{{ loop.index }}</span>
-              {% endif %}
-            </td>
-            <td class="gen">
-              <span class="lb-avatar" style="--h:{{ r.avatar_hue }}" aria-hidden="true">{{ r.avatar }}</span>
-              <span class="gen-name">{{ r.generator }}</span>
-              {# Prototype: provenance + provisional tags are right-aligned against the BT-score
-                 column, not crammed after the name (which crowds/overflows the row). #}
-              {% if r.provisional or r.provenance %}
-              <span class="lb-gen-tags">
-                {% if r.provisional %}<span class="cov-badge cov-prov" title="Fewer than {{ firm_vote_threshold }} votes — rank may still shift">provisional</span>{% endif %}
-                {% for p in r.provenance %}<span class="lb-prov mono">{{ p }}</span>{% endfor %}
-              </span>
-              {% endif %}
-            </td>
-            <td class="num mono{% if r.rank == 1 %} strong{% endif %}">{{ r.bt_score }}</td>
-            <td class="ci-cell">
-              <div
-                class="ci-bar"
-                title="95% bootstrap CI [{{ r.bt_lower }}, {{ r.bt_upper }}]"
-              >
-                <span
-                  class="ci-range"
-                  style="left: {{ r.ci_left }}%; width: {{ r.ci_width }}%;"
-                ></span>
-                <span class="ci-dot" style="left: {{ r.ci_point }}%;"></span>
-              </div>
-              <span class="ci-nums mono">[{{ r.bt_lower }}, {{ r.bt_upper }}]</span>
-            </td>
-            <td class="lb-trend-cell" title="Win-rate over time, in 8 buckets derived from real vote timestamps">
-              <svg class="lb-spark lb-spark-{{ r.momentum }}" viewBox="0 0 64 20" width="64" height="20" aria-hidden="true">
-                <polyline points="{{ r.trend_points }}" fill="none" stroke-width="1.5" />
-              </svg>
-            </td>
-            <td class="num lb-votes-cell">
-              {{ r.n_games }}
-              <a class="lb-chevron" href="{{ r.detail_url }}" aria-label="View {{ r.generator }} detail">►</a>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <p class="subtle lb-legend">
-      <span class="ci-range lb-legend-swatch" aria-hidden="true"></span> 95% credible interval ·
-      <span class="ci-dot lb-legend-swatch" aria-hidden="true"></span> point estimate ·
-      <svg class="lb-spark lb-legend-swatch" viewBox="0 0 64 20" width="20" height="12" aria-hidden="true"><polyline points="0,16 32,6 64,10" fill="none" stroke-width="1.5" /></svg> trend ·
-      <span class="cov-badge cov-prov lb-legend-badge">provisional</span> under {{ firm_vote_threshold }} votes ·
-      click a row for detail
-    </p>
-  </div>
+  {% if sections or rows %}
+  {% if unrated_count > 0 or show_all %}
+  <p class="lb-showall-row">
+    <a class="lb-showall-toggle" href="/leaderboard?{{ view_qs }}{% if not show_all %}&show_all=true{% endif %}"
+      >{% if show_all %}Show rated only{% else %}Show all {{ total_generators }} <span class="subtle">· {{ unrated_count }} unrated</span>{% endif %}</a>
+  </p>
+  {% endif %}
+  {% if sections %}
+  {% if stacked %}<p class="subtle lb-stacked-note">Each method is ranked on its own — the rigorous comparison. Cross-paradigm scores aren't directly comparable (separate match pools); the <b>Overall</b> tab shows a caveated combined view.</p>{% endif %}
+  {% for s in sections %}{{ lb_board(s.rows, s.display) }}{% endfor %}
+  {% else %}
+  {% if overall %}<p class="subtle lb-stacked-note">Cross-paradigm ordering — a display convenience, not a statistical claim (paradigms are scored in separate match pools). Use the per-paradigm tabs for the rigorous comparison.</p>{% endif %}
+  {{ lb_board(rows, board_title) }}
+  {% endif %}
+  <p class="subtle lb-legend">
+    <span class="ci-range lb-legend-swatch" aria-hidden="true"></span> 95% credible interval ·
+    <span class="ci-dot lb-legend-swatch" aria-hidden="true"></span> point estimate ·
+    <svg class="lb-spark lb-legend-swatch" viewBox="0 0 64 20" width="20" height="12" aria-hidden="true"><polyline points="0,16 32,6 64,10" fill="none" stroke-width="1.5" /></svg> trend ·
+    <span class="cov-badge cov-prov lb-legend-badge">provisional</span> under {{ firm_vote_threshold }} votes ·
+    click a row for detail
+  </p>
   {% else %}
   {% if verified %}<p>No verified votes yet — sign in with Hugging Face and vote to seed the verified board.</p>{% else %}<p>No ratings yet for this slice. Cast some votes in the <a href="/arena">Arena</a>.</p>{% endif %}
   {% endif %}
-
   <details class="lb-filters-audit">
     <summary>Filters &amp; bias audit</summary>
     <div class="lb-filters-audit-body">

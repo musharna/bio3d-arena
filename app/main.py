@@ -1219,6 +1219,7 @@ def leaderboard(
     paradigm: str | None = None,
     verified: bool = False,
     show_all: bool = False,
+    overall: bool = False,
 ):
     roadmap = _roadmap_or_none(request, db)
     if roadmap is not None:
@@ -1253,22 +1254,53 @@ def leaderboard(
     # ids take precedence over a plain category id, mirroring _matches_for_scope elsewhere).
     crit_row = db.execute(select(Criterion).where(Criterion.slug == criterion)).scalars().first()
     trend_by_gid: dict[int, list[float | None]] = {}
-    if rows and crit_row is not None:
+    if all_rows and crit_row is not None:
         trend_by_gid = service.generator_trend_series(
             db,
             crit_row.id,
             None if cat_ids is not None else category_id_sel,
             category_ids=cat_ids,
         )
-    rows = _enrich_leaderboard_rows(rows, trend_by_gid)
-    # Rated-only by default: hide generators with zero comparisons (never voted on — they carry
-    # only the default prior BT and flood the board). A "Show all" toggle reveals them. If nothing
-    # is rated yet (fresh slice), fall back to showing all so the board is never spuriously empty.
-    total_generators = len(rows)
-    rated_rows = [r for r in rows if r.get("n_games", 0) > 0]
-    unrated_count = total_generators - len(rated_rows)
-    if not show_all and rated_rows:
-        rows = rated_rows
+
+    def _finish(board_rows: list[dict]) -> list[dict]:
+        """Enrich + rated-only filter one board's rows (fall back to all if none are rated)."""
+        board_rows = _enrich_leaderboard_rows(board_rows, trend_by_gid)
+        rated = [r for r in board_rows if r.get("n_games", 0) > 0]
+        return board_rows if (show_all or not rated) else rated
+
+    # Paradigms present in this (criterion/category/kingdom) scope — drives BOTH the tabs and the
+    # stacked per-paradigm sections. Derived from merged all_rows so a tab never vanishes on click.
+    paradigms_in_rows = sorted({r["paradigm"] for r in all_rows if r.get("paradigm")})
+
+    # DEFAULT (trusted scope, no paradigm/overall filter) = stacked per-paradigm boards, each with
+    # its OWN fresh within-paradigm BT rank — the rigorous comparison (cross-paradigm BT scores
+    # come from disconnected match components). `?paradigm=X` shows one paradigm; `?overall=true`
+    # shows the caveated cross-paradigm merged board; the Verified scope always merges (it can't
+    # refit per-paradigm), so it renders as a single board too.
+    stacked = (not verified) and (paradigm is None) and (not overall)
+    sections: list[dict] | None = None
+    board_title = "Overall — all methods (cross-paradigm, display-only)"
+    if stacked:
+        # Group the merged rows by paradigm and RE-rank within each group (its own fresh 1..N BT
+        # rank — the rigorous comparison). Grouping all_rows (rather than N per-paradigm queries)
+        # also keeps any null-paradigm generator visible under an "Other" section.
+        groups: dict[str | None, list[dict]] = {}
+        for r in all_rows:
+            groups.setdefault(r.get("paradigm"), []).append(r)
+        sections = []
+        for p in sorted(groups, key=lambda x: (x is None, x or "")):
+            grows = _finish(service.finalize_rows(groups[p]))
+            if grows:
+                display = paradigms.DISPLAY_NAMES.get(p, p) if p else "Other"
+                sections.append({"value": p, "display": display, "rows": grows})
+        rows = []
+    else:
+        rows = _finish(rows)
+        if paradigm:
+            board_title = paradigms.DISPLAY_NAMES.get(paradigm, paradigm)
+    # Global rated/unrated counts (for the single Show-all toggle) from the merged universe.
+    total_generators = len(all_rows)
+    unrated_count = sum(1 for r in all_rows if r.get("n_games", 0) == 0)
     # Precompute `selected` flags in Python so the template avoids `==` (which the
     # HTML formatter mangles inside Jinja tags).
     category_options = [
@@ -1286,26 +1318,32 @@ def leaderboard(
     criterion_options = [
         {"slug": c.slug, "name": c.name, "selected": criterion == c.slug} for c in crits
     ]
-    # Paradigm tabs reflect the FULL universe for this (criterion/category/kingdom) scope,
-    # independent of which tab is currently active — deriving them from the (already
-    # paradigm-filtered) `rows` would make every non-active tab vanish after the first click.
-    paradigms_in_rows = sorted({r["paradigm"] for r in all_rows if r.get("paradigm")})
-    paradigm_options = [
-        {"value": None, "display": "All paradigms", "tab": "Overall", "selected": paradigm is None}
-    ] + [
-        {
-            "value": p,
-            "display": paradigms.DISPLAY_NAMES.get(p, p),
-            "tab": paradigms.SHORT_NAMES.get(p, p),
-            "selected": paradigm == p,
-        }
-        for p in paradigms_in_rows
-    ]
+    # Tabs reflect the FULL paradigm universe for this scope (from all_rows, so a tab never
+    # vanishes on click). Default "By paradigm" (stacked) first, then each paradigm, then the
+    # caveated cross-paradigm "Overall". `mode` tells the template which href/params to build.
+    paradigm_options = (
+        [{"mode": "stacked", "value": None, "tab": "By paradigm", "selected": stacked}]
+        + [
+            {
+                "mode": "paradigm",
+                "value": p,
+                "display": paradigms.DISPLAY_NAMES.get(p, p),
+                "tab": paradigms.SHORT_NAMES.get(p, p),
+                "selected": paradigm == p,
+            }
+            for p in paradigms_in_rows
+        ]
+        + [{"mode": "overall", "value": None, "tab": "Overall", "selected": overall}]
+    )
     return templates.TemplateResponse(
         request,
         "leaderboard.html",
         {
             "rows": rows,
+            "sections": sections,
+            "board_title": board_title,
+            "stacked": stacked,
+            "overall": overall,
             "total_votes": total,
             "category_options": category_options,
             "criterion_options": criterion_options,
