@@ -162,11 +162,15 @@ RELEASES_DIR = DATA_DIR / "releases"
 # showing its input as the reference rather than being left with no anchor at all.
 INPUT_REFERENCE_EXEMPT_SLUGS = {"hordeum_vulgare"}
 
-# AgriGen's internal procedural-expert testers. Their outputs stay in the DB for internal
-# analysis, but are hidden everywhere in the app UI — dropped from the perceptual boards
-# (mode_a_excluded_generator_ids) and the arena vote pool, on every instance (public + internal).
-# This is stricter than the public-export gate, which drops them only from the public bundle.
-APP_HIDDEN_GENERATOR_SLUGS = frozenset({"agrigen", "demeter", "helios"})
+# Generators hidden everywhere in the app UI by slug (kept in the DB for internal analysis) —
+# dropped from the perceptual boards (mode_a_excluded_generator_ids) and the arena vote pool on
+# every instance. Stricter than the public-export gate (which only drops them from the bundle).
+#   agrigen/demeter/helios — AgriGen internal procedural-expert testers (also covered by the
+#     procedural_expert paradigm hide, kept here belt-and-suspenders).
+#   trellis/hunyuan3d — the bio3d-arena SELF-HOSTED early recon runs. They duplicate the
+#     API-served TRELLIS/Hunyuan3D (fal/Replicate), aren't API-reproducible, and were the
+#     low-quality early runs — pruned. (Self-hosted InstantMesh stays: it's the only InstantMesh.)
+APP_HIDDEN_GENERATOR_SLUGS = frozenset({"agrigen", "demeter", "helios", "trellis", "hunyuan3d"})
 
 # Same internal-data-only posture as APP_HIDDEN_GENERATOR_SLUGS, but keyed by output SOURCE
 # rather than generator slug. xfrog uses one variant generator slug per crop (all named

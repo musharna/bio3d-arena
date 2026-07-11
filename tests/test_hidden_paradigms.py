@@ -35,6 +35,39 @@ def test_hidden_paradigms_configured():
     assert "image_recon" not in config.APP_HIDDEN_PARADIGMS
 
 
+def test_selfhosted_recon_dups_pruned_but_instantmesh_kept():
+    # bio3d-arena self-hosted TRELLIS/Hunyuan3D dupe the API versions → pruned by slug; the only
+    # InstantMesh stays. API-served TRELLIS has a distinct slug and must NOT be caught.
+    assert "trellis" in config.APP_HIDDEN_GENERATOR_SLUGS
+    assert "hunyuan3d" in config.APP_HIDDEN_GENERATOR_SLUGS
+    assert "instantmesh" not in config.APP_HIDDEN_GENERATOR_SLUGS
+    init_db()
+    with SessionLocal() as db:
+        r = random.randint(0, 10**9)
+
+        def mk(slug):
+            g = Generator(slug=slug, name=slug, paradigm="image_recon")
+            db.add(g)
+            db.flush()
+            db.add(
+                ModelOutput(
+                    task_id=1,
+                    generator_id=g.id,
+                    asset_path="x.glb",
+                    asset_format="glb",
+                    source="bio3d-arena",
+                )
+            )
+            db.flush()
+            return g
+
+        selfhosted, api, instant = mk("trellis"), mk(f"fal:trellis-{r}"), mk("instantmesh")
+        db.commit()
+        hidden = service.app_hidden_generator_ids(db)
+        assert selfhosted.id in hidden
+        assert api.id not in hidden and instant.id not in hidden
+
+
 def test_retrieval_and_procedural_expert_are_app_hidden():
     init_db()
     with SessionLocal() as db:
