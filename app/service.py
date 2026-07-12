@@ -323,6 +323,46 @@ def _matches_for_scope(
     return matches, groups
 
 
+def head_to_head_record(
+    db: Session,
+    generator_id: int,
+    criterion_slug: str = "overall",
+    *,
+    category_ids: set[int] | None = None,
+) -> list[dict]:
+    """Per-opponent decisive win/loss record for one generator within its paradigm scope.
+
+    Built from _matches_for_scope (already same-paradigm, gold/reference-excluded, trust-gated,
+    ties split). Returns [] when the generator has no decisive games. Sorted games desc, win% desc.
+    """
+    crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+    if crit is None:
+        return []
+    matches, _groups = _matches_for_scope(db, crit.id, category_ids=category_ids)
+    tally: dict[int, dict] = {}
+    for winner, loser in matches:
+        if winner == generator_id:
+            t = tally.setdefault(loser, {"wins": 0, "losses": 0})
+            t["wins"] += 1
+        elif loser == generator_id:
+            t = tally.setdefault(winner, {"wins": 0, "losses": 0})
+            t["losses"] += 1
+    out = []
+    for opp, t in tally.items():
+        games = t["wins"] + t["losses"]
+        out.append(
+            {
+                "opponent_id": opp,
+                "wins": t["wins"],
+                "losses": t["losses"],
+                "games": games,
+                "win_pct": (t["wins"] / games) if games else 0.0,
+            }
+        )
+    out.sort(key=lambda r: (r["games"], r["win_pct"]), reverse=True)
+    return out
+
+
 def _players_for_scope(
     db: Session, category_id: int | None = None, *, category_ids: set[int] | None = None
 ) -> list[int]:
