@@ -87,12 +87,18 @@ class IncludeSet:
 def resolve_include_ids(
     db: Session, *, task_titles: list[str], generator_slugs: list[str]
 ) -> IncludeSet:
+    from .service import app_hidden_generator_ids
+
     inc = IncludeSet()
+    # Anything hidden from the app UI everywhere (internal-only — retrieval + procedural_expert
+    # paradigms, xfrog/partcrafter sources, AgriGen testers, the pruned self-hosted recon dups)
+    # must never enter the public redistribute dataset either, regardless of the curator allowlist.
+    hidden = app_hidden_generator_ids(db)
     allowed = [s for s in generator_slugs if s not in PUBLIC_EXCLUDED_GENERATORS]
     inc.generator_ids = {
         g.id
         for g in db.execute(select(Generator).where(Generator.slug.in_(allowed))).scalars()
-        if g.slug not in PUBLIC_EXCLUDED_GENERATORS
+        if g.slug not in PUBLIC_EXCLUDED_GENERATORS and g.id not in hidden
     }
     inc.task_ids = {
         t.id
