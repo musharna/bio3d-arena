@@ -31,9 +31,13 @@ def test_synth_ingest_then_scoped_vote_ranks():
         db.commit()
         task = seed.synth_task_for_slug(db, "zea_mays")
         assert task is not None
+        # Use the API-served slugs: the bare "trellis"/"hunyuan3d" slugs are the self-hosted
+        # recon dups, now in config.APP_HIDDEN_GENERATOR_SLUGS (internal-only), so they'd be
+        # excluded from the arena pool and no votable pair would form. The "fal:" variants carry
+        # the same recon identity but stay displayable.
         for path, gen in [
-            (BAKE / "zea_mays__trellis.glb", "trellis"),
-            (BAKE / "zea_mays__hunyuan3d.glb", "hunyuan3d"),
+            (BAKE / "zea_mays__trellis.glb", "fal:trellis"),
+            (BAKE / "zea_mays__hunyuan3d.glb", "fal:hunyuan3d"),
         ]:
             ingest.register_output(
                 db,
@@ -63,7 +67,7 @@ def test_synth_ingest_then_scoped_vote_ranks():
             comp = db.get(Comparison, cid)
             if comp.is_gold:
                 continue
-            winner = "a" if out_gen.get(comp.output_a_id) == "trellis" else "b"
+            winner = "a" if out_gen.get(comp.output_a_id) == "fal:trellis" else "b"
             if (
                 client.post(
                     "/api/vote?category=synthetic-plants&criterion=botanical_plausibility",
