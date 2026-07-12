@@ -38,9 +38,11 @@ the spine**; everything else is a clearly-labeled secondary filter or a separate
 - **Cross-paradigm "Overall" ranking is removed** from the primary flow, replaced by a
   one-line explainer (it is explicitly "not a statistical claim").
 - **Kingdom stays the existing global filter.** **Criterion** is a secondary in-board filter.
-- **Visible modality boards = 5:** Image→3D reconstruction, Text→3D, LLM Procedural (code),
-  Scan/capture, Agentic. (`capture_scan` is a real competitor modality — photogrammetry of a
-  live organism — distinct from the held-out GT reference scans baked by `scripts/render_gt.py`.)
+- **Visible modality boards = 4:** Image→3D reconstruction, Text→3D, LLM Procedural (code),
+  Agentic. **`capture_scan` is moved to internal/app-hidden** as part of this work — add it to
+  `config.APP_HIDDEN_PARADIGMS` beside `retrieval` + `procedural_expert`. (It is photogrammetry
+  of a live organism — a data-capture reference more than a competing generator, and thin;
+  kept in the DB for internal analysis, hidden from the public boards.)
 
 ## Global Constraints
 
@@ -65,8 +67,8 @@ Landing shows one card per visible modality, under the global kingdom filter.
 ```
 Leaderboard        [ Plants ▾ ]     ⓘ Each method is ranked on its own — scores aren't
                                        comparable across methods (separate match pools).
-┌ Image→3D reconstruction ┐ ┌ Text→3D ┐ ┌ LLM Procedural (code) ┐ ┌ Scan ┐ ┌ Agentic ┐
-│ what: photo → 3D mesh    │ │ …       │ │ …                     │
+┌ Image→3D reconstruction ┐ ┌ Text→3D ┐ ┌ LLM Procedural (code) ┐ ┌ Agentic ┐
+│ what: photo → 3D mesh    │ │ …       │ │ …                     │ │ …       │
 │ 1 TRELLIS      1402      │
 │ 2 Hunyuan3D    1361      │
 │ 3 Meshy 6      1288      │
@@ -139,8 +141,9 @@ No migrations. No change to vote recording, matchmaking, or BT computation.
 ## Testing
 
 - `paradigms.WHAT_THIS_MEASURES` covers every non-hidden paradigm (unit).
-- Hub route: renders exactly the visible modalities, none app-hidden; each card carries name +
-  what-measures + population line; respects the kingdom filter (route test).
+- Hub route: renders exactly the 4 visible modalities; `capture_scan`, `retrieval`, and
+  `procedural_expert` never appear as public boards; each card carries name + what-measures +
+  population line; respects the kingdom filter (route test).
 - Board route: ranks one paradigm only; votes-until-firm status string correct on both sides of
   the threshold; AI-judge link present; app-hidden generators absent (route test).
 - Head-to-head aggregation: given seeded decisive votes, win% and n are correct; a model with no
@@ -153,7 +156,8 @@ No migrations. No change to vote recording, matchmaking, or BT computation.
 
 **In:** modality hub, per-modality board, model-detail head-to-head (#74), votes-until-firm
 (#76), judge-page delineation, kingdom/criterion filter cleanup, removal of the cross-paradigm
-Overall ranking, the variant grouping seam.
+Overall ranking, moving `capture_scan` into `config.APP_HIDDEN_PARADIGMS` (internal-only), the
+variant grouping seam.
 
 **Out:** entrant/effort-variant generation (Spec 2), share cards (#75), `/difficulty` redesign,
 mobile pass beyond keeping new layouts responsive (#77), public deploy (#33).
