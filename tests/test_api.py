@@ -30,8 +30,10 @@ def test_next_returns_anonymized_pair():
     assert r.status_code == 200
     data = r.json()
     assert "comparison_id" in data
-    assert data["a"]["url"].startswith("/assets/")
-    assert data["b"]["url"].startswith("/assets/")
+    # URLs are opaque + output-scoped (/media/o/{id}.{ext}) so devtools can't read the
+    # asset_path and de-anonymize the gold decoy — see test_opaque_asset_urls.py.
+    assert data["a"]["url"].startswith("/media/o/")
+    assert data["b"]["url"].startswith("/media/o/")
     # Anonymized: no generator identity leaks in the payload.
     assert "generator" not in str(data).lower()
 

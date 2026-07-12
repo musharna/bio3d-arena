@@ -45,10 +45,16 @@ def test_selfhosted_recon_dups_pruned_but_instantmesh_kept():
     with SessionLocal() as db:
         r = random.randint(0, 10**9)
 
+        # Get-or-create by slug: seed_all() (run by another test on the shared temp DB) already
+        # commits generators named "trellis"/"instantmesh", so a bare INSERT would hit the
+        # generator.slug UNIQUE constraint. The hidden-ness is a property of the slug, so reusing
+        # the existing generator tests exactly the same mapping.
         def mk(slug):
-            g = Generator(slug=slug, name=slug, paradigm="image_recon")
-            db.add(g)
-            db.flush()
+            g = db.query(Generator).filter_by(slug=slug).first()
+            if g is None:
+                g = Generator(slug=slug, name=slug, paradigm="image_recon")
+                db.add(g)
+                db.flush()
             db.add(
                 ModelOutput(
                     task_id=1,

@@ -75,7 +75,8 @@ def test_dangling_pair_skipped_usable_served():
         assert res is not None and not res.get("done")
         assert res["progress"]["total"] == 1
         served = {res["a"]["url"], res["b"]["url"]}
-        assert served == {"/assets/cdg/0.glb", "/assets/cdg/1.glb"}
+        # URLs are opaque + output-scoped (/media/o/{id}.{ext}), not the raw asset_path.
+        assert served == {f"/media/o/{outs[0].id}.glb", f"/media/o/{outs[1].id}.glb"}
 
 
 def test_only_dangling_returns_done_not_crash():
