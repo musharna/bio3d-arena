@@ -52,7 +52,10 @@
    first time this <details> is expanded. #}
 <details
   class="lb-filters-audit lb-judge-section"
-  data-judge-url="/leaderboard/judge?criterion={{ sel_criterion }}&category={{ sel_category }}{% if verified %}&verified=1{% endif %}"
+  {# `fragment=1` selects the BARE fragment: leaderboard.js assigns the response to .innerHTML,
+     so the standalone-page form of this route (what a browser gets from the "see the AI-judge
+     board →" link on the board above) would nest a whole <html> document inside this <div>. #}
+  data-judge-url="/leaderboard/judge?criterion={{ sel_criterion }}&category={{ sel_category }}{% if verified %}&verified=1{% endif %}&fragment=1"
 >
   <summary>VLM judge (Sonnet 4.6, multi-view) — automated LLM-judge rankings by paradigm</summary>
   <div class="lb-judge-body" data-loaded="0">

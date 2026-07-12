@@ -1363,18 +1363,54 @@ def leaderboard(
     )
 
 
+def _visible_modalities(db: Session) -> list[str]:
+    """The modalities that exist as a public surface — every paradigm carried by ≥1 generator in
+    the roster, minus config.APP_HIDDEN_PARADIGMS, in paradigms.PARADIGMS order. This is the same
+    universe the modality hub cards cover, so the judge page's switcher mirrors the human boards
+    (rather than the judge board's own row set, which would drop a modality the judge hasn't
+    scored yet and make the two surfaces disagree about which boards exist)."""
+    present = set(db.execute(select(Generator.paradigm).distinct()).scalars())
+    return [
+        p
+        for p in paradigms.PARADIGMS
+        if p in present and p not in config.APP_HIDDEN_PARADIGMS and p is not None
+    ]
+
+
 @app.get("/leaderboard/judge", response_class=HTMLResponse)
 def leaderboard_judge(
     request: Request,
     db: Session = Depends(get_db),
     criterion: str = "overall",
     category: str = "all",
+    modality: str | None = None,
     verified: bool = False,
+    fragment: bool = False,
 ):
-    """VLM-judge board fragment for the current (criterion, category, kingdom) scope — fetched
-    lazily by leaderboard.js when the collapsed judge <details> is expanded. Same cache-first,
-    live-fallback path the main route used to run inline (see _kingdom_judge_leaderboard_rows).
-    `verified` is accepted for URL symmetry with the human board; the judge board is unaffected."""
+    """The VLM-judge board — a SEPARATE surface from the human-vote board, never intermixed with
+    it (its BT scores come from VLM ballots, not human votes; the page says so in plain language).
+
+    ONE route, TWO consumers:
+
+    * A BROWSER arriving from a board's "see the AI-judge board →" link gets a full page
+      (leaderboard_judge.html: site chrome, disclaimer, modality switcher, human-board backlink).
+    * `app/static/leaderboard.js` lazy-fetches the SAME route into the collapsed <details> on the
+      leaderboard and assigns the response to `innerHTML`, so it needs the BARE FRAGMENT
+      (_leaderboard_judge.html) — a full page there would nest <html> inside a <div>. It is
+      selected explicitly by `?fragment=1` (what the rendered `data-judge-url` carries) or by the
+      `X-Requested-With` header leaderboard.js already sends, so a hand-typed URL — which has
+      neither — always lands on the page.
+
+    Rows are the same cache-first, live-fallback path the main route used to run inline (see
+    _kingdom_judge_leaderboard_rows); the fit is ~11s cold, which is why the leaderboard never
+    computes it on the main render. `verified` is accepted for URL symmetry with the human board;
+    the judge board is unaffected by it (judge ballots have no signed-in scope)."""
+    if modality is not None and (
+        modality in config.APP_HIDDEN_PARADIGMS or not paradigms.is_valid_paradigm(modality)
+    ):
+        # Same contract as /leaderboard/{modality}: an app-hidden modality is internal-only and
+        # must not exist as a public surface at all, judge board included.
+        raise HTTPException(status_code=404, detail="Unknown modality")
     kingdom = request.state.kingdom
     k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
     category_id_sel = _resolve_category_id(db, category)
@@ -1384,10 +1420,37 @@ def leaderboard_judge(
         if k_ids is not None
         else _judge_leaderboard_rows(db, criterion, "multi4")
     )
+    # Belt-and-braces with the generator-level hiding in service.app_hidden_generator_ids(): a
+    # hidden paradigm never gets a heading, even if a stale rating row slipped through.
+    judge_rows = [r for r in judge_rows if r.get("paradigm") not in config.APP_HIDDEN_PARADIGMS]
+    if modality is not None:
+        judge_rows = [r for r in judge_rows if r.get("paradigm") == modality]
+    ctx = {"judge_rows": judge_rows, "paradigm_display_names": paradigms.DISPLAY_NAMES}
+    if fragment or request.headers.get("x-requested-with"):
+        return templates.TemplateResponse(request, "_leaderboard_judge.html", ctx)
+    visible = _visible_modalities(db)
     return templates.TemplateResponse(
         request,
-        "_leaderboard_judge.html",
-        {"judge_rows": judge_rows, "paradigm_display_names": paradigms.DISPLAY_NAMES},
+        "leaderboard_judge.html",
+        {
+            **ctx,
+            # Suppresses the fragment's own inline provenance line — the page carries a louder one.
+            "on_page": True,
+            "sel_modality": modality,
+            "sel_criterion": criterion,
+            "sel_category": category,
+            "board_title": paradigms.DISPLAY_NAMES.get(modality, modality) if modality else None,
+            "board_what": paradigms.WHAT_THIS_MEASURES.get(modality, "") if modality else "",
+            "modality_options": [
+                {
+                    "value": p,
+                    "tab": paradigms.SHORT_NAMES.get(p, p),
+                    "display": paradigms.DISPLAY_NAMES.get(p, p),
+                    "selected": modality == p,
+                }
+                for p in visible
+            ],
+        },
     )
 
 
