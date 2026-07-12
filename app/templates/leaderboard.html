@@ -6,6 +6,74 @@
 {% set sel_paradigm_value = sel_paradigm_matches[0].value if sel_paradigm_matches else None %}
 {# Query string for the CURRENT view (minus show_all) — so the Show-all toggle keeps the view. #}
 {% set view_qs = "criterion=" ~ sel_criterion ~ "&category=" ~ sel_category ~ (("&paradigm=" ~ sel_paradigm_value) if sel_paradigm_value else "") ~ ("&verified=true" if verified else "") %}
+{# One board row, factored out of the table so rows can NEST.
+
+   VARIANT SEAM (data shape only — no row supplies these today, and nothing on the board looks
+   different because of them):
+     * `r.variant_of` — this row is a variant of another model; it renders INDENTED, with a ▸
+       marker instead of its own rank/medal (a variant does not hold a board position of its own).
+     * `r.children`   — variants belonging to THIS model; rendered directly after it, at depth+1.
+   A follow-on spec (effort/quality variants of one model — e.g. `Hunyuan3D ▸ turbo / standard`,
+   which today compete as if they were unrelated models) will populate both fields. The table is
+   cut for that shape NOW so landing it does not mean re-cutting every cell.
+
+   `pos` is the caller's display position: rank/medal must come from the parent loop, never from a
+   `loop.index` inside a nested render. #}
+{% macro lb_row(r, pos, depth=0) %}
+{% set is_variant = depth > 0 or r.variant_of %}
+<tr class="lb-row{{ ' lb-row-variant' if is_variant else '' }}">
+  <td class="lb-rank">
+    {% if is_variant %}
+    <span class="lb-variant-mark" aria-hidden="true">▸</span>
+    {% else %}
+    <span class="lb-momentum lb-momentum-{{ r.momentum }}" aria-hidden="true">{{ {"up": "▲", "down": "▽", "flat": "−"}[r.momentum] }}</span>
+    {% if pos <= 3 %}
+    <span class="lb-medal lb-medal-{{ ['gold', 'silver', 'bronze'][pos - 1] }}">{{ pos }}</span>
+    {% else %}
+    <span class="lb-rank-num mono">{{ pos }}</span>
+    {% endif %}
+    {% endif %}
+  </td>
+  <td class="gen">
+    <span class="lb-avatar" style="--h:{{ r.avatar_hue }}" aria-hidden="true">{{ r.avatar }}</span>
+    <span class="gen-name">{{ r.generator }}</span>
+    {# The old "provisional" chip lived here; the Status column now carries that signal as
+       a COUNTDOWN ("N more votes → firm") — evaluation-in-progress, not a defect. #}
+    {% if r.provenance %}
+    <span class="lb-gen-tags">
+      {% for p in r.provenance %}<span class="lb-prov mono">{{ p }}</span>{% endfor %}
+    </span>
+    {% endif %}
+  </td>
+  <td class="num mono{% if r.rank == 1 and not is_variant %} strong{% endif %}">{{ r.bt_score }}</td>
+  <td class="ci-cell">
+    <div class="ci-bar" title="95% bootstrap CI [{{ r.bt_lower }}, {{ r.bt_upper }}]">
+      <span class="ci-range" style="left: {{ r.ci_left }}%; width: {{ r.ci_width }}%;"></span>
+      <span class="ci-dot" style="left: {{ r.ci_point }}%;"></span>
+    </div>
+    <span class="ci-nums mono">[{{ r.bt_lower }}, {{ r.bt_upper }}]</span>
+  </td>
+  <td class="lb-trend-cell" title="Win-rate over time, in 8 buckets derived from real vote timestamps">
+    <svg class="lb-spark lb-spark-{{ r.momentum }}" viewBox="0 0 64 20" width="64" height="20" aria-hidden="true">
+      <polyline points="{{ r.trend_points }}" fill="none" stroke-width="1.5" />
+    </svg>
+  </td>
+  <td class="num lb-votes-cell">{{ r.n_games }}</td>
+  {# Votes-until-firm (r.status, computed in main._enrich_leaderboard_rows): an under-threshold
+     row reads as evaluation-in-progress ("N more votes → firm"), never as settled and never as
+     broken. The `title` is the hover explanation the retired "provisional" chip carried — the
+     column is a countdown, so only the unfinished state needs one. #}
+  <td class="lb-status-cell">
+    {% if r.status.firm %}
+    <span class="cov-badge cov-firm">{{ r.status.label }}</span>
+    {% else %}
+    <span class="cov-badge cov-prov" title="Fewer than {{ firm_vote_threshold }} votes — rank may still shift">{{ r.status.label }}</span>
+    {% endif %}
+    <a class="lb-chevron" href="{{ r.detail_url }}" aria-label="View {{ r.generator }} detail">►</a>
+  </td>
+</tr>
+{% for child in r.children or [] %}{{ lb_row(child, pos, depth + 1) }}{% endfor %}
+{% endmacro %}
 {# One ranked board (header + table). Legend + Show-all live outside so they render once. #}
 {% macro lb_board(brows, title) %}
 <div class="lb-panel">
@@ -27,50 +95,8 @@
         </tr>
       </thead>
       <tbody>
-        {% for r in brows %}
-        <tr>
-          <td class="lb-rank">
-            <span class="lb-momentum lb-momentum-{{ r.momentum }}" aria-hidden="true">{{ {"up": "▲", "down": "▽", "flat": "−"}[r.momentum] }}</span>
-            {% if loop.index <= 3 %}
-            <span class="lb-medal lb-medal-{{ ['gold', 'silver', 'bronze'][loop.index0] }}">{{ loop.index }}</span>
-            {% else %}
-            <span class="lb-rank-num mono">{{ loop.index }}</span>
-            {% endif %}
-          </td>
-          <td class="gen">
-            <span class="lb-avatar" style="--h:{{ r.avatar_hue }}" aria-hidden="true">{{ r.avatar }}</span>
-            <span class="gen-name">{{ r.generator }}</span>
-            {# The old "provisional" chip lived here; the Status column now carries that signal as
-               a COUNTDOWN ("N more votes → firm") — evaluation-in-progress, not a defect. #}
-            {% if r.provenance %}
-            <span class="lb-gen-tags">
-              {% for p in r.provenance %}<span class="lb-prov mono">{{ p }}</span>{% endfor %}
-            </span>
-            {% endif %}
-          </td>
-          <td class="num mono{% if r.rank == 1 %} strong{% endif %}">{{ r.bt_score }}</td>
-          <td class="ci-cell">
-            <div class="ci-bar" title="95% bootstrap CI [{{ r.bt_lower }}, {{ r.bt_upper }}]">
-              <span class="ci-range" style="left: {{ r.ci_left }}%; width: {{ r.ci_width }}%;"></span>
-              <span class="ci-dot" style="left: {{ r.ci_point }}%;"></span>
-            </div>
-            <span class="ci-nums mono">[{{ r.bt_lower }}, {{ r.bt_upper }}]</span>
-          </td>
-          <td class="lb-trend-cell" title="Win-rate over time, in 8 buckets derived from real vote timestamps">
-            <svg class="lb-spark lb-spark-{{ r.momentum }}" viewBox="0 0 64 20" width="64" height="20" aria-hidden="true">
-              <polyline points="{{ r.trend_points }}" fill="none" stroke-width="1.5" />
-            </svg>
-          </td>
-          <td class="num lb-votes-cell">{{ r.n_games }}</td>
-          {# Votes-until-firm (r.status, computed in main._enrich_leaderboard_rows): an under-
-             threshold row reads as evaluation-in-progress ("N more votes → firm"), never as
-             settled and never as broken. #}
-          <td class="lb-status-cell">
-            <span class="cov-badge {{ 'cov-firm' if r.status.firm else 'cov-prov' }}">{{ r.status.label }}</span>
-            <a class="lb-chevron" href="{{ r.detail_url }}" aria-label="View {{ r.generator }} detail">►</a>
-          </td>
-        </tr>
-        {% endfor %}
+        {# Top-level rows only; a row's variants (seam, none today) come out of lb_row itself. #}
+        {% for r in brows %}{{ lb_row(r, loop.index) }}{% endfor %}
       </tbody>
     </table>
   </div>

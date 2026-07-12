@@ -239,3 +239,62 @@ def test_verified_paradigm_board_is_a_fresh_within_paradigm_ranking(monkeypatch)
     # Fresh 1..N: the BT cell is marked `strong` only for rank == 1. On a slice of the merged
     # ranking vrecon-1 would still carry rank 3 and nothing on the board would be rank 1.
     assert "num mono strong" in html
+
+
+# ------------------------------------------------------- presentation: hub grid + status pill
+
+
+def _media_blocks(css: str) -> list[str]:
+    """Every `@media ... { ... }` block, brace-balanced. A plain substring/regex scan can't tell a
+    rule INSIDE a media block from one that merely follows it, and the assertion below is exactly
+    'the hub grid is overridden inside a media query'."""
+    blocks = []
+    for m in re.finditer(r"@media[^{]*\{", css):
+        depth = 0
+        for j in range(m.end() - 1, len(css)):
+            if css[j] == "{":
+                depth += 1
+            elif css[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    blocks.append(css[m.start() : j + 1])
+                    break
+    return blocks
+
+
+def test_hub_grid_is_styled_and_responsive():
+    """The hub cards are a styled, responsive grid — not raw markup. (The card rules must live in
+    the shipped stylesheet, so this reads the SERVED css, not the template.)"""
+    css = client.get("/static/style.css").text
+    assert ".lb-hub-grid" in css
+    assert ".lb-hub-card" in css
+    # collapses to a single column on narrow viewports
+    assert any(".lb-hub-grid" in b for b in _media_blocks(css)), "no @media rule for the hub grid"
+
+
+def test_hub_card_styling_uses_design_tokens_not_literal_colors():
+    """The hub must read as a sibling of the existing card family (.b3d-model-card), which is
+    built from the token vars — a hard-coded hex would drift the moment a theme changes."""
+    css = client.get("/static/style.css").text
+    card = css.split(".lb-hub-card")[1].split("}")[0]
+    assert "var(--border)" in card and "var(--r-card)" in card
+    assert "#" not in card  # no literal hex colors
+
+
+def test_hub_renders_the_card_classes():
+    html = client.get("/leaderboard").text
+    for cls in ("lb-hub-grid", "lb-hub-card", "lb-hub-what", "lb-hub-top", "lb-hub-cta"):
+        assert f'class="{cls}' in html or f'"{cls} ' in html or f' {cls}"' in html, cls
+
+
+def test_board_status_cell_keeps_the_provisional_tooltip():
+    """The per-row Status badge replaced an older `provisional` chip that carried a hover
+    explanation ("Fewer than N votes — rank may still shift"). A not-yet-firm row must still
+    explain itself on hover; a firm row needs no caveat."""
+    html = client.get("/leaderboard?paradigm=image_recon").text
+    m = re.search(r'<span class="cov-badge cov-prov"[^>]*title="([^"]+)"', html)
+    assert m, "not-yet-firm status badge has no title tooltip"
+    assert str(service.FIRM_VOTE_THRESHOLD) in m.group(1)
+    assert "rank may still shift" in m.group(1)
+    # the settled state is not a caveat — no "may still shift" wording on the firm badge
+    assert re.search(r'<span class="cov-badge cov-firm">firm</span>', html)
