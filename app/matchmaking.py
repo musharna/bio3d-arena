@@ -29,18 +29,38 @@ def _paradigm_groups(outputs: list[ModelOutput]) -> dict[str, list[ModelOutput]]
     return groups
 
 
+def _gen_key(o: ModelOutput):
+    """Identity of the output's generator (the MODEL being ranked).
+
+    A generator commonly owns several outputs on the same task, so "distinct outputs" is NOT
+    "distinct models" — the arena must never serve a model against itself. Persisted outputs
+    key on generator_id; not-yet-flushed in-memory outputs (unit fixtures) fall back to the
+    Generator object's identity, which is stable within one session's identity map.
+    """
+    return o.generator_id if o.generator_id is not None else id(o.generator)
+
+
+def _n_generators(outs: list[ModelOutput]) -> int:
+    return len({_gen_key(o) for o in outs})
+
+
 def _fresh_pair_exists(outs: list[ModelOutput], voted_pairs: set[frozenset[int]]) -> bool:
-    """True if some same-paradigm pair among `outs` is NOT in `voted_pairs` (the session's
-    already-voted set). With an empty voted_pairs this reduces to 'has any pairable group'."""
+    """True if some same-paradigm, DIFFERENT-GENERATOR pair among `outs` is NOT in
+    `voted_pairs` (the session's already-voted set). With an empty voted_pairs this reduces to
+    'has any group with >=2 distinct generators'.
+
+    Must mirror pick_pair's admissibility exactly — a task counted as pairable here but
+    rejected by pick_pair yields a spurious None → intermittent 404 on /api/next."""
     for g in _paradigm_groups(outs).values():
-        if len(g) < 2:
+        if _n_generators(g) < 2:
             continue
         if not voted_pairs:
             return True
-        ids = [o.id for o in g]
-        for i in range(len(ids)):
-            for j in range(i + 1, len(ids)):
-                if frozenset((ids[i], ids[j])) not in voted_pairs:
+        for i in range(len(g)):
+            for j in range(i + 1, len(g)):
+                if _gen_key(g[i]) == _gen_key(g[j]):
+                    continue  # a model is never its own opponent
+                if frozenset((g[i].id, g[j].id)) not in voted_pairs:
                     return True
     return False
 
@@ -103,6 +123,12 @@ def pick_pair(
     `exclude_fn(output) -> bool` may optionally be passed to filter out specific
     outputs (e.g. reference-scan sources) before pair selection.
 
+    The two outputs must come from DIFFERENT generators: a generator often owns several
+    outputs on one task, and pairing two of them ("TRELLIS vs TRELLIS") is a meaningless
+    choice for the voter AND a (G, G) self-match that pollutes the Bradley-Terry fit. A
+    paradigm group therefore qualifies only with >=2 distinct generators; a group whose
+    outputs all come from one model is skipped (and a task with no such group returns None).
+
     `voted_pairs` (set of frozenset({a_id, b_id})) is the session's already-voted pairings;
     any pair in it is skipped so the served comparison can't 409 the /api/vote guard. If a
     least-sampled group's pairs are all voted, fall through to the next group; return None
@@ -113,7 +139,7 @@ def pick_pair(
         outputs = [o for o in outputs if not exclude_fn(o)]
     groups = _paradigm_groups(outputs)
     voted = voted_pairs or set()
-    remaining = [g for g in groups.values() if len(g) >= 2]
+    remaining = [g for g in groups.values() if _n_generators(g) >= 2]
 
     # Consider paradigm groups least-sampled-first (preserving fairness), and within the
     # chosen group take the least-sampled pair NOT already voted. Among groups tied at the
@@ -129,6 +155,8 @@ def pick_pair(
         picked = None
         for i in range(len(ordered)):
             for j in range(i + 1, len(ordered)):
+                if _gen_key(ordered[i]) == _gen_key(ordered[j]):
+                    continue  # never pair a model against itself
                 if frozenset((ordered[i].id, ordered[j].id)) not in voted:
                     picked = (ordered[i], ordered[j])
                     break
@@ -147,19 +175,27 @@ def pick_pair(
 def pick_quad(
     db: Session, task: Task, exclude_fn=None, seen_quads=None
 ) -> list[ModelOutput] | None:
-    """Pick 4 distinct same-paradigm (non-gold) outputs for the task, biased toward least-compared.
+    """Pick 4 same-paradigm (non-gold) outputs from 4 DISTINCT generators, biased toward
+    least-compared.
 
     Mirrors pick_pair: exclude_fn filters the pool first (admissibility etc.), outputs are grouped
-    by paradigm, the least-sampled group with >=4 members is chosen, and its 4 least-sampled
-    outputs are returned in shuffled order. `seen_quads` (set of frozenset of 4 output ids) is the
-    session's already-served quads; a quad already seen is skipped. Returns None when no group has
-    4 fresh outputs (caller falls back to pairwise)."""
+    by paradigm, the least-sampled qualifying group is chosen, and its 4 least-sampled outputs —
+    one per generator — are returned in shuffled order.
+
+    A group qualifies only with >=4 DISTINCT GENERATORS (not merely >=4 outputs): the K-wise
+    ballot is rank-broken into pairwise comparisons, so the same model appearing twice on one
+    ballot would manufacture a (G, G) self-match in the Bradley-Terry fit — and asks the voter
+    to choose between two of one model's own outputs.
+
+    `seen_quads` (set of frozenset of 4 output ids) is the session's already-served quads; a quad
+    already seen is skipped. Returns None when no group yields a fresh 4-distinct-generator quad
+    (caller falls back to pairwise)."""
     outputs = _real_outputs(task)
     if exclude_fn is not None:
         outputs = [o for o in outputs if not exclude_fn(o)]
     groups = _paradigm_groups(outputs)
     seen = seen_quads or set()
-    remaining = [g for g in groups.values() if len(g) >= 4]
+    remaining = [g for g in groups.values() if _n_generators(g) >= 4]
     while remaining:
         best = min(min(o.n_comparisons for o in g) for g in remaining)
         tied = [g for g in remaining if min(o.n_comparisons for o in g) == best]
@@ -167,7 +203,18 @@ def pick_quad(
         ordered = list(chosen)
         random.shuffle(ordered)
         ordered.sort(key=lambda o: o.n_comparisons)
-        quad = ordered[:4]
+        # Least-sampled-first, at most one output per generator (the group is known to hold
+        # >=4 distinct generators, so this always fills to 4).
+        quad: list[ModelOutput] = []
+        used: set = set()
+        for o in ordered:
+            k = _gen_key(o)
+            if k in used:
+                continue
+            used.add(k)
+            quad.append(o)
+            if len(quad) == 4:
+                break
         if frozenset(o.id for o in quad) not in seen:
             random.shuffle(quad)
             return quad
