@@ -5,8 +5,9 @@
   <header class="b3d-page-head">
     <h1>Models</h1>
     <p class="b3d-page-lede">
-      Every generator in the arena — reconstruction models, procedural baselines, and
-      text-native / agentic pipelines. Click through for per-task stats.
+      Every generator in the arena, grouped by the method it uses — a model is only ranked
+      against the others in its own section. BT scores come from separate match pools per
+      method, so they aren't comparable across sections. Click through for per-task stats.
     </p>
   </header>
 
@@ -14,36 +15,64 @@
   {# Rated-only by default (never-voted generators show only the default prior BT and flood the
      grid); this toggle reveals/hides them. #}
   <div class="b3d-model-toolbar">
-    <span class="subtle">Showing {{ cards|length }} of {{ total_generators }} generators</span>
+    <span class="subtle">Showing {{ shown_count }} of {{ total_generators }} generators</span>
     <a class="lb-showall-toggle" href="/models{% if not show_all %}?show_all=true{% endif %}"
       >{% if show_all %}Show rated only{% else %}Show all {{ total_generators }} <span class="subtle">· {{ unrated_count }} unrated</span>{% endif %}</a>
   </div>
   {% endif %}
 
-  {% if cards %}
-  <div class="b3d-model-grid">
-    {% for c in cards %}
-    <a href="/models/{{ c.slug }}" class="b3d-model-card">
-      <span class="b3d-model-icon" style="--h:{{ c.avatar_hue }}" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M12 2.6 20.4 7.2v9.6L12 21.4 3.6 16.8V7.2z"/><path d="M12 2.6v18.8M3.6 7.2 12 12l8.4-4.8"/></svg></span>
-      <span class="b3d-model-main">
-        <span class="b3d-model-name-row">
-          <span class="b3d-model-name">{{ c.name }}</span>
-          <span class="kind kind-{{ c.kind }}">{{ c.kind }}</span>
-        </span>
-        <span class="b3d-model-secondary">
-          {{ c.paradigm_display or c.description or "—" }}
-        </span>
-        <span class="b3d-model-stats mono">
-          <span title="Bradley–Terry overall score">{% if c.bt_score is not none %}<strong>{{ c.bt_score }}</strong> BT{% else %}<span class="subtle">unrated</span>{% endif %}</span>
-          {% if c.bt_score is not none and c.confidence == "provisional" %}<span class="cov-badge cov-prov" title="Fewer than {{ firm_vote_threshold }} votes — rank may still shift">provisional</span>{% endif %}
-          <span><strong>{{ c.votes }}</strong> votes</span>
-          <span><strong>{{ c.tasks }}</strong> tasks</span>
-        </span>
+  {% if sections %}
+  {# ONE SECTION PER METHOD. The grid used to be a single flat list sorted by a BT number taken
+     from the MERGED (cross-paradigm) fit — a cross-method ranking, uncaveated, on a top-level nav
+     page. Ranking (and ordering) is within a section, exactly as on the boards. #}
+  {% for s in sections %}
+  <section class="b3d-model-section">
+    <div class="b3d-section-head">
+      <h2>{{ s.display }}</h2>
+      <span class="b3d-section-head-note">
+        {{ s.rated_count }} ranked of {{ s.model_count }} ·
+        {% if s.board_url %}<a href="{{ s.board_url }}">view the {{ s.display }} board &rarr;</a>{% else %}no board (method not classified){% endif %}
       </span>
-      <span class="b3d-model-arrow" aria-hidden="true">&rarr;</span>
-    </a>
-    {% endfor %}
-  </div>
+    </div>
+    {% if s.what %}<p class="b3d-model-section-what subtle">{{ s.what }}</p>{% endif %}
+    {% if s.cards %}
+    <div class="b3d-model-grid">
+      {% for c in s.cards %}
+      <a href="/models/{{ c.slug }}" class="b3d-model-card">
+        <span class="b3d-model-icon" style="--h:{{ c.avatar_hue }}" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M12 2.6 20.4 7.2v9.6L12 21.4 3.6 16.8V7.2z"/><path d="M12 2.6v18.8M3.6 7.2 12 12l8.4-4.8"/></svg></span>
+        <span class="b3d-model-main">
+          <span class="b3d-model-name-row">
+            {% if c.rank %}<span class="b3d-model-rank mono" title="Rank within {{ s.display }} — models with overlapping 95% CIs share a rank">#{{ c.rank }}</span>{% endif %}
+            <span class="b3d-model-name">{{ c.name }}</span>
+            <span class="kind kind-{{ c.kind }}">{{ c.kind }}</span>
+          </span>
+          <span class="b3d-model-secondary">
+            {{ c.description or c.paradigm_display or "—" }}
+          </span>
+          <span class="b3d-model-stats mono">
+            {# The BT number is a WITHIN-METHOD score (this section's match pool), never a
+               cross-method one — the label says so. #}
+            <span title="Bradley–Terry score within {{ s.display }} — BT scores from different methods come from disconnected match pools and aren't comparable">{% if c.bt_score is not none %}<strong>{{ c.bt_score }}</strong> BT <span class="subtle">in method</span>{% else %}<span class="subtle">unrated</span>{% endif %}</span>
+            {% if c.bt_score is not none and c.confidence == "provisional" %}<span class="cov-badge cov-prov" title="Fewer than {{ firm_vote_threshold }} votes — rank may still shift">provisional</span>{% endif %}
+            <span><strong>{{ c.votes }}</strong> votes</span>
+            <span><strong>{{ c.tasks }}</strong> tasks</span>
+          </span>
+        </span>
+        <span class="b3d-model-arrow" aria-hidden="true">&rarr;</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    {# Rated-only view, and nothing in this method has been voted on yet: the method still exists
+       (and has a board), so it keeps its section instead of vanishing. #}
+    <p class="b3d-model-section-empty subtle">
+      {{ s.model_count }} model{{ 's' if s.model_count != 1 else '' }} ·
+      no votes yet — evaluation in progress.
+      <a href="/models?show_all=true">Show all</a> to see them.
+    </p>
+    {% endif %}
+  </section>
+  {% endfor %}
   {% else %}
   <p class="subtle">No generators with outputs in this scope yet.</p>
   {% endif %}

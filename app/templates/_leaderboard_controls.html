@@ -1,0 +1,64 @@
+{# Page-level leaderboard chrome, shared by the modality HUB (/leaderboard) and a single
+   modality's board (?paradigm=X): the category/criterion filters, the Trusted/Verified scope
+   toggle, the bias audit, and the lazily-fetched VLM-judge panel. These are properties of the
+   PAGE, not of one board, so both surfaces carry them.
+   Context: sel_criterion, sel_category, sel_paradigm_value (may be None), verified,
+   category_options, criterion_options, bias. #}
+<details class="lb-filters-audit">
+  <summary>Filters &amp; bias audit</summary>
+  <div class="lb-filters-audit-body">
+    <form class="lb-filters filter-row" method="get" action="/leaderboard">
+      <input type="hidden" name="paradigm" value="{{ sel_paradigm_value or '' }}" />
+      {% if verified %}<input type="hidden" name="verified" value="true" />{% endif %}
+      <label>Category
+        <select name="category" onchange="this.form.submit()">
+          {% for opt in category_options %}
+          <option value="{{ opt.slug }}" {% if opt.selected %}selected{% endif %} {% if opt.coming_soon %}disabled{% endif %}>{{ opt.name }}{% if opt.coming_soon %} — coming soon{% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Criterion
+        <select name="criterion" onchange="this.form.submit()">
+          {% for opt in criterion_options %}
+          <option value="{{ opt.slug }}" {% if opt.selected %}selected{% endif %}>{{ opt.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </form>
+
+    <div class="lb-scope-row">
+      <span class="lb-scope-label mono">Scope</span>
+      <div class="lb-scope-toggle">
+        <a href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}{% if sel_paradigm_value %}&paradigm={{ sel_paradigm_value }}{% endif %}"
+          class="lb-scope-item{{ ' is-active' if not verified else '' }}">Trusted</a>
+        <a href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}{% if sel_paradigm_value %}&paradigm={{ sel_paradigm_value }}{% endif %}&verified=true"
+          class="lb-scope-item{{ ' is-active' if verified else '' }}">Verified ✓</a>
+      </div>
+      {% if verified %}<span class="subtle">Bradley–Terry over votes from signed-in (Hugging Face) users only.</span>{% endif %}
+    </div>
+
+    <p class="subtle bias-line">
+      Bias audit — left(A) win rate
+      <b>{% if bias.left_win_rate is none %}—{% else %}{{ bias.left_win_rate }}{% endif %}</b>
+      (≈0.50 = unbiased) · tie {% if bias.tie_rate is none %}—{% else %}{{ bias.tie_rate }}{% endif %} · bad {% if bias.bad_rate is none %}—{% else %}{{ bias.bad_rate }}{% endif %}{% if internal_pages() %} ·
+      <a href="/significance?criterion={{ sel_criterion }}&category={{ sel_category }}">significance &amp; full audit →</a>{% endif %}
+    </p>
+  </div>
+</details>
+
+{# Secondary board — collapsed by default so the page leads with the human-vote leaderboard
+   (matches the design). The judge BT fit is expensive (~11s for plants on a cold cache), so it
+   is NOT computed on the main render: leaderboard.js fetches data-judge-url into the panel the
+   first time this <details> is expanded. #}
+<details
+  class="lb-filters-audit lb-judge-section"
+  {# `fragment=1` selects the BARE fragment: leaderboard.js assigns the response to .innerHTML,
+     so the standalone-page form of this route (what a browser gets from the "see the AI-judge
+     board →" link on the board above) would nest a whole <html> document inside this <div>. #}
+  data-judge-url="/leaderboard/judge?criterion={{ sel_criterion }}&category={{ sel_category }}{% if verified %}&verified=1{% endif %}&fragment=1"
+>
+  <summary>VLM judge (Sonnet 4.6, multi-view) — automated LLM-judge rankings by paradigm</summary>
+  <div class="lb-judge-body" data-loaded="0">
+    <p class="subtle" style="padding: 0.4rem 0.1rem">Loading automated rankings…</p>
+  </div>
+</details>

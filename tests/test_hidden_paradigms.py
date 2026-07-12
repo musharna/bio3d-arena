@@ -33,6 +33,7 @@ def test_hidden_paradigms_configured():
     assert "procedural_expert" in config.APP_HIDDEN_PARADIGMS
     assert "procedural_llm" not in config.APP_HIDDEN_PARADIGMS  # the scalable path stays
     assert "image_recon" not in config.APP_HIDDEN_PARADIGMS
+    assert "capture_scan" in config.APP_HIDDEN_PARADIGMS  # data-capture reference, internal-only
 
 
 def test_selfhosted_recon_dups_pruned_but_instantmesh_kept():

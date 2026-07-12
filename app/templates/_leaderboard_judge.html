@@ -1,6 +1,14 @@
-{# VLM-judge board fragment — rendered by GET /leaderboard/judge and injected into the collapsed
-   <details> on the leaderboard page when it's first expanded (never on the main render, so the
-   page can't block on the ~11s judge BT fit). Context: judge_rows, paradigm_display_names. #}
+{# VLM-judge board — the ranked tables ONLY (no chrome), so it serves both consumers of
+   GET /leaderboard/judge: leaderboard.js injects it into the collapsed <details> on the
+   leaderboard (never on the main render, so the page can't block on the ~11s judge BT fit),
+   and leaderboard_judge.html includes it inside the standalone page.
+   Context: judge_rows, paradigm_display_names, on_page (set only by the standalone page, which
+   carries its own, louder provenance callout — so the inline copy below isn't doubled). #}
+{% if not on_page %}
+<p class="subtle" style="padding: 0.4rem 0.1rem">
+  These ranks come from a VLM judge, not human votes.
+</p>
+{% endif %}
 {% if judge_rows %}
 {% for pgm, group_rows in judge_rows|groupby('paradigm') %}
 <div class="lb-panel">

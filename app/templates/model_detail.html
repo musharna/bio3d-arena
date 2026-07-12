@@ -16,8 +16,13 @@
   </header>
 
   {% if card %}
+  {# This BT score is a WITHIN-METHOD score: the model was only ever compared against others in its
+     own paradigm (separate match pools), so it is not an "overall" number and the label must not
+     call it one. Same for the rank — it is a position on this method's board, not on the site. #}
+  {% set method = card.paradigm_display or gen.paradigm or "its method" %}
   <div class="b3d-model-stats mono b3d-model-detail-stats">
-    <span title="Bradley–Terry overall score">{% if card.bt_score is not none %}<strong>{{ card.bt_score }}</strong> BT{% else %}<span class="subtle">unrated</span>{% endif %}</span>
+    <span title="Bradley–Terry score within {{ method }} — BT scores from different methods come from disconnected match pools and aren't comparable">{% if card.bt_score is not none %}<strong>{{ card.bt_score }}</strong> BT <span class="subtle">in {{ method }}</span>{% else %}<span class="subtle">unrated</span>{% endif %}</span>
+    {% if card.rank %}<span title="Rank within {{ method }} — models with overlapping 95% CIs share a rank"><strong>#{{ card.rank }}</strong> <span class="subtle">in method</span></span>{% endif %}
     <span><strong>{{ card.votes }}</strong> votes</span>
     <span><strong>{{ card.tasks }}</strong> tasks</span>
     <span class="subtle">{{ card.confidence }}</span>
@@ -54,6 +59,46 @@
   </div>
   {% else %}
   <p class="subtle">No outputs for this generator in the current scope.</p>
+  {% endif %}
+
+  {# Head-to-head (#74): the evidence behind the rank. Opponents are same-paradigm by
+     construction, so this is a WITHIN-METHOD record — a cross-modality one would be
+     meaningless (paradigms are separate match pools). Ties are shown (W–L–T), never folded
+     into the W–L: a tie is half a win and exactly ONE comparison. #}
+  <div class="b3d-section-head">
+    <h2>Head-to-head</h2>
+    <span class="b3d-section-head-note">within its own method &middot; {{ card.paradigm_display if card and card.paradigm_display else gen.paradigm }}</span>
+  </div>
+  {% if h2h %}
+  <div class="ranktable-wrap">
+    <table class="ranktable b3d-h2h-table">
+      <thead>
+        <tr>
+          <th>Opponent</th>
+          <th class="num" title="Wins–Losses–Ties. A tie counts as half a win and one game.">W–L–T</th>
+          <th class="num" title="All judged comparisons between these two models (ties included; 'both bad' votes excluded)">n</th>
+          <th class="num">Win rate</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in h2h %}
+        <tr>
+          <td class="gen">{{ r.opponent_name }}</td>
+          <td class="num mono">{{ r.wins }}–{{ r.losses }}–{{ r.ties }}</td>
+          <td class="num mono subtle">{{ r.games }}</td>
+          <td class="num mono b3d-h2h-pct{% if r.win_pct > 0.5 %} b3d-h2h-win{% endif %}">{{ "%.1f"|format(r.win_pct * 100) }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="b3d-h2h-foot subtle">
+    Records cover all judged comparisons, ties included: a tie counts as half a win and one
+    comparison, so <span class="mono">n</span> is the true number of times the two models were
+    judged against each other. “Both bad” votes are excluded.
+  </p>
+  {% else %}
+  <p class="subtle">Not enough head-to-head data yet.</p>
   {% endif %}
 
   {% if samples %}

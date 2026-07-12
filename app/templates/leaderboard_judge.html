@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}AI-judge board{% if board_title %} · {{ board_title }}{% endif %} · Bio 3D Arena{% endblock %}
+{% block description %}Automated VLM-judge Bradley–Terry rankings of 3D generative models — a separate surface from the human-vote leaderboard, never intermixed with it.{% endblock %}
+{% block content %}
+{# The AI-JUDGE board. Deliberately a SEPARATE page from /leaderboard/<modality> (the human-vote
+   board): the two rankings are never intermixed in one table, and a reader must never mistake
+   one for the other — hence the callout below, the distinct title, and the explicit backlink.
+   Ranking stays WITHIN one paradigm (BT scores across paradigms come from disconnected match
+   pools). The tables themselves are the shared _leaderboard_judge.html partial — the same markup
+   leaderboard.js lazy-loads into the collapsed panel on the board, so the two can't drift. #}
+<section class="lb">
+  <header class="b3d-page-head">
+    <h1>AI-judge board {% include "_scope_pill.html" %}</h1>
+    {% if board_what %}<p class="b3d-page-lede lb-what-measures">{{ board_what }}</p>{% endif %}
+    <div class="sig-callout">
+      <span class="sig-callout-icon" aria-hidden="true">AI</span>
+      <p>
+        <b>These ranks come from a VLM judge, not human votes.</b>
+        A vision-language model (Sonnet 4.6, multi-view) casts the ballots on this
+        board — no person voted on them. It is a separate, automated surface: its
+        scores are never mixed into the human leaderboard, and the two can disagree.
+        For the ranking humans voted for, see the
+        <a
+          class="lb-judge-link"
+          href="/leaderboard{% if sel_modality %}/{{ sel_modality }}{% endif %}?criterion={{ sel_criterion }}&category={{ sel_category }}"
+          >human-vote {% if sel_modality %}{{ board_title }} board{% else %}leaderboard{% endif %} →</a
+        >
+      </p>
+    </div>
+  </header>
+
+  {# Mirrors the human boards' method tabs: one per visible modality (app-hidden paradigms are
+     internal-only and never appear), plus "All methods" for every visible modality at once —
+     still grouped per paradigm, never merged into one cross-paradigm ranking. #}
+  <nav class="lb-ptabs" role="tablist" aria-label="AI-judge board method">
+    <a
+      href="/leaderboard/judge?criterion={{ sel_criterion }}&category={{ sel_category }}"
+      class="lb-ptab{{ '' if sel_modality else ' is-active' }}"
+      role="tab"
+      aria-selected="{{ 'false' if sel_modality else 'true' }}"
+      >All methods</a
+    >
+    {% for opt in modality_options %}
+    <a
+      href="/leaderboard/judge?criterion={{ sel_criterion }}&category={{ sel_category }}&modality={{ opt.value }}"
+      class="lb-ptab{{ ' is-active' if opt.selected else '' }}"
+      role="tab"
+      aria-selected="{{ 'true' if opt.selected else 'false' }}"
+      title="{{ opt.display }}"
+      >{{ opt.tab }}</a
+    >
+    {% endfor %}
+  </nav>
+
+  {% include "_leaderboard_judge.html" %}
+
+  <p class="subtle lb-legend">
+    BT = Bradley–Terry score over VLM-judge ballots (multi-view condition), fitted
+    within a single method — scores from different methods come from disconnected
+    match pools and aren't comparable. Votes = judge ballots, not human votes.
+  </p>
+</section>
+{% endblock %}

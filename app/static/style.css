@@ -3596,6 +3596,24 @@ details.group[open] > summary.group-title::before {
 .lb-votes-cell {
   white-space: nowrap;
 }
+/* Status cell — votes-until-firm (service.firm_status). Reuses the .cov-badge/.cov-firm/.cov-prov
+   confidence tokens so "firm" vs "N more votes -> firm" reads the same everywhere in the app. */
+.lb-status-cell {
+  white-space: nowrap;
+}
+/* Board provenance line: "Ranked by human votes ... see the AI-judge board" (the judge board is a
+   separate surface, never intermixed with these ranks). */
+.lb-source-note {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+}
+.lb-judge-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.lb-judge-link:hover {
+  text-decoration: underline;
+}
 .lb-chevron {
   display: inline-block;
   margin-left: 0.5rem;
@@ -3654,7 +3672,178 @@ details.group[open] > summary.group-title::before {
   padding-top: 0.8rem;
 }
 
+/* === Leaderboard modality HUB (/leaderboard) — one card per generation method ==============
+   Siblings of .b3d-model-card (below): same border/radius/panel/shadow tokens, same
+   border-color + lift on hover. Deliberately NOT a new card species — the hub is a different
+   payload in the same component. All color comes from the theme tokens, so light/dark follow
+   :root[data-theme] with no per-theme rules here. */
+.lb-hub-grid {
+  display: grid;
+  /* auto-fill (not a fixed track count) so the grid degrades 4 -> 3 -> 2 -> 1 columns with the
+     viewport instead of overflowing — same rule as .b3d-model-grid. */
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.9rem;
+  margin-top: 1.2rem;
+}
+.lb-hub-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadowCard);
+  padding: 1.1rem 1.25rem;
+  text-decoration: none;
+  color: inherit;
+  transition:
+    border-color 0.14s,
+    transform 0.06s;
+}
+.lb-hub-card:hover,
+.lb-hub-card:focus-visible {
+  border-color: color-mix(in oklch, var(--accent) 55%, var(--border));
+  transform: translateY(-2px);
+}
+.lb-hub-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.lb-hub-what {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+/* Top-3 preview: a rank / generator / BT tri-column so the numbers line up across cards. */
+.lb-hub-top {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0.55rem 0 0;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 0.3rem;
+}
+.lb-hub-row {
+  display: grid;
+  grid-template-columns: 1.2rem 1fr auto;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+.lb-hub-rank {
+  color: var(--faint);
+  font-size: 0.78rem;
+}
+.lb-hub-gen {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lb-hub-bt {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.lb-hub-pop {
+  margin: 0.15rem 0 0;
+  color: var(--faint);
+  font-size: 0.76rem;
+}
+/* Empty state — a modality nobody has voted on yet still gets a card (its board exists), so this
+   line replaces the top-3 preview. Muted, never --bad: unrated is unfinished, not broken. */
+.lb-hub-empty {
+  margin: 0.35rem 0 0;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.lb-hub-firm {
+  color: var(--accent);
+  font-weight: 600;
+}
+.lb-hub-cta {
+  margin-top: auto;
+  padding-top: 0.5rem;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.lb-hub-card:hover .lb-hub-cta {
+  text-decoration: underline;
+}
+@media (max-width: 760px) {
+  .lb-hub-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Status column ("firm" / "N more votes → firm"). The pill itself is the app-wide
+   .cov-badge (var(--r-pill)); these two rules re-tone it FOR THE BOARD only:
+   - firm  -> the settled accent (a rank you can quote);
+   - not yet firm -> muted/neutral, i.e. evaluation in progress. The global .cov-prov is amber,
+     which reads as a caveat on a single chip but as an ALERT when it lights a whole column —
+     and an under-threshold rank is not an error, just unfinished. Never --bad.
+   The legend swatch is re-toned with it so the key matches the column it explains. */
+.lb-status-cell .cov-badge,
+.lb-legend .cov-badge {
+  font-size: 0.7rem;
+}
+.lb-status-cell .cov-firm,
+.lb-legend .cov-firm {
+  color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 14%, transparent);
+  border-color: color-mix(in oklch, var(--accent) 38%, transparent);
+}
+.lb-status-cell .cov-prov {
+  color: var(--muted);
+  background: var(--panel2);
+  border-color: var(--border);
+}
+/* Variant rows (seam — see the `lb_row` macro in leaderboard.html; nothing emits these yet). */
+.lb-row-variant td.gen {
+  padding-left: 2.1rem;
+}
+.lb-variant-mark {
+  color: var(--faint);
+}
+
 /* === Models index + detail (Task 12) — model-card family on shared tokens === */
+/* The index is SECTIONED BY METHOD (one section per modality, same spine as the leaderboard hub):
+   a model is only ranked against the others in its own section. Section chrome reuses
+   .b3d-section-head; only the spacing/empty-state below is new. All color from theme tokens. */
+.b3d-model-section + .b3d-model-section {
+  margin-top: 0.4rem;
+}
+.b3d-model-section-what {
+  margin: -0.5rem 0 0.85rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.b3d-model-section-empty {
+  margin: 0 0 0.5rem;
+  padding: 0.85rem 1rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-card);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+/* Within-method rank chip on a card (#N) — never a cross-method position. */
+.b3d-model-rank {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 12.5px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 0.05rem 0.45rem;
+  background: var(--panel2);
+}
 /* 2-col card grid (design-parity: task-models-spotlight), collapses to 1-col on narrow
    viewports; each card carries a colored avatar tile (shares .lb-avatar's hue formula). */
 .b3d-model-grid {
@@ -3782,7 +3971,10 @@ details.group[open] > summary.group-title::before {
 }
 .b3d-model-stats {
   display: flex;
-  gap: 1.1rem;
+  /* wraps: the BT stat now carries its "in method" qualifier (a BT score is a within-method
+     number), which can exceed one line in a narrow card. */
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
   font-size: 12.5px;
   color: var(--faint);
   white-space: nowrap;
@@ -3841,6 +4033,25 @@ details.group[open] > summary.group-title::before {
 .b3d-model-sample-label {
   margin-top: 0.3rem;
   font-size: 11px;
+}
+
+/* === Head-to-head (#74) — the evidence behind a rank, on the shared .ranktable tokens.
+   Horizontal overflow is owned by the enclosing .ranktable-wrap, so a wide record table
+   scrolls inside itself and never pushes the page sideways. === */
+.b3d-h2h-table {
+  min-width: 26rem; /* below this the 4 columns crowd — let .ranktable-wrap scroll instead */
+}
+.b3d-h2h-pct {
+  color: var(--text);
+}
+.b3d-h2h-win {
+  color: var(--accent);
+}
+.b3d-h2h-foot {
+  margin: 0.7rem 0 0;
+  max-width: 60ch;
+  font-size: 11.5px;
+  line-height: 1.5;
 }
 
 /* === Difficulty (Task 13) — card-wrapped sections on shared .ranktable tokens,

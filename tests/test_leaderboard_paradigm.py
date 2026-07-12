@@ -71,7 +71,7 @@ def test_empty_string_paradigm_means_no_filter():
             db.add(crit)
             db.commit()
         names_by_paradigm = {}
-        for pgm in ("capture_scan", "procedural_llm"):
+        for pgm in ("image_recon", "procedural_llm"):
             slug = f"c1test-{pgm}-{uuid.uuid4().hex}"
             g = Generator(slug=slug, name=slug, kind="model", paradigm=pgm)
             db.add(g)
@@ -92,13 +92,13 @@ def test_empty_string_paradigm_means_no_filter():
 
         empty_filter_rows = arena_main._leaderboard_rows(db, "overall", None, paradigm="")
         empty_filter_names = {r["generator"] for r in empty_filter_rows}
-        assert names_by_paradigm["capture_scan"] in empty_filter_names
+        assert names_by_paradigm["image_recon"] in empty_filter_names
         assert names_by_paradigm["procedural_llm"] in empty_filter_names
 
         scoped_rows = arena_main._leaderboard_rows(db, "overall", None, paradigm="procedural_llm")
         scoped_names = {r["generator"] for r in scoped_rows}
         assert names_by_paradigm["procedural_llm"] in scoped_names
-        assert names_by_paradigm["capture_scan"] not in scoped_names
+        assert names_by_paradigm["image_recon"] not in scoped_names
 
 
 def test_no_filter_leaderboard_ranks_within_each_paradigm():

@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import datetime as dt
 from collections import defaultdict
+from collections.abc import Callable, Iterable
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from . import config, kingdoms, matchmaking, ranking
+from . import config, kingdoms, matchmaking, paradigms, ranking
 from .calibration import cohens_kappa
 from .scope import is_assessable
 from .paradigms import same_paradigm
@@ -321,6 +322,75 @@ def _matches_for_scope(
             matches.append((gen_b, gen_a))
             groups.append(gkey)
     return matches, groups
+
+
+def head_to_head_record(
+    db: Session,
+    generator_id: int,
+    criterion_slug: str = "overall",
+    *,
+    category_ids: set[int] | None = None,
+) -> list[dict]:
+    """Per-opponent win/loss/tie record for one generator within its paradigm scope.
+
+    Built from _matches_for_scope (already same-paradigm, gold/reference-excluded,
+    trust-gated). Note: _matches_for_scope's `include_ties=True` mode is a Bradley-Terry
+    fitting device — it splits a tie into BOTH (a,b) and (b,a) so ties inform BT without a
+    separate tie parameter. That is not a display record: treating each split as its own
+    game would double-count real comparisons. Here, ties use the standard 0.5-win
+    convention instead: a tie counts as half a win, half a loss, and exactly ONE game.
+    `games` therefore equals the true number of comparisons decided between the two
+    generators (wins + losses + ties, not wins + losses + 2*ties).
+
+    Self-generator matches (both outputs from the same generator — matchmaking doesn't
+    guarantee distinct generators) are excluded: a generator is never its own opponent.
+
+    Returns [] when the generator has no games. Sorted games desc, win% desc, opponent_id
+    asc (explicit final tiebreak so equally-ranked opponents don't flap between requests).
+    """
+    crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+    if crit is None:
+        return []
+    decisive, _ = _matches_for_scope(db, crit.id, category_ids=category_ids, include_ties=False)
+    with_ties, _ = _matches_for_scope(db, crit.id, category_ids=category_ids, include_ties=True)
+
+    def _tally(matches: list[tuple[int, int]]) -> dict[int, dict]:
+        t: dict[int, dict] = {}
+        for winner, loser in matches:
+            if winner == loser:
+                continue  # same-generator comparison — not a head-to-head
+            if winner == generator_id:
+                t.setdefault(loser, {"wins": 0, "losses": 0})
+                t[loser]["wins"] += 1
+            elif loser == generator_id:
+                t.setdefault(winner, {"wins": 0, "losses": 0})
+                t[winner]["losses"] += 1
+        return t
+
+    decisive_tally = _tally(decisive)
+    all_tally = _tally(with_ties)
+
+    out = []
+    for opp in set(decisive_tally) | set(all_tally):
+        d = decisive_tally.get(opp, {"wins": 0, "losses": 0})
+        a = all_tally.get(opp, {"wins": 0, "losses": 0})
+        # Each tie contributes exactly +1 to the win direction and +1 to the loss
+        # direction in the split-record (`with_ties`) vs the decisive-only record.
+        ties = a["wins"] - d["wins"]
+        wins, losses = d["wins"], d["losses"]
+        games = wins + losses + ties
+        out.append(
+            {
+                "opponent_id": opp,
+                "wins": wins,
+                "losses": losses,
+                "ties": ties,
+                "games": games,
+                "win_pct": (wins + 0.5 * ties) / games,
+            }
+        )
+    out.sort(key=lambda r: (-r["games"], -r["win_pct"], r["opponent_id"]))
+    return out
 
 
 def _players_for_scope(
@@ -1214,6 +1284,71 @@ def compute_bias(db: Session) -> dict:
 # Below this many total Mode-A votes a generator's rank is flagged "provisional" — the
 # transparency knob that answers "is this rank trustworthy yet?" on the coverage page.
 FIRM_VOTE_THRESHOLD = 30
+
+
+def firm_status(n_games: int) -> dict:
+    """Votes-until-firm signal for a leaderboard row. `firm` once n_games >= FIRM_VOTE_THRESHOLD,
+    else a countdown label so a low-vote rank reads as evaluation-in-progress, not settled."""
+    if n_games >= FIRM_VOTE_THRESHOLD:
+        return {"firm": True, "label": "firm"}
+    remaining = FIRM_VOTE_THRESHOLD - n_games
+    unit = "vote" if remaining == 1 else "votes"
+    return {"firm": False, "label": f"{remaining} more {unit} → firm"}
+
+
+def modality_hub_cards(
+    rows_fn: Callable[[str], list[dict]], modalities: Iterable[str]
+) -> list[dict]:
+    """One hub card per VISIBLE modality (generation paradigm), in `paradigms.PARADIGMS` order.
+
+    The leaderboard's spine is the modality: every board ranks exactly ONE paradigm (BT scores
+    across paradigms come from disconnected match pools and are not comparable), so the landing
+    page is a hub of modalities rather than a merged cross-paradigm ranking.
+
+    `modalities` is the set of modalities that EXIST as a public surface (the caller passes the
+    roster's paradigms — see main._visible_modalities); every one of them gets a card, whether or
+    not anyone has voted on it. It used to be "a modality earns a card only if it has ≥1 rated
+    entrant", which on production data (votes in image_recon only) rendered ONE card and left
+    /leaderboard/text_native, /leaderboard/procedural_llm and /leaderboard/agentic reachable only
+    by typing the URL — an unvoted modality silently vanished instead of reading as
+    evaluation-in-progress, and the HTML disagreed with /api/leaderboard about which boards exist.
+    A modality with no rated entrant now carries an honest empty state (`rated_count == 0`), still
+    clickable. Iteration is over `paradigms.PARADIGMS` so the order is the registry's regardless of
+    the caller's; app-hidden paradigms never get a card, belt-and-braces with the generator-level
+    hiding in app_hidden_generator_ids().
+
+    `rows_fn(paradigm)` returns EVERY entrant of that paradigm for the current scope, rated or not
+    (the /leaderboard route passes a closure so scoping stays in one place). The card's top-3 is
+    re-ranked over the RATED subset alone (a fresh 1..N — an unrated entrant carries only the
+    default prior BT and has nothing to rank, so it must not push the rated leader to rank 2).
+
+    `firm` is ALL-rated-entrants-are-firm, never `any()`: one model over the threshold used to
+    stamp the card "firm" while the board it links to showed most rows still counting down
+    ("N more votes → firm"). `firm_count`/`rated_count` let the card state the same thing the
+    board does ("1 of 13 firm")."""
+    wanted = set(modalities)
+    cards: list[dict] = []
+    for p in paradigms.PARADIGMS:
+        if p not in wanted or p in config.APP_HIDDEN_PARADIGMS:
+            continue
+        rows = rows_fn(p)
+        rated = [r for r in rows if r.get("n_games", 0) > 0]
+        # COPIES: finalize_rows() rewrites rank/ci_* in place, and `rows` belongs to the caller.
+        top = finalize_rows([dict(r) for r in rated])[:3]
+        firm_count = sum(1 for r in rated if r.get("n_games", 0) >= FIRM_VOTE_THRESHOLD)
+        cards.append(
+            {
+                "paradigm": p,
+                "display": paradigms.DISPLAY_NAMES.get(p, p),
+                "what": paradigms.WHAT_THIS_MEASURES.get(p, ""),
+                "top": top,
+                "model_count": len(rows),  # entrants in this modality (rated or not)
+                "rated_count": len(rated),
+                "firm_count": firm_count,
+                "firm": bool(rated) and firm_count == len(rated),
+            }
+        )
+    return cards
 
 
 def coverage_summary(db: Session, category_ids: set[int] | None = None) -> dict:

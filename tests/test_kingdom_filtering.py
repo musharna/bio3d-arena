@@ -242,8 +242,10 @@ def _seed_lb_fixtures(db):
     db.flush()
 
     def _mk_pair(task, tag):
-        g1 = Generator(slug=f"{_LBPFX}-g{tag}1", name=f"KLB-G{tag}1")
-        g2 = Generator(slug=f"{_LBPFX}-g{tag}2", name=f"KLB-G{tag}2")
+        # A VISIBLE paradigm: /leaderboard is the modality hub, so a generator only reaches the
+        # page through its modality's card (an untagged generator has no modality, hence no card).
+        g1 = Generator(slug=f"{_LBPFX}-g{tag}1", name=f"KLB-G{tag}1", paradigm="image_recon")
+        g2 = Generator(slug=f"{_LBPFX}-g{tag}2", name=f"KLB-G{tag}2", paradigm="image_recon")
         db.add_all([g1, g2])
         db.flush()
         o1 = ModelOutput(task_id=task.id, generator_id=g1.id, asset_path=f"{_LBPFX}/{tag}1.glb")
