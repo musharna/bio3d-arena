@@ -41,6 +41,15 @@
     return [v[0], c * v[1] - s * v[2], s * v[1] + c * v[2]];
   }
 
+  // Vertical-drag pitch. phi is the elevation angle; clamp it so drag can't tumble the
+  // cloud past the poles (where the Euler rotX/rotY pair reads as an unpleasant flip).
+  var PHI_BASE = 0.42,
+    PHI_MIN = -1.4,
+    PHI_MAX = 1.4;
+  function clampPhi(p) {
+    return p < PHI_MIN ? PHI_MIN : p > PHI_MAX ? PHI_MAX : p;
+  }
+
   function drawCloud(pts, theta, phi, alpha) {
     var w = canvas.clientWidth,
       h = canvas.clientHeight;
@@ -115,13 +124,15 @@
 
   // ---- animation state ----
   var theta = 0,
-    dragTheta = 0;
+    dragTheta = 0,
+    dragPhi = 0;
   var idx = 0; // active kingdom index
   var phaseStart = null;
   var DWELL = 5000,
     FADE = 800; // ms visible, ms dissolve
   var dragging = false,
     lastX = 0,
+    lastY = 0,
     pausedFor = 0,
     pauseStart = 0;
 
@@ -181,13 +192,15 @@
   function frame(ts) {
     sizeCanvas();
     g.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
-    var phi = 0.42 + (reduce ? 0 : 0.16 * Math.sin(theta * 0.7));
+    var phi = clampPhi(
+      PHI_BASE + (reduce ? 0 : 0.16 * Math.sin(theta * 0.7)) + dragPhi,
+    );
 
     // pick which cloud(s) to draw and at what alpha
     var cur = ORDER[idx];
     if (reduce) {
-      if (ready("plants")) drawCloud(clouds.plants, 0.7 + dragTheta, 0.42, 1);
-      drawGizmo(0.7 + dragTheta, 0.42);
+      if (ready("plants")) drawCloud(clouds.plants, 0.7 + dragTheta, phi, 1);
+      drawGizmo(0.7 + dragTheta, phi);
       setActivePill("plants");
       return; // no rAF loop under reduced motion
     }
@@ -237,14 +250,24 @@
   canvas.addEventListener("pointerdown", function (ev) {
     dragging = true;
     lastX = ev.clientX;
+    lastY = ev.clientY;
     pauseStart = ev.timeStamp || 0;
     canvas.setPointerCapture && canvas.setPointerCapture(ev.pointerId);
     canvas.style.cursor = "grabbing";
   });
   canvas.addEventListener("pointermove", function (ev) {
     if (!dragging) return;
-    dragTheta += (ev.clientX - lastX) * 0.01;
+    dragTheta += (ev.clientX - lastX) * 0.01; // horizontal drag → yaw (unbounded spin)
+    // vertical drag → pitch; drag up reveals the top. Clamp the accumulator so the base
+    // tilt + drag stays inside [PHI_MIN, PHI_MAX] and can't wind up past the poles.
+    dragPhi -= (ev.clientY - lastY) * 0.01;
+    dragPhi = Math.max(
+      PHI_MIN - PHI_BASE,
+      Math.min(PHI_MAX - PHI_BASE, dragPhi),
+    );
     lastX = ev.clientX;
+    lastY = ev.clientY;
+    if (reduce) requestAnimationFrame(frame); // static mode: repaint on direct manipulation
   });
   function endDrag(ev) {
     if (!dragging) return;
