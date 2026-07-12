@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard · Bio 3D Arena{% endblock %}
+{% block description %}Bradley–Terry rankings of 3D generative models by generation method — image→3D, text→3D, LLM procedural, and agentic — scored by blind human votes on real plants, fungi, and animals.{% endblock %}
+{% block content %}
+{# No board is shown on the hub, so no paradigm is selected — the shared controls partial keys
+   its hidden `paradigm` input and its scope links off this. #}
+{% set sel_paradigm_value = None %}
+<section class="lb-hub">
+  <header class="b3d-page-head">
+    <h1>Leaderboard {% include "_scope_pill.html" %}</h1>
+    <p class="b3d-page-lede">
+      Each generation method is ranked on its own board — scores aren't comparable
+      across methods (they come from separate match pools). Pick a method to compare
+      the models within it.
+      <span class="mono lb-votecount">{{ total_votes }} votes cast.</span>
+    </p>
+  </header>
+
+  {% if cards %}
+  <div class="lb-hub-grid">
+    {% for c in cards %}
+    <a class="lb-hub-card" href="/leaderboard/{{ c.paradigm }}?criterion={{ sel_criterion }}&category={{ sel_category }}">
+      <h3 class="lb-hub-title">{{ c.display }}</h3>
+      <p class="lb-hub-what subtle">{{ c.what }}</p>
+      <ol class="lb-hub-top">
+        {% for r in c.top %}
+        <li class="lb-hub-row">
+          <span class="lb-hub-rank mono">{{ r.rank }}</span>
+          <span class="lb-hub-gen">{{ r.generator }}</span>
+          <span class="lb-hub-bt mono">{{ r.bt_score|round|int }}</span>
+        </li>
+        {% endfor %}
+      </ol>
+      <p class="lb-hub-pop subtle">
+        {{ c.model_count }} model{{ 's' if c.model_count != 1 else '' }} ranked ·
+        {% if c.firm %}<span class="lb-hub-firm">firm</span>{% else %}<span class="cov-badge cov-prov" title="No model has reached {{ firm_vote_threshold }} votes yet — ranks may still shift">provisional</span>{% endif %}
+      </p>
+      <span class="lb-hub-cta">View board →</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p>No rated models yet for this slice. Cast some votes in the <a href="/arena">Arena</a>.</p>
+  {% endif %}
+
+  {% include "_leaderboard_controls.html" %}
+</section>
+<script defer src="{{ asset('leaderboard.js') }}"></script>
+{% endblock %}

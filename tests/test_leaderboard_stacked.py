@@ -1,6 +1,8 @@
-"""The leaderboard defaults to stacked per-paradigm sections (each its own within-paradigm BT
-rank — the rigorous comparison); ?overall=true shows the caveated merged board; ?paradigm=X shows
-one paradigm."""
+"""Leaderboard views. `/leaderboard` defaults to the MODALITY HUB (one card per visible
+modality, each linking to that modality's own board — the rigorous, within-paradigm comparison).
+The old stacked sections and the caveated cross-paradigm `?overall=true` merged board are GONE
+(paradigms are disconnected match pools). `?paradigm=X` still shows exactly one paradigm's board.
+"""
 
 from __future__ import annotations
 
@@ -64,19 +66,24 @@ def _headings(html: str) -> list[str]:
     return re.findall(r'paradigm-heading">\s*([^<]+?)\s*<', html)
 
 
-def test_default_is_stacked_per_paradigm():
+def test_default_is_the_modality_hub():
+    """The landing page is a hub of modality CARDS — no ranked board (and so no merged
+    cross-paradigm ranking) is rendered on it at all."""
     html = client.get("/leaderboard").text
-    heads = _headings(html)
-    # our two seeded paradigms each render as their own section; none is the merged "Overall"
-    assert any("Image" in h for h in heads), heads
-    assert any("Text" in h or "text" in h for h in heads), heads
-    assert not any("Overall" in h for h in heads)
-    assert "By paradigm" in html and "Overall" in html  # both tabs present
+    assert 'class="lb-hub"' in html
+    assert _headings(html) == []  # no board panels on the hub
+    # one card per seeded modality, each linking to that modality's own board
+    assert "/leaderboard/image_recon" in html
+    assert "/leaderboard/text_native" in html
 
 
-def test_overall_toggle_shows_single_merged_board():
-    heads = _headings(client.get("/leaderboard?overall=true").text)
-    assert len(heads) == 1 and "Overall" in heads[0]
+def test_overall_cross_paradigm_ranking_is_gone():
+    """`?overall=true` no longer selects a merged board — the param is retired, so the request
+    falls through to the hub and no cross-paradigm ranked board is ever rendered."""
+    html = client.get("/leaderboard?overall=true").text
+    assert 'class="lb-hub"' in html
+    assert _headings(html) == []
+    assert "overall=true" not in html  # no Overall tab/link anywhere
 
 
 def test_single_paradigm_tab_shows_one_board():

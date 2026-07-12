@@ -5,7 +5,7 @@
 {% set sel_paradigm_matches = paradigm_options | selectattr('selected') | selectattr('mode', 'equalto', 'paradigm') | list %}
 {% set sel_paradigm_value = sel_paradigm_matches[0].value if sel_paradigm_matches else None %}
 {# Query string for the CURRENT view (minus show_all) — so the Show-all toggle keeps the view. #}
-{% set view_qs = "criterion=" ~ sel_criterion ~ "&category=" ~ sel_category ~ (("&paradigm=" ~ sel_paradigm_value) if sel_paradigm_value else "") ~ ("&overall=true" if overall else "") ~ ("&verified=true" if verified else "") %}
+{% set view_qs = "criterion=" ~ sel_criterion ~ "&category=" ~ sel_category ~ (("&paradigm=" ~ sel_paradigm_value) if sel_paradigm_value else "") ~ ("&verified=true" if verified else "") %}
 {# One ranked board (header + table). Legend + Show-all live outside so they render once. #}
 {% macro lb_board(brows, title) %}
 <div class="lb-panel">
@@ -88,11 +88,9 @@
           <b>Rank</b> groups models whose 95% bootstrap CIs overlap into the same
           rank (they are not statistically separable). BT = Bradley–Terry score
           (Elo-scaled); the bar shows the 95% CI with the point estimate marked.
-          <b>Overall</b> merges every paradigm into one BT-desc ordering for a
-          single at-a-glance board — since paradigms are disconnected match
-          components, that cross-paradigm ordering is a display convenience, not
-          a statistical claim; select a paradigm tab for the rigorous,
-          within-paradigm comparison. Elo updates live per vote. Recompute in Admin.
+          Every board ranks a SINGLE method — scores from different methods come
+          from disconnected match pools and aren't comparable, so there is no
+          cross-method ranking. Elo updates live per vote. Recompute in Admin.
         </p>
       </div>
     </details>
@@ -101,7 +99,7 @@
   <nav class="lb-ptabs" role="tablist" aria-label="Board view">
     {% for opt in paradigm_options %}
     <a
-      href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}{% if opt.mode == 'paradigm' %}&paradigm={{ opt.value }}{% endif %}{% if opt.mode == 'overall' %}&overall=true{% endif %}{% if verified %}&verified=true{% endif %}"
+      href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}{% if opt.mode == 'paradigm' %}&paradigm={{ opt.value }}{% endif %}{% if verified %}&verified=true{% endif %}"
       class="lb-ptab{{ ' is-active' if opt.selected else '' }}"
       role="tab"
       aria-selected="{{ 'true' if opt.selected else 'false' }}"
@@ -111,20 +109,15 @@
     {% endfor %}
   </nav>
 
-  {% if sections or rows %}
+  {% if rows %}
   {% if unrated_count > 0 or show_all %}
   <p class="lb-showall-row">
     <a class="lb-showall-toggle" href="/leaderboard?{{ view_qs }}{% if not show_all %}&show_all=true{% endif %}"
       >{% if show_all %}Show rated only{% else %}Show all {{ total_generators }} <span class="subtle">· {{ unrated_count }} unrated</span>{% endif %}</a>
   </p>
   {% endif %}
-  {% if sections %}
-  {% if stacked %}<p class="subtle lb-stacked-note">Each method is ranked on its own — the rigorous comparison. Cross-paradigm scores aren't directly comparable (separate match pools); the <b>Overall</b> tab shows a caveated combined view.</p>{% endif %}
-  {% for s in sections %}{{ lb_board(s.rows, s.display) }}{% endfor %}
-  {% else %}
-  {% if overall %}<p class="subtle lb-stacked-note">Cross-paradigm ordering — a display convenience, not a statistical claim (paradigms are scored in separate match pools). Use the per-paradigm tabs for the rigorous comparison.</p>{% endif %}
+  {% if verified and not sel_paradigm_value %}<p class="subtle lb-stacked-note">The verified scope fits ONE Bradley–Terry model over all signed-in votes, so this board spans methods — scores across methods aren't comparable (separate match pools). Pick a method tab for the rigorous, within-method comparison.</p>{% endif %}
   {{ lb_board(rows, board_title) }}
-  {% endif %}
   <p class="subtle lb-legend">
     <span class="ci-range lb-legend-swatch" aria-hidden="true"></span> 95% credible interval ·
     <span class="ci-dot lb-legend-swatch" aria-hidden="true"></span> point estimate ·
@@ -135,61 +128,7 @@
   {% else %}
   {% if verified %}<p>No verified votes yet — sign in with Hugging Face and vote to seed the verified board.</p>{% else %}<p>No ratings yet for this slice. Cast some votes in the <a href="/arena">Arena</a>.</p>{% endif %}
   {% endif %}
-  <details class="lb-filters-audit">
-    <summary>Filters &amp; bias audit</summary>
-    <div class="lb-filters-audit-body">
-      <form class="lb-filters filter-row" method="get" action="/leaderboard">
-        <input type="hidden" name="paradigm" value="{{ sel_paradigm_value or '' }}" />
-        {% if verified %}<input type="hidden" name="verified" value="true" />{% endif %}
-        <label>Category
-          <select name="category" onchange="this.form.submit()">
-            {% for opt in category_options %}
-            <option value="{{ opt.slug }}" {% if opt.selected %}selected{% endif %} {% if opt.coming_soon %}disabled{% endif %}>{{ opt.name }}{% if opt.coming_soon %} — coming soon{% endif %}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label>Criterion
-          <select name="criterion" onchange="this.form.submit()">
-            {% for opt in criterion_options %}
-            <option value="{{ opt.slug }}" {% if opt.selected %}selected{% endif %}>{{ opt.name }}</option>
-            {% endfor %}
-          </select>
-        </label>
-      </form>
-
-      <div class="lb-scope-row">
-        <span class="lb-scope-label mono">Scope</span>
-        <div class="lb-scope-toggle">
-          <a href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}"
-            class="lb-scope-item{{ ' is-active' if not verified else '' }}">Trusted</a>
-          <a href="/leaderboard?criterion={{ sel_criterion }}&category={{ sel_category }}&verified=true"
-            class="lb-scope-item{{ ' is-active' if verified else '' }}">Verified ✓</a>
-        </div>
-        {% if verified %}<span class="subtle">Bradley–Terry over votes from signed-in (Hugging Face) users only.</span>{% endif %}
-      </div>
-
-      <p class="subtle bias-line">
-        Bias audit — left(A) win rate
-        <b>{% if bias.left_win_rate is none %}—{% else %}{{ bias.left_win_rate }}{% endif %}</b>
-        (≈0.50 = unbiased) · tie {% if bias.tie_rate is none %}—{% else %}{{ bias.tie_rate }}{% endif %} · bad {% if bias.bad_rate is none %}—{% else %}{{ bias.bad_rate }}{% endif %}{% if internal_pages() %} ·
-        <a href="/significance?criterion={{ sel_criterion }}&category={{ sel_category }}">significance &amp; full audit →</a>{% endif %}
-      </p>
-    </div>
-  </details>
-
-  {# Secondary board — collapsed by default so the page leads with the human-vote leaderboard
-     (matches the design). The judge BT fit is expensive (~11s for plants on a cold cache), so it
-     is NOT computed on the main render: leaderboard.js fetches data-judge-url into the panel the
-     first time this <details> is expanded. #}
-  <details
-    class="lb-filters-audit lb-judge-section"
-    data-judge-url="/leaderboard/judge?criterion={{ sel_criterion }}&category={{ sel_category }}{% if verified %}&verified=1{% endif %}"
-  >
-    <summary>VLM judge (Sonnet 4.6, multi-view) — automated LLM-judge rankings by paradigm</summary>
-    <div class="lb-judge-body" data-loaded="0">
-      <p class="subtle" style="padding: 0.4rem 0.1rem">Loading automated rankings…</p>
-    </div>
-  </details>
+  {% include "_leaderboard_controls.html" %}
 </section>
 <script defer src="{{ asset('leaderboard.js') }}"></script>
 {% endblock %}

@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import datetime as dt
 from collections import defaultdict
+from collections.abc import Callable
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from . import config, kingdoms, matchmaking, ranking
+from . import config, kingdoms, matchmaking, paradigms, ranking
 from .calibration import cohens_kappa
 from .scope import is_assessable
 from .paradigms import same_paradigm
@@ -1293,6 +1294,38 @@ def firm_status(n_games: int) -> dict:
     remaining = FIRM_VOTE_THRESHOLD - n_games
     unit = "vote" if remaining == 1 else "votes"
     return {"firm": False, "label": f"{remaining} more {unit} → firm"}
+
+
+def modality_hub_cards(rows_fn: Callable[[str], list[dict]]) -> list[dict]:
+    """One hub card per VISIBLE modality (generation paradigm), in `paradigms.PARADIGMS` order.
+
+    The leaderboard's spine is the modality: every board ranks exactly ONE paradigm (BT scores
+    across paradigms come from disconnected match pools and are not comparable), so the landing
+    page is a hub of modalities rather than a merged cross-paradigm ranking.
+
+    `rows_fn(paradigm)` returns that paradigm's already-ranked + enriched rows for the current
+    scope (the /leaderboard route passes a closure so scoping/enrichment stay in one place).
+    A modality earns a card only if it has ≥1 RATED entrant (n_games > 0) in scope — an unvoted
+    modality has nothing to rank yet. App-hidden paradigms never get a card, belt-and-braces with
+    the generator-level hiding in app_hidden_generator_ids()."""
+    cards: list[dict] = []
+    for p in paradigms.PARADIGMS:
+        if p in config.APP_HIDDEN_PARADIGMS:
+            continue
+        rated = [r for r in rows_fn(p) if r.get("n_games", 0) > 0]
+        if not rated:
+            continue
+        cards.append(
+            {
+                "paradigm": p,
+                "display": paradigms.DISPLAY_NAMES.get(p, p),
+                "what": paradigms.WHAT_THIS_MEASURES.get(p, ""),
+                "top": rated[:3],
+                "model_count": len(rated),
+                "firm": any(r.get("n_games", 0) >= FIRM_VOTE_THRESHOLD for r in rated),
+            }
+        )
+    return cards
 
 
 def coverage_summary(db: Session, category_ids: set[int] | None = None) -> dict:

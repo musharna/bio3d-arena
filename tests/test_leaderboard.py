@@ -9,6 +9,35 @@ from app.seed import seed_all
 
 def setup_module(_module):
     seed_all(force=True)
+    _seed_paradigm_board_fixtures()
+
+
+def _seed_paradigm_board_fixtures():
+    """One rated + one unrated generator in a VISIBLE paradigm. `/leaderboard` itself is now the
+    modality hub (cards, no table), so the ranked-board surface — CI bar, rank column, rated-only
+    default — is exercised on that paradigm's own board (`?paradigm=image_recon`)."""
+    from app.models import Criterion, Generator, Rating
+
+    with SessionLocal() as db:
+        crit = db.query(Criterion).filter_by(slug="overall").one()
+        for slug, n_games in (("lbboard-rated", 5), ("lbboard-unrated", 0)):
+            if db.query(Generator).filter_by(slug=slug).first():
+                continue
+            g = Generator(slug=slug, name=slug, kind="model", paradigm="image_recon")
+            db.add(g)
+            db.flush()
+            db.add(
+                Rating(
+                    generator_id=g.id,
+                    criterion_id=crit.id,
+                    category_id=None,
+                    bt_score=1000.0 + n_games,
+                    bt_lower=990.0,
+                    bt_upper=1010.0,
+                    n_games=n_games,
+                )
+            )
+        db.commit()
 
 
 def test_leaderboard_rows_have_ci_bar_geometry():
@@ -38,7 +67,9 @@ def test_leaderboard_page_renders_rank_ub_and_ci_bar():
     from fastapi.testclient import TestClient
     from app.main import app
 
-    html = TestClient(app).get("/leaderboard").text
+    # `/leaderboard` is now the modality HUB (cards, no table); the ranked board — with the
+    # CI-grouped rank column and whisker bar — lives on each modality's own board.
+    html = TestClient(app).get("/leaderboard?paradigm=image_recon").text
     # Design-parity pass (task-lb) renamed the visible header from "Rank (UB)" to a plain
     # "Rank" (the prototype's compact column label); the CI-grouped-rank SEMANTICS are
     # unchanged (still `lb-th-rank` with the overlapping-CI tooltip) so check structure, not
@@ -289,15 +320,16 @@ def test_enrich_leaderboard_rows_avatar_provenance_momentum():
 
 
 def test_leaderboard_rated_only_default_with_show_all_toggle():
-    """The board defaults to generators with ≥1 comparison; ?show_all=true reveals the
-    never-voted ones (which carry only the default prior BT). Toggle offered when any hidden."""
+    """A modality board defaults to generators with ≥1 comparison; ?show_all=true reveals the
+    never-voted ones (which carry only the default prior BT). Toggle offered when any hidden.
+    (Checked on a paradigm board — `/leaderboard` itself is the card hub now, not a table.)"""
     from fastapi.testclient import TestClient
 
     from app.main import app
 
     client = TestClient(app)
-    default = client.get("/leaderboard")
-    show_all = client.get("/leaderboard?show_all=true")
+    default = client.get("/leaderboard?paradigm=image_recon")
+    show_all = client.get("/leaderboard?paradigm=image_recon&show_all=true")
     assert default.status_code == 200 and show_all.status_code == 200
     # One `lb-avatar` per main-board row (the collapsed judge sub-boards use plain text cells).
     n_default = default.text.count("lb-avatar")
