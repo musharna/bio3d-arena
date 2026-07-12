@@ -188,7 +188,9 @@ APP_HIDDEN_SOURCES = frozenset({"found:xfrog", "frontier:partcrafter"})
 #   procedural_expert — hand-authored rule-based generators (Blender/Infinigen/L-Py/AgriGen…),
 #     which we can't meaningfully scale beyond the current handful. (procedural_llm, the
 #     LLM-authored path, STAYS — it scales and is a core differentiator.)
-APP_HIDDEN_PARADIGMS = frozenset({"retrieval", "procedural_expert"})
+#   capture_scan — photogrammetry / real-world capture; a data-capture reference, thin, kept for
+#     internal analysis.
+APP_HIDDEN_PARADIGMS = frozenset({"retrieval", "procedural_expert", "capture_scan"})
 
 
 def is_safe_test_db_target(value: str | None) -> bool:
