@@ -22,23 +22,38 @@
     <a class="lb-hub-card" href="/leaderboard/{{ c.paradigm }}?criterion={{ sel_criterion }}&category={{ sel_category }}">
       <h3 class="lb-hub-title">{{ c.display }}</h3>
       <p class="lb-hub-what subtle">{{ c.what }}</p>
+      {% if c.rated_count %}
       <ol class="lb-hub-top">
-        {# loop.index, NOT r.rank: `rank` is assigned over the whole paradigm group INCLUDING
-           unrated entrants (which carry the default prior BT), and the card shows only the RATED
-           ones — so a card's top-3 could otherwise read 2/3/4. Same convention as the board table
-           in leaderboard.html. #}
+        {# r.rank is the CI-grouped rank over this modality's RATED set (service.modality_hub_cards
+           re-ranks it): it starts at 1 even when an unrated entrant carries a higher prior BT, and
+           models that are not statistically separable share a number. #}
         {% for r in c.top %}
         <li class="lb-hub-row">
-          <span class="lb-hub-rank mono">{{ loop.index }}</span>
+          <span class="lb-hub-rank mono">{{ r.rank }}</span>
           <span class="lb-hub-gen">{{ r.generator }}</span>
           <span class="lb-hub-bt mono">{{ r.bt_score|round|int }}</span>
         </li>
         {% endfor %}
       </ol>
+      {# Population line must AGREE with the board this card links to: it reports how many of the
+         ranked models are firm ("1 of 13 firm"), never a bare "firm" pill sitting on top of a
+         board whose rows are still counting down to it. #}
       <p class="lb-hub-pop subtle">
-        {{ c.model_count }} model{{ 's' if c.model_count != 1 else '' }} ranked ·
-        {% if c.firm %}<span class="lb-hub-firm">firm</span>{% else %}<span class="cov-badge cov-prov" title="No model has reached {{ firm_vote_threshold }} votes yet — ranks may still shift">provisional</span>{% endif %}
+        {{ c.rated_count }} model{{ 's' if c.rated_count != 1 else '' }} ranked ·
+        {% if c.firm %}<span class="lb-hub-firm">all firm</span>{% else %}<span class="cov-badge cov-prov" title="A rank is firm once it is backed by {{ firm_vote_threshold }}+ votes; the rest are still being evaluated">{{ c.firm_count }} of {{ c.rated_count }} firm</span>{% endif %}
       </p>
+      {% else %}
+      {# No rated entrant in this scope. The board still EXISTS (and /api/leaderboard publishes it),
+         so the card is still here and still clickable — an unvoted modality reads as
+         evaluation-in-progress, never as a modality that does not exist. #}
+      <p class="lb-hub-empty subtle">
+        {% if c.model_count %}{{ c.model_count }} model{{ 's' if c.model_count != 1 else '' }} entered ·{% endif %}
+        no votes yet — evaluation in progress
+      </p>
+      <p class="lb-hub-pop subtle">
+        <span class="cov-badge cov-prov" title="Nothing on this board has been voted on yet — vote in the Arena to seed it">unrated</span>
+      </p>
+      {% endif %}
       <span class="lb-hub-cta">View board →</span>
     </a>
     {% endfor %}

@@ -11,7 +11,7 @@ import re
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
-from app import config, paradigms, service
+from app import config, main, paradigms, service
 from app.database import SessionLocal, init_db
 from app.main import app
 from app.models import Criterion, Generator, Rating
@@ -31,8 +31,15 @@ FIXTURES = [
     ("lbhub-recon-c", "image_recon", 8800.0, 2),
     ("lbhub-recon-d", "image_recon", 8700.0, 1),  # 4th — must NOT appear in the card's top-3
     ("lbhub-text-a", "text_native", 8500.0, 3),  # provisional-only modality
+    # PRODUCTION SHAPE: on the real study DB only image_recon has any votes. These two modalities
+    # are in the roster with ZERO votes — they must still get a (clickable, empty-state) hub card.
+    ("lbhub-proc-unrated", "procedural_llm", 8400.0, 0),
+    ("lbhub-agentic-unrated", "agentic", 8300.0, 0),
     ("lbhub-retrieval", "retrieval", 9999.0, 50),  # app-hidden: must never surface
 ]
+
+# The modalities the hub is asked to render (what main._visible_modalities returns for the roster).
+MODALITIES = ("agentic", "text_native", "image_recon", "procedural_llm")  # deliberately unordered
 
 
 def setup_module(_m):
@@ -81,53 +88,125 @@ def teardown_module(_m):
 # --------------------------------------------------------------- service.modality_hub_cards
 
 
+def _row(generator: str, bt: float, n_games: int) -> dict:
+    """A leaderboard row as the route hands it to the hub: the WHOLE group, rated or not
+    (modality_hub_cards owns the rated/unrated split and re-ranks the rated subset itself)."""
+    return {
+        "generator": generator,
+        "bt_score": bt,
+        "bt_lower": bt - 1.0,
+        "bt_upper": bt + 1.0,
+        "n_games": n_games,
+    }
+
+
 def _fake_rows(paradigm: str) -> list[dict]:
-    """Stands in for the route's closure over _leaderboard_rows/_finish."""
+    """Stands in for the route's closure over _leaderboard_rows."""
     data = {
         "image_recon": [
-            {"generator": "A", "bt_score": 40.0, "n_games": 40, "rank": 1},
-            {"generator": "B", "bt_score": 30.0, "n_games": 10, "rank": 2},
-            {"generator": "C", "bt_score": 20.0, "n_games": 4, "rank": 3},
-            {"generator": "D", "bt_score": 10.0, "n_games": 1, "rank": 4},
+            # UNRATED but highest prior BT: it must not take the card's rank-1 slot.
+            _row("U", 50.0, 0),
+            _row("A", 40.0, 40),  # firm
+            _row("B", 30.0, 10),
+            _row("C", 20.0, 4),
+            _row("D", 10.0, 1),  # 4th rated — not in the top-3
         ],
-        "text_native": [{"generator": "T", "bt_score": 5.0, "n_games": 3, "rank": 1}],
-        # unrated only -> no card (nothing has been voted on in this scope)
-        "agentic": [{"generator": "Z", "bt_score": 0.0, "n_games": 0, "rank": 1}],
-        "procedural_llm": [],
+        "text_native": [_row("T", 5.0, 3)],  # rated, but nothing near the firm threshold
+        # UNRATED ONLY — the production shape: a modality nobody has voted on yet. It still has a
+        # board, so it still gets a card (this used to be silently skipped).
+        "agentic": [_row("Z", 0.0, 0)],
+        "procedural_llm": [],  # in the roster, no rating rows at all in this scope
         # app-hidden paradigms must be skipped even if rows_fn would return rated rows
-        "retrieval": [{"generator": "R", "bt_score": 99.0, "n_games": 99, "rank": 1}],
-        "capture_scan": [{"generator": "S", "bt_score": 99.0, "n_games": 99, "rank": 1}],
-        "procedural_expert": [{"generator": "E", "bt_score": 99.0, "n_games": 99, "rank": 1}],
+        "retrieval": [_row("R", 99.0, 99)],
+        "capture_scan": [_row("S", 99.0, 99)],
+        "procedural_expert": [_row("E", 99.0, 99)],
     }
     return data.get(paradigm, [])
 
 
-def test_modality_hub_cards_skips_hidden_and_unrated_and_follows_paradigm_order():
-    cards = service.modality_hub_cards(_fake_rows)
-    got = [c["paradigm"] for c in cards]
-    assert got == ["image_recon", "text_native"], got
-    for c in cards:
+def _cards(modalities=MODALITIES) -> list[dict]:
+    return service.modality_hub_cards(_fake_rows, modalities)
+
+
+def test_modality_hub_cards_skips_hidden_but_keeps_unrated_and_follows_paradigm_order():
+    """Converted from the old `..._skips_hidden_and_unrated_...`: hidden paradigms are STILL
+    skipped, but an unrated VISIBLE modality now keeps its card (it was silently dropped, which on
+    production data — votes in image_recon only — rendered a one-card hub and orphaned 3 boards)."""
+    got = [c["paradigm"] for c in _cards()]
+    assert got == ["image_recon", "procedural_llm", "text_native", "agentic"], got
+    for c in _cards():
         assert c["paradigm"] not in config.APP_HIDDEN_PARADIGMS
-    # order mirrors paradigms.PARADIGMS (image_recon precedes text_native there)
+    # Order is paradigms.PARADIGMS', not the caller's (MODALITIES is deliberately unordered).
     order = {p: i for i, p in enumerate(paradigms.PARADIGMS)}
     assert [order[p] for p in got] == sorted(order[p] for p in got)
 
 
+def test_hidden_paradigm_never_gets_a_card_even_if_asked_for():
+    for hidden in sorted(config.APP_HIDDEN_PARADIGMS):
+        assert _cards(modalities=[hidden]) == [], hidden
+
+
 def test_modality_hub_card_keys_and_values():
-    card = service.modality_hub_cards(_fake_rows)[0]
-    assert set(card) == {"paradigm", "display", "what", "top", "model_count", "firm"}
+    card = _cards()[0]
+    assert set(card) == {
+        "paradigm",
+        "display",
+        "what",
+        "top",
+        "model_count",
+        "rated_count",
+        "firm_count",
+        "firm",
+    }
     assert card["display"] == paradigms.DISPLAY_NAMES["image_recon"]
     assert card["what"] == paradigms.WHAT_THIS_MEASURES["image_recon"]
-    assert [r["generator"] for r in card["top"]] == ["A", "B", "C"]  # capped at 3
-    assert card["model_count"] == 4  # all RATED entrants, not just the shown top-3
-    assert card["firm"] is True  # A has 40 >= FIRM_VOTE_THRESHOLD
+    assert [r["generator"] for r in card["top"]] == ["A", "B", "C"]  # capped at 3; U is unrated
+    assert [r["rank"] for r in card["top"]] == [1, 2, 3]  # re-ranked over the RATED set
+    assert card["rated_count"] == 4  # A B C D
+    assert card["model_count"] == 5  # + the unrated entrant U
+    assert card["firm_count"] == 1  # only A has >= FIRM_VOTE_THRESHOLD games
+
+
+def test_card_is_firm_only_when_every_rated_entrant_is_firm():
+    """`any()` used to stamp the card "firm" the moment ONE model crossed the threshold — while the
+    board it links to still showed most rows counting down ("N more votes → firm"). The card must
+    not contradict its board."""
+    card = _cards()[0]
+    assert card["firm_count"] < card["rated_count"]  # 1 of 4
+    assert card["firm"] is False
+    all_firm = service.modality_hub_cards(
+        lambda p: [_row("A", 40.0, service.FIRM_VOTE_THRESHOLD)], ["image_recon"]
+    )[0]
+    assert all_firm["firm"] is True and all_firm["firm_count"] == 1
 
 
 def test_modality_hub_card_provisional_when_no_row_hits_threshold():
-    text = next(c for c in service.modality_hub_cards(_fake_rows) if c["paradigm"] == "text_native")
+    text = next(c for c in _cards() if c["paradigm"] == "text_native")
     assert text["firm"] is False
-    assert text["model_count"] == 1
+    assert text["firm_count"] == 0
+    assert text["rated_count"] == 1
     assert service.FIRM_VOTE_THRESHOLD > 3  # guards the fixture's intent
+
+
+def test_unrated_modality_gets_an_empty_state_card_not_a_fake_rank():
+    """The production shape: a modality with zero votes. Card exists (its board does), carries its
+    model count, and claims NO ranking — no top-3, no rank, no firm pill."""
+    agentic = next(c for c in _cards() if c["paradigm"] == "agentic")
+    assert agentic["top"] == []
+    assert agentic["rated_count"] == 0
+    assert agentic["model_count"] == 1  # the entrant is disclosed, just not ranked
+    assert agentic["firm"] is False and agentic["firm_count"] == 0
+    # ...and a modality with no rating rows at all in scope still gets its card.
+    proc = next(c for c in _cards() if c["paradigm"] == "procedural_llm")
+    assert proc["model_count"] == 0 and proc["top"] == []
+
+
+def test_hub_shows_every_visible_modality_when_only_one_has_votes():
+    """The whole point: votes in ONE paradigm must not collapse the hub to one card."""
+    cards = _cards()
+    assert len(cards) == 4
+    assert sum(1 for c in cards if c["rated_count"]) == 2  # image_recon + text_native
+    assert [c["paradigm"] for c in cards if not c["rated_count"]] == ["procedural_llm", "agentic"]
 
 
 # --------------------------------------------------------------------------- /leaderboard hub
@@ -166,6 +245,30 @@ def test_hub_card_top3_starts_at_rank_one_despite_higher_unrated_prior():
     html = client.get("/leaderboard").text
     assert "lbhub-recon-unrated" not in html  # unrated entrants never reach a card
     assert _card_ranks(html, "image_recon")[:3] == ["1", "2", "3"]
+
+
+def test_hub_links_every_roster_modality_including_the_unvoted_ones():
+    """PRODUCTION SHAPE (this is what the study DB looks like): only image_recon has votes. Every
+    modality in the roster must still be a card — /leaderboard/text_native & friends are real
+    boards (/api/leaderboard publishes them), so the hub may not omit them."""
+    with SessionLocal() as db:
+        visible = main._visible_modalities(db)
+    assert {"image_recon", "text_native", "procedural_llm", "agentic"} <= set(visible)
+    html = client.get("/leaderboard").text
+    for p in visible:
+        assert f"/leaderboard/{p}?" in html, p  # a card, and a clickable one
+    # the unvoted fixture modalities carry an honest empty state, never a rank
+    assert "no votes yet — evaluation in progress" in html
+    assert "lbhub-proc-unrated" not in html and "lbhub-agentic-unrated" not in html
+
+
+def test_hub_firm_pill_does_not_contradict_the_board_it_links_to():
+    """The image_recon fixture has ONE firm model (40 votes) and three below the threshold — the
+    card used to read a bare "firm" while its board showed "N more votes → firm" on most rows."""
+    html = client.get("/leaderboard").text
+    card = html.split('href="/leaderboard/image_recon')[1].split("</a>")[0]
+    assert re.search(r"\d+ of \d+ firm", card)  # a COUNT, matching what the board shows row by row
+    assert ">all firm<" not in card  # ...and NOT the old any()-driven blanket claim
 
 
 def test_hub_has_no_cross_paradigm_overall_ranking():
@@ -228,6 +331,38 @@ def test_verified_scope_renders_the_hub_not_a_merged_board(monkeypatch):
     # cards are per-paradigm and each starts at 1 (not a slice of the merged 1..4 ranking)
     assert _card_ranks(r.text, "image_recon")[:2] == ["1", "2"]
     assert "vrecon-1" in r.text and "vtext-1" in r.text
+
+
+def _fake_zero_vote_board_rows(*_a, **_kw) -> list[dict]:
+    """A board on which NOTHING has been voted on: identical priors, identical CIs, zero games —
+    the shape every unvoted modality's board now has (they became reachable when the hub stopped
+    skipping unrated modalities)."""
+
+    def row(slug):
+        return {
+            "generator": slug,
+            "kind": "model",
+            "paradigm": "image_recon",
+            "generator_id": None,
+            "slug": slug,
+            "bt_score": 1000.0,
+            "bt_lower": 995.0,
+            "bt_upper": 1005.0,
+            "n_games": 0,
+        }
+
+    return service.finalize_rows([row("zv-1"), row("zv-2"), row("zv-3")])
+
+
+def test_zero_vote_board_shares_rank_one_instead_of_inventing_an_order(monkeypatch):
+    """The board printed `loop.index` under a "Rank" header: on a zero-vote board that reads
+    1/2/3 for models with identical BT, identical CIs and not one comparison between them. It now
+    prints the CI-GROUPED rank — all three share rank 1 — and no row wears a medal (a podium is a
+    claim; there is no evidence for one here)."""
+    monkeypatch.setattr(service, "verified_leaderboard_rows", _fake_zero_vote_board_rows)
+    html = client.get("/leaderboard?verified=true&paradigm=image_recon").text
+    assert re.findall(r'lb-rank-num mono">(\d+)<', html) == ["1", "1", "1"]
+    assert "lb-medal" not in html
 
 
 def test_verified_paradigm_board_is_a_fresh_within_paradigm_ranking(monkeypatch):

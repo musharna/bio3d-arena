@@ -16,8 +16,13 @@
   </header>
 
   {% if card %}
+  {# This BT score is a WITHIN-METHOD score: the model was only ever compared against others in its
+     own paradigm (separate match pools), so it is not an "overall" number and the label must not
+     call it one. Same for the rank — it is a position on this method's board, not on the site. #}
+  {% set method = card.paradigm_display or gen.paradigm or "its method" %}
   <div class="b3d-model-stats mono b3d-model-detail-stats">
-    <span title="Bradley–Terry overall score">{% if card.bt_score is not none %}<strong>{{ card.bt_score }}</strong> BT{% else %}<span class="subtle">unrated</span>{% endif %}</span>
+    <span title="Bradley–Terry score within {{ method }} — BT scores from different methods come from disconnected match pools and aren't comparable">{% if card.bt_score is not none %}<strong>{{ card.bt_score }}</strong> BT <span class="subtle">in {{ method }}</span>{% else %}<span class="subtle">unrated</span>{% endif %}</span>
+    {% if card.rank %}<span title="Rank within {{ method }} — models with overlapping 95% CIs share a rank"><strong>#{{ card.rank }}</strong> <span class="subtle">in method</span></span>{% endif %}
     <span><strong>{{ card.votes }}</strong> votes</span>
     <span><strong>{{ card.tasks }}</strong> tasks</span>
     <span class="subtle">{{ card.confidence }}</span>

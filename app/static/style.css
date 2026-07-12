@@ -3752,6 +3752,16 @@ details.group[open] > summary.group-title::before {
   color: var(--faint);
   font-size: 0.76rem;
 }
+/* Empty state — a modality nobody has voted on yet still gets a card (its board exists), so this
+   line replaces the top-3 preview. Muted, never --bad: unrated is unfinished, not broken. */
+.lb-hub-empty {
+  margin: 0.35rem 0 0;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
 .lb-hub-firm {
   color: var(--accent);
   font-weight: 600;
@@ -3803,6 +3813,37 @@ details.group[open] > summary.group-title::before {
 }
 
 /* === Models index + detail (Task 12) — model-card family on shared tokens === */
+/* The index is SECTIONED BY METHOD (one section per modality, same spine as the leaderboard hub):
+   a model is only ranked against the others in its own section. Section chrome reuses
+   .b3d-section-head; only the spacing/empty-state below is new. All color from theme tokens. */
+.b3d-model-section + .b3d-model-section {
+  margin-top: 0.4rem;
+}
+.b3d-model-section-what {
+  margin: -0.5rem 0 0.85rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.b3d-model-section-empty {
+  margin: 0 0 0.5rem;
+  padding: 0.85rem 1rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-card);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+/* Within-method rank chip on a card (#N) — never a cross-method position. */
+.b3d-model-rank {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 12.5px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 0.05rem 0.45rem;
+  background: var(--panel2);
+}
 /* 2-col card grid (design-parity: task-models-spotlight), collapses to 1-col on narrow
    viewports; each card carries a colored avatar tile (shares .lb-avatar's hue formula). */
 .b3d-model-grid {
@@ -3930,7 +3971,10 @@ details.group[open] > summary.group-title::before {
 }
 .b3d-model-stats {
   display: flex;
-  gap: 1.1rem;
+  /* wraps: the BT stat now carries its "in method" qualifier (a BT score is a within-method
+     number), which can exceed one line in a narrow card. */
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
   font-size: 12.5px;
   color: var(--faint);
   white-space: nowrap;

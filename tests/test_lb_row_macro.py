@@ -53,6 +53,9 @@ def _row(name: str, **extra) -> dict:
         "trend_points": "0,10 64,10",
         "n_games": 42,
         "rank": 1,
+        # A separated top-3 rank (main._enrich_leaderboard_rows): CI-tied / unvoted rows get
+        # podium=False and show their shared rank number instead of a medal.
+        "podium": True,
         "status": {"firm": True, "label": "firm"},
         "detail_url": f"/models/{name}",
     }
@@ -75,6 +78,15 @@ def test_plain_row_renders_as_a_normal_board_row():
     assert "lb-medal" in html  # pos 1..3 get a medal
     assert "alpha" in html
     assert html.count("<tr") == 1  # no children -> exactly one row
+
+
+def test_ci_tied_row_shows_its_shared_rank_number_instead_of_a_medal():
+    """Rank 1 is not always a podium: rank_by_ci ties statistically-inseparable models at the same
+    rank, and on a thin board that can be EVERY model. Such a row shows the number, not a medal."""
+    html = _render(_row("tied", podium=False), pos=1)
+    assert "lb-medal" not in html
+    assert "lb-rank-num" in html
+    assert ">1<" in html  # the shared rank is still displayed
 
 
 def test_parent_with_children_renders_indented_variant_rows():

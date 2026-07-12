@@ -1014,8 +1014,18 @@ def _enrich_leaderboard_rows(
     rows: list[dict], trend_by_gid: dict[int, list[float | None]]
 ) -> list[dict]:
     """Attach the prototype's display-only fields (avatar, provenance chips, trend
-    sparkline + momentum, model-detail link, provisional flag) to already-ranked
+    sparkline + momentum, model-detail link, provisional flag, podium medal) to already-ranked
     leaderboard rows. Never touches bt_score/rank/ci_* — pure presentation enrichment."""
+    # A medal is a claim of SEPARATION, so only a top-3 rank that no other displayed row shares —
+    # and that real votes back — earns one. rank_by_ci lets CI-overlapping models share a rank; on
+    # a thin board that can tie every model at rank 1, and five gold medals would read as five
+    # winners. Those rows still show their (shared) rank number, which is the honest signal.
+    rank_counts: dict[int, int] = {}
+    for r in rows:
+        rank_counts[r.get("rank", 0)] = rank_counts.get(r.get("rank", 0), 0) + 1
+    for r in rows:
+        rank = r.get("rank", 0)
+        r["podium"] = r.get("n_games", 0) > 0 and rank <= 3 and rank_counts.get(rank, 0) == 1
     for r in rows:
         r["avatar"] = _avatar_initials(r["generator"])
         r["avatar_hue"] = _avatar_hue(r.get("slug") or r["generator"])
@@ -1253,15 +1263,23 @@ def leaderboard(
         )
 
     def _finish(board_rows: list[dict]) -> list[dict]:
-        """Enrich + rated-only filter one board's rows (fall back to all if none are rated).
+        """Select → RANK → enrich ONE board's rows. Rated-only by default (`show_all` reveals the
+        never-voted entrants; fall back to all if none are rated).
 
-        NOTE: `show_all` only reaches the USER on a single-paradigm board. On the hub it is
-        intentionally inert — service.modality_hub_cards() re-applies its own rated-only filter
-        (an unrated entrant has nothing to rank, so it never belongs on a card's top-3). That is
-        by design, not a dropped wire."""
-        board_rows = _enrich_leaderboard_rows(board_rows, trend_by_gid)
+        The rated filter runs BEFORE service.finalize_rows(), so `rank` is a CI-grouped 1..N over
+        exactly the rows that will be DISPLAYED. Ranking first and filtering after (the old order)
+        left the displayed rank a slice of a wider ranking — a board could start at rank 2 — which
+        is why the template fell back to printing `loop.index` under the "Rank" header, inventing a
+        strict order among CI-tied rows (on a zero-vote board: six models, identical BT, identical
+        CIs, printed 1..6). Now the template prints the real CI-grouped rank: it starts at 1 and
+        models that are not statistically separable SHARE a rank.
+
+        `show_all` only reaches the USER on a single-paradigm board — the hub does not call this
+        (service.modality_hub_cards owns its own rated/unrated split, since a card shows both a
+        rated top-3 and an unvoted modality's empty state)."""
         rated = [r for r in board_rows if r.get("n_games", 0) > 0]
-        return board_rows if (show_all or not rated) else rated
+        shown = board_rows if (show_all or not rated) else rated
+        return _enrich_leaderboard_rows(service.finalize_rows(shown), trend_by_gid)
 
     # Paradigms present in this (criterion/category/kingdom) scope — drives the tabs on a single
     # board. Derived from the merged all_rows so a tab never vanishes on click.
@@ -1301,10 +1319,13 @@ def leaderboard(
     # own group (a fresh within-paradigm 1..N — the only rigorous comparison); finalize_rows()
     # ranks whatever rows it is handed, so grouping the already-computed universe is identical to
     # issuing one row-query per paradigm, at a single query/BT read.
+    #
+    # The card set is the ROSTER's modalities (_visible_modalities), not "the modalities that have
+    # votes in this scope": an unvoted modality still has a board (and /api/leaderboard still
+    # publishes one), so it gets a card in an honest empty state rather than vanishing. rows_fn
+    # hands modality_hub_cards the WHOLE group (rated + unrated) — it owns the split.
     if paradigm is None:
-        cards = service.modality_hub_cards(
-            lambda p: _finish(service.finalize_rows(groups.get(p, [])))
-        )
+        cards = service.modality_hub_cards(lambda p: groups.get(p, []), _visible_modalities(db))
         return templates.TemplateResponse(
             request,
             "leaderboard_hub.html",
@@ -1319,7 +1340,7 @@ def leaderboard(
     # ONE paradigm's board, in either scope. Its rank is a FRESH within-paradigm 1..N (never a
     # slice of a merged ranking, which would read 3/7/9): finalize_rows() re-ranks this
     # paradigm's rows alone.
-    rows = _finish(service.finalize_rows(groups.get(paradigm, [])))
+    rows = _finish(groups.get(paradigm, []))
     board_title = paradigms.DISPLAY_NAMES.get(paradigm, paradigm)
     # Global rated/unrated counts (for the single Show-all toggle) from the merged universe.
     total_generators = len(all_rows)
@@ -1571,16 +1592,39 @@ def api_leaderboard(
 
 
 def _model_cards(db: Session, k_ids: set[int] | None) -> list[dict]:
-    """Per-generator directory rows for /models: coverage stats + overall BT score, matched
-    by the same unique display name `coverage_summary`/`_leaderboard_rows` compute internally
-    (both derive it from `service.generator_display_names`, so matching on it is safe). No
-    fabricated org/company field — `Generator` has none (name/kind/paradigm/description only).
+    """Per-generator directory rows for /models: coverage stats + a WITHIN-METHOD BT score/rank,
+    matched by the same unique display name `coverage_summary`/`_leaderboard_rows` compute
+    internally (both derive it from `service.generator_display_names`, so matching on it is safe).
+    No fabricated org/company field — `Generator` has none (name/kind/paradigm/description only).
+
+    The `rank` is computed PER PARADIGM (the same group-then-finalize_rows pattern the /leaderboard
+    route runs), over that modality's RATED entrants — never over the merged universe. The grid this
+    feeds is sectioned by modality (_model_sections) for the same reason the leaderboard is: BT
+    scores from different paradigms come from disconnected match pools, so one BT-descending order
+    over every generator at once is not a comparison. /models used to BE that order — sorting the
+    whole public grid by the merged BT number and printing it uncaveated on every card — which is
+    the last cross-paradigm ranking on the site; the merged number itself is unchanged (a
+    generator's BT does not depend on how rows are grouped), only what it is sorted by and how it
+    is labelled.
     """
     names = service.generator_display_names(db)
     cov_by_name = {
         r["generator"]: r for r in service.coverage_summary(db, category_ids=k_ids)["generators"]
     }
-    bt_by_name = {r["generator"]: r for r in _leaderboard_rows(db, "overall", "all", None)}
+    # One read of the BT universe; only the per-generator NUMBERS (bt_score/n_games) are taken from
+    # it. Its own merged rank/order is deliberately discarded — see the rank pass below.
+    universe = _leaderboard_rows(db, "overall", "all", None)
+    bt_by_name = {r["generator"]: r for r in universe}
+    by_paradigm: dict[str | None, list[dict]] = {}
+    for r in universe:
+        by_paradigm.setdefault(r.get("paradigm") or None, []).append(dict(r))  # copies: see below
+    # Within-method rank: finalize_rows() (the boards' own ranker — no BT refit, no change to the
+    # ranking math) over each modality's rated rows alone, so it starts at 1 and CI-tied models
+    # share a number. Unrated entrants get no rank — they carry only the default prior.
+    rank_by_name: dict[str, int] = {}
+    for rows in by_paradigm.values():
+        for r in service.finalize_rows([r for r in rows if r.get("n_games", 0) > 0]):
+            rank_by_name[r["generator"]] = r["rank"]
     app_hidden = service.app_hidden_generator_ids(db)
 
     cards = []
@@ -1605,14 +1649,58 @@ def _model_cards(db: Session, k_ids: set[int] | None) -> list[dict]:
                 else "",
                 "description": g.description,
                 "bt_score": bt["bt_score"] if bt else None,
+                "rank": rank_by_name.get(disp_name),
                 "votes": cov["votes"],
                 "tasks": cov["tasks"],
                 "confidence": cov["confidence"],
             }
         )
-    # BT score desc; generators without a score (no overall rating yet) sink to the bottom.
-    cards.sort(key=lambda c: (c["bt_score"] is None, -(c["bt_score"] or 0), c["name"]))
+    # Sorted WITHIN a modality (BT desc, unscored last) — the flat list is only ever consumed
+    # per-section (_model_sections) or by slug (model_detail); it is not a ranking of its own.
+    order = {p: i for i, p in enumerate(paradigms.PARADIGMS)}
+    cards.sort(
+        key=lambda c: (
+            c["paradigm"] is None,
+            order.get(c["paradigm"], len(order)),
+            c["bt_score"] is None,
+            -(c["bt_score"] or 0),
+            c["name"],
+        )
+    )
     return cards
+
+
+def _model_sections(cards: list[dict], show_all: bool) -> list[dict]:
+    """Group the model directory BY MODALITY, in `paradigms.PARADIGMS` order — the same spine the
+    leaderboard hub uses, so /models and /leaderboard agree about what a BT score means (a rank
+    within ONE method). Each section shows its rated models by default; `show_all` reveals the
+    never-voted entrants, and a section whose models are all unrated keeps an honest empty state
+    rather than disappearing. Generators with no paradigm land in a trailing "Unclassified"
+    section (they are one match pool of their own — see paradigms.same_paradigm)."""
+    order = {p: i for i, p in enumerate(paradigms.PARADIGMS)}
+    by_p: dict[str | None, list[dict]] = {}
+    for c in cards:
+        by_p.setdefault(c["paradigm"] or None, []).append(c)
+    sections = []
+    for p in sorted(by_p, key=lambda x: (x is None, order.get(x, len(order)))):
+        group = by_p[p]
+        rated = [c for c in group if c.get("votes", 0) > 0]
+        sections.append(
+            {
+                "paradigm": p,
+                "display": paradigms.DISPLAY_NAMES.get(p, p) if p else "Unclassified",
+                "what": paradigms.WHAT_THIS_MEASURES.get(p, "") if p else "",
+                "cards": group if show_all else rated,
+                "model_count": len(group),
+                "rated_count": len(rated),
+                # An app-hidden paradigm has no public board (its generators are already filtered
+                # out of `cards`, so this is belt-and-braces), and neither has "Unclassified".
+                "board_url": f"/leaderboard/{p}"
+                if p and p not in config.APP_HIDDEN_PARADIGMS
+                else None,
+            }
+        )
+    return sections
 
 
 @app.get("/models", response_class=HTMLResponse)
@@ -1627,13 +1715,13 @@ def models_index(request: Request, db: Session = Depends(get_db), show_all: bool
     total_generators = len(cards)
     rated_cards = [c for c in cards if c.get("votes", 0) > 0]
     unrated_count = total_generators - len(rated_cards)
-    if not show_all and rated_cards:
-        cards = rated_cards
+    sections = _model_sections(cards, show_all or not rated_cards)
     return templates.TemplateResponse(
         request,
         "models.html",
         {
-            "cards": cards,
+            "sections": sections,
+            "shown_count": sum(len(s["cards"]) for s in sections),
             "show_all": show_all,
             "unrated_count": unrated_count,
             "total_generators": total_generators,

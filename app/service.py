@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
@@ -1296,33 +1296,56 @@ def firm_status(n_games: int) -> dict:
     return {"firm": False, "label": f"{remaining} more {unit} → firm"}
 
 
-def modality_hub_cards(rows_fn: Callable[[str], list[dict]]) -> list[dict]:
+def modality_hub_cards(
+    rows_fn: Callable[[str], list[dict]], modalities: Iterable[str]
+) -> list[dict]:
     """One hub card per VISIBLE modality (generation paradigm), in `paradigms.PARADIGMS` order.
 
     The leaderboard's spine is the modality: every board ranks exactly ONE paradigm (BT scores
     across paradigms come from disconnected match pools and are not comparable), so the landing
     page is a hub of modalities rather than a merged cross-paradigm ranking.
 
-    `rows_fn(paradigm)` returns that paradigm's already-ranked + enriched rows for the current
-    scope (the /leaderboard route passes a closure so scoping/enrichment stay in one place).
-    A modality earns a card only if it has ≥1 RATED entrant (n_games > 0) in scope — an unvoted
-    modality has nothing to rank yet. App-hidden paradigms never get a card, belt-and-braces with
-    the generator-level hiding in app_hidden_generator_ids()."""
+    `modalities` is the set of modalities that EXIST as a public surface (the caller passes the
+    roster's paradigms — see main._visible_modalities); every one of them gets a card, whether or
+    not anyone has voted on it. It used to be "a modality earns a card only if it has ≥1 rated
+    entrant", which on production data (votes in image_recon only) rendered ONE card and left
+    /leaderboard/text_native, /leaderboard/procedural_llm and /leaderboard/agentic reachable only
+    by typing the URL — an unvoted modality silently vanished instead of reading as
+    evaluation-in-progress, and the HTML disagreed with /api/leaderboard about which boards exist.
+    A modality with no rated entrant now carries an honest empty state (`rated_count == 0`), still
+    clickable. Iteration is over `paradigms.PARADIGMS` so the order is the registry's regardless of
+    the caller's; app-hidden paradigms never get a card, belt-and-braces with the generator-level
+    hiding in app_hidden_generator_ids().
+
+    `rows_fn(paradigm)` returns EVERY entrant of that paradigm for the current scope, rated or not
+    (the /leaderboard route passes a closure so scoping stays in one place). The card's top-3 is
+    re-ranked over the RATED subset alone (a fresh 1..N — an unrated entrant carries only the
+    default prior BT and has nothing to rank, so it must not push the rated leader to rank 2).
+
+    `firm` is ALL-rated-entrants-are-firm, never `any()`: one model over the threshold used to
+    stamp the card "firm" while the board it links to showed most rows still counting down
+    ("N more votes → firm"). `firm_count`/`rated_count` let the card state the same thing the
+    board does ("1 of 13 firm")."""
+    wanted = set(modalities)
     cards: list[dict] = []
     for p in paradigms.PARADIGMS:
-        if p in config.APP_HIDDEN_PARADIGMS:
+        if p not in wanted or p in config.APP_HIDDEN_PARADIGMS:
             continue
-        rated = [r for r in rows_fn(p) if r.get("n_games", 0) > 0]
-        if not rated:
-            continue
+        rows = rows_fn(p)
+        rated = [r for r in rows if r.get("n_games", 0) > 0]
+        # COPIES: finalize_rows() rewrites rank/ci_* in place, and `rows` belongs to the caller.
+        top = finalize_rows([dict(r) for r in rated])[:3]
+        firm_count = sum(1 for r in rated if r.get("n_games", 0) >= FIRM_VOTE_THRESHOLD)
         cards.append(
             {
                 "paradigm": p,
                 "display": paradigms.DISPLAY_NAMES.get(p, p),
                 "what": paradigms.WHAT_THIS_MEASURES.get(p, ""),
-                "top": rated[:3],
-                "model_count": len(rated),
-                "firm": any(r.get("n_games", 0) >= FIRM_VOTE_THRESHOLD for r in rated),
+                "top": top,
+                "model_count": len(rows),  # entrants in this modality (rated or not)
+                "rated_count": len(rated),
+                "firm_count": firm_count,
+                "firm": bool(rated) and firm_count == len(rated),
             }
         )
     return cards

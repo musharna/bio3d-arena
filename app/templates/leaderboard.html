@@ -27,7 +27,11 @@
     <span class="lb-variant-mark" aria-hidden="true">▸</span>
     {% else %}
     <span class="lb-momentum lb-momentum-{{ r.momentum }}" aria-hidden="true">{{ {"up": "▲", "down": "▽", "flat": "−"}[r.momentum] }}</span>
-    {% if pos <= 3 %}
+    {# A medal is a claim of SEPARATION (r.podium, computed in main._enrich_leaderboard_rows): a
+       top-3 rank that no other displayed row shares, backed by real votes. CI-tied rows — every
+       row on a zero-vote board, and most of a thin one — show their shared rank NUMBER instead;
+       five gold medals would read as five winners where the data separates nobody. #}
+    {% if r.podium %}
     <span class="lb-medal lb-medal-{{ ['gold', 'silver', 'bronze'][pos - 1] }}">{{ pos }}</span>
     {% else %}
     <span class="lb-rank-num mono">{{ pos }}</span>
@@ -95,8 +99,13 @@
         </tr>
       </thead>
       <tbody>
-        {# Top-level rows only; a row's variants (seam, none today) come out of lb_row itself. #}
-        {% for r in brows %}{{ lb_row(r, loop.index) }}{% endfor %}
+        {# Top-level rows only; a row's variants (seam, none today) come out of lb_row itself.
+           `r.rank` — the CI-GROUPED rank service.finalize_rows computed over exactly these rows
+           (main._finish filters to the displayed set BEFORE ranking, so it starts at 1) — never
+           `loop.index`, which is a positional index printed under a "Rank" header: on a board with
+           no votes it would invent a strict 1..N order among models with identical BT, identical
+           CIs and zero comparisons between them. #}
+        {% for r in brows %}{{ lb_row(r, r.rank) }}{% endfor %}
       </tbody>
     </table>
   </div>
