@@ -114,6 +114,10 @@ def test_vote_reveal_present_for_real_comparison(monkeypatch):
     assert isinstance(reveal["a"]["name"], str) and reveal["a"]["name"]
     assert isinstance(reveal["b"]["name"], str) and reveal["b"]["name"]
     assert reveal["winner"] == "a"
+    # Reveal is name-only: the "#N/M · provisional" standing chip was removed, so the payload
+    # must not re-introduce rank/of/provisional on either side.
+    assert set(reveal["a"]) == {"name"}
+    assert set(reveal["b"]) == {"name"}
 
 
 def test_vote_reveal_omitted_for_gold(monkeypatch):
@@ -162,6 +166,8 @@ def test_kvote_reveal_labels_every_output_and_the_pick():
     seen_ids = {o["output_id"] for o in reveal["outputs"]}
     assert seen_ids == set(out_ids)
     assert all(isinstance(o["name"], str) and o["name"] for o in reveal["outputs"])
+    # Name-only reveal: no rank/provisional standing chip re-introduced per output.
+    assert all(set(o) == {"output_id", "name"} for o in reveal["outputs"])
 
 
 def _overall_criterion_id(db) -> int:
