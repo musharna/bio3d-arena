@@ -1561,6 +1561,15 @@ def model_detail(slug: str, request: Request, db: Session = Depends(get_db)):
             }
         )
 
+    # Head-to-head record (#74): the evidence behind the rank. Opponents are same-paradigm by
+    # construction (see service.head_to_head_record) — the template must label it as a
+    # within-method record, and ties are shown, not folded away.
+    names = service.generator_display_names(db)
+    h2h = [
+        {**rec, "opponent_name": names.get(rec["opponent_id"], "Unknown")}
+        for rec in service.head_to_head_record(db, gen.id, "overall", category_ids=k_ids)
+    ]
+
     return templates.TemplateResponse(
         request,
         "model_detail.html",
@@ -1569,6 +1578,7 @@ def model_detail(slug: str, request: Request, db: Session = Depends(get_db)):
             "card": card,
             "task_rows": task_rows,
             "samples": samples,
+            "h2h": h2h,
         },
     )
 

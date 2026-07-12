@@ -3991,6 +3991,25 @@ details.group[open] > summary.group-title::before {
   font-size: 11px;
 }
 
+/* === Head-to-head (#74) — the evidence behind a rank, on the shared .ranktable tokens.
+   Horizontal overflow is owned by the enclosing .ranktable-wrap, so a wide record table
+   scrolls inside itself and never pushes the page sideways. === */
+.b3d-h2h-table {
+  min-width: 26rem; /* below this the 4 columns crowd — let .ranktable-wrap scroll instead */
+}
+.b3d-h2h-pct {
+  color: var(--text);
+}
+.b3d-h2h-win {
+  color: var(--accent);
+}
+.b3d-h2h-foot {
+  margin: 0.7rem 0 0;
+  max-width: 60ch;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
 /* === Difficulty (Task 13) — card-wrapped sections on shared .ranktable tokens,
    + a server-rendered inline-SVG degradation chart + heat-mapped tier grid === */
 .diff-panel {
