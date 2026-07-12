@@ -6,6 +6,7 @@ recon scorer. Commits per object. API keys come from env and are never logged.
 
 from __future__ import annotations
 
+import functools
 import sys
 from pathlib import Path
 
@@ -24,66 +25,115 @@ PINE_TITLE = "Pinus sylvestris — single-image → 3D reconstruction"
 # Per-crop: subject task + its CC reference photo. The API recon path attaches api:<provider>
 # outputs to the subject by title (no GT/ReconTask needed); key-gated per provider.
 CROPS = {
-    "tomato": {"task_title": TOMATO_TITLE, "image": "data/assets/reference/tomato_ref_clean.jpg"},
-    "maize": {"task_title": MAIZE_TITLE, "image": "data/assets/reference/maize_ref.jpg"},
-    "rose": {"task_title": ROSE_TITLE, "image": "data/assets/reference/rose_ref_clean.jpg"},
+    "tomato": {
+        "task_title": TOMATO_TITLE,
+        "image": "data/assets/reference/tomato_ref_clean.jpg",
+        "subject": "tomato plant",
+    },
+    "maize": {
+        "task_title": MAIZE_TITLE,
+        "image": "data/assets/reference/maize_ref.jpg",
+        "subject": "maize plant",
+    },
+    "rose": {
+        "task_title": ROSE_TITLE,
+        "image": "data/assets/reference/rose_ref_clean.jpg",
+        "subject": "rose plant",
+    },
     "soybean": {
         "task_title": "Glycine max — single-image → 3D reconstruction",
         "image": "data/assets/reference/soybean_ref_clean.jpg",
+        "subject": "soybean plant",
     },
     "arabidopsis": {
         "task_title": ARABIDOPSIS_TITLE,
         "image": "data/assets/reference/arabidopsis_ref.jpg",
+        "subject": "arabidopsis rosette plant",
     },
-    "pinus": {"task_title": PINE_TITLE, "image": "data/assets/reference/pinus_ref.jpg"},
+    "pinus": {
+        "task_title": PINE_TITLE,
+        "image": "data/assets/reference/pinus_ref.jpg",
+        "subject": "pine tree",
+    },
     # Kingdom Fungi + easy-plant expansion (CC-clean reference photos)
     "puffball": {
         "task_title": "Lycoperdon perlatum — single-image → 3D reconstruction",
         "image": "data/assets/reference/puffball_ref.jpg",
+        "subject": "puffball mushroom",
     },
     "gourd": {
         "task_title": "Cucurbita pepo — single-image → 3D reconstruction",
         "image": "data/assets/reference/gourd_ref.jpg",
+        "subject": "gourd",
     },
     "hericium": {
         "task_title": "Hericium erinaceus — single-image → 3D reconstruction",
         "image": "data/assets/reference/hericium_ref.jpg",
+        "subject": "lion's mane mushroom",
     },
     # Fungi expansion wave-2 (real-specimen CC photos: bolete/amanita CC-BY-3.0, morel/turkey-tail CC0)
     "bolete": {
         "task_title": "Boletus edulis — single-image → 3D reconstruction",
         "image": "data/assets/reference/bolete_ref.jpg",
+        "subject": "bolete mushroom",
     },
     "amanita": {
         "task_title": "Amanita muscaria — single-image → 3D reconstruction",
         "image": "data/assets/reference/amanita_ref.jpg",
+        "subject": "fly agaric mushroom",
     },
     "morel": {
         "task_title": "Morchella esculenta — single-image → 3D reconstruction",
         "image": "data/assets/reference/morel_ref.jpg",
+        "subject": "morel mushroom",
     },
     "turkeytail": {
         "task_title": "Trametes versicolor — single-image → 3D reconstruction",
         "image": "data/assets/reference/turkeytail_ref.jpg",
+        "subject": "turkey tail bracket fungus",
     },
     # Kingdom Animalia (SP3) — CC-clean reference photos (dog CC-BY, mallard/monarch CC-BY-SA, goldfish CC0)
     "dog": {
         "task_title": "Canis lupus familiaris — single-image → 3D reconstruction",
         "image": "data/assets/reference/dog_ref_clean.jpg",
+        "subject": "dog",
     },
     "mallard": {
         "task_title": "Anas platyrhynchos — single-image → 3D reconstruction",
         "image": "data/assets/reference/mallard_ref_clean.jpg",
+        "subject": "mallard duck",
     },
     "monarch": {
         "task_title": "Danaus plexippus — single-image → 3D reconstruction",
         "image": "data/assets/reference/monarch_ref_clean.jpg",
+        "subject": "monarch butterfly",
     },
     "goldfish": {
         "task_title": "Carassius auratus — single-image → 3D reconstruction",
         "image": "data/assets/reference/goldfish_ref_clean.jpg",
+        "subject": "goldfish",
     },
 }
+
+
+# fal models that segment-then-reconstruct and REQUIRE a plain-language subject prompt: SAM-3D's
+# auto-segmentation returns no masks on a clean single-subject photo, so we pass the crop's subject
+# as extra_input["prompt"]. (Meshy 6 / Pixal3D / TRELLIS / Rodin need no prompt.)
+PROMPT_REQUIRING_SLUGS = frozenset({"fal:sam-3d"})
+
+
+def apply_subject_prompts(providers: dict, subject: str | None) -> dict:
+    """Return a providers dict where prompt-requiring models carry the crop's plain-language
+    subject as extra_input={"prompt": subject}; every other provider passes through by identity.
+    A falsy subject leaves providers untouched (the model then fails loud rather than reconstruct
+    nothing)."""
+    if not subject:
+        return providers
+    out = dict(providers)
+    for slug in PROMPT_REQUIRING_SLUGS & providers.keys():
+        fn, env_var, name = providers[slug]
+        out[slug] = (functools.partial(fn, extra_input={"prompt": subject}), env_var, name)
+    return out
 
 
 def _provenance(slug: str, name: str) -> tuple[str, str]:
@@ -241,6 +291,9 @@ def main() -> int:
     # storage-relative path of the reference (asset store root is data/assets/) for per-output provenance
     input_image_rel = crop["image"].split("data/assets/", 1)[-1]
     active = {s: v for s, v in PROVIDERS.items() if os.environ.get(v[1])}
+    # SAM-3D (and any other prompt-requiring model) needs the crop's plain-language subject to
+    # segment; inject it so the batch loop's fn(image, api_key=...) call carries the prompt.
+    active = apply_subject_prompts(active, crop.get("subject"))
     if not active:
         print("no provider API key in env (e.g. TRIPO_API_KEY) — nothing to generate")
         return 0
