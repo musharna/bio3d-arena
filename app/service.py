@@ -330,36 +330,65 @@ def head_to_head_record(
     *,
     category_ids: set[int] | None = None,
 ) -> list[dict]:
-    """Per-opponent decisive win/loss record for one generator within its paradigm scope.
+    """Per-opponent win/loss/tie record for one generator within its paradigm scope.
 
-    Built from _matches_for_scope (already same-paradigm, gold/reference-excluded, trust-gated,
-    ties split). Returns [] when the generator has no decisive games. Sorted games desc, win% desc.
+    Built from _matches_for_scope (already same-paradigm, gold/reference-excluded,
+    trust-gated). Note: _matches_for_scope's `include_ties=True` mode is a Bradley-Terry
+    fitting device — it splits a tie into BOTH (a,b) and (b,a) so ties inform BT without a
+    separate tie parameter. That is not a display record: treating each split as its own
+    game would double-count real comparisons. Here, ties use the standard 0.5-win
+    convention instead: a tie counts as half a win, half a loss, and exactly ONE game.
+    `games` therefore equals the true number of comparisons decided between the two
+    generators (wins + losses + ties, not wins + losses + 2*ties).
+
+    Self-generator matches (both outputs from the same generator — matchmaking doesn't
+    guarantee distinct generators) are excluded: a generator is never its own opponent.
+
+    Returns [] when the generator has no games. Sorted games desc, win% desc, opponent_id
+    asc (explicit final tiebreak so equally-ranked opponents don't flap between requests).
     """
     crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
     if crit is None:
         return []
-    matches, _groups = _matches_for_scope(db, crit.id, category_ids=category_ids)
-    tally: dict[int, dict] = {}
-    for winner, loser in matches:
-        if winner == generator_id:
-            t = tally.setdefault(loser, {"wins": 0, "losses": 0})
-            t["wins"] += 1
-        elif loser == generator_id:
-            t = tally.setdefault(winner, {"wins": 0, "losses": 0})
-            t["losses"] += 1
+    decisive, _ = _matches_for_scope(db, crit.id, category_ids=category_ids, include_ties=False)
+    with_ties, _ = _matches_for_scope(db, crit.id, category_ids=category_ids, include_ties=True)
+
+    def _tally(matches: list[tuple[int, int]]) -> dict[int, dict]:
+        t: dict[int, dict] = {}
+        for winner, loser in matches:
+            if winner == loser:
+                continue  # same-generator comparison — not a head-to-head
+            if winner == generator_id:
+                t.setdefault(loser, {"wins": 0, "losses": 0})
+                t[loser]["wins"] += 1
+            elif loser == generator_id:
+                t.setdefault(winner, {"wins": 0, "losses": 0})
+                t[winner]["losses"] += 1
+        return t
+
+    decisive_tally = _tally(decisive)
+    all_tally = _tally(with_ties)
+
     out = []
-    for opp, t in tally.items():
-        games = t["wins"] + t["losses"]
+    for opp in set(decisive_tally) | set(all_tally):
+        d = decisive_tally.get(opp, {"wins": 0, "losses": 0})
+        a = all_tally.get(opp, {"wins": 0, "losses": 0})
+        # Each tie contributes exactly +1 to the win direction and +1 to the loss
+        # direction in the split-record (`with_ties`) vs the decisive-only record.
+        ties = a["wins"] - d["wins"]
+        wins, losses = d["wins"], d["losses"]
+        games = wins + losses + ties
         out.append(
             {
                 "opponent_id": opp,
-                "wins": t["wins"],
-                "losses": t["losses"],
+                "wins": wins,
+                "losses": losses,
+                "ties": ties,
                 "games": games,
-                "win_pct": (t["wins"] / games) if games else 0.0,
+                "win_pct": (wins + 0.5 * ties) / games,
             }
         )
-    out.sort(key=lambda r: (r["games"], r["win_pct"]), reverse=True)
+    out.sort(key=lambda r: (-r["games"], -r["win_pct"], r["opponent_id"]))
     return out
 
 
