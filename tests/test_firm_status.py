@@ -12,3 +12,10 @@ def test_firm_status_counts_remaining_below_threshold():
     s = service.firm_status(n)
     assert s["firm"] is False
     assert s["label"] == "3 more votes → firm"
+
+
+def test_firm_status_singular_vote_remaining():
+    n = service.FIRM_VOTE_THRESHOLD - 1
+    s = service.firm_status(n)
+    assert s["firm"] is False
+    assert s["label"] == "1 more vote → firm"

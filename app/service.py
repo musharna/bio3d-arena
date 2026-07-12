@@ -1290,7 +1290,9 @@ def firm_status(n_games: int) -> dict:
     else a countdown label so a low-vote rank reads as evaluation-in-progress, not settled."""
     if n_games >= FIRM_VOTE_THRESHOLD:
         return {"firm": True, "label": "firm"}
-    return {"firm": False, "label": f"{FIRM_VOTE_THRESHOLD - n_games} more votes → firm"}
+    remaining = FIRM_VOTE_THRESHOLD - n_games
+    unit = "vote" if remaining == 1 else "votes"
+    return {"firm": False, "label": f"{remaining} more {unit} → firm"}
 
 
 def coverage_summary(db: Session, category_ids: set[int] | None = None) -> dict:
