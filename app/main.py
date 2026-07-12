@@ -1214,26 +1214,26 @@ def leaderboard(
     k_ids = kingdoms.category_ids_for_kingdom(db, kingdom)
     category_id_sel = _resolve_category_id(db, category)
     cat_ids = _effective_category_ids(k_ids, category_id_sel) if k_ids is not None else None
+    # `all_rows` is the UNIVERSE for this scope (every paradigm). It is NEVER displayed as one
+    # merged board — the cross-paradigm ranking is gone (paradigms are disconnected match pools,
+    # so a merged BT ordering was never a statistical claim). It feeds the trend series, the
+    # rated/unrated counts, the tab list, and the per-modality grouping below.
+    #
+    # `verified` is a SCOPE MODIFIER (which votes count), not a board: it swaps the row source
+    # (BT refit over signed-in votes only) and nothing else. Both scopes render the same two
+    # surfaces — the modality hub (no paradigm) or ONE paradigm's board.
     if verified:
-        # verified_leaderboard_rows has no paradigm parameter (it always merges every
-        # paradigm's votes into one BT fit); filter the ALREADY-RANKED rows for display so a
-        # paradigm tab still narrows the Verified scope. Unlike the trusted-scope branch
-        # below, this does NOT recompute a fresh within-paradigm rank — the row's `rank`
-        # stays whatever the global verified fit assigned it.
         all_rows = service.verified_leaderboard_rows(db, criterion, category, category_ids=cat_ids)
-        rows = [r for r in all_rows if r["paradigm"] == paradigm] if paradigm else all_rows
     else:
-        # `all_rows` is the UNIVERSE for this scope (every paradigm) — it is never displayed as
-        # one merged board any more (the cross-paradigm "Overall" ranking is gone: paradigms are
-        # disconnected match pools). It feeds the trend series, the rated/unrated counts, the tab
-        # list, and the hub's per-modality grouping. A single-paradigm board gets its OWN call so
-        # its rank is a fresh 1..N within just that paradigm's rows.
         all_rows = _leaderboard_rows(db, criterion, category, None, kingdom)
-        rows = (
-            all_rows
-            if paradigm is None
-            else _leaderboard_rows(db, criterion, category, paradigm, kingdom)
-        )
+
+    # Paradigm -> that paradigm's rows. SHALLOW COPIES on purpose: service.finalize_rows() sorts
+    # its list and rewrites `rank`/`ci_*` IN PLACE, so grouping the live all_rows dicts would let
+    # a board's re-rank leak back into the universe that the counts/tabs/trend read from.
+    groups: dict[str | None, list[dict]] = {}
+    for r in all_rows:
+        groups.setdefault(r.get("paradigm"), []).append(dict(r))
+
     total = matchmaking.total_votes(db)
     cats = db.execute(select(Category)).scalars().all()
     crits = db.execute(select(Criterion)).scalars().all()
@@ -1250,7 +1250,12 @@ def leaderboard(
         )
 
     def _finish(board_rows: list[dict]) -> list[dict]:
-        """Enrich + rated-only filter one board's rows (fall back to all if none are rated)."""
+        """Enrich + rated-only filter one board's rows (fall back to all if none are rated).
+
+        NOTE: `show_all` only reaches the USER on a single-paradigm board. On the hub it is
+        intentionally inert — service.modality_hub_cards() re-applies its own rated-only filter
+        (an unrated entrant has nothing to rank, so it never belongs on a card's top-3). That is
+        by design, not a dropped wire."""
         board_rows = _enrich_leaderboard_rows(board_rows, trend_by_gid)
         rated = [r for r in board_rows if r.get("n_games", 0) > 0]
         return board_rows if (show_all or not rated) else rated
@@ -1287,20 +1292,13 @@ def leaderboard(
         "verified": verified,
     }
 
-    # DEFAULT (trusted scope, no paradigm filter) = the modality HUB: one card per visible
-    # modality, linking to that modality's own board. There is NO cross-paradigm "Overall"
-    # ranking any more — BT scores from different paradigms come from disconnected match pools,
-    # so a merged ordering was never a statistical claim. `?paradigm=X` shows one paradigm's
-    # board; the Verified scope always merges paradigms into one BT fit (it can't refit
-    # per-paradigm), so it renders as a single board too.
-    if (not verified) and paradigm is None:
-        # Group the already-computed universe by paradigm and RE-rank within each group (a fresh
-        # within-paradigm 1..N BT rank — the only rigorous comparison). Grouping all_rows rather
-        # than issuing one _leaderboard_rows call per paradigm keeps this to a single query/BT
-        # read: finalize_rows() ranks whatever rows it is handed, so the result is identical.
-        groups: dict[str | None, list[dict]] = {}
-        for r in all_rows:
-            groups.setdefault(r.get("paradigm"), []).append(r)
+    # NO paradigm filter (in EITHER scope) = the modality HUB: one card per visible modality,
+    # linking to that modality's own board. There is no cross-paradigm ranking any more — BT
+    # scores from different paradigms come from disconnected match pools. Each card re-ranks its
+    # own group (a fresh within-paradigm 1..N — the only rigorous comparison); finalize_rows()
+    # ranks whatever rows it is handed, so grouping the already-computed universe is identical to
+    # issuing one row-query per paradigm, at a single query/BT read.
+    if paradigm is None:
         cards = service.modality_hub_cards(
             lambda p: _finish(service.finalize_rows(groups.get(p, [])))
         )
@@ -1315,12 +1313,11 @@ def leaderboard(
             },
         )
 
-    rows = _finish(rows)
-    board_title = (
-        paradigms.DISPLAY_NAMES.get(paradigm, paradigm)
-        if paradigm
-        else "Verified votes — all methods"
-    )
+    # ONE paradigm's board, in either scope. Its rank is a FRESH within-paradigm 1..N (never a
+    # slice of a merged ranking, which would read 3/7/9): finalize_rows() re-ranks this
+    # paradigm's rows alone.
+    rows = _finish(service.finalize_rows(groups.get(paradigm, [])))
+    board_title = paradigms.DISPLAY_NAMES.get(paradigm, paradigm)
     # Global rated/unrated counts (for the single Show-all toggle) from the merged universe.
     total_generators = len(all_rows)
     unrated_count = sum(1 for r in all_rows if r.get("n_games", 0) == 0)

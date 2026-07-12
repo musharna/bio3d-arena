@@ -1,9 +1,12 @@
 """/leaderboard is a modality HUB: one card per VISIBLE modality, each linking to that
 modality's own board. The cross-paradigm "Overall" ranking is gone (paradigms are disconnected
-match pools — a merged BT ordering was never a statistical claim). `?paradigm=X` and the
-verified scope still render a single within-paradigm board."""
+match pools — a merged BT ordering was never a statistical claim). `?paradigm=X` renders a single
+within-paradigm board; `?verified=true` is a SCOPE MODIFIER over the same two surfaces (hub /
+one-paradigm board), never a merged cross-paradigm board of its own."""
 
 from __future__ import annotations
+
+import re
 
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
@@ -19,6 +22,10 @@ client = TestClient(app)
 # fixtures (~1000-2000) so these rows own the top of their modality's board even though the whole
 # suite shares one DB file — the top-3 assertions must not depend on test ordering.
 FIXTURES = [
+    # UNRATED (n_games=0) but carrying the highest prior BT in its paradigm: ranks are assigned
+    # over the whole group (including unrated), so this row would push the card's rated top-3 to
+    # read 2/3/4 if the card rendered `rank` instead of the position within its rated set.
+    ("lbhub-recon-unrated", "image_recon", 9500.0, 0),
     ("lbhub-recon-a", "image_recon", 9000.0, 40),  # firm (>= FIRM_VOTE_THRESHOLD)
     ("lbhub-recon-b", "image_recon", 8900.0, 5),
     ("lbhub-recon-c", "image_recon", 8800.0, 2),
@@ -147,6 +154,20 @@ def test_hub_shows_top_models_and_population():
     assert paradigms.WHAT_THIS_MEASURES["image_recon"] in html
 
 
+def _card_ranks(html: str, paradigm: str) -> list[str]:
+    """The rank numbers rendered inside one modality card (cards are anchors, in order)."""
+    card = html.split(f'href="/leaderboard/{paradigm}')[1]
+    return re.findall(r'lb-hub-rank mono">(\d+)<', card)
+
+
+def test_hub_card_top3_starts_at_rank_one_despite_higher_unrated_prior():
+    """lbhub-recon-unrated (n_games=0) carries the paradigm's highest prior BT, so the group-wide
+    `rank` of the rated leader is 2 — the card must still read 1/2/3 for its RATED set."""
+    html = client.get("/leaderboard").text
+    assert "lbhub-recon-unrated" not in html  # unrated entrants never reach a card
+    assert _card_ranks(html, "image_recon")[:3] == ["1", "2", "3"]
+
+
 def test_hub_has_no_cross_paradigm_overall_ranking():
     html = client.get("/leaderboard").text
     assert "overall=true" not in html  # the Overall tab/board is gone
@@ -167,7 +188,54 @@ def test_hidden_paradigm_board_is_empty():
     assert "lbhub-retrieval" not in html
 
 
-def test_verified_scope_still_renders():
+# -------------------------------------------------- verified = a SCOPE MODIFIER, not a board
+
+
+def _fake_verified_rows(*_a, **_kw) -> list[dict]:
+    """A MERGED verified BT fit (what service.verified_leaderboard_rows returns): one ranking over
+    every paradigm. Ranks land 1..4 across paradigms, so image_recon's leader sits at rank 3 —
+    slicing this by paradigm (the old behavior) would show a board starting at rank 3."""
+
+    def row(slug, paradigm, bt):
+        return {
+            "generator": slug,
+            "kind": "model",
+            "paradigm": paradigm,
+            "generator_id": None,
+            "slug": slug,
+            "bt_score": bt,
+            "bt_lower": bt - 5.0,
+            "bt_upper": bt + 5.0,
+            "n_games": 12,
+        }
+
+    return service.finalize_rows(
+        [
+            row("vtext-1", "text_native", 400.0),
+            row("vtext-2", "text_native", 300.0),
+            row("vrecon-1", "image_recon", 200.0),
+            row("vrecon-2", "image_recon", 100.0),
+        ]
+    )
+
+
+def test_verified_scope_renders_the_hub_not_a_merged_board(monkeypatch):
+    monkeypatch.setattr(service, "verified_leaderboard_rows", _fake_verified_rows)
     r = client.get("/leaderboard?verified=true")
     assert r.status_code == 200
-    assert 'class="lb-hub"' not in r.text
+    assert 'class="lb-hub"' in r.text  # the SAME hub, cards built from the verified rows
+    assert "Verified votes — all methods" not in r.text  # the merged board is gone
+    # cards are per-paradigm and each starts at 1 (not a slice of the merged 1..4 ranking)
+    assert _card_ranks(r.text, "image_recon")[:2] == ["1", "2"]
+    assert "vrecon-1" in r.text and "vtext-1" in r.text
+
+
+def test_verified_paradigm_board_is_a_fresh_within_paradigm_ranking(monkeypatch):
+    monkeypatch.setattr(service, "verified_leaderboard_rows", _fake_verified_rows)
+    html = client.get("/leaderboard?verified=true&paradigm=image_recon").text
+    assert 'class="lb-hub"' not in html  # a single board, not the hub
+    assert "vrecon-1" in html
+    assert "vtext-1" not in html  # other paradigms are not on this board
+    # Fresh 1..N: the BT cell is marked `strong` only for rank == 1. On a slice of the merged
+    # ranking vrecon-1 would still carry rank 3 and nothing on the board would be rank 1.
+    assert "num mono strong" in html

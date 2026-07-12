@@ -116,7 +116,8 @@
       >{% if show_all %}Show rated only{% else %}Show all {{ total_generators }} <span class="subtle">· {{ unrated_count }} unrated</span>{% endif %}</a>
   </p>
   {% endif %}
-  {% if verified and not sel_paradigm_value %}<p class="subtle lb-stacked-note">The verified scope fits ONE Bradley–Terry model over all signed-in votes, so this board spans methods — scores across methods aren't comparable (separate match pools). Pick a method tab for the rigorous, within-method comparison.</p>{% endif %}
+  {# No cross-method caveat needed: this template only ever renders ONE paradigm's board (the
+     no-paradigm view is the modality hub, in BOTH the trusted and verified scopes). #}
   {{ lb_board(rows, board_title) }}
   <p class="subtle lb-legend">
     <span class="ci-range lb-legend-swatch" aria-hidden="true"></span> 95% credible interval ·
