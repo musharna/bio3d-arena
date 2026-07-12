@@ -45,6 +45,21 @@ SHORT_NAMES: dict[str, str] = {
 }
 
 
+# One plain-language line per modality for the leaderboard hub cards / board headers.
+WHAT_THIS_MEASURES: dict[str, str] = {
+    "image_recon": "A single photo reconstructed into a 3D mesh.",
+    "text_native": "A text prompt turned directly into 3D.",
+    "procedural_llm": "An LLM writes Blender/CAD code that builds the 3D model.",
+    "agentic": "An agent renders, critiques, and revises its own 3D model in a loop.",
+    "capture_scan": "A real organism captured to 3D by photogrammetry / scanning.",
+    "video": "Video frames lifted into 3D / 4D.",
+    "texturing": "Editing or texturing an existing 3D model.",
+    "retrieval": "A pre-existing human-made asset retrieved from a library.",
+    "procedural_expert": "Hand-authored rule-based / simulation generators.",
+    "sketch": "A sketch turned into 3D.",
+}
+
+
 def is_valid_paradigm(p: str) -> bool:
     return p in PARADIGMS
 
