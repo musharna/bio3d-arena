@@ -1285,6 +1285,14 @@ def compute_bias(db: Session) -> dict:
 FIRM_VOTE_THRESHOLD = 30
 
 
+def firm_status(n_games: int) -> dict:
+    """Votes-until-firm signal for a leaderboard row. `firm` once n_games >= FIRM_VOTE_THRESHOLD,
+    else a countdown label so a low-vote rank reads as evaluation-in-progress, not settled."""
+    if n_games >= FIRM_VOTE_THRESHOLD:
+        return {"firm": True, "label": "firm"}
+    return {"firm": False, "label": f"{FIRM_VOTE_THRESHOLD - n_games} more votes → firm"}
+
+
 def coverage_summary(db: Session, category_ids: set[int] | None = None) -> dict:
     """Per-generator + per-task coverage & vote-count disclosure (governance transparency).
 
