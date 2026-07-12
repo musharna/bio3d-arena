@@ -1489,6 +1489,15 @@ def leaderboard_modality(
     )
 
 
+API_LEADERBOARD_NOTE = (
+    "Every board ranks exactly ONE modality (paradigm). `rank` is always WITHIN a paradigm: "
+    "BT scores from different paradigms come from disconnected match pools (models never face "
+    "another modality), so a merged cross-paradigm ordering is not a statistical claim and this "
+    "API does not emit one. `rows` is the concatenation of `boards` in modality order; pass "
+    "?paradigm=<modality> for a single board."
+)
+
+
 @app.get("/api/leaderboard")
 def api_leaderboard(
     db: Session = Depends(get_db),
@@ -1497,17 +1506,67 @@ def api_leaderboard(
     paradigm: str | None = None,
     verified: bool = False,
 ):
+    """The JSON twin of the HTML leaderboard, under the SAME invariant: no cross-paradigm rank.
+
+    It used to hand back one merged BT ordering ranked 1..N over every paradigm at once (and to
+    ignore `?paradigm=` entirely in the `verified` branch) — the last surface still publishing a
+    ranking across disconnected match pools. Now it mirrors the pages:
+
+    * `?paradigm=<modality>` → that ONE board, freshly ranked 1..N within itself (the same
+      service.finalize_rows() call the HTML board runs on the paradigm-filtered subset — no BT
+      refit, no change to the ranking math). Unknown / app-hidden modalities 404, as on the page.
+    * no `?paradigm=` → `boards`: one per modality, each independently ranked. `rows` stays for
+      back-compat (app/client.py's `leaderboard()` reads it) as the boards concatenated in
+      modality order — so every `rank` it carries is a within-paradigm one, and there are as many
+      rank-1 rows as there are modalities. There is no merged rank anywhere in the response.
+
+    `verified` is a SCOPE modifier (which votes count), never a board of its own: it swaps the row
+    source and is then grouped/ranked identically.
+    """
     paradigm = paradigm or None  # "" (unset filter) and None both mean "no filter"
+    if paradigm is not None and (
+        paradigm in config.APP_HIDDEN_PARADIGMS or not paradigms.is_valid_paradigm(paradigm)
+    ):
+        raise HTTPException(status_code=404, detail="Unknown modality")
+
     if verified:
-        rows = service.verified_leaderboard_rows(db, criterion, category)
+        all_rows = service.verified_leaderboard_rows(db, criterion, category)
     else:
-        rows = _leaderboard_rows(db, criterion, category, paradigm)
+        all_rows = _leaderboard_rows(db, criterion, category, None)
+    # Belt-and-braces with the generator-level hiding already applied by both row sources
+    # (service.app_hidden_generator_ids covers APP_HIDDEN_PARADIGMS): an internal-only modality is
+    # not a public surface, JSON included.
+    all_rows = [r for r in all_rows if r.get("paradigm") not in config.APP_HIDDEN_PARADIGMS]
+
+    # Group first, rank second. COPIES: service.finalize_rows() sorts and rewrites rank/ci_* in
+    # place, so a board's re-rank must not leak back into the merged rows it came from.
+    groups: dict[str, list[dict]] = {}
+    for r in all_rows:
+        groups.setdefault(r.get("paradigm") or "", []).append(dict(r))
+    if paradigm is not None:
+        keys = [paradigm]
+    else:
+        # Registry order first, then any leftover value (notably "" — un-backfilled generators,
+        # which form ONE match pool of their own per paradigms.same_paradigm).
+        keys = [p for p in paradigms.PARADIGMS if p in groups]
+        keys += sorted(k for k in groups if k not in paradigms.PARADIGMS)
+    boards = [
+        {
+            "paradigm": k or None,
+            "display_name": paradigms.DISPLAY_NAMES.get(k) or "Unclassified",
+            # Fresh within-paradigm 1..N (never a slice of a merged ranking).
+            "rows": service.finalize_rows(groups.get(k, [])),
+        }
+        for k in keys
+    ]
     return {
         "criterion": criterion,
         "category": category,
         "paradigm": paradigm,
         "verified": verified,
-        "rows": rows,
+        "note": API_LEADERBOARD_NOTE,
+        "boards": boards,
+        "rows": [r for b in boards for r in b["rows"]],
     }
 
 

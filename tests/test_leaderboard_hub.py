@@ -241,6 +241,125 @@ def test_verified_paradigm_board_is_a_fresh_within_paradigm_ranking(monkeypatch)
     assert "num mono strong" in html
 
 
+# ------------------------------------------------- GET /api/leaderboard: no cross-paradigm rank
+
+
+def _by_paradigm(rows: list[dict]) -> dict[str | None, list[dict]]:
+    out: dict[str | None, list[dict]] = {}
+    for r in rows:
+        out.setdefault(r.get("paradigm") or None, []).append(r)
+    return out
+
+
+def test_api_leaderboard_returns_per_paradigm_boards():
+    """The JSON surface mirrors the HTML one: NO merged cross-paradigm ranking. With no
+    `?paradigm=`, it returns one board per modality, each freshly ranked 1..N within itself."""
+    body = client.get("/api/leaderboard").json()
+    assert body["paradigm"] is None
+    boards = {b["paradigm"]: b for b in body["boards"]}
+    assert "image_recon" in boards and "text_native" in boards
+    for b in body["boards"]:
+        rows = b["rows"]
+        assert rows, b["paradigm"]
+        assert min(r["rank"] for r in rows) == 1  # a fresh within-paradigm 1..N, never a slice
+        assert [r["bt_score"] for r in rows] == sorted((r["bt_score"] for r in rows), reverse=True)
+        assert {r["paradigm"] or None for r in rows} == {b["paradigm"]}
+
+
+def test_api_leaderboard_rank_is_never_cross_paradigm():
+    """The defect this replaces: one merged BT ordering with a global rank 1..N over paradigms
+    that never played each other. Now every rank is relative to its own modality — so, with >1
+    modality on the board, there is more than one rank-1 row and no row's rank can be read as a
+    cross-paradigm position."""
+    rows = client.get("/api/leaderboard").json()["rows"]
+    groups = _by_paradigm(rows)
+    assert len(groups) > 1, "fixture should span several paradigms"
+    for pgm, grows in groups.items():
+        assert min(r["rank"] for r in grows) == 1, pgm
+    # Every modality has its OWN rank-1 (CI-grouped ranks can tie several rows at 1 within a
+    # board — the claim here is that rank 1 exists per modality, not once overall).
+    leader_paradigms = {r.get("paradigm") or None for r in rows if r["rank"] == 1}
+    assert leader_paradigms == set(groups)
+    # ...and the flat list is grouped by modality, not merged BT-desc across them.
+    top = groups["image_recon"][0]
+    assert top["generator"] == "lbhub-recon-unrated"  # highest BT in ITS paradigm
+
+
+def test_api_leaderboard_paradigm_param_returns_that_board_only():
+    body = client.get("/api/leaderboard?paradigm=image_recon").json()
+    assert body["paradigm"] == "image_recon"
+    rows = body["rows"]
+    assert {r["paradigm"] for r in rows} == {"image_recon"}
+    assert rows[0]["rank"] == 1
+    assert not any(r["generator"] == "lbhub-text-a" for r in rows)
+    assert [b["paradigm"] for b in body["boards"]] == ["image_recon"]
+
+
+def test_api_leaderboard_hidden_or_unknown_paradigm_404s():
+    for hidden in sorted(config.APP_HIDDEN_PARADIGMS):
+        assert client.get(f"/api/leaderboard?paradigm={hidden}").status_code == 404, hidden
+    assert client.get("/api/leaderboard?paradigm=not-a-paradigm").status_code == 404
+
+
+def test_api_leaderboard_never_exposes_an_app_hidden_paradigm():
+    body = client.get("/api/leaderboard").json()
+    seen = {b["paradigm"] for b in body["boards"]} | {r.get("paradigm") for r in body["rows"]}
+    assert not (seen & config.APP_HIDDEN_PARADIGMS)
+    assert not any(r["generator"] == "lbhub-retrieval" for r in body["rows"])
+
+
+def test_api_leaderboard_verified_scope_is_also_within_paradigm(monkeypatch):
+    """`?verified=true` used to bypass the paradigm filter entirely and hand back the merged
+    verified BT fit (vrecon-1 at rank 3). It is a SCOPE modifier, so it gets the same treatment."""
+    monkeypatch.setattr(service, "verified_leaderboard_rows", _fake_verified_rows)
+    body = client.get("/api/leaderboard?verified=true&paradigm=image_recon").json()
+    assert body["verified"] is True
+    rows = body["rows"]
+    assert [r["generator"] for r in rows] == ["vrecon-1", "vrecon-2"]
+    assert [r["rank"] for r in rows] == [1, 2]  # fresh 1..N, not the merged 3..4
+
+
+def test_api_leaderboard_verified_without_paradigm_has_no_merged_rank(monkeypatch):
+    monkeypatch.setattr(service, "verified_leaderboard_rows", _fake_verified_rows)
+    body = client.get("/api/leaderboard?verified=true").json()
+    boards = {b["paradigm"]: b["rows"] for b in body["boards"]}
+    assert set(boards) == {"image_recon", "text_native"}
+    for pgm, rows in boards.items():
+        assert [r["rank"] for r in rows] == [1, 2], pgm  # each modality starts at 1
+
+
+def test_api_leaderboard_documents_the_within_paradigm_contract():
+    body = client.get("/api/leaderboard").json()
+    assert "paradigm" in body["note"].lower() or "modality" in body["note"].lower()
+
+
+# --------------------------------------------------- regression guards for the whole redesign
+
+
+def test_no_cross_paradigm_overall_board_can_be_resurrected():
+    """The Overall board is GONE, not hidden behind a flag: an unknown `?overall=true` cannot
+    bring it back (FastAPI ignores it) and the hub is what renders."""
+    r = client.get("/leaderboard?overall=true")
+    assert r.status_code == 200
+    assert 'class="lb-hub"' in r.text  # the hub, not a board
+    # The ranked BT table only exists on a single-modality board — never on the hub, in any
+    # scope, under any query param.
+    assert "lb-ranktable" not in r.text
+    assert "lb-ranktable" not in client.get("/leaderboard?overall=true&verified=true").text
+    assert "Overall — all methods" not in r.text
+
+
+def test_app_hidden_paradigms_have_no_public_surface():
+    for hidden in sorted(config.APP_HIDDEN_PARADIGMS):
+        assert client.get(f"/leaderboard/{hidden}").status_code == 404, hidden
+        assert client.get(f"/leaderboard/judge?modality={hidden}").status_code == 404, hidden
+        assert client.get(f"/api/leaderboard?paradigm={hidden}").status_code == 404, hidden
+    hub = client.get("/leaderboard").text
+    for hidden in config.APP_HIDDEN_PARADIGMS:
+        assert paradigms.DISPLAY_NAMES[hidden] not in hub
+        assert f"/leaderboard/{hidden}" not in hub
+
+
 # ------------------------------------------------------- presentation: hub grid + status pill
 
 

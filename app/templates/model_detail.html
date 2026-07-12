@@ -71,7 +71,7 @@
         <tr>
           <th>Opponent</th>
           <th class="num" title="Wins–Losses–Ties. A tie counts as half a win and one game.">W–L–T</th>
-          <th class="num" title="Comparisons decided between these two models">n</th>
+          <th class="num" title="All judged comparisons between these two models (ties included; 'both bad' votes excluded)">n</th>
           <th class="num">Win rate</th>
         </tr>
       </thead>
@@ -88,8 +88,9 @@
     </table>
   </div>
   <p class="b3d-h2h-foot subtle">
-    Records cover decided comparisons only. A tie counts as half a win and one comparison, so
-    <span class="mono">n</span> is the true number of times the two models were judged against each other.
+    Records cover all judged comparisons, ties included: a tie counts as half a win and one
+    comparison, so <span class="mono">n</span> is the true number of times the two models were
+    judged against each other. “Both bad” votes are excluded.
   </p>
   {% else %}
   <p class="subtle">Not enough head-to-head data yet.</p>

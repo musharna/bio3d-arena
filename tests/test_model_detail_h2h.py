@@ -99,6 +99,25 @@ def test_model_detail_shows_opponent_name_and_record():
     assert "75.0%" in r.text  # win rate straight from service (no contradicting rounding)
 
 
+def test_head_to_head_footnote_copy_is_self_consistent():
+    """The footnote used to say "decided comparisons only" and then, in the next breath, "a tie
+    counts as half a win and one comparison" — a tie IS the undecided outcome, so the two
+    sentences contradicted. The record counts ties (0.5 convention); only `bad` votes are dropped
+    (service._matches_for_scope). The copy must say exactly that, in the footnote AND in the
+    column tooltip that repeats it."""
+    with SessionLocal() as db:
+        # idempotent: the champ/challenger fixture may already exist (slugs are UNIQUE), and this
+        # test must also pass when run on its own.
+        if db.query(Generator).filter_by(slug=f"{PFX}-champ").first() is None:
+            _seed_h2h(db)
+    text = client.get(f"/models/{PFX}-champ").text
+    assert "decided comparisons only" not in text
+    assert "Comparisons decided between these two models" not in text  # the <th> title copy
+    assert "ties included" in text.lower()
+    assert "half a win" in text
+    assert "both bad" in text.lower()  # the outcome that IS excluded, named
+
+
 def test_model_detail_empty_state_when_no_games():
     """A never-compared model renders the empty state — not a crash, not a headless table."""
     with SessionLocal() as db:
