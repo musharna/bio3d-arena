@@ -3596,6 +3596,24 @@ details.group[open] > summary.group-title::before {
 .lb-votes-cell {
   white-space: nowrap;
 }
+/* Status cell — votes-until-firm (service.firm_status). Reuses the .cov-badge/.cov-firm/.cov-prov
+   confidence tokens so "firm" vs "N more votes -> firm" reads the same everywhere in the app. */
+.lb-status-cell {
+  white-space: nowrap;
+}
+/* Board provenance line: "Ranked by human votes ... see the AI-judge board" (the judge board is a
+   separate surface, never intermixed with these ranks). */
+.lb-source-note {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+}
+.lb-judge-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.lb-judge-link:hover {
+  text-decoration: underline;
+}
 .lb-chevron {
   display: inline-block;
   margin-left: 0.5rem;

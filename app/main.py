@@ -1026,6 +1026,9 @@ def _enrich_leaderboard_rows(
         r["trend_points"] = _trend_polyline(trend)
         r["momentum"] = _momentum(trend)
         r["provisional"] = r.get("n_games", 0) < service.FIRM_VOTE_THRESHOLD
+        # Votes-until-firm signal for the board's Status column ({"firm": bool, "label": str}),
+        # computed HERE so the template stays free of ranking/threshold logic.
+        r["status"] = service.firm_status(r.get("n_games", 0))
         r["detail_url"] = f"/models/{r['slug']}" if r.get("slug") else "#"
     return rows
 
@@ -1341,6 +1344,10 @@ def leaderboard(
         {
             "rows": rows,
             "board_title": board_title,
+            # Plain-language "what this measures" line for THIS modality (never hard-coded copy —
+            # paradigms.WHAT_THIS_MEASURES is the one source, shared with the hub cards).
+            "board_what": paradigms.WHAT_THIS_MEASURES.get(paradigm, ""),
+            "sel_paradigm": paradigm,
             "total_votes": total,
             "paradigm_options": paradigm_options,
             "paradigm_display_names": paradigms.DISPLAY_NAMES,
@@ -1381,6 +1388,41 @@ def leaderboard_judge(
         request,
         "_leaderboard_judge.html",
         {"judge_rows": judge_rows, "paradigm_display_names": paradigms.DISPLAY_NAMES},
+    )
+
+
+@app.get("/leaderboard/{modality}", response_class=HTMLResponse)
+def leaderboard_modality(
+    modality: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    criterion: str = "overall",
+    category: str = "all",
+    verified: bool = False,
+    show_all: bool = False,
+):
+    """One modality's human-vote board — the destination of every hub card, and the canonical
+    URL for a board (the `?paradigm=` form still works and renders the identical page).
+
+    DECLARED AFTER `/leaderboard/judge` ON PURPOSE: Starlette matches routes in declaration
+    order, so a `{modality}` route placed above it would swallow `/leaderboard/judge` and 404
+    the judge board on the paradigm validation below (locked in by
+    tests/test_modality_board_route.py::test_judge_route_is_not_shadowed_by_the_modality_path).
+
+    Unknown OR app-hidden paradigms 404 rather than rendering an empty board: an internal-only
+    modality (config.APP_HIDDEN_PARADIGMS) must not exist as a public surface at all."""
+    if modality in config.APP_HIDDEN_PARADIGMS or not paradigms.is_valid_paradigm(modality):
+        raise HTTPException(status_code=404, detail="Unknown modality")
+    # Delegate to the single-paradigm branch of the existing handler — one board renderer, so the
+    # path and query forms can never drift apart.
+    return leaderboard(
+        request,
+        db,
+        criterion=criterion,
+        category=category,
+        paradigm=modality,
+        verified=verified,
+        show_all=show_all,
     )
 
 
