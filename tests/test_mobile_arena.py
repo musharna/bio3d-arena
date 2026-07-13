@@ -35,8 +35,8 @@ def _media_blocks(css: str, header: str) -> list[tuple[int, str]]:
     return blocks
 
 
-def _phone_css() -> str:
-    blocks = _media_blocks(CSS, PHONE_BP)
+def _phone_css(css: str = CSS) -> str:
+    blocks = _media_blocks(css, PHONE_BP)
     assert blocks, f"no {PHONE_BP} block in style.css"
     return "\n".join(body for _, body in blocks)
 
@@ -132,7 +132,7 @@ def test_phone_overrides_come_after_the_rules_they_override():
     never applies. These overrides must therefore appear after their base declarations —
     a plain "is the rule present?" substring test passes even when the rule is dead.
     """
-    for selector in (".arena-hero-h1", ".arena-hero-lede", ".arena-hero"):
+    for selector in (".arena-hero-h1", ".arena-hero-lede", ".arena-hero-stats", ".arena-hero"):
         base = CSS.index(f"\n{selector} {{")  # top-level (column-0) declaration
         overrides = [
             start for start, body in _media_blocks(CSS, PHONE_BP) if selector + " {" in body
@@ -147,4 +147,42 @@ def test_reference_gallery_scrolls_inside_itself():
     """The page body must never scroll sideways; the wide photo row scrolls in its own box."""
     assert "overflow-x: auto" in _rule(CSS, ".reference-gallery")
     # Arena-scoped shrink (spotlight shares the class but not the #id, and keeps full size).
-    assert "92px" in _rule(_phone_css(), "#reference-panel .reference-img")
+    body = _rule(_phone_css(), "#reference-panel .reference-img")
+    m = re.search(r"height:\s*(\d+)px", body)
+    assert m, "#reference-panel .reference-img has no phone height"
+    assert int(m.group(1)) <= 100, "reference thumbs must shrink from their 150px base on phones"
+
+
+def test_arena_hero_collapses_on_phones():
+    """A phone voter must land on the TASK, not on marketing copy.
+
+    The full hero (h1 + lede + stat row) is 203px tall at 390px wide, which left the model
+    stage — the only thing a voter is there to judge — 72px of visible height above the
+    sticky vote bar on first paint. The pitch already lives on the home page; /arena is the
+    working surface. On phones the lede and the stat row go away and the h1 shrinks to a
+    single compact line, putting the whole 300px stage above the vote bar (measured).
+    """
+    phone = _phone_css()
+    assert "display: none" in _rule(phone, ".arena-hero-lede"), "hero lede must be hidden on phones"
+    assert "display: none" in _rule(phone, ".arena-hero-stats"), (
+        "hero stat row must be hidden on phones"
+    )
+    # The heading itself stays — the page keeps a title — but compact (base is 34px/26px).
+    m = re.search(r"font-size:\s*(\d+)px", _rule(phone, ".arena-hero-h1"))
+    assert m, ".arena-hero-h1 has no phone font-size"
+    assert int(m.group(1)) <= 20, f"phone hero h1 is {m.group(1)}px — not a compact single line"
+
+
+def test_served_css_carries_the_hero_collapse():
+    """Guard the artifact the browser actually gets, not just the file on disk.
+
+    (The desktop hero must survive: these rules live inside the phone media block, so the
+    top-level .arena-hero-lede/.arena-hero-stats declarations are untouched.)
+    """
+    served = TestClient(app).get("/static/style.css").text
+    phone = _phone_css(served)
+    assert "display: none" in _rule(phone, ".arena-hero-lede")
+    assert "display: none" in _rule(phone, ".arena-hero-stats")
+    # Desktop still renders both: the base rules are outside any media block.
+    assert "\n.arena-hero-lede {" in served and "\n.arena-hero-stats {" in served
+    assert "display: flex" in _rule(served, ".arena-hero-stats")

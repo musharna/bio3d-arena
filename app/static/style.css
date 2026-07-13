@@ -1396,7 +1396,7 @@ kbd {
   .ab-toggle {
     display: flex;
     gap: 0.5rem;
-    margin-bottom: 0.8rem;
+    margin-bottom: 0.5rem;
   }
   .ab-btn {
     flex: 1;
@@ -2932,40 +2932,73 @@ details.group[open] > summary.group-title::before {
    earlier in source order simply loses. (Verified in-browser: the same declarations in
    the upper block had zero effect.) */
 @media (max-width: 720px) {
-  /* The hero is marketing copy. At 275px tall it was pushing the stages — the thing a
-     voter actually came for — completely below the fold on a 390px-wide phone. */
+  /* The hero is marketing copy, and on a phone it cost the voter the thing they came for:
+     h1 + lede + stat row = 203px, which left the model stage only 72px of visible height
+     above the sticky vote bar on first paint. The pitch lives on the home page (/); anyone
+     who navigated to /arena has already bought it. So on phones the hero collapses to a
+     single compact title line — the page keeps a heading (and its context), and the task +
+     model + vote controls all land on the first screen. Desktop keeps the full hero.
+
+     Cascade note (same trap as the rest of this block): these selectors match the base
+     .arena-hero* rules' specificity exactly, so they only win by coming LATER in source
+     order — which is the whole reason this block sits here at ~:2934 and not in the arena
+     @media block up at ~:1288. Verified in-browser, not assumed. */
   .arena-hero {
-    margin-bottom: 1rem;
+    text-align: left;
+    margin: 0 0 0.55rem;
   }
   .arena-hero-h1 {
-    font-size: 26px;
+    font-size: 16px;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+    color: var(--muted);
   }
+  /* Kept as two separate rules (not a grouped selector) so the source-order guard in
+     tests/test_mobile_arena.py can still find each base rule's override. */
   .arena-hero-lede {
-    font-size: 14px;
-    line-height: 1.5;
-    margin-top: 0.6rem;
+    display: none;
   }
   .arena-hero-stats {
-    gap: 0.3rem 1rem;
-    margin-top: 0.7rem;
+    display: none;
   }
+
+  /* Task strip: the voter needs the title + the two filters. Tighten the chrome around
+     them (the strip was 144px on its own). */
+  .task-strip {
+    padding: 0.6rem 0.8rem;
+    gap: 0.45rem 0.7rem;
+    margin-bottom: 0.5rem;
+  }
+  .task-strip h2 {
+    font-size: 1rem;
+    line-height: 1.3;
+  }
+  .task-card-heading {
+    gap: 0.45rem;
+  }
+
   /* Reference strip: a fixed 158px-tall row of 150px photos is a big bite out of a phone
      screen. Shrink to thumbnails — the row still scrolls inside its own overflow-x
      container (so the page body never scrolls sideways) and tapping still opens the
      full-size lightbox. Scoped to #reference-panel (arena-only; /spotlight sets the class
      but not the id) so the spotlight gallery keeps its full-size thumbnails. */
+  #reference-panel {
+    margin: 0 0 0.5rem;
+  }
   #reference-panel .reference-gallery {
     min-height: 0;
     justify-content: flex-start;
     gap: 0.4rem;
   }
   #reference-panel .reference-img {
-    flex: 0 0 92px;
-    width: 92px;
-    height: 92px;
+    flex: 0 0 72px;
+    width: 72px;
+    height: 72px;
   }
   #reference-panel .reference-cap {
     font-size: 0.72rem;
+    margin: 0 0 0.35rem;
   }
 }
 

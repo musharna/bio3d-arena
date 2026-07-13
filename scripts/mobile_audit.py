@@ -58,8 +58,19 @@ PROBE = """() => {
             slotTouchAction: getComputedStyle(s).touchAction};
   });
   const vb = document.querySelector('.vote-bar');
+  // THE number this page lives or dies on: how much of the model a phone voter can see
+  // without scrolling. The stage is clipped from below by the sticky vote bar, not by the
+  // viewport, so the ceiling is min(stage.bottom, voteBar.top, vh).
+  const stage = document.querySelector('.pair .model-col.is-active .viewer-slot')
+             || document.querySelector('.pair .viewer-slot');
+  const sr = stage ? stage.getBoundingClientRect() : null;
+  const barTop = vb ? vb.getBoundingClientRect().top : vh;
+  const stageVisible = sr
+    ? Math.max(0, Math.round(Math.min(sr.bottom, barTop, vh) - Math.max(sr.top, 0))) : 0;
   return {
     viewport: {vw, vh},
+    scrollY: window.scrollY,
+    stageVisibleAboveVoteBar: stageVisible,
     scrollWidth: se.scrollWidth, clientWidth: se.clientWidth,
     hOverflow: se.scrollWidth > se.clientWidth,
     bodyOverflowX: getComputedStyle(document.body).overflowX,
@@ -88,6 +99,16 @@ PROBE = """() => {
 def show(label, d):
     print(f"\n===== {label} =====")
     print(f"  viewport {d['viewport']['vw']}x{d['viewport']['vh']}  docHeight={d['docHeight']}")
+    # Only meaningful for the 2-up ballot: K-wise hides .pair and .vote-bar and votes with
+    # per-cell pick buttons, so there is no single stage to measure.
+    if d["cells"]:
+        print("  MODEL VISIBLE (no scroll): n/a — K-wise ballot (see kwise cells below)")
+    else:
+        flag = "  <-- BELOW THE FOLD" if d["stageVisibleAboveVoteBar"] < 300 else ""
+        print(
+            f"  MODEL VISIBLE (no scroll, above vote bar): {d['stageVisibleAboveVoteBar']}px"
+            f"  [scrollY={d['scrollY']}]{flag}"
+        )
     print(
         f"  H-OVERFLOW: {d['hOverflow']}  (scrollWidth={d['scrollWidth']} clientWidth={d['clientWidth']})"
     )
@@ -129,6 +150,24 @@ with sync_playwright() as p:
             page = ctx.new_page()
             page.goto(url, wait_until="networkidle")
             page.wait_for_timeout(2500)
+            # First-run onboarding card covers the page; a voter taps "Start voting" once.
+            # Measurements below are the landing state, before any scrolling.
+            #
+            # The JS-click fallback is not cosmetic: on the K-wise page Playwright's
+            # click() can hang in "scrolling into view if needed" even though the button is
+            # visible and IS the topmost element at its own center (elementFromPoint returns
+            # it — a real finger lands on it). Without the fallback the card stays up and
+            # every geometry number below is silently measured through a 397px overlay.
+            try:
+                page.click("#onboard-start", timeout=3000)
+            except Exception:
+                print("    (onboard click timed out — Playwright quirk; dispatching via JS)")
+                page.evaluate("document.getElementById('onboard-start')?.click()")
+            page.wait_for_timeout(1000)
+            page.evaluate("window.scrollTo(0, 0)")
+            page.wait_for_timeout(300)
+            if page.evaluate("!document.getElementById('onboard-banner').hasAttribute('hidden')"):
+                print("    !! onboarding card STILL UP — geometry below is not the voter's view")
             d = page.evaluate(PROBE)
             show(f"{mode} @ {name}", d)
             page.screenshot(path=str(OUT / f"{mode}-{name}.png"), full_page=False)
