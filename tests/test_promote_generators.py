@@ -54,6 +54,11 @@ def _seed_source(con):
         "INSERT INTO metric (output_id, chamfer, scorer_version, gt_version_hash, status, detail, "
         "computed) VALUES (581, 0.5, 'v1', 'h', 'ok', '', '2026-01-01')"
     )
+    # the agentic paradigm's render->critique->revise trail: how the output was MADE, not voted on
+    con.execute(
+        "INSERT INTO critique (output_id, render_path, critic_note, status, computed) "
+        "VALUES (581,'renders/581.png','fins detached','ok','2026-01-01')"
+    )
     # vote-derived rows that must NEVER cross
     con.execute("INSERT INTO criterion (id, slug, name, description) VALUES (1,'overall','O','')")
     con.execute(
@@ -61,6 +66,41 @@ def _seed_source(con):
         "is_gold, created) VALUES (1,1,581,581,1,'s',0,'2026-01-01')"
     )
     con.commit()
+
+
+def test_failed_attempts_promote_too_or_pass_at_1_is_inflated(tmp_path):
+    """commission_attempt is what /procedural computes pass@1 from, and a FAILED attempt has
+    output_id IS NULL. Copying it keyed by output would carry only the successes and silently
+    report pass@1 as 100%. The attempt log travels with the GENERATOR, not with the output."""
+    src, dst = _fresh_db(tmp_path / "src.db"), _fresh_db(tmp_path / "dst.db")
+    with sqlite3.connect(src) as c:
+        _seed_source(c)
+        # a failed attempt: the model produced no output at all, so output_id IS NULL.
+        # (commission_attempt is UNIQUE(model_id, task_id) — one attempt per model x task — so the
+        # failure and the success below belong to different models of the same generator family.)
+        c.execute(
+            "INSERT INTO commission_attempt (id, task_id, model_id, generator_id, output_id, "
+            "status, error, script, mesh_stats_json, duration_ms, created) "
+            "VALUES (900,1,'m-failed',85,NULL,'invalid_mesh','','s','{}',10,'2026-01-01')"
+        )
+        # a successful one, linked to the promoted output
+        c.execute(
+            "INSERT INTO commission_attempt (id, task_id, model_id, generator_id, output_id, "
+            "status, error, script, mesh_stats_json, duration_ms, created) "
+            "VALUES (901,1,'m-ok',85,581,'ok','','s','{}',10,'2026-01-01')"
+        )
+        c.commit()
+    with sqlite3.connect(dst) as c:
+        _seed_common(c)
+        c.commit()
+
+    promote(src, dst, ["fal:new"], apply=True)
+
+    with sqlite3.connect(dst) as c:
+        statuses = {
+            r[0] for r in c.execute("SELECT status FROM commission_attempt WHERE generator_id=85")
+        }
+    assert statuses == {"ok", "invalid_mesh"}, "the failed attempt was dropped — pass@1 inflated"
 
 
 def test_promotes_generator_outputs_and_evidence(tmp_path):
@@ -80,6 +120,8 @@ def test_promotes_generator_outputs_and_evidence(tmp_path):
             c.execute("SELECT COUNT(*) FROM admissibility WHERE output_id=581").fetchone()[0] == 1
         )
         assert c.execute("SELECT COUNT(*) FROM metric WHERE output_id=581").fetchone()[0] == 1
+        # the agentic render->critique->revise trail travels with its output
+        assert c.execute("SELECT COUNT(*) FROM critique WHERE output_id=581").fetchone()[0] == 1
     assert summary["generators"] == 1
     assert summary["model_output"] == 1
 
