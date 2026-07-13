@@ -42,7 +42,18 @@ EVIDENCE_TABLES = (
     "organ_metric",
     "trait_verdict",
     "model_scope",
+    # The agentic paradigm's render->critique->revise trail: render path, the model's own critique
+    # note, perceptual distances. It records how the output was MADE, not how it was voted on —
+    # no session, no ballot. (Rule 3 caught this table as unclassified on the first agentic
+    # promote and aborted the run, which is exactly what it is there for.)
+    "critique",
 )
+
+# Evidence keyed by GENERATOR rather than by output: the commissioned-generation attempt log.
+# /procedural computes pass@1 from these rows, and a FAILED attempt has output_id IS NULL — so
+# copying this table keyed by output would carry only the successes and silently report pass@1 as
+# 100%. It travels with the generator, failures included.
+GENERATOR_EVIDENCE_TABLES = ("commission_attempt",)
 
 # Vote-, session-, or curation-derived. NEVER promoted: these are earned in the target DB.
 VOTE_DERIVED_TABLES = (
@@ -141,7 +152,10 @@ def promote(source: str, target: str, slugs: list[str], *, apply: bool = False) 
             unclassified = [
                 t
                 for t in _tables_with_output_fk(src)
-                if t not in EVIDENCE_TABLES and t not in VOTE_DERIVED_TABLES and t != "task"
+                if t not in EVIDENCE_TABLES
+                and t not in VOTE_DERIVED_TABLES
+                and t not in GENERATOR_EVIDENCE_TABLES
+                and t != "task"
             ]
             for t in unclassified:
                 oq = ",".join("?" * len(out_ids))
@@ -173,6 +187,16 @@ def promote(source: str, target: str, slugs: list[str], *, apply: bool = False) 
                 f"SELECT COUNT(*) FROM {t} WHERE output_id IN ({oq})", promoted_ids
             ).fetchone()[0]
 
+        for t in GENERATOR_EVIDENCE_TABLES:
+            if t not in {r[0] for r in src.execute("SELECT name FROM sqlite_master")}:
+                continue
+            have_ids = {r[0] for r in dst.execute(f"SELECT id FROM {t}")}
+            summary[t] = sum(
+                1
+                for r in src.execute(f"SELECT id FROM {t} WHERE generator_id IN ({gq})", gen_ids)
+                if r[0] not in have_ids
+            )
+
         if not apply:
             return summary
 
@@ -202,6 +226,29 @@ def promote(source: str, target: str, slugs: list[str], *, apply: bool = False) 
                     f"INSERT INTO {t} ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
                     [r[c] for c in cols],
                 )
+
+        # Generator-keyed evidence (the attempt log). Selected by generator_id — NOT by output —
+        # so failed attempts (output_id IS NULL) come across too; dropping them would inflate
+        # pass@1. Rows already in the target are skipped, keeping a re-run a no-op.
+        for t in GENERATOR_EVIDENCE_TABLES:
+            if t not in {r[0] for r in src.execute("SELECT name FROM sqlite_master")}:
+                continue
+            have_ids = {r[0] for r in dst.execute(f"SELECT id FROM {t}")}
+            rows = src.execute(
+                f"SELECT * FROM {t} WHERE generator_id IN ({gq})", gen_ids
+            ).fetchall()
+            dst_cols = _cols(dst, t)
+            n = 0
+            for r in rows:
+                if r["id"] in have_ids:
+                    continue
+                cols = [c for c in r.keys() if c in dst_cols]
+                dst.execute(
+                    f"INSERT INTO {t} ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
+                    [r[c] for c in cols],
+                )
+                n += 1
+            summary[t] = n
         dst.commit()
         return summary
     finally:
