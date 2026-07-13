@@ -187,6 +187,27 @@ class HarnessError(RuntimeError):
     """The harness itself cannot run. Fatal: never recorded as a model's failed attempt."""
 
 
+# HTTP statuses that mean OUR ACCOUNT is the problem, not the model: no credit (402), bad or
+# missing key (401), forbidden (403). Mid-sweep the OpenRouter balance ran out and every subsequent
+# call 402'd — each one recorded as status="error" against the model, giving qwen3.6-plus a 0/17
+# record it had not earned, feeding /procedural's pass@1, and (UNIQUE(model_id, task_id)) burning
+# those pairs permanently. An account failure is a STOP, not a result.
+ACCOUNT_FAILURE_STATUSES = frozenset({401, 402, 403})
+
+
+def _is_account_failure(exc: Exception) -> bool:
+    """True if this dispatch exception is our account failing rather than the model.
+
+    Duck-typed on purpose: the HTTP client is injected (httpx today), so commission.py never
+    imports it. Falls back to the status code in the message, which is how httpx renders it
+    ("Client error '402 Payment Required' for url ...")."""
+    response = getattr(exc, "response", None)
+    code = getattr(response, "status_code", None)
+    if isinstance(code, int):
+        return code in ACCOUNT_FAILURE_STATUSES
+    return any(f"'{s} " in str(exc) or f" {s} " in str(exc) for s in ACCOUNT_FAILURE_STATUSES)
+
+
 def preflight_sandbox(
     *, sandbox_prefix: list[str] | None = None, blender_bin: str = "blender"
 ) -> None:
@@ -389,7 +410,16 @@ def run_batch(db, *, complete_fn, run_fn, roster, taxon_tasks, asset_dir, max_ca
     Returns:
         dict with counts by status: {"ok", "error", "timeout", "invalid_mesh", "skipped"}
     """
-    counts = {"ok": 0, "error": 0, "timeout": 0, "invalid_mesh": 0, "skipped": 0}
+    # dispatch_failed: the call never returned a script (timeout, 429, 5xx). Counted, NOT recorded
+    # as an attempt — a row would burn the (model, task) pair forever under the UNIQUE constraint.
+    counts = {
+        "ok": 0,
+        "error": 0,
+        "timeout": 0,
+        "invalid_mesh": 0,
+        "skipped": 0,
+        "dispatch_failed": 0,
+    }
     seen = existing_pairs(db)
     made = 0
     for model_id in roster:
@@ -403,15 +433,19 @@ def run_batch(db, *, complete_fn, run_fn, roster, taxon_tasks, asset_dir, max_ca
             try:
                 text = complete_fn(model_id, prompt)
                 script = extract_script(text)
-            except Exception as e:  # noqa: BLE001 — transport failure: record + continue
-                run = {
-                    "status": "error",
-                    "stderr": f"dispatch: {e}",
-                    "duration_ms": 0,
-                    "glb_path": None,
-                    "mesh_stats": {},
-                }
-                script = ""
+            except Exception as e:  # noqa: BLE001 — see _dispatch_failure below
+                # A model is judged ONLY on a script it actually returned. A dispatch failure is
+                # ours or the network's, never the model's — and recording one would both publish
+                # it as the model's pass@1 AND burn the pair forever (UNIQUE(model_id, task_id)).
+                if _is_account_failure(e):
+                    raise HarnessError(
+                        f"account failure calling {model_id!r}: {e}. Nothing was recorded. "
+                        "This is OUR account, not the model — recording it would publish a billing "
+                        "problem as the model's score. Top up / fix credentials and re-run "
+                        "(the run is resumable)."
+                    ) from e
+                counts["dispatch_failed"] += 1  # transient: no row, so the pair stays retryable
+                continue
             else:
                 with tempfile.TemporaryDirectory() as td:
                     out_glb = Path(td) / "out.glb"
