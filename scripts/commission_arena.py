@@ -73,6 +73,9 @@ def main(argv=None) -> int:
     import httpx
 
     prefix = args.sandbox_prefix.split() or None
+    # Prove the sandbox runs Blender before spending a single LLM call: a wrapper that cannot
+    # start would otherwise be recorded as every model failing the task (and feed pass@1).
+    commission.preflight_sandbox(sandbox_prefix=prefix, blender_bin=args.blender_bin)
 
     def complete_fn(model_id, prompt):
         return commission.openrouter_complete(httpx.post, model_id, prompt, api_key=api_key)
