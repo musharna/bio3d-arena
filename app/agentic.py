@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 
 from .commission import build_prompt, extract_script
+from .organ_inventory import inventory_for
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 _SECRET_MARKERS = ("KEY", "TOKEN", "SECRET", "PASSWORD")
@@ -147,13 +148,29 @@ def get_or_create_agentic_generator(db, model_id: str):
 
 
 def critique_prompt(species: str, common: str) -> str:
+    """Ask the model to critique its own render against the real organism.
+
+    Organism-neutral, and it names the specimen's actual body plan from ORGAN_INVENTORY (with
+    complements — a goldfish has TWO pectoral fins, a monarch four wings and six legs), so the
+    critique has something concrete to check against. It used to say "{common} plant" and ask
+    about "leaf/needle shape", which is unanswerable for a fungus or a fish."""
+    inv = inventory_for(species)
+    if inv is None:
+        anatomy = "every structure it should have"
+    else:
+        parts = [
+            f"{o.visual} (×{o.complement})" if o.complement > 1 else o.visual
+            for o in inv.organs
+            if o.required
+        ]
+        anatomy = "; ".join(parts)
     return (
-        f"The attached image is a render of YOUR current 3D mesh of a {common} plant "
+        f"The attached image is a render of YOUR current 3D mesh of a {common} "
         f"({species}), built by your previous Blender-Python script. Critically compare it to a "
-        f"real {common}: name what is wrong or missing (proportions, missing organs, leaf/needle "
-        "shape, topology, obvious artefacts). Then output ONLY an improved, COMPLETE Blender 4.2 "
-        "bpy script that fixes those issues and re-exports GLB to os.environ['OUT_GLB'] — no "
-        "explanation, no markdown."
+        f"real {common}: name what is wrong or missing (proportions, topology, obvious artefacts, "
+        f"and any missing or miscounted anatomy — a specimen should show {anatomy}). Then output "
+        "ONLY an improved, COMPLETE Blender 4.2 bpy script that fixes those issues and re-exports "
+        "GLB to os.environ['OUT_GLB'] — no explanation, no markdown."
     )
 
 

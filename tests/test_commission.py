@@ -96,15 +96,14 @@ def test_build_prompt_pins_contract():
     assert "4.2" in p  # pins the target Blender version so models use the right bpy API
 
 
-def test_species_common_covers_six_taxa():
-    assert set(commission.SPECIES_COMMON) == {
-        "Solanum lycopersicum",
-        "Zea mays",
-        "Pinus sylvestris",
-        "Rosa",
-        "Glycine max",
-        "Arabidopsis thaliana",
-    }
+def test_species_common_names_every_registered_organism():
+    """Was "covers six taxa" — an assertion that pinned the roster to 6 plants, which is exactly
+    the ceiling that left procedural_llm and agentic with zero fungus and zero animal outputs. The
+    roster now derives from ORGAN_INVENTORY, so the real invariant is: every registered organism is
+    nameable."""
+    from app.organ_inventory import ORGAN_INVENTORY
+
+    assert set(commission.SPECIES_COMMON) == set(ORGAN_INVENTORY)
 
 
 def test_openrouter_complete_returns_message_content():
