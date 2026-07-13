@@ -849,6 +849,14 @@ textarea:focus-visible,
     filter 0.12s,
     transform 0.06s;
 }
+/* The `display: block` above (specificity 1,0,0) otherwise beats the UA's
+   `[hidden] { display: none }`, so arena.html's `hidden` attribute had no effect and the
+   "Next pair →" button rendered on load, before any vote had been cast — offering a skip
+   out of the ballot and reading as a live control. Same cascade trap already documented
+   for `#reference-panel[hidden]` and `.kwise-grid:not([hidden])`. */
+#next-pair-btn[hidden] {
+  display: none;
+}
 #next-pair-btn:hover {
   filter: brightness(1.08);
 }
@@ -1281,9 +1289,25 @@ kbd {
   .task-strip {
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.8rem;
+    gap: 0.55rem 0.7rem;
+    padding: 0.7rem 0.9rem;
+    margin-bottom: 0.75rem;
   }
+  .task-strip h2 {
+    font-size: 1.05rem;
+  }
+  /* Selects share one row instead of each claiming a full-width line (which made the
+     strip ~200px tall on its own). */
   .task-strip .filter-row {
+    width: 100%;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+  }
+  .task-strip .filter-row label {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .task-strip .filter-row select {
     width: 100%;
   }
   .pair {
@@ -1291,20 +1315,83 @@ kbd {
   }
   .viewer-slot {
     height: 300px;
+    /* Vertical drags scroll the page, horizontal drags orbit the model. viewer.js sets
+       the equivalent touch-action attribute on <model-viewer>, but 3Dmol slots get none —
+       without this a drag on a 3Dmol stage traps the page's vertical scroll. */
+    touch-action: pan-y;
   }
-  .kwise-grid {
-    grid-template-columns: 1fr;
+  /* K-wise 4-up. NOTE the :not([hidden]) — the base rule at ~:714 is
+     `.kwise-grid:not([hidden])` (specificity 0,2,0), so a plain `.kwise-grid` rule here
+     LOSES the cascade (media queries add no specificity) and silently does nothing.
+     Keep the 2x2 (all four models comparable at a glance is the whole point of a K-wise
+     ballot; a 1-col stack would make it 4 screens of scrolling), but tighten the gap and
+     shorten the stages so the full ballot + its buttons fit the screen. */
+  .kwise-grid:not([hidden]) {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
   }
+  .kwise-cell .viewer-slot {
+    height: 168px;
+  }
+  /* At ~156px of cell width the floating label and the flag/expand toolbar collide. */
+  .kwise-cell .model-label {
+    top: 8px;
+    left: 8px;
+    padding: 3px 8px;
+    font-size: 0.7rem;
+  }
+  .kwise-cell .viewer-controls {
+    top: 6px;
+    right: 6px;
+  }
+  .kwise-cell .kwise-pick-btn {
+    margin: 0.5rem;
+  }
+  .vote-btn.kwise-pick-btn {
+    width: calc(100% - 1rem);
+    min-height: 44px;
+  }
+  /* Vote bar — explicit 2x2 so the four choices are equal-sized thumb targets rather than
+     whatever a flex-wrap happens to produce, and >=44px tall (they were 41px). */
   .vote-bar {
-    flex-wrap: wrap;
+    position: sticky;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
     width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    padding: 0.6rem;
+    margin-top: 0.9rem;
+    z-index: 5;
   }
   .vote-bar .vote-btn {
-    flex: 1 1 44%;
+    min-height: 46px;
+    padding: 0.6rem 0.7rem;
+    font-size: 0.9rem;
   }
   .vote-btn kbd,
   .onboard-banner kbd {
     display: none;
+  }
+  /* Post-vote the vote bar is display:none'd and "Next pair →" replaces it — but the
+     button sits in normal flow at the very end of the document, i.e. ~800px BELOW the
+     fold on a phone. A voter tapped a choice, the bar vanished, and nothing actionable
+     was on screen. Pin it into the slot the vote bar just vacated. */
+  #next-pair-btn {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    width: 100%;
+    min-height: 48px;
+    margin: 0.9rem 0 0;
+    border-radius: var(--r-card);
+    box-shadow:
+      var(--shadowCard),
+      0 14px 40px oklch(0 0 0 / 0.35);
   }
   .ab-toggle {
     display: flex;
@@ -1313,6 +1400,7 @@ kbd {
   }
   .ab-btn {
     flex: 1;
+    min-height: 44px;
     padding: 0.75rem;
     border: 1px solid var(--border);
     border-radius: var(--r-ctl);
@@ -1332,17 +1420,9 @@ kbd {
   body.js-ab .pair .model-col.is-active {
     display: flex;
   }
-  .vote-bar {
-    position: sticky;
-    bottom: 0;
-    background: var(--panel);
-    border-top: 1px solid var(--border);
-    padding: 0.6rem 0;
-    margin-top: 0;
-    z-index: 5;
-  }
+  /* Clear the sticky action bar so the last of the content is still reachable. */
   .arena {
-    padding-bottom: 4.5rem;
+    padding-bottom: 5.5rem;
   }
 }
 
@@ -2843,6 +2923,50 @@ details.group[open] > summary.group-title::before {
 .arena-hero-stats strong {
   color: var(--accent2);
   font-weight: 600;
+}
+
+/* Arena mobile, part 2. These rules MUST live here rather than in the main arena
+   @media (max-width: 720px) block up at ~:1280, because the base declarations they
+   override (.reference-gallery ~:1995, .arena-hero just above) come LATER in the file —
+   and a media query adds no specificity, so an equal-specificity rule that appears
+   earlier in source order simply loses. (Verified in-browser: the same declarations in
+   the upper block had zero effect.) */
+@media (max-width: 720px) {
+  /* The hero is marketing copy. At 275px tall it was pushing the stages — the thing a
+     voter actually came for — completely below the fold on a 390px-wide phone. */
+  .arena-hero {
+    margin-bottom: 1rem;
+  }
+  .arena-hero-h1 {
+    font-size: 26px;
+  }
+  .arena-hero-lede {
+    font-size: 14px;
+    line-height: 1.5;
+    margin-top: 0.6rem;
+  }
+  .arena-hero-stats {
+    gap: 0.3rem 1rem;
+    margin-top: 0.7rem;
+  }
+  /* Reference strip: a fixed 158px-tall row of 150px photos is a big bite out of a phone
+     screen. Shrink to thumbnails — the row still scrolls inside its own overflow-x
+     container (so the page body never scrolls sideways) and tapping still opens the
+     full-size lightbox. Scoped to #reference-panel (arena-only; /spotlight sets the class
+     but not the id) so the spotlight gallery keeps its full-size thumbnails. */
+  #reference-panel .reference-gallery {
+    min-height: 0;
+    justify-content: flex-start;
+    gap: 0.4rem;
+  }
+  #reference-panel .reference-img {
+    flex: 0 0 92px;
+    width: 92px;
+    height: 92px;
+  }
+  #reference-panel .reference-cap {
+    font-size: 0.72rem;
+  }
 }
 
 .b3d-hero-viz {
