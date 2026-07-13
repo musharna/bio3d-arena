@@ -95,6 +95,10 @@ def main() -> int:
     def run_fn(script, out_glb):
         return commission.run_bpy(script, out_glb=out_glb)
 
+    # Prove Blender runs before spending LLM calls: run_bpy maps a non-zero exit to the MODEL, so
+    # an unrunnable Blender would be recorded as every model failing the task.
+    commission.preflight_sandbox()
+
     db = SessionLocal()
     try:
         taxon_tasks = commission.resolve_taxon_tasks(db)

@@ -183,6 +183,37 @@ def is_valid_mesh(glb_path) -> tuple[bool, dict]:
     return ok, {"meshes": len(geoms), "vertices": vertices, "faces": faces}
 
 
+class HarnessError(RuntimeError):
+    """The harness itself cannot run. Fatal: never recorded as a model's failed attempt."""
+
+
+def preflight_sandbox(
+    *, sandbox_prefix: list[str] | None = None, blender_bin: str = "blender"
+) -> None:
+    """Prove the sandbox can actually run Blender, BEFORE any LLM call or attempt row.
+
+    run_bpy shells out to [*sandbox_prefix, blender, ...] and maps every non-zero exit to
+    status="error" against the MODEL. So when the WRAPPER fails — heavy-run is a systemd user
+    scope and exits 1 inside a detached session — three valid bpy scripts got recorded as three
+    models failing the task, in 12ms, with an empty stderr. /procedural computes pass@1 from those
+    rows, so a broken sandbox would publish itself as a model's score. Fail loud here instead."""
+    cmd = [*(sandbox_prefix or []), blender_bin, "--version"]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except FileNotFoundError as e:
+        raise HarnessError(f"sandbox preflight: cannot execute {cmd!r} — {e}") from None
+    except subprocess.TimeoutExpired:
+        raise HarnessError(f"sandbox preflight: {cmd!r} hung past 60s") from None
+    if proc.returncode != 0:
+        raise HarnessError(
+            f"sandbox preflight FAILED (exit {proc.returncode}) for {cmd!r}. The wrapper cannot "
+            "run Blender, so every attempt would be recorded as the MODEL failing. "
+            f"stderr: {proc.stderr[-500:]!r}. "
+            "(heavy-run needs a systemd user session — it exits 1 under a detached setsid. Run "
+            "via jobd, or pass --sandbox-prefix '' to drop the memory cap.)"
+        )
+
+
 def run_bpy(
     script_text: str,
     *,
