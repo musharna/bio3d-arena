@@ -48,6 +48,7 @@ from . import (
     ranking,
     service,
     submissions,
+    variants,
 )
 from .database import get_db, init_db
 from .models import (
@@ -1278,7 +1279,12 @@ def leaderboard(
         rated top-3 and an unvoted modality's empty state)."""
         rated = [r for r in board_rows if r.get("n_games", 0) > 0]
         shown = board_rows if (show_all or not rated) else rated
-        return _enrich_leaderboard_rows(service.finalize_rows(shown), trend_by_gid)
+        enriched = _enrich_leaderboard_rows(service.finalize_rows(shown), trend_by_gid)
+        # Fold re-hosts of one model (TRELLIS on fal / Replicate / local) under their canonical
+        # row: three hosts of one model can otherwise take three separate rank slots and read as
+        # three competitors. nest_variants re-ranks the top level so they consume none, and keeps
+        # each variant's own BT + votes (see app/variants.py — scores are NOT merged).
+        return variants.nest_variants(enriched)
 
     # Paradigms present in this (criterion/category/kingdom) scope — drives the tabs on a single
     # board. Derived from the merged all_rows so a tab never vanishes on click.
