@@ -97,6 +97,16 @@ def enumerate_sample(
     outputs (reference scans + untextured) — they're not ranked, so judging them wastes calls.
     Pairs form a circulant graph (each output vs its next k) → connected (so Bradley-Terry can
     rank every node) at ~n·k/2 pairs instead of n²/2. Two ordered rows per pair (swap_group).
+
+    Bradley-Terry ranks GENERATORS, not outputs, so a pair of two outputs from the SAME generator
+    is a self-edge: it tells the fit nothing and burns a real VLM call. A generator often owns
+    several outputs on one task, so the raw circulant pairs models against themselves. Here a
+    same-generator ring neighbour is skipped (never emitted) and the walk advances to the next
+    eligible partner from a DIFFERENT generator — so each output still spends its full
+    `per_output_k` budget on genuinely different models, and the generator-level graph stays
+    connected (the "next different generator" edges chain around the ring through every
+    same-generator run). A task whose eligible outputs all come from one generator yields no
+    pairs — correct: a model cannot be compared with itself.
     """
     from app.sourcing import is_reference_scan, is_untextured_output
 
@@ -124,20 +134,31 @@ def enumerate_sample(
         task = db.get(Task, tid)
         if task is None:
             continue
-        ids = sorted(
-            o.id
-            for o in _real_outputs(task)
-            if not is_reference_scan(o.source) and not is_untextured_output(o)
+        eligible = sorted(
+            (
+                o
+                for o in _real_outputs(task)
+                if not is_reference_scan(o.source) and not is_untextured_output(o)
+            ),
+            key=lambda o: o.id,
         )
+        ids = [o.id for o in eligible]
+        gens = [o.generator_id for o in eligible]
         n = len(ids)
         if n < 2:
             continue
         seen_pairs: set[tuple[int, int]] = set()
         for i in range(n):
-            for d in range(1, per_output_k + 1):
+            budget = per_output_k
+            # Walk the ring forward, skipping same-generator neighbours (self-edges), until this
+            # output has `budget` partners from different generators or the ring is exhausted.
+            for d in range(1, n):
+                if budget <= 0:
+                    break
                 j = (i + d) % n
-                if i == j:
+                if gens[j] == gens[i]:
                     continue
+                budget -= 1
                 a, b = sorted((ids[i], ids[j]))
                 if (a, b) in seen_pairs:
                     continue

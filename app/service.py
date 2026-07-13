@@ -304,6 +304,14 @@ def _matches_for_scope(
         gen_b = out_b.generator_id
         if gen_a in ref_gens or gen_b in ref_gens:
             continue  # GT/reference scans are not perceptual competitors (Mode-A exclusion)
+        if gen_a == gen_b:
+            # Both outputs came from the SAME generator ("TRELLIS vs TRELLIS"). Matchmaking now
+            # refuses to serve such a pair, but historic comparisons already carry real votes.
+            # A (G, G) match is a model beating itself: meaningless as a preference signal and
+            # unidentifiable in Bradley-Terry, so it must never reach the fit. The rows stay in
+            # the DB (audit trail) — they are just inert here. The same_paradigm() guard below
+            # can't catch this: same_paradigm(p, p) is trivially true.
+            continue
         if not same_paradigm(db.get(Generator, gen_a).paradigm, db.get(Generator, gen_b).paradigm):
             continue  # never rank across paradigms
         # Ballot-group key: comparisons derived from one K-wise ballot share ballot_id, so
@@ -571,6 +579,9 @@ def generator_trend_series(
         gen_a, gen_b = out_a.generator_id, out_b.generator_id
         if gen_a in ref_gens or gen_b in ref_gens:
             continue
+        if gen_a == gen_b:
+            continue  # a model beating itself is not history — identical guard in
+            # _matches_for_scope; same_paradigm(p, p) below is trivially true and can't catch it
         for gid in (gen_a, gen_b):
             if gid not in gen_paradigm:
                 g = db.get(Generator, gid)
@@ -812,6 +823,13 @@ def _judge_matches_for_scope(
         gen_b = out_b.generator_id
         if gen_a in ref_gens or gen_b in ref_gens:
             continue  # GT/reference scans are not perceptual competitors (Mode-A exclusion)
+        if gen_a == gen_b:
+            # Both outputs came from the SAME generator ("TRELLIS vs TRELLIS"). A (G, G) match
+            # is a model beating itself: meaningless as a preference signal and unidentifiable
+            # in Bradley-Terry, so it must never reach the fit. The judge_vote rows stay in the
+            # DB (audit trail) — they are just inert here. The same_paradigm() guard below can't
+            # catch this: same_paradigm(p, p) is trivially true.
+            continue
         if not same_paradigm(db.get(Generator, gen_a).paradigm, db.get(Generator, gen_b).paradigm):
             continue  # never rank across paradigms
         if jv.winner == "a":
