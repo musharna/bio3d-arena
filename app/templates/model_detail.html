@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ gen.name }} · Models · Bio 3D Arena{% endblock %}
+{# Share cards (#75): a pasted model link unfurls into THIS model's live card, not the generic
+   site image. Title/description/image all come from one `share` context (app.og.model_standing),
+   so the picture and the text can never disagree — and both scope the rank to the model's own
+   method, and say "provisional" when the votes are thin. #}
+{% block og_title %}{{ share.name }} · {{ share.modality }} · {{ site_name }}{% endblock %}
+{% block description %}{{ share.description }}{% endblock %}
+{% block og_image %}{{ share.og_image_url }}{% endblock %}
 {% block content %}
 <section class="b3d-models">
   <header class="b3d-page-head">
@@ -13,6 +20,36 @@
       {% if gen.description %}&middot; {{ gen.description }}{% endif %}
     </p>
     <p><a href="/models">&larr; all models</a></p>
+
+    {# Share (#75): the growth loop — a reader who shares a standing brings back a voter. Deliberately
+       NOT in the arena's post-vote reveal, which was decluttered on purpose (#60). #}
+    <div
+      class="b3d-share"
+      data-share-url="{{ share.page_url }}"
+      aria-label="Share this model"
+      role="group"
+    >
+      <span class="b3d-share-label">Share</span>
+      <button type="button" class="b3d-share-btn" data-share-copy>
+        <span data-share-copy-text>Copy link</span>
+      </button>
+      <a
+        class="b3d-share-btn"
+        href="{{ share.x_intent_url }}"
+        target="_blank"
+        rel="noopener"
+      >Post on X</a>
+      <span class="b3d-share-status subtle" role="status" aria-live="polite"></span>
+      {# Fallback for browsers with no Clipboard API (or a denied permission): the URL, selectable. #}
+      <input
+        class="b3d-share-fallback"
+        type="text"
+        value="{{ share.page_url }}"
+        readonly
+        hidden
+        aria-label="Model link"
+      />
+    </div>
   </header>
 
   {% if card %}
@@ -125,4 +162,5 @@
   </div>
   {% endif %}
 </section>
+<script defer src="{{ asset('share.js') }}"></script>
 {% endblock %}

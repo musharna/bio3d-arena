@@ -4655,3 +4655,62 @@ select.b3d-select {
   background: var(--panelDeep);
   font-style: italic;
 }
+
+/* === Share (task #75) — the copy-link + X-intent row on /models/{slug}. Tokens only (no literal
+   colors): the page renders in both themes, and a hard-coded hex would go invisible in one. */
+.b3d-share {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.9rem;
+}
+.b3d-share-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.b3d-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.36rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.b3d-share-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.b3d-share-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.b3d-share.is-copied .b3d-share-btn[data-share-copy] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.b3d-share-status {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.b3d-share-fallback {
+  padding: 0.32rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.8rem;
+  min-width: 18rem;
+}

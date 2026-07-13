@@ -31,7 +31,7 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import (
@@ -43,6 +43,7 @@ from . import (
     integrity,
     kingdoms,
     matchmaking,
+    og,
     paradigms,
     ranking,
     service,
@@ -663,7 +664,6 @@ def _hero_stats(db: Session) -> dict:
     """Cheap headline counts shared by the home hero and the arena hero, so both
     pages report the same numbers (votes cast / distinct models / active tasks /
     live kingdoms)."""
-    from sqlalchemy import func
 
     return {
         "total_votes": matchmaking.total_votes(db),
@@ -681,7 +681,6 @@ def _hero_stats(db: Session) -> dict:
 def home(request: Request, db: Session = Depends(get_db)):
     """Marketing/landing page. Never kingdom-gated (see `_roadmap_or_none` docstring) —
     it's the one screen every visitor should be able to load regardless of scope."""
-    from sqlalchemy import func
 
     stats = _hero_stats(db)
     total_votes = stats["total_votes"]
@@ -1729,6 +1728,117 @@ def models_index(request: Request, db: Session = Depends(get_db), show_all: bool
     )
 
 
+# --------------------------------------------------------------- shareable result cards (#75)
+# A shared model link must unfurl into a card showing that model's CURRENT standing — ranks move
+# as votes land, so the image is a live route, not a baked asset. The bytes are cached in-process
+# against the data they were drawn from, so a burst of unfurls redraws once.
+_OG_CARD_CACHE: dict[str, tuple[str, bytes]] = {}
+
+
+def _og_cache_key(db: Session, gen: Generator) -> str:
+    """Everything the card can change with, in two cheap aggregates: the ratings' `updated` stamp
+    (a recompute rewrites every row, so a rank shift anywhere invalidates every card) and this
+    generator's own vote tally (which moves per-vote, before the next recompute)."""
+    ratings_v = db.execute(select(func.max(Rating.updated))).scalar()
+    votes_v = db.execute(
+        select(func.sum(ModelOutput.n_comparisons)).where(ModelOutput.generator_id == gen.id)
+    ).scalar()
+    return f"{gen.id}:{ratings_v}:{votes_v}"
+
+
+def _model_share_context(db: Session, gen: Generator, cards: list[dict] | None = None) -> dict:
+    """The facts behind a model's share card + og:description.
+
+    GLOBAL scope on purpose (`_model_cards(db, None)`): a shared link must unfurl the same way for
+    everyone, not according to whichever kingdom the sharer happened to have selected.
+
+    The rank is a WITHIN-METHOD rank and is labelled as one everywhere it appears — every board on
+    this site ranks exactly one paradigm (disconnected match pools), so a bare site-wide "#2"
+    would be a claim the ranking math does not back. `rank_of` counts the models actually RANKED
+    in this method (finalize_rows' rated set — an unrated entrant carries only the default prior
+    and is not a rung on the ladder).
+    """
+    if cards is None:
+        cards = _model_cards(db, None)
+    card = next((c for c in cards if c["slug"] == gen.slug), None)
+    modality = paradigms.DISPLAY_NAMES.get(gen.paradigm, gen.paradigm) or "an unclassified method"
+    name = card["name"] if card else gen.name
+    votes = int(card["votes"]) if card else 0
+    rank = card["rank"] if card else None
+    bt_score = card["bt_score"] if card else None
+    rank_of = (
+        sum(1 for c in cards if c["paradigm"] == gen.paradigm and c["rank"] is not None)
+        if rank
+        else 0
+    )
+    status = service.firm_status(votes)
+    standing = og.model_standing(
+        modality=modality,
+        rank=rank,
+        rank_of=rank_of,
+        bt_score=bt_score,
+        votes=votes,
+        firm=status["firm"],
+        firm_label=status["label"],
+    )
+    description = og.share_description(
+        name=name,
+        modality=modality,
+        standing=standing,
+        bt_score=bt_score,
+        votes=votes,
+        site_name=config.SITE_NAME,
+    )
+    page_url = _abs_url(f"/models/{gen.slug}")
+    tweet = f"{name} — {standing['headline']} on {config.SITE_NAME}."
+    return {
+        "name": name,
+        "modality": modality,
+        "bt_score": bt_score,
+        "rank": rank,
+        "rank_of": rank_of,
+        "votes": votes,
+        "firm": status["firm"],
+        "firm_label": status["label"],
+        "standing": standing,
+        "description": description,
+        "page_url": page_url,
+        "og_image_url": _abs_url(f"/og/models/{gen.slug}.png"),
+        "x_intent_url": (f"https://x.com/intent/post?text={quote(tweet)}&url={quote(page_url)}"),
+    }
+
+
+@app.get("/og/models/{slug}.png")
+def model_og_card(slug: str, db: Session = Depends(get_db)):
+    """The per-model Open Graph card, drawn from CURRENT data (app.og). 404s for an app-hidden
+    generator exactly like /models/{slug} does — an unfurl must never leak an internal model."""
+    gen = db.execute(select(Generator).where(Generator.slug == slug)).scalars().first()
+    if gen is None or gen.id in service.app_hidden_generator_ids(db):
+        raise HTTPException(404, "Unknown generator")
+    key = _og_cache_key(db, gen)
+    cached = _OG_CARD_CACHE.get(slug)
+    if cached is not None and cached[0] == key:
+        png = cached[1]
+    else:
+        ctx = _model_share_context(db, gen)
+        png = og.render_model_card(
+            name=ctx["name"],
+            modality=ctx["modality"],
+            bt_score=ctx["bt_score"],
+            rank=ctx["rank"],
+            rank_of=ctx["rank_of"],
+            votes=ctx["votes"],
+            firm=ctx["firm"],
+            firm_label=ctx["firm_label"],
+        )
+        _OG_CARD_CACHE[slug] = (key, png)
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=600"},
+    )
+
+
 @app.get("/models/{slug}", response_class=HTMLResponse)
 def model_detail(slug: str, request: Request, db: Session = Depends(get_db)):
     roadmap = _roadmap_or_none(request, db)
@@ -1740,6 +1850,9 @@ def model_detail(slug: str, request: Request, db: Session = Depends(get_db)):
     k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
     cards = _model_cards(db, k_ids)
     card = next((c for c in cards if c["slug"] == slug), None)
+    # The share card / meta description are kingdom-INDEPENDENT (see _model_share_context); reuse
+    # the cards we already have only when the current scope IS the global one.
+    share = _model_share_context(db, gen, cards=cards if k_ids is None else None)
 
     outs = [o for o in gen.outputs if not o.is_gold and o.hidden_at is None]
     by_task: dict[int, dict] = {}
@@ -1789,6 +1902,7 @@ def model_detail(slug: str, request: Request, db: Session = Depends(get_db)):
             "task_rows": task_rows,
             "samples": samples,
             "h2h": h2h,
+            "share": share,
         },
     )
 
@@ -2006,7 +2120,6 @@ def significance_page(
 
 @app.get("/tasks", response_class=HTMLResponse)
 def tasks_page(request: Request, db: Session = Depends(get_db)):
-    from sqlalchemy import func
 
     from .models import ReconTask, TaskDifficulty
 
