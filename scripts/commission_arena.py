@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import commission, config  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
+from app.rosters import PROCEDURAL_ROSTER  # noqa: E402
 
 
 def taxon_tasks_for(db, crop: str | None) -> list[tuple[str, int]]:
@@ -39,7 +40,11 @@ def plan(db, *, roster: list[str], crop: str | None = None) -> dict:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--roster", required=True, help="comma-separated OpenRouter model ids")
+    ap.add_argument(
+        "--roster",
+        default=None,
+        help="comma-separated OpenRouter model ids (default: app.rosters.PROCEDURAL_ROSTER)",
+    )
     ap.add_argument("--blender-bin", default="blender")
     ap.add_argument("--timeout", type=int, default=120)
     ap.add_argument(
@@ -54,7 +59,11 @@ def main(argv=None) -> int:
     ap.add_argument("--crop", default=None, help="substring of a species, to run just one taxon")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
-    roster = [m.strip() for m in args.roster.split(",") if m.strip()]
+    roster = (
+        [m.strip() for m in args.roster.split(",") if m.strip()]
+        if args.roster
+        else list(PROCEDURAL_ROSTER)
+    )
 
     with SessionLocal() as db:
         p = plan(db, roster=roster, crop=args.crop)

@@ -11,12 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import agentic, commission  # noqa: E402
-
-ROSTER = [
-    "anthropic/claude-opus-4.8",
-    "google/gemini-3.1-pro-preview",
-    "openai/gpt-5.1",
-]
+from app.rosters import AGENTIC_ROSTER as ROSTER  # noqa: E402  (vision-capable entrants only)
 
 
 def run_agentic_batch(
