@@ -78,11 +78,19 @@ _CHUNK = 25  # commit every N outputs -> durable + resumable (a kill loses at mo
 def main() -> int:
     ap = argparse.ArgumentParser(description="Batch-score semantic admissibility.")
     ap.add_argument("--limit", type=int, default=0, help="score at most N outputs (0 = all)")
+    ap.add_argument(
+        "--generator",
+        action="append",
+        default=None,
+        metavar="SLUG",
+        help="only score outputs from this Generator.slug (repeatable). Each output costs a "
+        "headless render + a VLM call, so scope a gate-a-new-model run to that model.",
+    )
     args = ap.parse_args()
     init_db()
     total = {"scored": 0, "errors": 0, "flagged": 0}
     with SessionLocal() as db:
-        work = enumerate_semantic_work(db)
+        work = enumerate_semantic_work(db, generators=args.generator)
         if args.limit:
             work = work[: args.limit]
         emit_flags = config.SEMANTIC_ADMISSIBILITY_MODE == "advisory"
