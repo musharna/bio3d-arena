@@ -5,8 +5,17 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from .envfile import load_env_file
+
 # Project root = parent of the app/ package directory.
 ROOT = Path(__file__).resolve().parent.parent
+
+# Fold the repo's .env into the environment before anything below reads it. Keys live there
+# (OPENROUTER_API_KEY) and no consumer loaded them, so they read as unset; from a worktree the
+# gitignored .env is only in the main checkout. The shell always wins over the file, and a .env
+# naming a database is fatal — see app/envfile.py.
+load_env_file(ROOT)
+
 DATA_DIR = Path(os.environ.get("BIO3D_DATA_DIR", ROOT / "data"))
 ASSET_DIR = DATA_DIR / "assets"
 DB_PATH = Path(os.environ.get("BIO3D_DB_PATH", DATA_DIR / "arena.db"))
