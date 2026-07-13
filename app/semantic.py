@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from . import flags
 from .admissibility import Verdict
 from .judge import JUDGE_MODEL
-from .models import Admissibility, ModelOutput, TraitRubric
+from .models import Admissibility, Generator, ModelOutput, TraitRubric
 from .sourcing import is_reference_scan, is_untextured_output
 
 VERSION = "semantic-v2"
@@ -122,12 +122,17 @@ def score_semantic(client, sheet_png: bytes, *, taxon: str | None) -> dict:
     return _parse(resp)
 
 
-def enumerate_semantic_work(db: Session) -> list[dict]:
+def enumerate_semantic_work(db: Session, generators: list[str] | None = None) -> list[dict]:
     """One {'output_id', 'taxon'} per eligible output lacking a current-VERSION semantic verdict.
     Eligible = non-gold, non-reference-scan, non-untextured (structural's breadth — NOT gated on a
     taxon inventory, so this reaches the outputs completeness never scored). taxon = the output's
     task's TraitRubric.taxon if a rubric exists, else None (used only to frame the prompt — every
-    reject code is taxon-agnostic, so a missing taxon changes nothing about admissibility)."""
+    reject code is taxon-agnostic, so a missing taxon changes nothing about admissibility).
+
+    generators: optional Generator.slug allow-list, for gating one newly-added model without
+    re-scoring the whole DB (each output costs a headless render + a VLM call). An unmatched slug
+    narrows to nothing rather than falling back to everything — a typo must not silently become a
+    full-DB run."""
     have = {
         oid
         for (oid,) in db.execute(
@@ -140,8 +145,14 @@ def enumerate_semantic_work(db: Session) -> list[dict]:
         tid: taxon
         for (tid, taxon) in db.execute(select(TraitRubric.task_id, TraitRubric.taxon)).all()
     }
+    q = select(ModelOutput).where(ModelOutput.is_gold.is_(False))
+    if generators is not None:
+        gen_ids = (
+            db.execute(select(Generator.id).where(Generator.slug.in_(generators))).scalars().all()
+        )
+        q = q.where(ModelOutput.generator_id.in_(gen_ids))
     work: list[dict] = []
-    outs = db.execute(select(ModelOutput).where(ModelOutput.is_gold.is_(False))).scalars().all()
+    outs = db.execute(q).scalars().all()
     for out in outs:
         if out.id in have:
             continue
