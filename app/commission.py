@@ -1,9 +1,13 @@
 """Commissioned-generation arena harness (core).
 
-Give each competing LLM the same plant-generation task, run the bpy script it writes in a
+Give each competing LLM the same organism-generation task, run the bpy script it writes in a
 sandbox, and ingest the resulting mesh as an agent-attributed arena output. Pure/core helpers
 here (prompt build, script extraction, OpenRouter dispatch, sandbox run, mesh validation, DB
-ingestion); scripts/commission_arena.py wires the real HTTP client + Blender."""
+ingestion); scripts/commission_arena.py wires the real HTTP client + Blender.
+
+The roster and every prompt's body plan are driven by ORGAN_INVENTORY (the registry the
+completeness metric already scores against), so this harness reaches every kingdom. It used to
+iterate a literal 6-plant dict, which is why fungi and animals had zero code-gen outputs."""
 
 from __future__ import annotations
 
@@ -18,6 +22,8 @@ from pathlib import Path
 
 import trimesh
 
+from .organ_inventory import ORGAN_INVENTORY, inventory_for
+
 
 _SECRET_ENV_MARKERS = ("KEY", "TOKEN", "SECRET", "PASSWORD")
 _SECRET_ENV_EXACT = {"BIO3D_DATABASE_URL"}
@@ -25,28 +31,80 @@ _SECRET_ENV_EXACT = {"BIO3D_DATABASE_URL"}
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+# Common name per taxon. Every taxon in ORGAN_INVENTORY must appear here — the roster is derived
+# from that registry, so an organism it can see but cannot name is a fail-loud error (common_name).
 SPECIES_COMMON: dict[str, str] = {
+    # Plantae
     "Solanum lycopersicum": "tomato",
     "Zea mays": "maize (corn)",
     "Pinus sylvestris": "Scots pine",
     "Rosa": "rose",
     "Glycine max": "soybean",
     "Arabidopsis thaliana": "Arabidopsis (thale cress)",
+    # Fungi
+    "Lycoperdon perlatum": "common puffball",
+    "Cucurbita pepo": "field pumpkin (gourd)",
+    "Hericium erinaceus": "lion's mane mushroom",
+    "Boletus edulis": "porcini",
+    "Amanita muscaria": "fly agaric",
+    "Morchella esculenta": "common morel",
+    "Trametes versicolor": "turkey tail",
+    # Animalia
+    "Canis lupus familiaris": "dog",
+    "Anas platyrhynchos": "mallard duck",
+    "Danaus plexippus": "monarch butterfly",
+    "Carassius auratus": "goldfish",
 }
 
 
+def common_name(taxon: str) -> str:
+    """The taxon's common name. Fail loud: the roster comes from ORGAN_INVENTORY, so a taxon the
+    generator can reach but cannot name is a registry bug, not something to paper over."""
+    try:
+        return SPECIES_COMMON[taxon]
+    except KeyError:
+        raise KeyError(
+            f"no common name for {taxon!r} — add it to SPECIES_COMMON; every taxon in "
+            "ORGAN_INVENTORY must be nameable"
+        ) from None
+
+
+def _body_plan(species: str) -> str:
+    """The 'what must this organism have' block, read from ORGAN_INVENTORY — the same registry the
+    completeness metric scores the result against. Asking a fish for the right body plan is what
+    makes the ask answerable; this prompt used to demand 'stem/trunk, leaves' of every taxon."""
+    inv = inventory_for(species)
+    if inv is None:
+        return (
+            "- Build real geometry for the whole organism: every structure a specimen visibly has."
+        )
+
+    lines = ["- Build real geometry for the whole organism. A specimen must show:"]
+    for organ in (o for o in inv.organs if o.required):
+        count = f" (exactly {organ.complement} of them)" if organ.complement > 1 else ""
+        lines.append(f"    - {organ.visual}{count}")
+    optional = [o.visual for o in inv.organs if not o.required]
+    if optional:
+        lines.append("  Where this specimen has them, also include: " + "; ".join(optional) + ".")
+    return "\n".join(lines)
+
+
 def build_prompt(species: str, common: str) -> str:
-    """Build a prompt for LLM-based plant generation."""
+    """Prompt an LLM for a bpy script building ONE whole organism of `species`.
+
+    Body-plan requirements come from ORGAN_INVENTORY, so a fungus is asked for a cap on a stalk and
+    a goldfish for its two pectoral fins. The prompt is kingdom-neutral: it used to say
+    "botanically accurate ... whole {common} plant", which is why only plants were commissionable."""
     return (
         f"Write a complete Blender Python (bpy) script that procedurally generates a "
-        f"botanically accurate 3D model of a whole {common} plant ({species}).\n\n"
+        f"biologically accurate 3D model of a whole {common} ({species}).\n\n"
         "Runtime: the script runs on Blender 4.2.0 — use only bpy APIs valid in Blender 4.2 "
         "(note Blender 4.x renamed several Principled BSDF sockets, e.g. 'Subsurface' -> "
         "'Subsurface Weight'). Keep material setup minimal and defensive so one wrong socket "
         "name cannot abort the whole script (guard optional material tweaks in try/except).\n\n"
         "Requirements:\n"
-        "- Build real geometry: stem/trunk, leaves, and species-appropriate organs "
-        "(flowers, fruit, cones, etc. where applicable).\n"
+        f"{_body_plan(species)}\n"
+        "- Model exactly ONE whole specimen — not a cluster, not a scene, not a detached part.\n"
         "- Export the result as GLB to the path in the environment variable OUT_GLB "
         "(read it with os.environ['OUT_GLB']).\n"
         "- The script must run headless under `blender --background --python` with no user "
@@ -261,13 +319,19 @@ def ingest_attempt(db, *, task_id: int, model_id: str, run: dict, script: str, a
 
 
 def resolve_taxon_tasks(db) -> list[tuple[str, int]]:
-    """Return (taxon, task_id) pairs for taxa in SPECIES_COMMON that have a TraitRubric."""
+    """(taxon, task_id) for every organism in ORGAN_INVENTORY that has a TraitRubric.
+
+    Driven by the inventory rather than a hand-kept species literal: registering an organism —
+    which you must do anyway for completeness scoring — is what makes it commissionable. Iterating
+    the old 6-plant dict is why the 7 fungus and 4 animal tasks were unreachable, leaving the
+    procedural_llm and agentic boards empty under a Fungi or Animals filter."""
     from .models import TraitRubric
 
     out = []
-    for taxon in SPECIES_COMMON:
+    for taxon in ORGAN_INVENTORY:
         r = db.query(TraitRubric).filter_by(taxon=taxon).first()
         if r is not None and r.task_id:
+            common_name(taxon)  # fail loud now, not mid-run: reachable but unnameable is a bug
             out.append((taxon, r.task_id))
     return out
 
@@ -304,7 +368,7 @@ def run_batch(db, *, complete_fn, run_fn, roster, taxon_tasks, asset_dir, max_ca
                 continue
             if max_calls is not None and made >= max_calls:
                 return counts
-            prompt = build_prompt(taxon, SPECIES_COMMON[taxon])
+            prompt = build_prompt(taxon, common_name(taxon))
             try:
                 text = complete_fn(model_id, prompt)
                 script = extract_script(text)

@@ -18,8 +18,20 @@ from app import commission, config  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
 
 
-def plan(db, *, roster: list[str]) -> dict:
+def taxon_tasks_for(db, crop: str | None) -> list[tuple[str, int]]:
+    """The roster's (taxon, task_id) pairs, optionally narrowed to one species by substring.
+    Each pair costs an LLM call plus a sandboxed Blender run, so a validation slice scopes to the
+    taxa it is validating. Mirrors --crop in scripts/generate_agentic.py."""
     tt = commission.resolve_taxon_tasks(db)
+    if crop:
+        tt = [(s, t) for s, t in tt if crop.lower() in s.lower()]
+        if not tt:
+            raise SystemExit(f"--crop {crop!r} matched no taxon with a task")
+    return tt
+
+
+def plan(db, *, roster: list[str], crop: str | None = None) -> dict:
+    tt = taxon_tasks_for(db, crop)
     seen = commission.existing_pairs(db)
     needed = sum(1 for m in roster for _, tid in tt if (m, tid) not in seen)
     return {"tasks": len(tt), "roster": len(roster), "calls_needed": needed}
@@ -39,12 +51,13 @@ def main(argv=None) -> int:
         ),
     )
     ap.add_argument("--max", type=int, default=None)
+    ap.add_argument("--crop", default=None, help="substring of a species, to run just one taxon")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
     roster = [m.strip() for m in args.roster.split(",") if m.strip()]
 
     with SessionLocal() as db:
-        p = plan(db, roster=roster)
+        p = plan(db, roster=roster, crop=args.crop)
         print(
             f"commission plan: {p['roster']} models x {p['tasks']} tasks; "
             f"{p['calls_needed']} calls needed"
@@ -75,7 +88,7 @@ def main(argv=None) -> int:
 
     config.ensure_dirs()
     with SessionLocal() as db:
-        tt = commission.resolve_taxon_tasks(db)
+        tt = taxon_tasks_for(db, args.crop)
         res = commission.run_batch(
             db,
             complete_fn=complete_fn,
