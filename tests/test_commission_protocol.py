@@ -266,6 +266,88 @@ def test_scorecard_reports_both_numbers_and_ignores_the_legacy_rows(tmp_path):
         db.commit()
 
 
+def test_the_same_pair_can_be_measured_under_two_protocols():
+    """An attempt is a measurement of (model, task) UNDER A HARNESS. Two harnesses measuring the
+    same pair are two different measurements, and we keep both — the legacy row is the evidence for
+    why the protocol changed.
+
+    The schema used to disagree: UNIQUE(model_id, task_id) meant a pair could be measured exactly
+    once, ever. So the protocol-scoped re-run this whole change exists to run was physically
+    forbidden — the live smoke test generated a valid fly agaric and then died on the INSERT."""
+    from app.database import SessionLocal, init_db
+    from app.models import Category, CommissionAttempt, Task
+
+    init_db()
+    with SessionLocal() as db:
+        cat = Category(slug="two-protocols", name="Two protocols")
+        db.add(cat)
+        db.flush()
+        task = Task(category_id=cat.id, title="t", prompt="p")
+        db.add(task)
+        db.flush()
+
+        db.add(
+            CommissionAttempt(
+                task_id=task.id, model_id="tp-model", status="invalid_mesh", protocol="legacy"
+            )
+        )
+        db.commit()
+        db.add(
+            CommissionAttempt(
+                task_id=task.id,
+                model_id="tp-model",
+                status="ok",
+                status_oneshot="ok",
+                rounds=1,
+                protocol="repair",
+            )
+        )
+        db.commit()  # used to raise IntegrityError: UNIQUE constraint failed
+
+        rows = db.query(CommissionAttempt).filter_by(model_id="tp-model", task_id=task.id).all()
+        assert {r.protocol for r in rows} == {"legacy", "repair"}
+
+        db.query(CommissionAttempt).filter_by(model_id="tp-model").delete()
+        db.query(Task).filter_by(id=task.id).delete()
+        db.query(Category).filter_by(id=cat.id).delete()
+        db.commit()
+
+
+def test_a_pair_is_still_attempted_only_once_per_protocol():
+    """Resumability is the reason the constraint exists at all: a re-run must never double-write a
+    cell it already measured. Widening identity by protocol must not widen it to 'anything goes'."""
+    import pytest as _pytest
+    from sqlalchemy.exc import IntegrityError
+
+    from app.database import SessionLocal, init_db
+    from app.models import Category, CommissionAttempt, Task
+
+    init_db()
+    with SessionLocal() as db:
+        cat = Category(slug="one-per-protocol", name="One per protocol")
+        db.add(cat)
+        db.flush()
+        task = Task(category_id=cat.id, title="t", prompt="p")
+        db.add(task)
+        db.flush()
+        db.add(
+            CommissionAttempt(task_id=task.id, model_id="op-model", status="ok", protocol="repair")
+        )
+        db.commit()
+
+        db.add(
+            CommissionAttempt(task_id=task.id, model_id="op-model", status="ok", protocol="repair")
+        )
+        with _pytest.raises(IntegrityError):
+            db.commit()
+        db.rollback()
+
+        db.query(CommissionAttempt).filter_by(model_id="op-model").delete()
+        db.query(Task).filter_by(id=task.id).delete()
+        db.query(Category).filter_by(id=cat.id).delete()
+        db.commit()
+
+
 def test_a_legacy_row_never_blocks_the_rerun():
     """existing_pairs is protocol-scoped. If it were not, every pair the broken harness already
     touched would be skipped forever and the re-run would measure nothing."""

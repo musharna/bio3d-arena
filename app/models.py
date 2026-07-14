@@ -700,7 +700,16 @@ class ModelScope(Base):
 class CommissionAttempt(Base):
     """One agent's attempt at one task in the commissioned-generation arena. Records the
     script + outcome even on failure (output_id NULL), so execution-success rate is a real
-    metric. One row per (model_id, task_id) — resumable.
+    metric. One row per (model_id, task_id, PROTOCOL) — resumable.
+
+    Protocol is part of the identity because an attempt is not a fact about a model, it is a
+    MEASUREMENT of that model under a named harness. Two harnesses measuring the same cell produce
+    two non-comparable numbers, and we keep both. The constraint used to be (model_id, task_id),
+    which asserted a cell could be measured once, ever — so the re-run under the fixed harness was
+    physically forbidden by the schema: the smoke test built a valid fly agaric and then died on the
+    INSERT, colliding with the legacy row for the same pair. app.database.ensure_schema rebuilds the
+    table on any DB still carrying the two-column constraint (SQLite cannot ALTER one, and the
+    additive-column self-heal structurally cannot touch it).
 
     The row carries TWO outcomes, because one number cannot honestly describe what happened:
       - status_oneshot: the UNAIDED first script. This is what pass@1 always claimed to be.
@@ -717,7 +726,9 @@ class CommissionAttempt(Base):
     they are kept, because they are the evidence for why the protocol changed."""
 
     __tablename__ = "commission_attempt"
-    __table_args__ = (UniqueConstraint("model_id", "task_id", name="uq_commission_attempt"),)
+    __table_args__ = (
+        UniqueConstraint("model_id", "task_id", "protocol", name="uq_commission_attempt"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("task.id"), index=True)
