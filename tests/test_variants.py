@@ -62,6 +62,36 @@ def test_representative_is_elected_when_the_named_canonical_is_absent():
     assert [c["slug"] for c in rep["children"]] == ["replicate:trellis"]
 
 
+def test_effort_variants_group_under_the_same_model():
+    """GPT-5.6 Sol and Sol Pro are the SAME underlying model at two effort tiers (OpenRouter says
+    so outright). "Does more effort produce a better mesh?" is a real question — but the two must
+    not read as two competitors on the board."""
+    rows = [
+        _row("openrouter-openai-gpt-5-6-sol-pro", 1300),
+        _row("openrouter-openai-gpt-5-6-sol", 1200),
+        _row("fal:hyper3d", 1100),
+    ]
+
+    top = nest_variants(rows)
+
+    assert {r["slug"] for r in top} == {"openrouter-openai-gpt-5-6-sol-pro", "fal:hyper3d"}
+    rep = top[0]
+    assert [c["slug"] for c in rep["children"]] == ["openrouter-openai-gpt-5-6-sol"]
+    assert rep["rank"] == 1 and top[1]["rank"] == 2  # the pair takes ONE slot, not two
+
+
+def test_effort_variant_slug_matches_what_the_ingester_produces():
+    """The family map is keyed by GENERATOR SLUG, which commission.slug_for_model derives from the
+    model id. A typo here fails silently — the models simply never group."""
+    from app.commission import slug_for_model
+
+    assert slug_for_model("openai/gpt-5.6-sol") == "openrouter-openai-gpt-5-6-sol"
+    assert slug_for_model("openai/gpt-5.6-sol-pro") == "openrouter-openai-gpt-5-6-sol-pro"
+    assert family_of(slug_for_model("openai/gpt-5.6-sol-pro")) == slug_for_model(
+        "openai/gpt-5.6-sol"
+    )
+
+
 def test_variants_do_not_consume_rank_slots():
     """The distortion: with 3 TRELLIS hosts ranked independently, a rival 4th by score reads as
     4th. Once the hosts collapse into one entrant, it is genuinely 2nd."""

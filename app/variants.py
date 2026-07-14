@@ -32,6 +32,13 @@ FAMILY_OF: dict[str, str] = {
     "trellis": "trellis",
     "fal:trellis": "trellis",
     "replicate:trellis": "trellis",
+    # GPT-5.6 Sol at two EFFORT tiers. OpenRouter states outright that "GPT-5.6 Sol Pro is the same
+    # underlying model as GPT-5.6 Sol" — the -pro suffix buys more effort, not different weights.
+    # This is the effort/quality variant case the grouping was built for: "does more effort produce
+    # a better mesh?" is a real question, and the two must not read as two competitors.
+    # (commission.slug_for_model: "openrouter-" + the model id, non-alphanumerics -> "-".)
+    "openrouter-openai-gpt-5-6-sol": "openrouter-openai-gpt-5-6-sol",
+    "openrouter-openai-gpt-5-6-sol-pro": "openrouter-openai-gpt-5-6-sol",
 }
 
 

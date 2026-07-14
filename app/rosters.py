@@ -3,22 +3,29 @@
 
 One module, because the two rosters are NOT interchangeable and the difference is easy to get
 wrong: the agentic paradigm shows the model a RENDER of its own mesh and asks it to critique it,
-so an agentic entrant must accept image input. A text-only model silently fails that loop (or
-errors on the image block) — and a failed attempt is recorded against the model, so a mis-rostered
-model would look like a model that cannot build a mushroom.
+so an agentic entrant must accept image input. A text-only model fails that call — and the harness
+records a failed attempt against the model, which /procedural turns into pass@1. A mis-rostered
+model would be published as a model that cannot build a mushroom. The roster is scoring input, so
+it is tested (tests/test_rosters.py), not trusted.
 
-Procedural has no such constraint: it is one text prompt in, one bpy script out. That is why the
-procedural roster is a superset — it can field the strong text-only coders (DeepSeek) that the
-agentic loop structurally cannot use.
+Procedural has no such constraint: one text prompt in, one bpy script out. That is why the
+procedural roster is a superset — it can field the strong TEXT-ONLY reasoners (DeepSeek V4 Pro,
+GLM 5.2) that the agentic loop structurally cannot use.
 
-Diversity is the point (task #78): eight labs, not eight re-hosts of two.
+RECENCY IS PART OF THE JOB. A benchmark that quietly measures last season's checkpoints is a
+benchmark nobody should trust. The first pass of this roster shipped gpt-5.1 four days after
+gpt-5.6 landed, and grok-4.20 three months after grok-4.5. Every id below was checked against the
+live OpenRouter catalogue by RELEASE DATE, not by name recall. Re-check before any big commission.
+
+Older versions are KEPT alongside their successors on purpose: gpt-5.1 vs gpt-5.6-sol and
+grok-4.20 vs grok-4.5 are version-over-version results, which is a finding, not clutter.
 """
 
 from __future__ import annotations
 
-# Vision-capable. Verified against the OpenRouter /models catalogue: every id below advertises
-# "image" in architecture.input_modalities. Adding a text-only id here is a bug — see is_agentic_eligible.
+# Vision-capable. Every id advertises "image" in architecture.input_modalities on OpenRouter.
 AGENTIC_ROSTER: list[str] = [
+    # --- incumbents (already have results) ---
     "anthropic/claude-opus-4.8",
     "google/gemini-3.1-pro-preview",
     "openai/gpt-5.1",
@@ -27,16 +34,35 @@ AGENTIC_ROSTER: list[str] = [
     "moonshotai/kimi-k2.7-code",
     "z-ai/glm-4.6v",
     "meta-llama/llama-4-maverick",
+    # --- current flagships (2026-07) ---
+    "openai/gpt-5.6-sol",  # the GPT-5.6 flagship tier; luna is the cheap tier, terra the middle
+    "openai/gpt-5.6-sol-pro",  # SAME underlying model as sol, higher effort tier -> see app/variants.py
+    "x-ai/grok-4.5",
+    "qwen/qwen3.7-plus",
+    "anthropic/claude-sonnet-5",
+    # --- labs the first roster missed entirely ---
+    "minimax/minimax-m3",
+    "mistralai/mistral-medium-3-5",
 ]
 
-# The agentic eight plus the strong TEXT-ONLY coders, which procedural can field and agentic cannot.
+# The agentic entrants plus the strong TEXT-ONLY reasoners, which procedural can field and agentic
+# structurally cannot (no image input -> the critique step is impossible).
 PROCEDURAL_ROSTER: list[str] = [
     *AGENTIC_ROSTER,
     "deepseek/deepseek-v3.2",
+    "deepseek/deepseek-v4-pro",
+    "z-ai/glm-5.2",
 ]
 
-# Models known to be text-only — kept explicit so the eligibility check is a fact, not a guess.
-TEXT_ONLY = frozenset({"deepseek/deepseek-v3.2"})
+# Text-only: no image input, so these can never enter the agentic loop. Explicit, so the
+# eligibility check is a fact rather than a guess.
+TEXT_ONLY = frozenset(
+    {
+        "deepseek/deepseek-v3.2",
+        "deepseek/deepseek-v4-pro",
+        "z-ai/glm-5.2",  # GLM 5.2 is text-only; z-ai's vision model is glm-5v-turbo
+    }
+)
 
 
 def is_agentic_eligible(model_id: str) -> bool:
