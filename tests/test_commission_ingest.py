@@ -82,6 +82,120 @@ def test_ingest_failure_writes_attempt_without_output(tmp_path):
         assert att.error == "boom" and att.script == "bad"
 
 
+def test_a_reruns_mesh_never_displaces_the_entrant_people_already_voted_on(tmp_path):
+    """A re-run under a new protocol is a new MEASUREMENT of a cell, not a new entrant in the arena.
+
+    The arena's live invariant is one output per (task, generator) — 0 duplicate groups in the real
+    DB — and 18 votes already point at commissioned meshes. Widening the attempt's identity by
+    protocol removed the UNIQUE constraint that was implicitly enforcing that invariant, so without
+    this guard the re-run would (a) shutil.copyfile over the very GLB those votes were cast on and
+    (b) enter every model twice on every task it had already covered, which is the same-generator
+    BT pollution we fixed once already.
+
+    So: the attempt is recorded in full (that is the deliverable — pass@1 / pass@repair), and the
+    cell's existing entrant is left exactly as it stands, mesh and votes intact."""
+    with SessionLocal() as db:
+        tid = _task(db, cat_slug="t-cat-rerun")
+        assets = tmp_path / "assets"
+
+        first = tmp_path / "first.glb"
+        trimesh.creation.box().export(str(first))
+        att1 = commission.ingest_attempt(
+            db,
+            task_id=tid,
+            model_id="x-ai/grok-4.20",
+            run={
+                "status": "ok",
+                "stderr": "",
+                "duration_ms": 10,
+                "glb_path": str(first),
+                "mesh_stats": {"vertices": 8},
+            },
+            script="import bpy  # legacy",
+            asset_dir=assets,
+            protocol="legacy",
+        )
+        out1 = db.get(ModelOutput, att1.output_id)
+        entrant_path = assets / out1.asset_path
+        mesh_before = entrant_path.read_bytes()
+
+        # the same cell, re-measured under the fixed harness, producing a DIFFERENT mesh
+        second = tmp_path / "second.glb"
+        trimesh.creation.icosphere().export(str(second))
+        att2 = commission.ingest_attempt(
+            db,
+            task_id=tid,
+            model_id="x-ai/grok-4.20",
+            run={
+                "status": "ok",
+                "stderr": "",
+                "duration_ms": 20,
+                "glb_path": str(second),
+                "mesh_stats": {"vertices": 42},
+            },
+            script="import bpy  # repair",
+            asset_dir=assets,
+            protocol="repair",
+            status_oneshot="ok",
+            rounds=1,
+        )
+
+        # the measurement is recorded in full
+        assert att2.status == "ok" and att2.protocol == "repair"
+        assert att2.script == "import bpy  # repair"
+        assert '"vertices": 42' in att2.mesh_stats_json
+
+        # ...and the arena is untouched: one entrant, same mesh bytes, same output row
+        outs = db.query(ModelOutput).filter_by(task_id=tid, generator_id=att2.generator_id).all()
+        assert len(outs) == 1, "the re-run entered the same model twice on one task"
+        assert outs[0].id == out1.id
+        assert entrant_path.read_bytes() == mesh_before, "the re-run overwrote a voted-on mesh"
+        assert att2.output_id is None  # status='ok' is what says the mesh was valid
+
+
+def test_a_rerun_DOES_add_an_entrant_when_the_cell_has_none(tmp_path):
+    """The other half: a cell the broken harness recorded as a flat failure has no entrant, so a
+    model that now succeeds must actually enter the arena. This is the point of the re-run —
+    previously-'failing' models get their mesh in the pool."""
+    with SessionLocal() as db:
+        tid = _task(db, cat_slug="t-cat-rerun-2")
+        assets = tmp_path / "assets2"
+
+        commission.ingest_attempt(
+            db,
+            task_id=tid,
+            model_id="x-ai/grok-4.20",
+            run={"status": "invalid_mesh", "stderr": "boom", "duration_ms": 9, "glb_path": None},
+            script="import bpy",
+            asset_dir=assets,
+            protocol="legacy",
+        )
+
+        glb = tmp_path / "now_works.glb"
+        trimesh.creation.box().export(str(glb))
+        att = commission.ingest_attempt(
+            db,
+            task_id=tid,
+            model_id="x-ai/grok-4.20",
+            run={
+                "status": "ok",
+                "stderr": "",
+                "duration_ms": 30,
+                "glb_path": str(glb),
+                "mesh_stats": {"vertices": 8},
+            },
+            script="import bpy",
+            asset_dir=assets,
+            protocol="repair",
+            status_oneshot="ok",
+            rounds=1,
+        )
+
+        assert att.output_id is not None
+        out = db.get(ModelOutput, att.output_id)
+        assert (assets / out.asset_path).exists()
+
+
 def test_run_batch_persists_and_resumes(tmp_path):
     import trimesh
 

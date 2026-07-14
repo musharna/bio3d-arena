@@ -31,9 +31,11 @@ def taxon_tasks_for(db, crop: str | None) -> list[tuple[str, int]]:
     return tt
 
 
-def plan(db, *, roster: list[str], crop: str | None = None) -> dict:
+def plan(db, *, roster: list[str], crop: str | None = None, protocol: str = "repair") -> dict:
+    """What the run will cost. Scoped to the SAME protocol run_batch will write under — a plan
+    counted against a different protocol would report a call count the run does not make."""
     tt = taxon_tasks_for(db, crop)
-    seen = commission.existing_pairs(db)
+    seen = commission.existing_pairs(db, protocol)
     needed = sum(1 for m in roster for _, tid in tt if (m, tid) not in seen)
     return {"tasks": len(tt), "roster": len(roster), "calls_needed": needed}
 
@@ -89,7 +91,7 @@ def main(argv=None) -> int:
     )
 
     with SessionLocal() as db:
-        p = plan(db, roster=roster, crop=args.crop)
+        p = plan(db, roster=roster, crop=args.crop, protocol=args.protocol)
         print(
             f"commission plan: {p['roster']} models x {p['tasks']} tasks; "
             f"{p['calls_needed']} calls needed"

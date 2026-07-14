@@ -486,16 +486,31 @@ def ingest_attempt(
     rounds: int = 1,
 ):
     """Persist one attempt. On status 'ok', copy the GLB under asset_dir/commissioned and
-    create a ModelOutput(source='commissioned'); always create a CommissionAttempt.
+    create a ModelOutput(source='commissioned') — UNLESS this cell already has one; always create a
+    CommissionAttempt.
 
     `protocol` is passed explicitly by every caller: the model's "legacy" default exists only so
     that PRE-EXISTING rows self-heal to the truth about themselves when the column is added, and a
-    new row silently inheriting it would quietly poison the scorecard's exclusion filter."""
+    new row silently inheriting it would quietly poison the scorecard's exclusion filter.
+
+    An attempt is a MEASUREMENT of a cell; a ModelOutput is the model's ENTRANT in the arena on that
+    task, and the arena's invariant is one entrant per (task, generator). Those used to be the same
+    thing, because UNIQUE(model_id, task_id) meant a cell could only ever be attempted once. Now
+    that a cell can be re-measured under a new protocol, they part company: re-measuring must not
+    mint a second entrant (that is the same-generator BT pollution we already fixed once) and must
+    not copy its mesh over the entrant's — which would silently rewrite the very asset earlier votes
+    were cast on. So a re-run of a covered cell records the measurement in full and leaves the arena
+    alone; `status` is what says the mesh was valid, and output_id NULL here means "no entrant slot
+    to fill", not "no mesh". A cell the old harness scored as a flat failure has no entrant, so a
+    model that now succeeds does enter the pool — which is the whole point of the re-run."""
     from .models import CommissionAttempt, ModelOutput
 
     gen = get_or_create_generator(db, model_id)
     output_id = None
-    if run.get("status") == "ok" and run.get("glb_path"):
+    covered = (
+        db.query(ModelOutput.id).filter_by(task_id=task_id, generator_id=gen.id).first() is not None
+    )
+    if run.get("status") == "ok" and run.get("glb_path") and not covered:
         rel = Path("commissioned") / f"{gen.slug}_{task_id}.glb"
         dst = Path(asset_dir) / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
