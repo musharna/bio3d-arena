@@ -4,11 +4,21 @@ Arena{% endblock %} {% block content %}
 <h2>Procedural code-gen arena {% include "_scope_pill.html" %}</h2>
 <p class="subtle">
   Each model authors a Blender-Python script that must run headless (Blender
-  4.2) and produce a valid plant mesh.
+  4.2) and leave a valid mesh in the scene. The harness saves the result, so a
+  model is scored on the organism it builds &mdash; never on whether it
+  remembers our export call.
 </p>
 <ul>
   <li>
-    <strong>pass@1</strong> — share of tasks that ran and yielded a valid mesh.
+    <strong>pass@1</strong> — share of tasks whose <em>first, unaided</em> script
+    ran and produced a valid mesh.
+  </li>
+  <li>
+    <strong>pass@repair</strong> — share that got there within two further
+    attempts, each handed the Blender traceback from the last one. This is how
+    people actually use these models, and the gap between the two columns is the
+    finding: a single sample is a coin flip, so pass@1 alone understates every
+    model on the board.
   </li>
   <li>
     <strong>Morphology fidelity</strong> — share of judgeable traits the model
@@ -25,6 +35,7 @@ Arena{% endblock %} {% block content %}
       <th>Rank</th>
       <th>Model</th>
       <th>pass@1</th>
+      <th>pass@repair</th>
       <th>Morphology fidelity</th>
       <th>Median verts</th>
       <th>n</th>
@@ -37,6 +48,10 @@ Arena{% endblock %} {% block content %}
       <td>{{ r.model }}</td>
       <td>
         {{ "%.0f%%"|format(r.pass_at_1 * 100) }}
+        <small>({{ r.n_oneshot }}/{{ r.attempts }})</small>
+      </td>
+      <td>
+        {{ "%.0f%%"|format(r.pass_repair * 100) }}
         <small>({{ r.valid }}/{{ r.attempts }})</small>
       </td>
       <td>
@@ -52,7 +67,9 @@ Arena{% endblock %} {% block content %}
   </tbody>
 </table>
 {% else %}
-<p class="subtle">No procedural code-gen results yet.</p>
+<p class="subtle">
+  No procedural code-gen results yet under the current harness.
+</p>
 {% endif %}
 </section>
 {% endblock %}

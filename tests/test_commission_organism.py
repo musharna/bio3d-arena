@@ -92,10 +92,15 @@ def test_plant_prompt_still_names_plant_organs():
 
 
 def test_prompt_keeps_the_blender_runtime_contract():
-    """The bpy runtime contract is what makes the script executable at all — it must survive."""
+    """The bpy runtime contract is what makes the script executable at all — it must survive.
+
+    The export is NOT part of that contract any more. This test used to assert `OUT_GLB in prompt`;
+    that clause is what made the model reproduce our GLB export call from memory, and 14% of the
+    first sweep's failures died on it with the organism already built. The harness owns the export
+    now, so the runtime contract is only: the right Blender, running headless."""
     prompt = build_prompt("Amanita muscaria", "fly agaric")
 
-    assert "OUT_GLB" in prompt
+    assert "OUT_GLB" not in prompt
     assert "Blender 4.2" in prompt
     assert "--background" in prompt
 

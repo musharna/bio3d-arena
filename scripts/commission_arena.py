@@ -57,6 +57,29 @@ def main(argv=None) -> int:
     )
     ap.add_argument("--max", type=int, default=None)
     ap.add_argument("--crop", default=None, help="substring of a species, to run just one taxon")
+    ap.add_argument(
+        "--max-repairs",
+        type=int,
+        default=2,
+        help=(
+            "repair rounds allowed after a failing script, each handed the Blender traceback "
+            "(default 2). 0 reproduces the old unaided-only protocol."
+        ),
+    )
+    ap.add_argument(
+        "--temperature",
+        type=float,
+        default=0.2,
+        help=(
+            "sampling temperature, pinned for every model (default 0.2). The first sweep sent "
+            "none, so each cell ran at its provider's default and the board partly ranked noise."
+        ),
+    )
+    ap.add_argument(
+        "--protocol",
+        default="repair",
+        help="recorded on every row; the scorecard groups by it and excludes 'legacy'",
+    )
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
     roster = (
@@ -87,7 +110,9 @@ def main(argv=None) -> int:
     commission.preflight_sandbox(sandbox_prefix=prefix, blender_bin=args.blender_bin)
 
     def complete_fn(model_id, prompt):
-        return commission.openrouter_complete(httpx.post, model_id, prompt, api_key=api_key)
+        return commission.openrouter_complete(
+            httpx.post, model_id, prompt, api_key=api_key, temperature=args.temperature
+        )
 
     def run_fn(script, out_glb):
         return commission.run_bpy(
@@ -109,6 +134,8 @@ def main(argv=None) -> int:
             taxon_tasks=tt,
             asset_dir=config.ASSET_DIR,
             max_calls=args.max,
+            max_repairs=args.max_repairs,
+            protocol=args.protocol,
         )
     print(res)
     return 0
