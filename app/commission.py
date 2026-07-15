@@ -108,6 +108,17 @@ def build_prompt(species: str, common: str) -> str:
         "(note Blender 4.x renamed several Principled BSDF sockets, e.g. 'Subsurface' -> "
         "'Subsurface Weight'). Keep material setup minimal and defensive so one wrong socket "
         "name cannot abort the whole script (guard optional material tweaks in try/except).\n\n"
+        "Avoid these bpy 4.2 API mistakes — each one aborts the whole script:\n"
+        "- bmesh.ops has NO create_cylinder/create_cube/create_sphere. Make primitives with "
+        "bpy.ops.mesh.primitive_*_add, or bmesh.ops.create_cone (a cone with equal radii and "
+        "capped ends is a cylinder) / create_circle / create_icosphere.\n"
+        "- After an operator that deletes or recreates an object, any Python variable still "
+        "pointing at the old object is dead ('StructRNA of type Object has been removed'); re-fetch "
+        "it from bpy.data.objects or bpy.context after such a call.\n"
+        "- A node socket's default_value must match its type: a scalar socket wants a float, a "
+        "color/vector socket wants a tuple — never assign a tuple to a float socket.\n"
+        "- bpy.context.active_object and bpy.context.object can be None; check before touching "
+        ".data. Deselect with bpy.ops.object.select_all(action='DESELECT'), not a .clear() call.\n\n"
         "Requirements:\n"
         f"{_body_plan(species)}\n"
         "- Model exactly ONE whole specimen — not a cluster, not a scene, not a detached part.\n"
@@ -119,6 +130,21 @@ def build_prompt(species: str, common: str) -> str:
     )
 
 
+def _final_exception_line(error: str) -> str:
+    """The most specific exception line in a Blender traceback, seen THROUGH the runner's
+    @@BIO3D_MODEL_ERROR@@ sentinel. Foregrounding it in the repair prompt focuses the fix: every one
+    of the 32 residual sweep failures was one of a handful of bpy-API mistakes (a nonexistent
+    operator, a stale object ref, a wrong socket value type), and the model repairs the exact call
+    faster when told which line blew up than when left to re-read the whole dump."""
+    lines = [ln.strip() for ln in (error or "").splitlines() if ln.strip()]
+    real = [ln for ln in lines if "@@BIO3D_MODEL_ERROR@@" not in ln]
+    for ln in reversed(real):
+        head = ln.split(":", 1)[0].strip()
+        if ("Error" in head or "Exception" in head) and head.replace(".", "").isalnum():
+            return ln
+    return real[-1] if real else ""
+
+
 def repair_prompt(original_prompt: str, script: str, error: str) -> str:
     """Hand the model its own traceback back and ask for a corrected script.
 
@@ -126,16 +152,26 @@ def repair_prompt(original_prompt: str, script: str, error: str) -> str:
     scored as failures, returned ['ok','invalid_mesh'] and ['invalid_mesh','ok'] — coin flips
     published as flat zeros. Its 2/17 was a sampling artifact. Nobody uses an LLM by taking the
     first script and walking away when it throws; they paste the error back. Measuring only the
-    unaided shot measures something real but narrow, so the harness now measures BOTH."""
+    unaided shot measures something real but narrow, so the harness now measures BOTH.
+
+    The exact exception is FOREGROUNDED above the raw dump (see _final_exception_line): the residual
+    failures are bpy-API mistakes, not wrong approaches, so naming the failing call and telling the
+    model to fix that one thing (not rewrite) is what converts a stuck cell into a pass."""
+    exc = _final_exception_line(error)
+    headline = f"The error was:\n\n    {exc}\n\n" if exc else ""
     return (
         f"{original_prompt}\n\n"
         "---\n\n"
-        "Your previous script failed when it was run. Here is the script:\n\n"
+        "Your previous script failed when it was run.\n\n"
+        f"{headline}"
+        "Here is the script:\n\n"
         f"```python\n{script}\n```\n\n"
-        "Here is what Blender reported:\n\n"
+        "Here is the full traceback Blender reported:\n\n"
         f"```\n{error.strip()[-3000:]}\n```\n\n"
-        "Fix it and output the COMPLETE corrected script. Output ONLY the Python script — no "
-        "explanation, no markdown prose."
+        "This is almost certainly a bpy API mistake (a nonexistent operator, a stale object "
+        "reference after a mutating op, or a wrong socket value type) rather than a wrong overall "
+        "approach — fix that specific call and keep the rest of your model. Output the COMPLETE "
+        "corrected script. Output ONLY the Python script — no explanation, no markdown prose."
     )
 
 
@@ -576,6 +612,21 @@ def existing_pairs(db, protocol: str = "repair") -> set[tuple[str, int]]:
     return {(a.model_id, a.task_id) for a in rows}
 
 
+def failed_pairs(db, protocol: str) -> set[tuple[str, int]]:
+    """(model_id, task_id) pairs whose attempt under `protocol` did NOT end 'ok'.
+
+    The re-measurement set for a harness improvement: an already-passing cell has an entrant and
+    re-running it is a wasted (billed) call, so a lift run touches only the ones that failed."""
+    from .models import CommissionAttempt
+
+    rows = (
+        db.query(CommissionAttempt.model_id, CommissionAttempt.task_id)
+        .filter(CommissionAttempt.protocol == protocol, CommissionAttempt.status != "ok")
+        .all()
+    )
+    return {(m, t) for m, t in rows}
+
+
 def run_batch(
     db,
     *,
@@ -588,6 +639,7 @@ def run_batch(
     max_repairs: int = 2,
     protocol: str = "repair",
     on_progress=None,
+    pairs=None,
 ):
     """Run commissioned generation for each un-attempted (model_id, (taxon, task_id)) pair.
 
@@ -604,6 +656,9 @@ def run_batch(
         max_calls: optional limit on the number of PAIRS attempted (not LLM calls)
         max_repairs: repair rounds allowed after a failing script
         protocol: recorded on every row; the scorecard groups by it
+        pairs: optional set of (model_id, task_id) to restrict the run to — used to re-measure JUST
+            the cells that failed under a prior protocol without re-generating (and re-billing) the
+            whole roster. None means the full roster x taxon_tasks cross product.
         on_progress: optional (done, total, model_id, task_id, status) -> None, called once per
             ATTEMPTED cell (never for a skipped one). The batch runner passes a callback that prints
             and flushes a heartbeat line: without it, run_batch is silent between the plan line and
@@ -625,12 +680,20 @@ def run_batch(
         "dispatch_failed": 0,
         "pass_oneshot": 0,
     }
+
+    def in_scope(m, tid):
+        return pairs is None or (m, tid) in pairs
+
     seen = existing_pairs(db, protocol)
-    total = sum(1 for m in roster for _, tid in taxon_tasks if (m, tid) not in seen)
+    total = sum(
+        1 for m in roster for _, tid in taxon_tasks if in_scope(m, tid) and (m, tid) not in seen
+    )
     processed = 0  # attempted (non-skipped) cells so far — the heartbeat's numerator
     made = 0
     for model_id in roster:
         for taxon, task_id in taxon_tasks:
+            if not in_scope(model_id, task_id):
+                continue  # out of the targeted re-measurement set — not counted at all
             if (model_id, task_id) in seen:
                 counts["skipped"] += 1
                 continue

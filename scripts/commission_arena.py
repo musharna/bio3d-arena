@@ -31,12 +31,19 @@ def taxon_tasks_for(db, crop: str | None) -> list[tuple[str, int]]:
     return tt
 
 
-def plan(db, *, roster: list[str], crop: str | None = None, protocol: str = "repair") -> dict:
+def plan(
+    db, *, roster: list[str], crop: str | None = None, protocol: str = "repair", pairs=None
+) -> dict:
     """What the run will cost. Scoped to the SAME protocol run_batch will write under — a plan
-    counted against a different protocol would report a call count the run does not make."""
+    counted against a different protocol would report a call count the run does not make. When
+    `pairs` restricts the run (a targeted re-measurement), the count reflects only those cells."""
     tt = taxon_tasks_for(db, crop)
     seen = commission.existing_pairs(db, protocol)
-    needed = sum(1 for m in roster for _, tid in tt if (m, tid) not in seen)
+
+    def scope(m, tid):
+        return pairs is None or (m, tid) in pairs
+
+    needed = sum(1 for m in roster for _, tid in tt if scope(m, tid) and (m, tid) not in seen)
     return {"tasks": len(tt), "roster": len(roster), "calls_needed": needed}
 
 
@@ -82,6 +89,16 @@ def main(argv=None) -> int:
         default="repair",
         help="recorded on every row; the scorecard groups by it and excludes 'legacy'",
     )
+    ap.add_argument(
+        "--rerun-failed-of",
+        default=None,
+        metavar="SRC_PROTOCOL",
+        help=(
+            "re-measure ONLY the cells that failed under SRC_PROTOCOL (e.g. 'repair'), under the "
+            "new --protocol, to prove a harness improvement's lift without re-running the whole "
+            "roster. Use a fresh --protocol tag so the source measurement stays intact."
+        ),
+    )
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
     roster = (
@@ -90,8 +107,19 @@ def main(argv=None) -> int:
         else list(PROCEDURAL_ROSTER)
     )
 
+    pairs = None
+    if args.rerun_failed_of:
+        with SessionLocal() as db:
+            pairs = commission.failed_pairs(db, args.rerun_failed_of)
+        if not pairs:
+            print(f"no failed cells under protocol {args.rerun_failed_of!r} — nothing to re-run")
+            return 0
+        # narrow the roster to the models that actually failed, so the plan count is honest
+        roster = [m for m in roster if any(pm == m for pm, _ in pairs)]
+        print(f"re-measuring {len(pairs)} failed cells from protocol {args.rerun_failed_of!r}")
+
     with SessionLocal() as db:
-        p = plan(db, roster=roster, crop=args.crop, protocol=args.protocol)
+        p = plan(db, roster=roster, crop=args.crop, protocol=args.protocol, pairs=pairs)
         print(
             f"commission plan: {p['roster']} models x {p['tasks']} tasks; "
             f"{p['calls_needed']} calls needed"
@@ -145,6 +173,7 @@ def main(argv=None) -> int:
             max_repairs=args.max_repairs,
             protocol=args.protocol,
             on_progress=on_progress,
+            pairs=pairs,
         )
     print(res)
     return 0
