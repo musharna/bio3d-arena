@@ -242,6 +242,92 @@ def test_run_batch_persists_and_resumes(tmp_path):
         assert db.query(CommissionAttempt).filter_by(model_id=roster[0], task_id=tid).count() == 1
 
 
+def test_run_batch_emits_a_progress_heartbeat_for_each_attempted_cell(tmp_path):
+    """A long batch harness must emit stdout as it works, not only at start and finish.
+
+    The first jobd run of this sweep was SIGTERM'd at exactly its 3600s idle timeout after doing
+    11 real cells in that hour: run_batch printed the plan line and then nothing until the final
+    summary, so the broker's stdout-idle watchdog judged a productive job dead. The fix is a
+    per-cell progress callback the runner uses to print (and flush) a heartbeat — it both keeps the
+    idle timer alive and makes the logs actually track progress. Skipped (already-attempted) cells
+    are instant and don't heartbeat; only real work does."""
+    with SessionLocal() as db:
+        tid1 = _rubric_task(db, "Zea mays")
+        tid2 = _rubric_task(db, "Solanum lycopersicum")
+
+        def complete_fn(model_id, prompt):
+            return "```python\nimport bpy\n```"
+
+        def run_fn(script, out_glb):
+            trimesh.creation.box().export(str(out_glb))
+            return {
+                "status": "ok",
+                "stderr": "",
+                "duration_ms": 5,
+                "glb_path": str(out_glb),
+                "mesh_stats": {"vertices": 8},
+            }
+
+        events = []
+        commission.run_batch(
+            db,
+            complete_fn=complete_fn,
+            run_fn=run_fn,
+            roster=["m1"],
+            taxon_tasks=[("Zea mays", tid1), ("Solanum lycopersicum", tid2)],
+            asset_dir=tmp_path / "assets",
+            on_progress=lambda done, total, model_id, task_id, status: events.append(
+                (done, total, model_id, task_id, status)
+            ),
+        )
+
+        # one heartbeat per attempted cell, with a monotonic done/total and the outcome
+        assert [(e[0], e[1]) for e in events] == [(1, 2), (2, 2)]
+        assert all(e[2] == "m1" and e[4] == "ok" for e in events)
+        assert {e[3] for e in events} == {tid1, tid2}
+
+
+def test_run_batch_does_not_heartbeat_skipped_cells(tmp_path):
+    """A resume iterates every pair to skip the already-done ones; those skips are instant set
+    lookups and must not fire the heartbeat (it exists to mark real work, and firing on skips would
+    flood the log at resume)."""
+    with SessionLocal() as db:
+        tid = _rubric_task(db, "Zea mays")
+
+        def complete_fn(model_id, prompt):
+            return "```python\nimport bpy\n```"
+
+        def run_fn(script, out_glb):
+            trimesh.creation.box().export(str(out_glb))
+            return {
+                "status": "ok",
+                "stderr": "",
+                "duration_ms": 5,
+                "glb_path": str(out_glb),
+                "mesh_stats": {"vertices": 8},
+            }
+
+        commission.run_batch(
+            db,
+            complete_fn=complete_fn,
+            run_fn=run_fn,
+            roster=["m1"],
+            taxon_tasks=[("Zea mays", tid)],
+            asset_dir=tmp_path / "assets",
+        )
+        events = []
+        res2 = commission.run_batch(
+            db,
+            complete_fn=complete_fn,
+            run_fn=run_fn,
+            roster=["m1"],
+            taxon_tasks=[("Zea mays", tid)],
+            asset_dir=tmp_path / "assets",
+            on_progress=lambda *a: events.append(a),
+        )
+        assert res2["skipped"] == 1 and events == []
+
+
 def test_dry_run_plan_counts_uncovered_pairs(tmp_path):
     from scripts import commission_arena
 

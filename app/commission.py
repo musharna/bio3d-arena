@@ -587,6 +587,7 @@ def run_batch(
     max_calls=None,
     max_repairs: int = 2,
     protocol: str = "repair",
+    on_progress=None,
 ):
     """Run commissioned generation for each un-attempted (model_id, (taxon, task_id)) pair.
 
@@ -603,6 +604,11 @@ def run_batch(
         max_calls: optional limit on the number of PAIRS attempted (not LLM calls)
         max_repairs: repair rounds allowed after a failing script
         protocol: recorded on every row; the scorecard groups by it
+        on_progress: optional (done, total, model_id, task_id, status) -> None, called once per
+            ATTEMPTED cell (never for a skipped one). The batch runner passes a callback that prints
+            and flushes a heartbeat line: without it, run_batch is silent between the plan line and
+            the final summary, and a jobd worker's stdout-idle watchdog SIGTERMs the (productive) job
+            at its idle timeout. It also makes the log track real progress.
 
     Returns:
         counts by final status, plus "pass_oneshot" (how many passed with no help at all)
@@ -620,6 +626,8 @@ def run_batch(
         "pass_oneshot": 0,
     }
     seen = existing_pairs(db, protocol)
+    total = sum(1 for m in roster for _, tid in taxon_tasks if (m, tid) not in seen)
+    processed = 0  # attempted (non-skipped) cells so far — the heartbeat's numerator
     made = 0
     for model_id in roster:
         for taxon, task_id in taxon_tasks:
@@ -655,6 +663,9 @@ def run_batch(
                             "re-run (the run is resumable)."
                         ) from e
                     counts["dispatch_failed"] += 1  # transient: no row, so the pair stays retryable
+                    processed += 1
+                    if on_progress is not None:
+                        on_progress(processed, total, model_id, task_id, "dispatch_failed")
                     continue
                 # ingest copies from glb_path, so it must happen before the tempdir is torn down
                 att = ingest_attempt(
@@ -673,4 +684,7 @@ def run_batch(
                 counts["pass_oneshot"] += 1
             seen.add((model_id, task_id))
             made += 1
+            processed += 1
+            if on_progress is not None:
+                on_progress(processed, total, model_id, task_id, att.status)
     return counts

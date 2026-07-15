@@ -125,6 +125,12 @@ def main(argv=None) -> int:
             sandbox_prefix=prefix,
         )
 
+    def on_progress(done, total, model_id, task_id, status):
+        # Flushed per-cell so a jobd worker's stdout-idle watchdog sees a productive job as alive
+        # (the first run was SIGTERM'd at its idle timeout for going silent mid-sweep), and so the
+        # log tracks real progress instead of jumping from the plan line to the final summary.
+        print(f"[{done}/{total}] {model_id} task={task_id} -> {status}", flush=True)
+
     config.ensure_dirs()
     with SessionLocal() as db:
         tt = taxon_tasks_for(db, args.crop)
@@ -138,6 +144,7 @@ def main(argv=None) -> int:
             max_calls=args.max,
             max_repairs=args.max_repairs,
             protocol=args.protocol,
+            on_progress=on_progress,
         )
     print(res)
     return 0
