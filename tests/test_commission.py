@@ -91,9 +91,14 @@ def test_extract_script_unclosed_fence_is_stripped():
 
 def test_build_prompt_pins_contract():
     p = commission.build_prompt("Solanum lycopersicum", "tomato")
-    assert "OUT_GLB" in p and "tomato" in p and "Solanum lycopersicum" in p
+    assert "tomato" in p and "Solanum lycopersicum" in p
     assert "bpy" in p.lower()
     assert "4.2" in p  # pins the target Blender version so models use the right bpy API
+    # The prompt USED to end by asking the model to export to os.environ['OUT_GLB'], and 14% of
+    # every failure in the first sweep died on that one call — invented kwargs to
+    # export_scene.gltf, with the organism already built. The harness owns the export now, so the
+    # task is only ever about the organism. See tests/test_commission_protocol.py.
+    assert "OUT_GLB" not in p
 
 
 def test_species_common_names_every_registered_organism():

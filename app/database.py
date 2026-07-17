@@ -134,10 +134,79 @@ def _ensure_columns(engine) -> None:  # noqa: ANN001
                 logger.info("self-healed missing column %s.%s", table.name, col.name)
 
 
-def init_db() -> None:
-    """Create all tables, then self-heal any additive columns missing from a pre-existing
-    (e.g. restored-from-backup) DB. Idempotent."""
+def _ensure_commission_attempt_identity(engine) -> None:  # noqa: ANN001
+    """Rebuild commission_attempt when it still carries the OLD UNIQUE(model_id, task_id).
+
+    An attempt is a MEASUREMENT of a cell under a named harness, so its identity is
+    (model_id, task_id, protocol) — see models.CommissionAttempt. A DB created before that was true
+    asserts a cell can be measured once, ever, which forbids the very re-run the protocol change
+    exists to run.
+
+    This is the one schema fix _ensure_columns structurally cannot make: it only ADDs columns, and
+    SQLite cannot ALTER a constraint at all — changing one means rebuilding the table. So: rename
+    the stale table aside, let the ORM's own metadata create the correct one (no hand-written DDL to
+    drift from the model), copy every row across, drop the stale one. Lossless by construction — the
+    legacy rows are the evidence for why the protocol changed, and a migration that dropped them to
+    make room would be deleting the finding.
+
+    Idempotent: a DB whose unique index already spans protocol is left untouched."""
+    from . import models  # noqa: F401  (registers the table on Base.metadata)
+
+    name = "commission_attempt"
+    table = Base.metadata.tables[name]
+    stale_name = f"{name}_stale"
+    with engine.begin() as conn:
+        tables = {
+            r[0] for r in conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        if name not in tables:
+            return  # create_all's job — it will build the correct constraint
+
+        # Every cursor is drained into a list before the next statement runs: DDL against a table
+        # whose PRAGMA cursor is still open locks it ("database table is locked").
+        indexes = list(conn.exec_driver_sql(f"PRAGMA index_list({name})"))
+        stale = any(
+            idx[2]  # unique?
+            and {r[2] for r in conn.exec_driver_sql(f"PRAGMA index_info({idx[1]})")}
+            == {"model_id", "task_id"}
+            for idx in indexes
+        )
+        if not stale:
+            return
+
+        have = {r[1] for r in conn.exec_driver_sql(f"PRAGMA table_info({name})")}
+        carried = [c.name for c in table.columns if c.name in have]
+
+        conn.exec_driver_sql(f"ALTER TABLE {name} RENAME TO {stale_name}")
+        # SQLite does not rename a table's indexes along with it, so the stale table still owns the
+        # names the new table is about to claim (ix_commission_attempt_model_id, ...). Drop the
+        # explicitly created ones (origin 'c'); the constraint's own auto-indexes are unnamed and go
+        # with the table. The stale table is dropped moments later, so nothing is lost.
+        for idx in list(conn.exec_driver_sql(f"PRAGMA index_list({stale_name})")):
+            if idx[3] == "c":
+                conn.exec_driver_sql(f"DROP INDEX {idx[1]}")
+
+        table.create(bind=conn)
+        cols_sql = ", ".join(carried)
+        conn.exec_driver_sql(f"INSERT INTO {name} ({cols_sql}) SELECT {cols_sql} FROM {stale_name}")
+        conn.exec_driver_sql(f"DROP TABLE {stale_name}")
+        logger.info("rebuilt %s: identity is now (model_id, task_id, protocol)", name)
+
+
+def ensure_schema(target_engine=None) -> None:  # noqa: ANN001
+    """Bring a DB up to the current schema: create missing tables, ADD missing additive columns,
+    then rebuild any table whose CONSTRAINTS are stale. Idempotent.
+
+    Takes an engine so a tool that writes a DB other than this process's own (scripts that promote
+    into the study DB) can heal its target instead of failing on a schema it never booted."""
     from . import models  # noqa: F401  (import registers models on Base.metadata)
 
-    Base.metadata.create_all(bind=engine)
-    _ensure_columns(engine)
+    eng = target_engine if target_engine is not None else engine
+    Base.metadata.create_all(bind=eng)
+    _ensure_columns(eng)
+    _ensure_commission_attempt_identity(eng)
+
+
+def init_db() -> None:
+    """Self-heal this process's own DB. Idempotent."""
+    ensure_schema(engine)

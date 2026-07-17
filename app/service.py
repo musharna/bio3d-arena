@@ -1597,14 +1597,28 @@ def procedural_scorecard(db: Session, judge_model: str | None = None) -> list[di
     rows: list[dict] = []
     for gen in gens:
         attempts = (
-            db.execute(select(CommissionAttempt).where(CommissionAttempt.generator_id == gen.id))
+            db.execute(
+                select(CommissionAttempt).where(
+                    CommissionAttempt.generator_id == gen.id,
+                    CommissionAttempt.protocol != "legacy",
+                )
+            )
             .scalars()
             .all()
         )
         n_attempts = len(attempts)
         ok = [a for a in attempts if a.status == "ok"]
         n_valid = len(ok)
-        pass_at_1 = (n_valid / n_attempts) if n_attempts else 0.0
+        # TWO numbers, and the board shows both. pass@1 is the UNAIDED script — the honest version
+        # of what this column always claimed to be. pass@repair is after up to 2 rounds with the
+        # traceback handed back, which is how people actually use these models. Reporting only the
+        # first published grok-4.20 at 2/17 on cells that rerun ~50/50; reporting only the second
+        # would hide that these models write Blender that does not run.
+        n_oneshot = len([a for a in attempts if a.status_oneshot == "ok"])
+        pass_at_1 = (n_oneshot / n_attempts) if n_attempts else 0.0
+        pass_repair = (n_valid / n_attempts) if n_attempts else 0.0
+        repaired = [a.rounds for a in ok if a.rounds > 1]
+        mean_rounds = (sum(a.rounds for a in attempts) / n_attempts) if n_attempts else 0.0
 
         verts: list[int] = []
         for a in ok:
@@ -1655,7 +1669,11 @@ def procedural_scorecard(db: Session, judge_model: str | None = None) -> list[di
                 "model": gen.name,
                 "attempts": n_attempts,
                 "valid": n_valid,
-                "pass_at_1": pass_at_1,
+                "pass_at_1": pass_at_1,  # unaided
+                "n_oneshot": n_oneshot,
+                "pass_repair": pass_repair,  # after <=2 repair rounds
+                "n_repaired": len(repaired),  # passed only because it got its traceback back
+                "mean_rounds": mean_rounds,
                 "morph_correct": morph_correct,
                 "morph_assessable": morph_assessable,
                 "morph_fidelity": morph_fidelity,
@@ -1665,6 +1683,7 @@ def procedural_scorecard(db: Session, judge_model: str | None = None) -> list[di
         )
     rows.sort(
         key=lambda r: (
+            r["pass_repair"],
             r["pass_at_1"],
             r["morph_fidelity"] if r["morph_fidelity"] is not None else -1.0,
         ),

@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import commission, config  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
+from app.rosters import PROCEDURAL_ROSTER  # noqa: E402
 
 
 def taxon_tasks_for(db, crop: str | None) -> list[tuple[str, int]]:
@@ -30,16 +31,29 @@ def taxon_tasks_for(db, crop: str | None) -> list[tuple[str, int]]:
     return tt
 
 
-def plan(db, *, roster: list[str], crop: str | None = None) -> dict:
+def plan(
+    db, *, roster: list[str], crop: str | None = None, protocol: str = "repair", pairs=None
+) -> dict:
+    """What the run will cost. Scoped to the SAME protocol run_batch will write under — a plan
+    counted against a different protocol would report a call count the run does not make. When
+    `pairs` restricts the run (a targeted re-measurement), the count reflects only those cells."""
     tt = taxon_tasks_for(db, crop)
-    seen = commission.existing_pairs(db)
-    needed = sum(1 for m in roster for _, tid in tt if (m, tid) not in seen)
+    seen = commission.existing_pairs(db, protocol)
+
+    def scope(m, tid):
+        return pairs is None or (m, tid) in pairs
+
+    needed = sum(1 for m in roster for _, tid in tt if scope(m, tid) and (m, tid) not in seen)
     return {"tasks": len(tt), "roster": len(roster), "calls_needed": needed}
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--roster", required=True, help="comma-separated OpenRouter model ids")
+    ap.add_argument(
+        "--roster",
+        default=None,
+        help="comma-separated OpenRouter model ids (default: app.rosters.PROCEDURAL_ROSTER)",
+    )
     ap.add_argument("--blender-bin", default="blender")
     ap.add_argument("--timeout", type=int, default=120)
     ap.add_argument(
@@ -52,12 +66,60 @@ def main(argv=None) -> int:
     )
     ap.add_argument("--max", type=int, default=None)
     ap.add_argument("--crop", default=None, help="substring of a species, to run just one taxon")
+    ap.add_argument(
+        "--max-repairs",
+        type=int,
+        default=2,
+        help=(
+            "repair rounds allowed after a failing script, each handed the Blender traceback "
+            "(default 2). 0 reproduces the old unaided-only protocol."
+        ),
+    )
+    ap.add_argument(
+        "--temperature",
+        type=float,
+        default=0.2,
+        help=(
+            "sampling temperature, pinned for every model (default 0.2). The first sweep sent "
+            "none, so each cell ran at its provider's default and the board partly ranked noise."
+        ),
+    )
+    ap.add_argument(
+        "--protocol",
+        default="repair",
+        help="recorded on every row; the scorecard groups by it and excludes 'legacy'",
+    )
+    ap.add_argument(
+        "--rerun-failed-of",
+        default=None,
+        metavar="SRC_PROTOCOL",
+        help=(
+            "re-measure ONLY the cells that failed under SRC_PROTOCOL (e.g. 'repair'), under the "
+            "new --protocol, to prove a harness improvement's lift without re-running the whole "
+            "roster. Use a fresh --protocol tag so the source measurement stays intact."
+        ),
+    )
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
-    roster = [m.strip() for m in args.roster.split(",") if m.strip()]
+    roster = (
+        [m.strip() for m in args.roster.split(",") if m.strip()]
+        if args.roster
+        else list(PROCEDURAL_ROSTER)
+    )
+
+    pairs = None
+    if args.rerun_failed_of:
+        with SessionLocal() as db:
+            pairs = commission.failed_pairs(db, args.rerun_failed_of)
+        if not pairs:
+            print(f"no failed cells under protocol {args.rerun_failed_of!r} — nothing to re-run")
+            return 0
+        # narrow the roster to the models that actually failed, so the plan count is honest
+        roster = [m for m in roster if any(pm == m for pm, _ in pairs)]
+        print(f"re-measuring {len(pairs)} failed cells from protocol {args.rerun_failed_of!r}")
 
     with SessionLocal() as db:
-        p = plan(db, roster=roster, crop=args.crop)
+        p = plan(db, roster=roster, crop=args.crop, protocol=args.protocol, pairs=pairs)
         print(
             f"commission plan: {p['roster']} models x {p['tasks']} tasks; "
             f"{p['calls_needed']} calls needed"
@@ -78,7 +140,9 @@ def main(argv=None) -> int:
     commission.preflight_sandbox(sandbox_prefix=prefix, blender_bin=args.blender_bin)
 
     def complete_fn(model_id, prompt):
-        return commission.openrouter_complete(httpx.post, model_id, prompt, api_key=api_key)
+        return commission.openrouter_complete(
+            httpx.post, model_id, prompt, api_key=api_key, temperature=args.temperature
+        )
 
     def run_fn(script, out_glb):
         return commission.run_bpy(
@@ -88,6 +152,12 @@ def main(argv=None) -> int:
             blender_bin=args.blender_bin,
             sandbox_prefix=prefix,
         )
+
+    def on_progress(done, total, model_id, task_id, status):
+        # Flushed per-cell so a jobd worker's stdout-idle watchdog sees a productive job as alive
+        # (the first run was SIGTERM'd at its idle timeout for going silent mid-sweep), and so the
+        # log tracks real progress instead of jumping from the plan line to the final summary.
+        print(f"[{done}/{total}] {model_id} task={task_id} -> {status}", flush=True)
 
     config.ensure_dirs()
     with SessionLocal() as db:
@@ -100,6 +170,10 @@ def main(argv=None) -> int:
             taxon_tasks=tt,
             asset_dir=config.ASSET_DIR,
             max_calls=args.max,
+            max_repairs=args.max_repairs,
+            protocol=args.protocol,
+            on_progress=on_progress,
+            pairs=pairs,
         )
     print(res)
     return 0

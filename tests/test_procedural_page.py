@@ -35,6 +35,12 @@ def _seed_one() -> str:
                 model_id=name,
                 generator_id=g.id,
                 status="ok",
+                # The board excludes protocol="legacy" (the confounded first harness), and "legacy"
+                # is the column default — so a row seeded without these fields never reaches the
+                # page. pass@1 is computed from status_oneshot, not status.
+                status_oneshot="ok",
+                rounds=1,
+                protocol="repair",
                 mesh_stats_json=json.dumps({"vertices": 42}),
             )
         )

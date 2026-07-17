@@ -18,6 +18,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -699,21 +700,63 @@ class ModelScope(Base):
 class CommissionAttempt(Base):
     """One agent's attempt at one task in the commissioned-generation arena. Records the
     script + outcome even on failure (output_id NULL), so execution-success rate is a real
-    metric. One row per (model_id, task_id) — resumable."""
+    metric. One row per (model_id, task_id, PROTOCOL) — resumable.
+
+    Protocol is part of the identity because an attempt is not a fact about a model, it is a
+    MEASUREMENT of that model under a named harness. Two harnesses measuring the same cell produce
+    two non-comparable numbers, and we keep both. The constraint used to be (model_id, task_id),
+    which asserted a cell could be measured once, ever — so the re-run under the fixed harness was
+    physically forbidden by the schema: the smoke test built a valid fly agaric and then died on the
+    INSERT, colliding with the legacy row for the same pair. app.database.ensure_schema rebuilds the
+    table on any DB still carrying the two-column constraint (SQLite cannot ALTER one, and the
+    additive-column self-heal structurally cannot touch it).
+
+    The row carries TWO outcomes, because one number cannot honestly describe what happened:
+      - status_oneshot: the UNAIDED first script. This is what pass@1 always claimed to be.
+      - status:         after up to 2 repair rounds with the traceback handed back — which is how
+                        anyone actually uses these models.
+    Reruns of cells the first sweep scored as flat failures came back ~50/50, so the unaided number
+    is real but noisy, and the repaired number is real but assisted. /procedural reports both.
+
+    `protocol` says which harness produced the row, and it is why the default is "legacy": every
+    pre-existing row came from a harness that (a) made the model write our GLB export from memory
+    and then scored the model when it got a kwarg wrong, (b) filed crashed scripts as
+    `invalid_mesh`, because Blender exits 0 on an uncaught exception, and (c) pinned no
+    temperature. Those rows are not comparable to new ones and the scorecard excludes them — but
+    they are kept, because they are the evidence for why the protocol changed."""
 
     __tablename__ = "commission_attempt"
-    __table_args__ = (UniqueConstraint("model_id", "task_id", name="uq_commission_attempt"),)
+    __table_args__ = (
+        UniqueConstraint("model_id", "task_id", "protocol", name="uq_commission_attempt"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("task.id"), index=True)
     model_id: Mapped[str] = mapped_column(String(128), index=True)
     generator_id: Mapped[int | None] = mapped_column(ForeignKey("generator.id"), nullable=True)
     output_id: Mapped[int | None] = mapped_column(ForeignKey("model_output.id"), nullable=True)
-    status: Mapped[str] = mapped_column(String(20))  # ok|error|timeout|invalid_mesh
+    status: Mapped[str] = mapped_column(String(20))  # ok|script_error|invalid_mesh|timeout|error
     error: Mapped[str] = mapped_column(Text, default="")
     script: Mapped[str] = mapped_column(Text, default="")
     mesh_stats_json: Mapped[str] = mapped_column(Text, default="{}")
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    # "legacy" (the confounded first harness) | "repair" (harness owns the export, temperature
+    # pinned, up to 2 repair rounds). The default is what makes pre-existing rows self-heal to the
+    # truth about themselves when the column is added.
+    #
+    # server_default, not just default: scripts/promote_generators.py copies this table over a raw
+    # sqlite3 connection, so it never runs the ORM or the boot-time self-heal. A Python-side default
+    # is invisible to every non-ORM writer, and a NOT NULL column without a DDL default turns any
+    # such write into an IntegrityError. A row written by a tool that has never heard of `protocol`
+    # IS a legacy-protocol row, so the DDL default states exactly that.
+    protocol: Mapped[str] = mapped_column(
+        String(20), default="legacy", server_default="legacy", index=True
+    )
+    # "" on a legacy row: what its unaided first script did is genuinely unknowable — the old
+    # harness never recorded it. Do not read "" as a failure.
+    status_oneshot: Mapped[str] = mapped_column(String(20), default="", server_default="")
+    # LLM calls spent on this cell; 1 = passed unaided. 0 on legacy rows: not counted.
+    rounds: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
 

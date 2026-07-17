@@ -30,6 +30,30 @@ def _mk_task(db) -> int:
     return t.id
 
 
+def _attempt(task_id: int, gen, status: str, verts: int | None = None) -> CommissionAttempt:
+    """An attempt row under the CURRENT protocol.
+
+    protocol="repair" is not decoration: the scorecard excludes protocol="legacy" rows (the first
+    harness scored its own export boilerplate and filed crashed scripts as empty meshes), and
+    "legacy" is the column default — so a fixture that omits it seeds a row the board will never
+    count, and the test quietly stops testing what it claims to.
+
+    status_oneshot == status here because these fixtures are about the scorecard's arithmetic. The
+    case where the two differ — failed unaided, passed with the traceback handed back — is the
+    subject of tests/test_commission_protocol.py.
+    """
+    return CommissionAttempt(
+        task_id=task_id,
+        model_id=gen.name,
+        generator_id=gen.id,
+        status=status,
+        status_oneshot=status,
+        rounds=1,
+        protocol="repair",
+        mesh_stats_json=json.dumps({"vertices": verts}) if verts is not None else "{}",
+    )
+
+
 def test_scorecard_pass_at_1_fidelity_rank_and_exclusion():
     with SessionLocal() as db:
         tag = uuid.uuid4().hex
@@ -51,41 +75,11 @@ def test_scorecard_pass_at_1_fidelity_rank_and_exclusion():
         t1, t2 = _mk_task(db), _mk_task(db)
         db.add_all(
             [
-                CommissionAttempt(
-                    task_id=t1,
-                    model_id=gen_a.name,
-                    generator_id=gen_a.id,
-                    status="ok",
-                    mesh_stats_json=json.dumps({"vertices": 100}),
-                ),
-                CommissionAttempt(
-                    task_id=t2,
-                    model_id=gen_a.name,
-                    generator_id=gen_a.id,
-                    status="ok",
-                    mesh_stats_json=json.dumps({"vertices": 300}),
-                ),
-                CommissionAttempt(
-                    task_id=t1,
-                    model_id=gen_b.name,
-                    generator_id=gen_b.id,
-                    status="ok",
-                    mesh_stats_json=json.dumps({"vertices": 50}),
-                ),
-                CommissionAttempt(
-                    task_id=t2,
-                    model_id=gen_b.name,
-                    generator_id=gen_b.id,
-                    status="error",
-                    mesh_stats_json="{}",
-                ),
-                CommissionAttempt(
-                    task_id=t1,
-                    model_id=gen_c.name,
-                    generator_id=gen_c.id,
-                    status="ok",
-                    mesh_stats_json=json.dumps({"vertices": 999}),
-                ),
+                _attempt(t1, gen_a, "ok", 100),
+                _attempt(t2, gen_a, "ok", 300),
+                _attempt(t1, gen_b, "ok", 50),
+                _attempt(t2, gen_b, "error"),
+                _attempt(t1, gen_c, "ok", 999),
             ]
         )
         # A commissioned output for gen_a with a plant scope + trait verdicts.
@@ -205,24 +199,7 @@ def test_scorecard_morph_fidelity_0_sorts_before_none():
         t1, t2 = _mk_task(db), _mk_task(db)
 
         # Both generators: 1/1 ok attempts → pass@1 == 1.0 (same tiebreak position).
-        db.add_all(
-            [
-                CommissionAttempt(
-                    task_id=t1,
-                    model_id=gen_b.name,
-                    generator_id=gen_b.id,
-                    status="ok",
-                    mesh_stats_json=json.dumps({"vertices": 100}),
-                ),
-                CommissionAttempt(
-                    task_id=t2,
-                    model_id=gen_a.name,
-                    generator_id=gen_a.id,
-                    status="ok",
-                    mesh_stats_json=json.dumps({"vertices": 100}),
-                ),
-            ]
-        )
+        db.add_all([_attempt(t1, gen_b, "ok", 100), _attempt(t2, gen_a, "ok", 100)])
 
         # Gen B: commissioned output with a scope but no trait verdicts → fidelity None.
         out_b = ModelOutput(
@@ -312,15 +289,7 @@ def test_procedural_scorecard_filters_by_judge_model():
         db.flush()
 
         t = _mk_task(db)
-        db.add(
-            CommissionAttempt(
-                task_id=t,
-                model_id=gen.name,
-                generator_id=gen.id,
-                status="ok",
-                mesh_stats_json=json.dumps({"vertices": 100}),
-            )
-        )
+        db.add(_attempt(t, gen, "ok", 100))
 
         # Commissioned output with a plant scope
         out = ModelOutput(

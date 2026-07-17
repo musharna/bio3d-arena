@@ -94,7 +94,13 @@ def build_prompt(species: str, common: str) -> str:
 
     Body-plan requirements come from ORGAN_INVENTORY, so a fungus is asked for a cap on a stalk and
     a goldfish for its two pectoral fins. The prompt is kingdom-neutral: it used to say
-    "botanically accurate ... whole {common} plant", which is why only plants were commissionable."""
+    "botanically accurate ... whole {common} plant", which is why only plants were commissionable.
+
+    The prompt says NOTHING about exporting. It used to end with "export the result as GLB to
+    os.environ['OUT_GLB']", and 14% of every failure in the first sweep died right there — on
+    invented kwargs to `bpy.ops.export_scene.gltf` (use_selected, export_colors, export_y_up), with
+    the organism already fully built in the scene. That is us scoring our own plumbing. The harness
+    owns the export now (see RUNNER_SRC); the model is asked for a mesh and judged on the mesh."""
     return (
         f"Write a complete Blender Python (bpy) script that procedurally generates a "
         f"biologically accurate 3D model of a whole {common} ({species}).\n\n"
@@ -102,14 +108,70 @@ def build_prompt(species: str, common: str) -> str:
         "(note Blender 4.x renamed several Principled BSDF sockets, e.g. 'Subsurface' -> "
         "'Subsurface Weight'). Keep material setup minimal and defensive so one wrong socket "
         "name cannot abort the whole script (guard optional material tweaks in try/except).\n\n"
+        "Avoid these bpy 4.2 API mistakes — each one aborts the whole script:\n"
+        "- bmesh.ops has NO create_cylinder/create_cube/create_sphere. Make primitives with "
+        "bpy.ops.mesh.primitive_*_add, or bmesh.ops.create_cone (a cone with equal radii and "
+        "capped ends is a cylinder) / create_circle / create_icosphere.\n"
+        "- After an operator that deletes or recreates an object, any Python variable still "
+        "pointing at the old object is dead ('StructRNA of type Object has been removed'); re-fetch "
+        "it from bpy.data.objects or bpy.context after such a call.\n"
+        "- A node socket's default_value must match its type: a scalar socket wants a float, a "
+        "color/vector socket wants a tuple — never assign a tuple to a float socket.\n"
+        "- bpy.context.active_object and bpy.context.object can be None; check before touching "
+        ".data. Deselect with bpy.ops.object.select_all(action='DESELECT'), not a .clear() call.\n\n"
         "Requirements:\n"
         f"{_body_plan(species)}\n"
         "- Model exactly ONE whole specimen — not a cluster, not a scene, not a detached part.\n"
-        "- Export the result as GLB to the path in the environment variable OUT_GLB "
-        "(read it with os.environ['OUT_GLB']).\n"
+        "- Leave the finished specimen in the scene. Saving it is handled for you — do not write "
+        "any file, and do not clear the scene at the end.\n"
         "- The script must run headless under `blender --background --python` with no user "
         "interaction and no external asset files.\n"
         "- Output ONLY the Python script — no explanation, no markdown prose."
+    )
+
+
+def _final_exception_line(error: str) -> str:
+    """The most specific exception line in a Blender traceback, seen THROUGH the runner's
+    @@BIO3D_MODEL_ERROR@@ sentinel. Foregrounding it in the repair prompt focuses the fix: every one
+    of the 32 residual sweep failures was one of a handful of bpy-API mistakes (a nonexistent
+    operator, a stale object ref, a wrong socket value type), and the model repairs the exact call
+    faster when told which line blew up than when left to re-read the whole dump."""
+    lines = [ln.strip() for ln in (error or "").splitlines() if ln.strip()]
+    real = [ln for ln in lines if "@@BIO3D_MODEL_ERROR@@" not in ln]
+    for ln in reversed(real):
+        head = ln.split(":", 1)[0].strip()
+        if ("Error" in head or "Exception" in head) and head.replace(".", "").isalnum():
+            return ln
+    return real[-1] if real else ""
+
+
+def repair_prompt(original_prompt: str, script: str, error: str) -> str:
+    """Hand the model its own traceback back and ask for a corrected script.
+
+    Why this exists: re-running grok-4.20 under the sweep's exact conditions, on taxa the sweep
+    scored as failures, returned ['ok','invalid_mesh'] and ['invalid_mesh','ok'] — coin flips
+    published as flat zeros. Its 2/17 was a sampling artifact. Nobody uses an LLM by taking the
+    first script and walking away when it throws; they paste the error back. Measuring only the
+    unaided shot measures something real but narrow, so the harness now measures BOTH.
+
+    The exact exception is FOREGROUNDED above the raw dump (see _final_exception_line): the residual
+    failures are bpy-API mistakes, not wrong approaches, so naming the failing call and telling the
+    model to fix that one thing (not rewrite) is what converts a stuck cell into a pass."""
+    exc = _final_exception_line(error)
+    headline = f"The error was:\n\n    {exc}\n\n" if exc else ""
+    return (
+        f"{original_prompt}\n\n"
+        "---\n\n"
+        "Your previous script failed when it was run.\n\n"
+        f"{headline}"
+        "Here is the script:\n\n"
+        f"```python\n{script}\n```\n\n"
+        "Here is the full traceback Blender reported:\n\n"
+        f"```\n{error.strip()[-3000:]}\n```\n\n"
+        "This is almost certainly a bpy API mistake (a nonexistent operator, a stale object "
+        "reference after a mutating op, or a wrong socket value type) rather than a wrong overall "
+        "approach — fix that specific call and keep the rest of your model. Output the COMPLETE "
+        "corrected script. Output ONLY the Python script — no explanation, no markdown prose."
     )
 
 
@@ -121,25 +183,33 @@ def openrouter_complete(
     api_key: str,
     max_tokens: int = 32000,
     max_retries: int = 3,
+    temperature: float | None = None,
     sleep_fn=None,
 ) -> str:
     """One chat completion via OpenRouter (OpenAI-compatible). `post` injected (httpx.post) for
     testing. Retries up to max_retries times with exponential backoff on any dispatch failure
-    (covers transient 429/5xx/transport errors); re-raises the last error if all attempts fail."""
+    (covers transient 429/5xx/transport errors); re-raises the last error if all attempts fail.
+
+    `temperature` is sent only when set. The first sweep sent none at all, so every cell ran at
+    whatever default its provider happened to use and the board was partly ranking sampling noise —
+    a benchmark picks its own sampler rather than inheriting eleven of them."""
     import time as _time
 
     sleep = sleep_fn or _time.sleep
+    payload = {
+        "model": model_id,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+    }
+    if temperature is not None:
+        payload["temperature"] = temperature
     last_exc = None
     for attempt in range(max_retries):
         try:
             resp = post(
                 OPENROUTER_URL,
                 headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": model_id,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": max_tokens,
-                },
+                json=payload,
                 timeout=180,
             )
             resp.raise_for_status()
@@ -187,6 +257,27 @@ class HarnessError(RuntimeError):
     """The harness itself cannot run. Fatal: never recorded as a model's failed attempt."""
 
 
+# HTTP statuses that mean OUR ACCOUNT is the problem, not the model: no credit (402), bad or
+# missing key (401), forbidden (403). Mid-sweep the OpenRouter balance ran out and every subsequent
+# call 402'd — each one recorded as status="error" against the model, giving qwen3.6-plus a 0/17
+# record it had not earned, feeding /procedural's pass@1, and (UNIQUE(model_id, task_id)) burning
+# those pairs permanently. An account failure is a STOP, not a result.
+ACCOUNT_FAILURE_STATUSES = frozenset({401, 402, 403})
+
+
+def _is_account_failure(exc: Exception) -> bool:
+    """True if this dispatch exception is our account failing rather than the model.
+
+    Duck-typed on purpose: the HTTP client is injected (httpx today), so commission.py never
+    imports it. Falls back to the status code in the message, which is how httpx renders it
+    ("Client error '402 Payment Required' for url ...")."""
+    response = getattr(exc, "response", None)
+    code = getattr(response, "status_code", None)
+    if isinstance(code, int):
+        return code in ACCOUNT_FAILURE_STATUSES
+    return any(f"'{s} " in str(exc) or f" {s} " in str(exc) for s in ACCOUNT_FAILURE_STATUSES)
+
+
 def preflight_sandbox(
     *, sandbox_prefix: list[str] | None = None, blender_bin: str = "blender"
 ) -> None:
@@ -214,6 +305,74 @@ def preflight_sandbox(
         )
 
 
+EXIT_MODEL_ERROR = 3  # the model's script raised — its fault, recorded as script_error
+EXIT_HARNESS_EXPORT_ERROR = 4  # OUR export raised — our fault, never the model's
+
+# The harness runs THIS, not the model's script. It execs the model's code, then exports the scene
+# itself.
+#
+# Two bugs die here.
+#
+# (1) The export used to be the model's job, so a model could build a flawless organism and still
+#     score zero by mis-remembering a kwarg on `bpy.ops.export_scene.gltf`. 14% of the first
+#     sweep's failures were exactly that.
+#
+# (2) Blender EXITS 0 WHEN A --python SCRIPT RAISES. (Verified against Blender 4.2.0: an uncaught
+#     exception prints its traceback and the process returns 0.) run_bpy checked only the exit
+#     code, so every crashed script fell through to the mesh check, found no GLB, and was filed as
+#     `invalid_mesh` — which is why 98% of "invalid_mesh" rows carry a Python traceback. Catching
+#     the model's exception here and exiting 3 makes "the model wrote broken code" (script_error)
+#     distinguishable from "the script ran and built nothing" (invalid_mesh).
+#
+# compile(..., "gen.py", ...) keeps the model's filename and line numbers in the traceback, which
+# is what the repair loop hands back to the model.
+RUNNER_SRC = """\
+import os, sys, traceback
+
+import bpy
+
+GEN, OUT = os.environ["GEN_SCRIPT"], os.environ["OUT_GLB"]
+
+try:
+    src = open(GEN).read()
+    exec(compile(src, "gen.py", "exec"), {"__name__": "__main__", "__file__": GEN})
+except SystemExit:
+    pass  # a script calling sys.exit() after building its scene is fine
+except BaseException:
+    traceback.print_exc()
+    sys.stderr.write("\\n@@BIO3D_MODEL_ERROR@@\\n")
+    sys.exit(3)
+
+try:
+    bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB")
+except BaseException:
+    traceback.print_exc()
+    sys.stderr.write("\\n@@BIO3D_HARNESS_EXPORT_ERROR@@\\n")
+    sys.exit(4)
+
+sys.exit(0)
+"""
+
+
+def classify_exit(returncode: int, *, stderr: str) -> str | None:
+    """Map the runner's exit code to a status. None means "defer to the mesh check".
+
+    HarnessError on our own export failing is the whole point. This is the third time our
+    infrastructure has been recorded as a model's result — the sandbox wrapper exiting 1, then a
+    402 from our billing, now the export. Each one published OUR failure as the model's pass@1, and
+    UNIQUE(model_id, task_id) made it permanent. A harness failure is a STOP, not a score."""
+    if returncode == EXIT_HARNESS_EXPORT_ERROR:
+        raise HarnessError(
+            "OUR GLB export failed on a script that ran to completion — the model built its "
+            f"organism and we lost it. Nothing recorded. stderr: {stderr[-1500:]!r}"
+        )
+    if returncode == EXIT_MODEL_ERROR:
+        return "script_error"
+    if returncode != 0:
+        return "error"  # blender itself died (segfault, OOM kill): not a clean model traceback
+    return None
+
+
 def run_bpy(
     script_text: str,
     *,
@@ -223,19 +382,26 @@ def run_bpy(
     sandbox_prefix: list[str] | None = None,
 ) -> dict:
     """Run an LLM-authored bpy script headless in a throwaway temp cwd with a sandboxed
-    environment. Injects OUT_GLB into the environment and strips secret-looking vars
-    (containing KEY/TOKEN/SECRET/PASSWORD, or BIO3D_DATABASE_URL). Returns a status dict;
-    never raises on script failure. sandbox_prefix lets the caller wrap the command
-    (e.g. ["heavy-run"] for a memory cap, ["unshare","-rn"] for no network) — kept
-    configurable so tests run bare."""
+    environment. The model's script is exec'd by RUNNER_SRC, which owns the GLB export.
+
+    Strips secret-looking vars from the child env (containing KEY/TOKEN/SECRET/PASSWORD, or
+    BIO3D_DATABASE_URL). Returns a status dict; never raises on script failure — but DOES raise
+    HarnessError when the failure is ours. sandbox_prefix lets the caller wrap the command
+    (e.g. ["heavy-run"] for a memory cap) — kept configurable so tests run bare.
+
+    Status is one of: ok | script_error (the model's code raised) | invalid_mesh (it ran and built
+    nothing) | timeout | error (Blender itself died)."""
     out_glb = Path(out_glb)
     prefix = list(sandbox_prefix or [])
     start = time.monotonic()
     with tempfile.TemporaryDirectory() as td:
         script_path = Path(td) / "gen.py"
         script_path.write_text(script_text)
+        runner_path = Path(td) / "runner.py"
+        runner_path.write_text(RUNNER_SRC)
         env = _sandbox_env(out_glb)
-        cmd = [*prefix, blender_bin, "--background", "--python", str(script_path)]
+        env["GEN_SCRIPT"] = str(script_path)
+        cmd = [*prefix, blender_bin, "--background", "--python", str(runner_path)]
         try:
             proc = subprocess.run(
                 cmd, env=env, cwd=td, capture_output=True, text=True, timeout=timeout_s
@@ -257,9 +423,10 @@ def run_bpy(
                 "mesh_stats": {},
             }
         dur = int((time.monotonic() - start) * 1000)
-        if proc.returncode != 0:
+        status = classify_exit(proc.returncode, stderr=proc.stderr)  # raises on OUR export failing
+        if status is not None:
             return {
-                "status": "error",
+                "status": status,
                 "stderr": proc.stderr[-4000:],
                 "duration_ms": dur,
                 "glb_path": None,
@@ -273,6 +440,39 @@ def run_bpy(
             "glb_path": str(out_glb) if ok else None,
             "mesh_stats": stats,
         }
+
+
+def run_with_repair(
+    *,
+    complete_fn,
+    run_fn,
+    model_id: str,
+    prompt: str,
+    out_glb,
+    max_repairs: int = 2,
+) -> dict:
+    """One model, one task: the unaided attempt, then up to `max_repairs` rounds with the traceback.
+
+    Returns {"run", "script", "rounds", "status_oneshot"} — BOTH outcomes, on purpose. pass@1 has
+    always claimed to be the unaided number and `status_oneshot` is finally exactly that; `run` is
+    what the model gets to when you do what everyone actually does and paste the error back.
+    Neither one alone is the honest measure, so the row carries both.
+
+    A repair round is only ever spent on a script that FAILED, so a strong model costs one call."""
+    script = extract_script(complete_fn(model_id, prompt))
+    run = run_fn(script, out_glb)
+    status_oneshot = run.get("status", "error")
+    rounds = 1
+
+    for _ in range(max_repairs):
+        if run.get("status") == "ok":
+            break
+        fix = repair_prompt(prompt, script, run.get("stderr", "") or "")
+        script = extract_script(complete_fn(model_id, fix))
+        run = run_fn(script, out_glb)
+        rounds += 1
+
+    return {"run": run, "script": script, "rounds": rounds, "status_oneshot": status_oneshot}
 
 
 def extract_script(text: str) -> str:
@@ -309,14 +509,44 @@ def get_or_create_generator(db, model_id: str):
     return gen
 
 
-def ingest_attempt(db, *, task_id: int, model_id: str, run: dict, script: str, asset_dir):
+def ingest_attempt(
+    db,
+    *,
+    task_id: int,
+    model_id: str,
+    run: dict,
+    script: str,
+    asset_dir,
+    protocol: str = "repair",
+    status_oneshot: str = "",
+    rounds: int = 1,
+):
     """Persist one attempt. On status 'ok', copy the GLB under asset_dir/commissioned and
-    create a ModelOutput(source='commissioned'); always create a CommissionAttempt."""
+    create a ModelOutput(source='commissioned') — UNLESS this cell already has one; always create a
+    CommissionAttempt.
+
+    `protocol` is passed explicitly by every caller: the model's "legacy" default exists only so
+    that PRE-EXISTING rows self-heal to the truth about themselves when the column is added, and a
+    new row silently inheriting it would quietly poison the scorecard's exclusion filter.
+
+    An attempt is a MEASUREMENT of a cell; a ModelOutput is the model's ENTRANT in the arena on that
+    task, and the arena's invariant is one entrant per (task, generator). Those used to be the same
+    thing, because UNIQUE(model_id, task_id) meant a cell could only ever be attempted once. Now
+    that a cell can be re-measured under a new protocol, they part company: re-measuring must not
+    mint a second entrant (that is the same-generator BT pollution we already fixed once) and must
+    not copy its mesh over the entrant's — which would silently rewrite the very asset earlier votes
+    were cast on. So a re-run of a covered cell records the measurement in full and leaves the arena
+    alone; `status` is what says the mesh was valid, and output_id NULL here means "no entrant slot
+    to fill", not "no mesh". A cell the old harness scored as a flat failure has no entrant, so a
+    model that now succeeds does enter the pool — which is the whole point of the re-run."""
     from .models import CommissionAttempt, ModelOutput
 
     gen = get_or_create_generator(db, model_id)
     output_id = None
-    if run.get("status") == "ok" and run.get("glb_path"):
+    covered = (
+        db.query(ModelOutput.id).filter_by(task_id=task_id, generator_id=gen.id).first() is not None
+    )
+    if run.get("status") == "ok" and run.get("glb_path") and not covered:
         rel = Path("commissioned") / f"{gen.slug}_{task_id}.glb"
         dst = Path(asset_dir) / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
@@ -343,6 +573,9 @@ def ingest_attempt(db, *, task_id: int, model_id: str, run: dict, script: str, a
         script=script or "",
         mesh_stats_json=json.dumps(run.get("mesh_stats", {})),
         duration_ms=int(run.get("duration_ms", 0)),
+        protocol=protocol,
+        status_oneshot=status_oneshot,
+        rounds=rounds,
     )
     db.add(att)
     db.commit()
@@ -367,15 +600,51 @@ def resolve_taxon_tasks(db) -> list[tuple[str, int]]:
     return out
 
 
-def existing_pairs(db) -> set[tuple[str, int]]:
-    """Return set of (model_id, task_id) pairs already attempted."""
+def existing_pairs(db, protocol: str = "repair") -> set[tuple[str, int]]:
+    """(model_id, task_id) pairs already attempted UNDER THIS PROTOCOL.
+
+    Protocol-scoped so the legacy rows do not block the re-run. They record what a different (and
+    broken) harness measured; a pair being "done" under that harness says nothing about whether it
+    has been measured under this one."""
     from .models import CommissionAttempt
 
-    return {(a.model_id, a.task_id) for a in db.query(CommissionAttempt).all()}
+    rows = db.query(CommissionAttempt).filter_by(protocol=protocol).all()
+    return {(a.model_id, a.task_id) for a in rows}
 
 
-def run_batch(db, *, complete_fn, run_fn, roster, taxon_tasks, asset_dir, max_calls=None):
+def failed_pairs(db, protocol: str) -> set[tuple[str, int]]:
+    """(model_id, task_id) pairs whose attempt under `protocol` did NOT end 'ok'.
+
+    The re-measurement set for a harness improvement: an already-passing cell has an entrant and
+    re-running it is a wasted (billed) call, so a lift run touches only the ones that failed."""
+    from .models import CommissionAttempt
+
+    rows = (
+        db.query(CommissionAttempt.model_id, CommissionAttempt.task_id)
+        .filter(CommissionAttempt.protocol == protocol, CommissionAttempt.status != "ok")
+        .all()
+    )
+    return {(m, t) for m, t in rows}
+
+
+def run_batch(
+    db,
+    *,
+    complete_fn,
+    run_fn,
+    roster,
+    taxon_tasks,
+    asset_dir,
+    max_calls=None,
+    max_repairs: int = 2,
+    protocol: str = "repair",
+    on_progress=None,
+    pairs=None,
+):
     """Run commissioned generation for each un-attempted (model_id, (taxon, task_id)) pair.
+
+    Each pair gets the unaided script and, if it failed, up to `max_repairs` rounds with the
+    traceback handed back (see run_with_repair). The row keeps BOTH outcomes.
 
     Args:
         db: database session
@@ -384,61 +653,101 @@ def run_batch(db, *, complete_fn, run_fn, roster, taxon_tasks, asset_dir, max_ca
         roster: list of model IDs to try
         taxon_tasks: list of (taxon, task_id) pairs
         asset_dir: root directory for saving assets
-        max_calls: optional limit on number of attempts
+        max_calls: optional limit on the number of PAIRS attempted (not LLM calls)
+        max_repairs: repair rounds allowed after a failing script
+        protocol: recorded on every row; the scorecard groups by it
+        pairs: optional set of (model_id, task_id) to restrict the run to — used to re-measure JUST
+            the cells that failed under a prior protocol without re-generating (and re-billing) the
+            whole roster. None means the full roster x taxon_tasks cross product.
+        on_progress: optional (done, total, model_id, task_id, status) -> None, called once per
+            ATTEMPTED cell (never for a skipped one). The batch runner passes a callback that prints
+            and flushes a heartbeat line: without it, run_batch is silent between the plan line and
+            the final summary, and a jobd worker's stdout-idle watchdog SIGTERMs the (productive) job
+            at its idle timeout. It also makes the log track real progress.
 
     Returns:
-        dict with counts by status: {"ok", "error", "timeout", "invalid_mesh", "skipped"}
+        counts by final status, plus "pass_oneshot" (how many passed with no help at all)
     """
-    counts = {"ok": 0, "error": 0, "timeout": 0, "invalid_mesh": 0, "skipped": 0}
-    seen = existing_pairs(db)
+    # dispatch_failed: the call never returned a script (timeout, 429, 5xx). Counted, NOT recorded
+    # as an attempt — a row would burn the (model, task) pair forever under the UNIQUE constraint.
+    counts = {
+        "ok": 0,
+        "error": 0,
+        "script_error": 0,
+        "timeout": 0,
+        "invalid_mesh": 0,
+        "skipped": 0,
+        "dispatch_failed": 0,
+        "pass_oneshot": 0,
+    }
+
+    def in_scope(m, tid):
+        return pairs is None or (m, tid) in pairs
+
+    seen = existing_pairs(db, protocol)
+    total = sum(
+        1 for m in roster for _, tid in taxon_tasks if in_scope(m, tid) and (m, tid) not in seen
+    )
+    processed = 0  # attempted (non-skipped) cells so far — the heartbeat's numerator
     made = 0
     for model_id in roster:
         for taxon, task_id in taxon_tasks:
+            if not in_scope(model_id, task_id):
+                continue  # out of the targeted re-measurement set — not counted at all
             if (model_id, task_id) in seen:
                 counts["skipped"] += 1
                 continue
             if max_calls is not None and made >= max_calls:
                 return counts
             prompt = build_prompt(taxon, common_name(taxon))
-            try:
-                text = complete_fn(model_id, prompt)
-                script = extract_script(text)
-            except Exception as e:  # noqa: BLE001 — transport failure: record + continue
-                run = {
-                    "status": "error",
-                    "stderr": f"dispatch: {e}",
-                    "duration_ms": 0,
-                    "glb_path": None,
-                    "mesh_stats": {},
-                }
-                script = ""
-            else:
-                with tempfile.TemporaryDirectory() as td:
-                    out_glb = Path(td) / "out.glb"
-                    run = run_fn(script, out_glb)
-                    if run.get("status") == "ok" and run.get("glb_path"):
-                        # ingest copies from glb_path; keep it alive past the tempdir by ingesting now
-                        att = ingest_attempt(
-                            db,
-                            task_id=task_id,
-                            model_id=model_id,
-                            run=run,
-                            script=script,
-                            asset_dir=asset_dir,
-                        )
-                        counts[att.status] = counts.get(att.status, 0) + 1
-                        seen.add((model_id, task_id))
-                        made += 1
-                        continue
-            att = ingest_attempt(
-                db,
-                task_id=task_id,
-                model_id=model_id,
-                run=run,
-                script=script,
-                asset_dir=asset_dir,
-            )
+            with tempfile.TemporaryDirectory() as td:
+                out_glb = Path(td) / "out.glb"
+                try:
+                    res = run_with_repair(
+                        complete_fn=complete_fn,
+                        run_fn=run_fn,
+                        model_id=model_id,
+                        prompt=prompt,
+                        out_glb=out_glb,
+                        max_repairs=max_repairs,
+                    )
+                except HarnessError:
+                    raise  # our sandbox or our export — never a model's result
+                except Exception as e:  # noqa: BLE001 — dispatch failure, see below
+                    # A model is judged ONLY on a script it actually returned. A dispatch failure is
+                    # ours or the network's, never the model's — and recording one would both
+                    # publish it as the model's pass@1 AND burn the pair forever under
+                    # UNIQUE(model_id, task_id).
+                    if _is_account_failure(e):
+                        raise HarnessError(
+                            f"account failure calling {model_id!r}: {e}. Nothing was recorded. "
+                            "This is OUR account, not the model — recording it would publish a "
+                            "billing problem as the model's score. Top up / fix credentials and "
+                            "re-run (the run is resumable)."
+                        ) from e
+                    counts["dispatch_failed"] += 1  # transient: no row, so the pair stays retryable
+                    processed += 1
+                    if on_progress is not None:
+                        on_progress(processed, total, model_id, task_id, "dispatch_failed")
+                    continue
+                # ingest copies from glb_path, so it must happen before the tempdir is torn down
+                att = ingest_attempt(
+                    db,
+                    task_id=task_id,
+                    model_id=model_id,
+                    run=res["run"],
+                    script=res["script"],
+                    asset_dir=asset_dir,
+                    protocol=protocol,
+                    status_oneshot=res["status_oneshot"],
+                    rounds=res["rounds"],
+                )
             counts[att.status] = counts.get(att.status, 0) + 1
+            if res["status_oneshot"] == "ok":
+                counts["pass_oneshot"] += 1
             seen.add((model_id, task_id))
             made += 1
+            processed += 1
+            if on_progress is not None:
+                on_progress(processed, total, model_id, task_id, att.status)
     return counts

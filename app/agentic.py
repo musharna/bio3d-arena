@@ -169,8 +169,11 @@ def critique_prompt(species: str, common: str) -> str:
         f"({species}), built by your previous Blender-Python script. Critically compare it to a "
         f"real {common}: name what is wrong or missing (proportions, topology, obvious artefacts, "
         f"and any missing or miscounted anatomy — a specimen should show {anatomy}). Then output "
-        "ONLY an improved, COMPLETE Blender 4.2 bpy script that fixes those issues and re-exports "
-        "GLB to os.environ['OUT_GLB'] — no explanation, no markdown."
+        "ONLY an improved, COMPLETE Blender 4.2 bpy script that fixes those issues. Leave the "
+        # Not "…and leaves the specimen in the scene": a fungus critique may not contain plant
+        # vocabulary, and "leaves" is on that list. test_agentic_critique_is_organism_neutral.
+        "finished specimen in the scene — saving it is handled for you, so do not write any file "
+        "and do not clear the scene at the end. No explanation, no markdown."
     )
 
 
