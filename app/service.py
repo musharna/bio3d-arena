@@ -1607,6 +1607,12 @@ def procedural_scorecard(db: Session, judge_model: str | None = None) -> list[di
             .all()
         )
         n_attempts = len(attempts)
+        if n_attempts == 0:
+            # No attempt under the reported protocol — a retired model, or one measured only under
+            # the old harness (legacy rows are excluded above). It has not been measured on this
+            # board; showing it would be a phantom 0/0 row that reads as "scored zero", not
+            # "not measured". Skip it entirely.
+            continue
         ok = [a for a in attempts if a.status == "ok"]
         n_valid = len(ok)
         # TWO numbers, and the board shows both. pass@1 is the UNAIDED script — the honest version

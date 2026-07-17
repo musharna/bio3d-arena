@@ -133,9 +133,7 @@ def ingest_best(
     from app.judge import JUDGE_MODEL
     from app.models import ModelOutput, TraitRubric, TraitVerdict
 
-    gen = get_or_create_generator(db, f"{model_id}-dgen")
-    if gen.paradigm != "procedural_llm":
-        gen.paradigm = "procedural_llm"
+    gen = get_or_create_generator(db, f"{model_id}-dgen")  # born procedural_llm; see the helper
     rel = Path("dgen") / f"{gen.slug}_{task_id}.glb"
     dst = Path(asset_dir) / rel
     dst.parent.mkdir(parents=True, exist_ok=True)
