@@ -343,3 +343,41 @@ def test_procedural_scorecard_filters_by_judge_model():
             f"got {gen_row['morph_assessable']}"
         )
         assert gen_row["morph_correct"] == 1
+
+
+def test_scorecard_excludes_a_generator_with_no_current_protocol_attempts():
+    """A procedural_llm generator whose only attempts are 'legacy' (a retired model, or one measured
+    solely under the old harness) has NOT been measured under the reported protocol — the board
+    excludes legacy rows, so it would otherwise show as a phantom all-zero 0/0 row (n=0, pass@1=0.0)
+    that reads as 'this model scored zero' rather than 'this model was not measured'. It must not
+    appear on the board at all."""
+    with SessionLocal() as db:
+        tag = uuid.uuid4().hex
+        gen = Generator(
+            slug=f"legacyonly-{tag}",
+            name=f"model-legacyonly-{tag}",
+            kind="model",
+            paradigm="procedural_llm",
+        )
+        db.add(gen)
+        db.flush()
+        t = _mk_task(db)
+        # Only a LEGACY attempt exists — the scorecard filters protocol=='legacy', so this
+        # generator has zero counted attempts.
+        db.add(
+            CommissionAttempt(
+                task_id=t,
+                model_id=gen.name,
+                generator_id=gen.id,
+                status="ok",
+                status_oneshot="ok",
+                rounds=1,
+                protocol="legacy",
+            )
+        )
+        db.commit()
+
+        rows = service.procedural_scorecard(db)
+        assert all(r["model"] != gen.name for r in rows), (
+            "a generator with only legacy attempts (0 counted) must not appear as an n=0 row"
+        )
