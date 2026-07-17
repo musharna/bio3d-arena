@@ -20,11 +20,33 @@ def test_all_present_full_complement_is_complete():
     assert cat == "complete" and score == 1.0
 
 
-def test_missing_leg_is_malformed_not_complete():
+def test_missing_leg_complement_is_complete_not_malformed():
+    # A limb-count complement (e.g. VLM reports 3 of 4 legs) is ADVISORY, not category-gating:
+    # the VLM cannot reliably count thin paired limbs from a turntable sheet (a correctly
+    # 4-legged dog is routinely miscounted), so derive() no longer promotes that noise to a
+    # `malformed` category. Every required part-TYPE is present -> complete.
     inv = inventory_for("Canis lupus familiaris")
-    cat, score = derive(inv, _present(inv, {"leg": "missing_some"}))  # 3-legged dog
-    assert cat == "malformed"
-    assert score == 1.0  # all part-types present -> coverage 1.0; category carries the signal
+    cat, score = derive(inv, _present(inv, {"leg": "missing_some"}))  # VLM "3-legged" dog
+    assert cat == "complete"
+    assert score == 1.0  # all part-types present -> coverage 1.0
+
+
+def test_derive_never_returns_malformed_for_any_complement_state():
+    # No complement configuration (missing_some / extra / uncertain, on any paired organ)
+    # yields `malformed` — the noisy category is gone for every animal inventory.
+    for taxon in (
+        "Canis lupus familiaris",
+        "Anas platyrhynchos",
+        "Danaus plexippus",
+        "Carassius auratus",
+    ):
+        inv = inventory_for(taxon)
+        paired = [o.key for o in inv.organs if o.complement > 1]
+        for state in ("missing_some", "extra", "uncertain"):
+            overrides = {k: state for k in paired}
+            cat, _ = derive(inv, _present(inv, overrides))
+            assert cat != "malformed", f"{taxon} {state} still malformed"
+            assert cat == "complete", f"{taxon} {state} -> {cat}, expected complete"
 
 
 def test_missing_whole_part_type_is_partial_not_malformed():

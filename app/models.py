@@ -351,7 +351,7 @@ class Completeness(Base):
     output_id: Mapped[int] = mapped_column(ForeignKey("model_output.id"), unique=True, index=True)
     category: Mapped[str] = mapped_column(
         String(20), default=""
-    )  # complete|malformed|partial-organism|isolated-organ|fragment
+    )  # complete|partial-organism|isolated-organ|fragment  (malformed: legacy, no longer emitted)
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     checklist_json: Mapped[str] = mapped_column(Text, default="{}")
     judge_model: Mapped[str] = mapped_column(String(128), default="")

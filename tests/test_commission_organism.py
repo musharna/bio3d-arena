@@ -74,7 +74,9 @@ def test_fungus_prompt_asks_for_a_cap_not_a_stem():
 
 def test_animal_prompt_carries_the_paired_complement():
     """The goldfish inventory says pectoral_fin has complement=2 — a body plan the prompt must
-    state, since a one-finned fish is the exact 'malformed' failure the metric already catches."""
+    state so the generator builds the full paired complement. (The completeness metric no longer
+    gates a category on the VLM's limb COUNT — too noisy from a turntable sheet, see
+    completeness.derive — but the correct body plan is still the generation target.)"""
     prompt = build_prompt("Carassius auratus", "goldfish")
 
     assert "goldfish" in prompt.lower()
