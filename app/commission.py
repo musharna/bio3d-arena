@@ -495,17 +495,33 @@ def slug_for_model(model_id: str) -> str:
     return "openrouter-" + re.sub(r"[^a-z0-9]+", "-", model_id.lower()).strip("-")
 
 
-def get_or_create_generator(db, model_id: str):
+def get_or_create_generator(db, model_id: str, *, paradigm: str = "procedural_llm"):
+    """Fetch (or create) the generator for a commissioned model, asserting its paradigm.
+
+    The paradigm is KNOWN at creation — the commission harness only makes procedural_llm entrants
+    (an LLM authoring Blender-Python), and /procedural filters on paradigm == 'procedural_llm', so a
+    generator born blank is invisible to its own board until a manual backfill. The creator states
+    the paradigm it knows instead of deferring to a classify pass. `paradigm` defaults to the common
+    case; a caller building a different kind of entrant passes its own. A pre-existing row with a
+    blank paradigm is healed here (the harness now telling it what it is); a row that already carries
+    a deliberate, non-blank paradigm is left untouched.
+    """
     from .models import Generator
 
     slug = slug_for_model(model_id)
     gen = db.query(Generator).filter_by(slug=slug).first()
     if gen is None:
         gen = Generator(
-            slug=slug, name=model_id, kind="model", description="commissioned via OpenRouter"
+            slug=slug,
+            name=model_id,
+            kind="model",
+            description="commissioned via OpenRouter",
+            paradigm=paradigm,
         )
         db.add(gen)
         db.flush()
+    elif not gen.paradigm:
+        gen.paradigm = paradigm
     return gen
 
 

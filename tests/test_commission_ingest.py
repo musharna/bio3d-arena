@@ -335,3 +335,37 @@ def test_dry_run_plan_counts_uncovered_pairs(tmp_path):
         tid = _rubric_task(db, "Zea mays")
         plan = commission_arena.plan(db, roster=["m1", "m2"])
         assert plan["tasks"] == 1 and plan["roster"] == 2 and plan["calls_needed"] == 2
+
+
+def test_get_or_create_generator_is_born_procedural_llm():
+    """A commissioned generator's paradigm is KNOWN at creation — the commission harness only ever
+    makes procedural_llm entrants (an LLM authoring Blender-Python). Leaving it blank makes the
+    generator invisible to /procedural (which filters paradigm == 'procedural_llm') until a manual
+    backfill, so the creator must assert the paradigm it definitionally knows."""
+    with SessionLocal() as db:
+        gen = commission.get_or_create_generator(db, "some-lab/new-model-xyz")
+        assert gen.paradigm == "procedural_llm"
+
+
+def test_get_or_create_generator_heals_a_blank_paradigm_on_an_existing_row():
+    """A generator created before this fix (blank paradigm) is healed the next time the harness
+    touches it — the creator tells the row the paradigm it knows. A row that already carries a
+    DELIBERATE (non-blank) paradigm is left untouched."""
+    from app.models import Generator
+
+    with SessionLocal() as db:
+        slug = commission.slug_for_model("some-lab/legacy-blank")
+        db.add(Generator(slug=slug, name="some-lab/legacy-blank", kind="model", paradigm=""))
+        db.flush()
+
+        gen = commission.get_or_create_generator(db, "some-lab/legacy-blank")
+        assert gen.paradigm == "procedural_llm"
+
+
+def test_get_or_create_generator_respects_an_explicit_paradigm():
+    """The paradigm is a parameter, defaulting to the common (procedural_llm) case, so a future
+    caller creating a non-procedural entrant asserts its own paradigm rather than re-inventing the
+    post-hoc assignment this fix removed."""
+    with SessionLocal() as db:
+        gen = commission.get_or_create_generator(db, "some-lab/agentic-model", paradigm="agentic")
+        assert gen.paradigm == "agentic"
