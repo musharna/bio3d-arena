@@ -70,9 +70,10 @@ def _body_inv(taxon: str, body_key: str, body: str, *optional: tuple[str, str]) 
 
 def _animal_inv(taxon: str, *parts: tuple[str, str, int]) -> TaxonInventory:
     """Bilaterian animal body plan: several required parts, each with an expected complement
-    (leg x4, wing x2). A part is satisfied only if present AND its full complement is present; an
-    all-part-types-present body with a missing limb reads `malformed` (see completeness.derive).
-    UNCALIBRATED cross-kingdom extension of the plant-calibrated completeness metric."""
+    (leg x4, wing x2). The complement is the generation target and is recorded as an advisory note,
+    but does NOT gate the completeness category — a VLM cannot reliably count thin paired limbs
+    from a turntable sheet (see completeness.derive). Category keys on required part-TYPE presence,
+    identically for all kingdoms. UNCALIBRATED cross-kingdom extension of the completeness metric."""
     return TaxonInventory(taxon=taxon, organs=tuple(Organ(k, v, True, c) for k, v, c in parts))
 
 

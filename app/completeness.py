@@ -13,11 +13,18 @@ from app.organ_inventory import TaxonInventory
 
 
 def derive(inventory: TaxonInventory, organs_present: list[dict]) -> tuple[str, float]:
-    """Map a per-part present/absent/uncertain checklist (with optional `complement` status for
-    multi-part organs) to (category, score). Categories: fragment / isolated-organ /
-    partial-organism / malformed / complete. `malformed` = every required part-TYPE present but a
-    part's expected complement is not `full` (a 3-legged dog); the anatomical-completeness signal
-    geometry misses. score = required part-type coverage (a malformed output still scores 1.0)."""
+    """Map a per-part present/absent checklist to (category, score). Categories: fragment /
+    isolated-organ / partial-organism / complete — keyed purely on required part-TYPE presence,
+    identically for all kingdoms. score = required part-type coverage.
+
+    A multi-part organ's `complement` status (leg x4, wing x2) is recorded in the checklist as an
+    ADVISORY note but does NOT gate the category: firming the animal-completeness scores showed a
+    VLM cannot reliably COUNT thin paired limbs from a turntable contact sheet (a correctly
+    4-legged dog is routinely reported `missing_some`), so the old `malformed` category promoted
+    that measurement noise into a hard verdict — and did so only for animals, since plants/fungi
+    have no complement>1 parts. Dropping the gate removes the artifact and the kingdom asymmetry;
+    a genuinely missing part-TYPE still surfaces as partial-organism. See
+    memory/animal_fidelity_firming_2026-07-17.md."""
     by_key = {o["key"]: o for o in organs_present}
     required = [o for o in inventory.organs if o.required]
     req_present = sum(1 for o in required if by_key.get(o.key, {}).get("status") == "present")
@@ -25,25 +32,12 @@ def derive(inventory: TaxonInventory, organs_present: list[dict]) -> tuple[str, 
     present_count = sum(
         1 for o in inventory.organs if by_key.get(o.key, {}).get("status") == "present"
     )
-
-    def _complement_ok(o) -> bool:
-        # A part with expected complement <= 1 (all plants/fungi, singular animal parts) is
-        # trivially satisfied; a multi-part organ must report complement `full`.
-        if o.complement <= 1:
-            return True
-        return by_key.get(o.key, {}).get("complement", "full") == "full"
-
     all_required_present = req_present == len(required)
-    complements_full = all(
-        _complement_ok(o) for o in required if by_key.get(o.key, {}).get("status") == "present"
-    )
 
     if present_count == 0:
         category = "fragment"
-    elif all_required_present and complements_full:
+    elif all_required_present:
         category = "complete"
-    elif all_required_present:  # every part-type present but a limb/wing complement is off
-        category = "malformed"
     elif present_count == 1:
         category = "isolated-organ"
     else:
