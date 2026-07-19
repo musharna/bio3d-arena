@@ -308,6 +308,7 @@ def generate_replicate(
     api_key: str,
     model: str,
     mode: str = "image",
+    extra_input: dict | None = None,
     transport=None,
     timeout_s: int = 300,
     poll_interval_s: int = 5,
@@ -315,9 +316,11 @@ def generate_replicate(
     """Replicate →3D for a given model: create prediction → poll → download GLB.
 
     `source` is image bytes when mode="image" (default), or a text prompt (str) when mode="text".
+    `extra_input` merges model-specific params into the prediction input (e.g. Shap-E needs
+    `output_type="mesh"` — its default output is a rotating GIF, not a mesh), mirroring generate_fal.
     """
     t = transport or ReplicateTransport()
-    req = t.submit(source, model, api_key, mode)
+    req = t.submit(source, model, api_key, mode, extra_input)
     start = time.monotonic()  # wall-clock budget: counts retry/backoff time inside poll(), too
     while True:
         status, glb_url = t.poll(req, api_key)
@@ -355,7 +358,9 @@ class ReplicateTransport:
     # resolved from the model's input schema rather than hard-coded.
     _IMAGE_FIELDS = ("images", "image", "image_url", "input_image")
 
-    def submit(self, source, model: str, api_key: str, mode: str = "image") -> dict:
+    def submit(
+        self, source, model: str, api_key: str, mode: str = "image", extra_input: dict | None = None
+    ) -> dict:
         # Community models require the version-pinned /predictions endpoint;
         # /models/{owner}/{name}/predictions 404s for them (official models only).
         m = _send_with_retry(
@@ -387,6 +392,8 @@ class ReplicateTransport:
             # False → only video/gaussian, no mesh). We want the mesh, so opt in when offered.
             if "generate_model" in props:
                 inp["generate_model"] = True
+        if extra_input:  # model-specific params (e.g. shap-e output_type="mesh")
+            inp.update(extra_input)
         r = _send_with_retry(
             lambda: self._client.post(
                 f"{self.BASE}/predictions",
@@ -546,6 +553,27 @@ TEXT_PROVIDERS: dict[str, tuple] = {
         functools.partial(generate_replicate, model="hyper3d/rodin", mode="text"),
         "REPLICATE_API_TOKEN",
         "Rodin text (Replicate)",
+    ),
+    # Deepening additions (web-verified 2026). Meshy v6 is a current SOTA text→3D on fal (prompt
+    # input, model_glb.url output — handled by FalTransport.poll); the non-preview endpoint is the
+    # textured one, so no extra params. Verify the exact fal field contract at the key-gated run.
+    "fal:meshy-v6-text": (
+        functools.partial(generate_fal, model="fal-ai/meshy/v6/text-to-3d", mode="text"),
+        "FAL_KEY",
+        "Meshy v6 text (fal)",
+    ),
+    # Shap-E (OpenAI, 2023) is a genuine text→3D on Replicate — a deliberately low-fidelity BASELINE
+    # for BT spread. Its default output is a rotating GIF, so it must request a mesh via
+    # output_type="mesh". Confirm the returned mesh is GLB (vs .ply/.obj) on the first key-gated run.
+    "replicate:shap-e-text": (
+        functools.partial(
+            generate_replicate,
+            model="cjwbw/shap-e",
+            mode="text",
+            extra_input={"output_type": "mesh"},
+        ),
+        "REPLICATE_API_TOKEN",
+        "Shap-E text (Replicate)",
     ),
 }
 
