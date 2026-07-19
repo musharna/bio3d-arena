@@ -64,9 +64,10 @@ class FakeReplicateTransport:
         self._glb = glb
         self.calls = []
 
-    def submit(self, source, model, api_key, mode="image"):
+    def submit(self, source, model, api_key, mode="image", extra_input=None):
         self.calls.append(("submit", model))
         self.last_source, self.last_mode = source, mode
+        self.last_extra_input = extra_input
         return {"get_url": "https://api.replicate.com/v1/predictions/p1"}
 
     def poll(self, req, api_key):
@@ -146,6 +147,71 @@ def test_text_providers_catalog():
     # text partials pre-bind mode="text" so the adapter can call fn(prompt, api_key=...)
     fn = TEXT_PROVIDERS["fal:hunyuan3d-v3-text"][0]
     assert isinstance(fn, functools.partial) and fn.keywords.get("mode") == "text"
+
+
+def test_text_providers_meshy_added():
+    """The web-verified deepening addition: Meshy v6 (fal), current SOTA text→3D — prompt input,
+    model_glb.url output (handled by FalTransport.poll), textured (non-preview endpoint), no extra
+    params. Verified end-to-end on a key-gated validation run. (Shap-E was investigated but deferred:
+    it returns a non-GLB mesh that ingest rejects — see the TEXT_PROVIDERS note.)"""
+    import functools
+
+    from app.image3d import TEXT_PROVIDERS
+
+    meshy = TEXT_PROVIDERS["fal:meshy-v6-text"]
+    assert meshy[1] == "FAL_KEY" and isinstance(meshy[2], str)
+    assert isinstance(meshy[0], functools.partial)
+    assert meshy[0].keywords.get("model") == "fal-ai/meshy/v6/text-to-3d"
+    assert meshy[0].keywords.get("mode") == "text"
+    assert "replicate:shap-e-text" not in TEXT_PROVIDERS  # deferred, non-GLB output
+
+
+def test_generate_replicate_threads_extra_input_to_submit():
+    """generate_replicate forwards model-specific params (e.g. Shap-E output_type=mesh) to the
+    transport, mirroring generate_fal's extra_input."""
+    t = FakeReplicateTransport(["succeeded"], "https://rep/x.glb", _box_glb())
+    generate_replicate(
+        "a tomato plant",
+        api_key="k",
+        model="cjwbw/shap-e",
+        mode="text",
+        extra_input={"output_type": "mesh"},
+        transport=t,
+        poll_interval_s=0,
+    )
+    assert t.last_extra_input == {"output_type": "mesh"}
+
+
+def test_replicate_extra_input_merged_into_prediction_body():
+    """ReplicateTransport.submit merges extra_input into the prediction input dict."""
+    from app.image3d import ReplicateTransport
+
+    captured = {}
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "latest_version": {"id": "v1"},
+                "urls": {"get": "https://api.replicate.com/v1/predictions/p1"},
+            }
+
+    class FakeClient:
+        def get(self, url, headers):
+            return FakeResp()
+
+        def post(self, url, headers, json):
+            captured["json"] = json
+            return FakeResp()
+
+    ReplicateTransport(client=FakeClient()).submit(
+        "a tomato plant", "cjwbw/shap-e", "k", "text", {"output_type": "mesh"}
+    )
+    inp = captured["json"]["input"]
+    assert inp["prompt"] == "a tomato plant"
+    assert inp["output_type"] == "mesh"
 
 
 def test_providers_registry_catalog():
