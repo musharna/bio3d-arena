@@ -562,19 +562,11 @@ TEXT_PROVIDERS: dict[str, tuple] = {
         "FAL_KEY",
         "Meshy v6 text (fal)",
     ),
-    # Shap-E (OpenAI, 2023) is a genuine text→3D on Replicate — a deliberately low-fidelity BASELINE
-    # for BT spread. Its default output is a rotating GIF, so it must request a mesh via
-    # output_type="mesh". Confirm the returned mesh is GLB (vs .ply/.obj) on the first key-gated run.
-    "replicate:shap-e-text": (
-        functools.partial(
-            generate_replicate,
-            model="cjwbw/shap-e",
-            mode="text",
-            extra_input={"output_type": "mesh"},
-        ),
-        "REPLICATE_API_TOKEN",
-        "Shap-E text (Replicate)",
-    ),
+    # DEFERRED — Shap-E (cjwbw/shap-e, Replicate) is a genuine text→3D but the key-gated validation
+    # run showed it returns a non-GLB mesh (native .ply/.obj), which ingest rejects ("incorrect
+    # header on GLB file"). Re-adding it needs a PLY/OBJ→GLB conversion step (trimesh) + a re-verify
+    # run; low priority since it's a low-fidelity 2023 baseline. The generate_replicate `extra_input`
+    # plumbing below stays — that conversion-based re-add would use it for output_type="mesh".
 }
 
 

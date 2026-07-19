@@ -149,10 +149,11 @@ def test_text_providers_catalog():
     assert isinstance(fn, functools.partial) and fn.keywords.get("mode") == "text"
 
 
-def test_text_providers_meshy_and_shape_added():
-    """The web-verified deepening additions: Meshy v6 (fal) + Shap-E (Replicate), both real
-    text→3D. Meshy needs no extra params; Shap-E must request a mesh (its default output is a
-    rotating GIF, not a mesh) via extra_input={'output_type': 'mesh'}."""
+def test_text_providers_meshy_added():
+    """The web-verified deepening addition: Meshy v6 (fal), current SOTA text→3D — prompt input,
+    model_glb.url output (handled by FalTransport.poll), textured (non-preview endpoint), no extra
+    params. Verified end-to-end on a key-gated validation run. (Shap-E was investigated but deferred:
+    it returns a non-GLB mesh that ingest rejects — see the TEXT_PROVIDERS note.)"""
     import functools
 
     from app.image3d import TEXT_PROVIDERS
@@ -162,12 +163,7 @@ def test_text_providers_meshy_and_shape_added():
     assert isinstance(meshy[0], functools.partial)
     assert meshy[0].keywords.get("model") == "fal-ai/meshy/v6/text-to-3d"
     assert meshy[0].keywords.get("mode") == "text"
-
-    shape = TEXT_PROVIDERS["replicate:shap-e-text"]
-    assert shape[1] == "REPLICATE_API_TOKEN" and isinstance(shape[2], str)
-    assert shape[0].keywords.get("model") == "cjwbw/shap-e"
-    assert shape[0].keywords.get("mode") == "text"
-    assert shape[0].keywords.get("extra_input") == {"output_type": "mesh"}
+    assert "replicate:shap-e-text" not in TEXT_PROVIDERS  # deferred, non-GLB output
 
 
 def test_generate_replicate_threads_extra_input_to_submit():
