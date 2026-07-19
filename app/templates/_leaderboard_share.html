@@ -1,0 +1,29 @@
+{# Share this board (B6): the growth loop for the site's most linkable page. Reuses share.js's
+   generic data-share-* handlers (same unit as the per-model page). `lb_share` is built in
+   main.leaderboard; the OG card it points at is kingdom-scoped and claims no cross-method rank. #}
+<div
+  class="b3d-share"
+  data-share-url="{{ lb_share.page_url }}"
+  aria-label="Share this leaderboard"
+  role="group"
+>
+  <span class="b3d-share-label">Share</span>
+  <button type="button" class="b3d-share-btn" data-share-copy>
+    <span data-share-copy-text>Copy link</span>
+  </button>
+  <a
+    class="b3d-share-btn"
+    href="{{ lb_share.x_intent_url }}"
+    target="_blank"
+    rel="noopener"
+  >Post on X</a>
+  <span class="b3d-share-status subtle" role="status" aria-live="polite"></span>
+  <input
+    class="b3d-share-fallback"
+    type="text"
+    value="{{ lb_share.page_url }}"
+    readonly
+    hidden
+    aria-label="Leaderboard link"
+  />
+</div>

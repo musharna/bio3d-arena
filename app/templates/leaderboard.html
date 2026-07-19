@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Leaderboard · Bio 3D Arena{% endblock %}
 {% block description %}Bradley–Terry rankings of 3D generative models, scored by blind human votes on how faithfully each reconstructs real plants, fungi, and animals.{% endblock %}
+{% block og_image %}{{ lb_share.og_image_url }}{% endblock %}
 {% block content %}
 {% set sel_paradigm_matches = paradigm_options | selectattr('selected') | selectattr('mode', 'equalto', 'paradigm') | list %}
 {% set sel_paradigm_value = sel_paradigm_matches[0].value if sel_paradigm_matches else None %}
@@ -128,6 +129,7 @@
           >see the AI-judge board →</a
         >
       </p>
+      {% include "_leaderboard_share.html" %}
     </header>
 
     <details class="lb-info lb-info-compact">
