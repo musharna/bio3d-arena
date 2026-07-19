@@ -42,13 +42,14 @@
     </script>
     <link rel="stylesheet" href="{{ asset('style.css') }}" />
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}" />
-    <!-- Viewer registry (loaded once, used per asset format):
-         model-viewer → GLB/GLTF meshes; 3Dmol.js → PDB/mmCIF molecular structures -->
+    <!-- Viewer registry: model-viewer (GLB/GLTF meshes) loads on every page that
+         may mount a mesh. 3Dmol.js (PDB/mmCIF molecular structures) is heavy and
+         rarely needed for organism meshes, so viewer.js lazy-loads it on the first
+         molecular mount instead of shipping it to every page. -->
     <script
       type="module"
       src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"
     ></script>
-    <script src="https://cdn.jsdelivr.net/npm/3dmol@2.4.2/build/3Dmol-min.js"></script>
     <script src="{{ asset('viewer.js') }}"></script>
     <script defer src="{{ asset('shell.js') }}"></script>
   </head>
@@ -631,27 +632,13 @@
               >Anonymous pairwise comparison of biological 3D generations.</span
             >
             <div class="b3d-footer-links">
-              <a
-                class="b3d-footer-chip"
-                href="/methodology"
-                target="_blank"
-                rel="noopener"
-                >Paper &#8599;</a
-              >
-              <a
-                class="b3d-footer-chip"
-                href="https://github.com/musharna/bio3d-arena"
-                target="_blank"
-                rel="noopener"
-                >GitHub &#8599;</a
-              >
-              <a
-                class="b3d-footer-chip"
-                href="/dataset"
-                target="_blank"
-                rel="noopener"
-                >Dataset &#8599;</a
-              >
+              <a class="b3d-footer-chip" href="/methodology">Methodology</a>
+              {# GitHub chip intentionally omitted: the repo (musharna/bio3d-arena)
+                 is private, so a public visitor would hit a 404. Re-add when the
+                 repo goes public:
+                 <a class="b3d-footer-chip" href="https://github.com/musharna/bio3d-arena"
+                    target="_blank" rel="noopener">GitHub &#8599;</a> #}
+              <a class="b3d-footer-chip" href="/dataset">Dataset</a>
               <a class="b3d-footer-chip" href="/submit">Submit a model</a>
               <a class="b3d-footer-muted" href="/terms">Terms</a>
               <a class="b3d-footer-muted" href="/privacy">Privacy</a>
