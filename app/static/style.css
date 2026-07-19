@@ -286,16 +286,6 @@ kbd,
 }
 
 /* Submission form + moderation queue */
-.submit-form {
-  max-width: 520px;
-}
-.submit-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.85rem;
-  color: #c8d2de;
-}
 .mod-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -668,6 +658,30 @@ textarea:focus-visible,
 }
 .viewer-error {
   color: var(--amber);
+}
+/* Empty state shown in a viewer slot when a filter has no available pairs. */
+.viewer-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 0 1rem;
+  background: var(--stage2);
+}
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 .viewer-spinner {
   width: 30px;
@@ -1437,21 +1451,17 @@ kbd {
   font-weight: 600;
 }
 .vote-cta:hover {
-  background: #2c3a50;
+  background: var(--panel2);
   text-decoration: none;
 }
 
 /* Recon benchmark — vote↔metric agreement disagreement highlight */
 .row-disagree {
-  background: rgba(
-    230,
-    178,
-    119,
-    0.1
-  ); /* faint orange — metric & votes disagree */
+  /* faint amber — metric & votes disagree (theme-aware via --amber token) */
+  background: color-mix(in oklch, var(--amber) 12%, transparent);
 }
 .disagree-flag {
-  color: #e6b277;
+  color: var(--amber);
   font-weight: 700;
 }
 
@@ -2127,6 +2137,26 @@ details.group[open] > summary.group-title::before {
   object-fit: contain;
   border-radius: var(--r-ctl);
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.55);
+}
+.rl-close {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.rl-close:hover {
+  background: rgba(0, 0, 0, 0.7);
 }
 .reference-lightbox .rl-credit {
   position: fixed;

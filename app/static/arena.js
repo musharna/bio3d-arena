@@ -96,10 +96,7 @@ async function loadNext() {
   try {
     const res = await fetch("/api/next" + qs());
     if (res.status === 404) {
-      setStatus(
-        "No comparisons available for this filter. Try another category.",
-      );
-      current = null;
+      renderNoComparisons();
       return;
     }
     render(await res.json());
@@ -113,7 +110,52 @@ async function loadNext() {
 // True when the page is in a scoped session mode (e.g. ?set=calibration).
 const inSessionMode = () => new URLSearchParams(location.search).has("set");
 
+// /api/next returned 404: the selected category+criterion has no available pairs.
+// Show an explicit in-stage empty state with a way back to "All" — never leave the
+// stage stuck on "Loading a comparison…" with two empty boxes (reads as a hung page).
+function renderNoComparisons() {
+  current = null;
+  setKwiseVisible(false);
+  const cat = el("task-cat");
+  if (cat) cat.hidden = true;
+  el("task-title").textContent = "No comparisons for this filter";
+  el("task-prompt").textContent =
+    "There are no available pairs for this category and criterion right now.";
+  const crit = el("criterion-name");
+  if (crit) crit.textContent = "—";
+  const a = el("slot-a");
+  const b = el("slot-b");
+  if (a) {
+    a.innerHTML =
+      '<div class="viewer-empty">No pairs here yet. ' +
+      '<button type="button" id="reset-filters" class="link-btn">Reset filters</button></div>';
+  }
+  if (b)
+    b.innerHTML = '<div class="viewer-empty">Try a different category.</div>';
+  const reset = el("reset-filters");
+  if (reset) reset.addEventListener("click", resetFilters);
+  // Nothing to vote on — hide the vote bar and any post-vote "next" affordance.
+  const voteBar = document.querySelector(".vote-bar");
+  if (voteBar) voteBar.style.display = "none";
+  const nextBtn = el("next-pair-btn");
+  if (nextBtn) nextBtn.hidden = true;
+  setStatus("");
+}
+
+// Reset the category + criterion selects to their first option ("All") and reload.
+function resetFilters() {
+  const cat = el("sel-category");
+  const crit = el("sel-criterion");
+  if (cat) cat.selectedIndex = 0;
+  if (crit) crit.selectedIndex = 0;
+  loadNext();
+}
+
 function render(data) {
+  // Leaving the no-comparisons empty state: restore the category chip the empty
+  // state hid (the viewer slots are cleared by Bio3DViewer.mount / renderKwise).
+  const catChip = el("task-cat");
+  if (catChip) catChip.hidden = false;
   // Terminal payload from a scoped mode (e.g. calibration): no card to render.
   if (data && data.done) {
     current = null;
@@ -574,18 +616,28 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-// Reference-image lightbox: open on thumbnail click, close on overlay click or Escape.
+// Reference-image lightbox: open on thumbnail click, close on overlay click, the ✕
+// button, or Escape. It is an aria-modal dialog, so it also manages focus: focus moves
+// into the dialog on open, Tab is trapped inside it, and focus returns to the thumbnail
+// that opened it on close (keyboard + screen-reader users can't get lost behind it).
+let lightboxOpener = null;
 function openReferenceLightbox(url, credit) {
   const box = el("reference-lightbox");
   const img = el("reference-lightbox-img");
   const cred = el("reference-lightbox-credit");
   if (!box || !img) return;
+  lightboxOpener =
+    document.activeElement && document.activeElement.focus
+      ? document.activeElement
+      : null;
   img.src = url;
   if (cred) {
     cred.textContent = credit || "";
     cred.hidden = !credit;
   }
   box.hidden = false;
+  const closeBtn = el("reference-lightbox-close");
+  if (closeBtn) closeBtn.focus();
 }
 
 function closeReferenceLightbox() {
@@ -594,15 +646,24 @@ function closeReferenceLightbox() {
   if (!box) return;
   box.hidden = true;
   if (img) img.removeAttribute("src"); // stop holding the full-size image in memory
+  if (lightboxOpener) lightboxOpener.focus(); // return focus to the opening thumbnail
+  lightboxOpener = null;
 }
 
 (function initReferenceLightbox() {
   const box = el("reference-lightbox");
   if (!box) return;
-  // Click anywhere on the overlay (including the image) closes it.
+  // Click anywhere on the overlay (including the image or the ✕) closes it.
   box.addEventListener("click", closeReferenceLightbox);
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !box.hidden) closeReferenceLightbox();
+  box.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeReferenceLightbox();
+    } else if (e.key === "Tab") {
+      // Only the ✕ button is focusable inside the dialog — keep focus trapped on it.
+      e.preventDefault();
+      const closeBtn = el("reference-lightbox-close");
+      if (closeBtn) closeBtn.focus();
+    }
   });
 })();
 

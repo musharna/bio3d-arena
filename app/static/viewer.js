@@ -76,6 +76,26 @@
     else if (slot.requestFullscreen) slot.requestFullscreen();
   }
 
+  // 3Dmol is only needed for the rare PDB/mmCIF molecular case, so it is not shipped
+  // in the page <head>. Inject it once, on the first molecular mount, and cache the
+  // load promise so concurrent mounts share a single fetch.
+  let _threeDmolPromise = null;
+  function ensure3Dmol() {
+    if (window.$3Dmol) return Promise.resolve();
+    if (_threeDmolPromise) return _threeDmolPromise;
+    _threeDmolPromise = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/3dmol@2.4.2/build/3Dmol-min.js";
+      s.onload = () => resolve();
+      s.onerror = () => {
+        _threeDmolPromise = null; // allow a later mount to retry
+        reject(new Error("3Dmol failed to load"));
+      };
+      document.head.appendChild(s);
+    });
+    return _threeDmolPromise;
+  }
+
   // Single module-level fullscreen listener (added once). On enter, the slot is
   // document.fullscreenElement; on exit it is null, so we keep the previously-
   // fullscreen slot to resize it back. Only molecular slots have _onResize (mesh
@@ -104,6 +124,10 @@
     mv.setAttribute("shadow-intensity", "1");
     mv.setAttribute("exposure", "1.0");
     mv.setAttribute("loading", "eager");
+    mv.setAttribute(
+      "aria-label",
+      "Interactive 3D model — drag to rotate, scroll to zoom",
+    );
     mv.setAttribute("src", asset.url);
     mv.style.width = "100%";
     mv.style.height = "100%";
@@ -132,6 +156,8 @@
     const stale = () => slot._viewerGen !== myGen;
     const loading = spinner(slot, "Loading structure…");
     try {
+      await ensure3Dmol(); // lazy-loaded on first molecular mount (not in page <head>)
+      if (stale()) return;
       const res = await fetch(asset.url);
       if (stale()) return;
       if (!res.ok) throw new Error("HTTP " + res.status);
