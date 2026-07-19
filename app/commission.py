@@ -331,6 +331,13 @@ import os, sys, traceback
 
 import bpy
 
+# Start from a truly empty scene. Blender's factory startup file ships a default Cube (plus a
+# camera and light), so a model script that builds its organism WITHOUT first clearing the scene
+# exports that stray Cube alongside it — a harness artefact, not the model's work, that inflates
+# the mesh's bounds and shows up as a box in the viewer. The render path already does this
+# (agentic.RENDER_SCRIPT); the generation runner must match. test_run_bpy_starts_from_empty_scene.
+bpy.ops.wm.read_factory_settings(use_empty=True)
+
 GEN, OUT = os.environ["GEN_SCRIPT"], os.environ["OUT_GLB"]
 
 try:
