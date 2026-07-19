@@ -253,6 +253,34 @@ def test_submit_batch_polls_until_ended():
     assert slept == [7, 7]  # slept on the two in_progress polls, not after 'ended'
 
 
+def test_submit_batch_retries_transient_error():
+    """A transient connection blip during create/poll/collect must not abort a multi-hour run —
+    submit_batch retries the injected transient exceptions (with a backoff sleep) and recovers."""
+    import scripts.judge_vlm as jv
+
+    class Flaky(_FakeBatches):
+        def __init__(self):
+            super().__init__()
+            self.create_attempts = 0
+
+        def create(self, requests):
+            self.create_attempts += 1
+            if self.create_attempts == 1:
+                raise ValueError("transient blip")  # injected as retryable below
+            return super().create(requests)
+
+    slept, fake = [], Flaky()
+    results = jv.submit_batch(
+        fake,
+        [{"custom_id": "x-1-2", "params": {}}],
+        sleep_fn=slept.append,
+        retryable=(ValueError,),
+    )
+    assert fake.create_attempts == 2  # retried the first failure
+    assert results["x-1-2"].type == "succeeded"
+    assert slept and slept[0] > 0  # backed off before the retry
+
+
 def test_run_batch_api_writes_votes_and_resumes():
     import scripts.judge_vlm as jv
 

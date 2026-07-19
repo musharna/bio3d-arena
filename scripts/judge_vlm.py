@@ -260,21 +260,52 @@ def build_judge_request(task, crit, item, a_b64, b_b64) -> tuple[str, dict]:
     return custom_id, params
 
 
+def _transient_batch_errors() -> tuple:
+    """Anthropic exceptions worth retrying during a long batch run (network blip / 5xx / timeout).
+    Lazy import so the module (and its tests) don't hard-require the SDK at import time."""
+    import anthropic
+
+    return (anthropic.APIConnectionError, anthropic.InternalServerError, anthropic.APITimeoutError)
+
+
 def submit_batch(
-    batches_client, requests, *, sleep_fn=time.sleep, poll_interval: int = 30, max_polls: int = 2880
+    batches_client,
+    requests,
+    *,
+    sleep_fn=time.sleep,
+    poll_interval: int = 30,
+    max_polls: int = 2880,
+    retry_attempts: int = 6,
+    retryable: tuple | None = None,
 ) -> dict:
     """Submit `requests` (list of {custom_id, params}) as one Message Batch, poll until the batch's
     processing_status is 'ended', then return {custom_id: result-body}. `max_polls * poll_interval`
     bounds the wait (default 24h, the batch SLA). batches_client is client.messages.batches (or a
-    fake in tests) — it needs create(requests=)/retrieve(id)/results(id)."""
-    batch = batches_client.create(requests=requests)
+    fake in tests) — it needs create(requests=)/retrieve(id)/results(id). Each API step retries a
+    transient error (`retryable`, default = network/5xx/timeout) with capped exponential backoff, so
+    one connection blip during the long poll doesn't abort a multi-hour run — the batch is created
+    once and only the poll/collect are re-attempted (no re-create, no double spend)."""
+    if retryable is None:
+        retryable = _transient_batch_errors()
+
+    def call(fn):
+        for i in range(retry_attempts):
+            try:
+                return fn()
+            except retryable:  # noqa: PERF203 — retry loop, not hot path
+                if i == retry_attempts - 1:
+                    raise
+                sleep_fn(min(2.0 * 2**i, 60.0))
+        raise ValueError("retry_attempts must be >= 1")
+
+    batch = call(lambda: batches_client.create(requests=requests))
     for _ in range(max_polls):
-        if batches_client.retrieve(batch.id).processing_status == "ended":
+        if call(lambda: batches_client.retrieve(batch.id).processing_status) == "ended":
             break
         sleep_fn(poll_interval)
     else:
         raise RuntimeError(f"batch {batch.id} did not end within {max_polls * poll_interval}s")
-    return {r.custom_id: r.result for r in batches_client.results(batch.id)}
+    return call(lambda: {r.custom_id: r.result for r in batches_client.results(batch.id)})
 
 
 def _chunks(seq, size):
