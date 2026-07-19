@@ -141,9 +141,15 @@ def get_or_create_agentic_generator(db, model_id: str):
             name=f"{model_id} (agentic)",
             kind="model",
             description="agentic (iterative render-critique-revise) via OpenRouter",
+            paradigm="agentic",
         )
         db.add(gen)
         db.flush()
+    elif not gen.paradigm:
+        # Heal a generator born blank before this fix — the agentic leaderboard filters
+        # paradigm == 'agentic', so a blank one is invisible on its own board (the same defect
+        # PR #70 fixed for the commissioned/procedural_llm path, on the agentic helper it missed).
+        gen.paradigm = "agentic"
     return gen
 
 

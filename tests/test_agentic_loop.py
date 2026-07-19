@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app import agentic
 from app.database import SessionLocal, init_db
-from app.models import Category, ModelOutput, Task
+from app.models import Category, Generator, ModelOutput, Task
 
 TITLE = "Zea mays — single-image → 3D reconstruction"
 
@@ -74,7 +74,7 @@ def test_agentic_adopts_valid_revision(tmp_path):
         meta = json.loads(out.meta_json)
         assert meta["modality"] == "agentic" and meta["n_iterations"] == 2
         assert meta["iter_vertices"] == [8, 99]
-        assert out.generator.paradigm != "procedural_llm"  # distinct generator
+        assert out.generator.paradigm == "agentic"  # born tagged, visible on its own board
     finally:
         db.close()
 
@@ -179,5 +179,36 @@ def test_agentic_idempotent(tmp_path):
         assert r1["status"] == "ok" and r2["status"] == "skipped_exists"
         gen = agentic.get_or_create_agentic_generator(db, "x/m3")
         assert db.query(ModelOutput).filter_by(generator_id=gen.id).count() == 1
+    finally:
+        db.close()
+
+
+def test_new_agentic_generator_is_born_with_agentic_paradigm():
+    """A freshly created agentic generator must carry paradigm='agentic' at birth. The agentic
+    leaderboard filters paradigm == 'agentic', so a generator born blank is invisible on its own
+    board until a manual backfill — the same defect PR #70 fixed for the commissioned
+    (procedural_llm) path, on the agentic helper it did not touch."""
+    db = SessionLocal()
+    try:
+        gen = agentic.get_or_create_agentic_generator(db, "x/brand-new-agentic-model")
+        assert gen.paradigm == "agentic"
+    finally:
+        db.close()
+
+
+def test_blank_agentic_generator_paradigm_is_healed_on_get():
+    """A pre-existing agentic generator created before the fix (blank paradigm) is healed when the
+    harness fetches it again, so a resumed sweep repairs the rows it already produced."""
+    db = SessionLocal()
+    try:
+        slug = agentic.agentic_slug("x/legacy-blank-agentic")
+        db.add(
+            Generator(
+                slug=slug, name="x/legacy-blank-agentic (agentic)", kind="model", paradigm=None
+            )
+        )
+        db.flush()
+        gen = agentic.get_or_create_agentic_generator(db, "x/legacy-blank-agentic")
+        assert gen.paradigm == "agentic"
     finally:
         db.close()
