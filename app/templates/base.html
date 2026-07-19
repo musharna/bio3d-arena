@@ -42,15 +42,11 @@
     </script>
     <link rel="stylesheet" href="{{ asset('style.css') }}" />
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}" />
-    <!-- Viewer registry: model-viewer (GLB/GLTF meshes) loads on every page that
-         may mount a mesh. 3Dmol.js (PDB/mmCIF molecular structures) is heavy and
-         rarely needed for organism meshes, so viewer.js lazy-loads it on the first
-         molecular mount instead of shipping it to every page. -->
-    <script
-      type="module"
-      src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"
-    ></script>
-    <script src="{{ asset('viewer.js') }}"></script>
+    <!-- Viewer registry: model-viewer + viewer.js load ONLY on pages that mount a
+         3D viewer — they opt in via the viewer_assets block (see _viewer_assets.html).
+         3Dmol.js is lazy-loaded by viewer.js on the first molecular mount. This keeps
+         the renderer off data-dense pages (leaderboard, models, methodology, …). -->
+    {% block viewer_assets %}{% endblock %}
     <script defer src="{{ asset('shell.js') }}"></script>
   </head>
   <body>
