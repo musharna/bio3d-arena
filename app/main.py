@@ -996,6 +996,16 @@ def _trend_polyline(values: list[float | None], width: int = 64, height: int = 2
     return " ".join(pts)
 
 
+def _trend_title(values: list[float | None]) -> str:
+    """A readable hover title for the trend sparkline: the actual win-rate per period so the line
+    conveys magnitude, not just shape. Win-rate values are a 0..1 fraction; None periods (no votes
+    yet) are skipped rather than drawn as a fabricated 0%."""
+    pct = [f"{v * 100:.0f}%" for v in values if v is not None]
+    if not pct:
+        return "No vote history yet"
+    return "Win-rate by period: " + " → ".join(pct)
+
+
 def _momentum(values: list[float | None]) -> str:
     """'up'/'down'/'flat' derived from the trend series — NOT a rank-vs-last-period delta
     (no historical rank snapshot table exists)."""
@@ -1034,6 +1044,7 @@ def _enrich_leaderboard_rows(
         trend = trend_by_gid.get(gid, []) if gid is not None else []
         r["trend"] = trend
         r["trend_points"] = _trend_polyline(trend)
+        r["trend_title"] = _trend_title(trend)
         r["momentum"] = _momentum(trend)
         r["provisional"] = r.get("n_games", 0) < service.FIRM_VOTE_THRESHOLD
         # Votes-until-firm signal for the board's Status column ({"firm": bool, "label": str}),
@@ -1139,6 +1150,8 @@ def _group_rank_judge_rows(rows: list[dict]) -> list[dict]:
             r["ci_left"] = round(100.0 * (r["bt_lower"] - lo) / span, 1)
             r["ci_width"] = round(100.0 * (r["bt_upper"] - r["bt_lower"]) / span, 1)
             r["ci_point"] = round(100.0 * (r["bt_score"] - lo) / span, 1)
+            r["ci_lo"] = round(lo, 1)  # domain endpoints for the axis label (mirrors finalize_rows)
+            r["ci_hi"] = round(hi, 1)
         grouped_rows.extend(grows)
     return grouped_rows
 

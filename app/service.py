@@ -439,6 +439,11 @@ def finalize_rows(rows: list[dict]) -> list[dict]:
             r["ci_left"] = round(100.0 * (r["bt_lower"] - lo) / span, 1)
             r["ci_width"] = round(100.0 * (r["bt_upper"] - r["bt_lower"]) / span, 1)
             r["ci_point"] = round(100.0 * (r["bt_score"] - lo) / span, 1)
+            # The domain the percentages above were normalized against, stamped on every row so the
+            # template can LABEL the axis (BT lo–hi). Reading min/max in the template instead would
+            # risk drifting from the geometry when the variant seam nests rows.
+            r["ci_lo"] = round(lo, 1)
+            r["ci_hi"] = round(hi, 1)
     return rows
 
 

@@ -1204,10 +1204,29 @@ kbd {
 .ci-cell {
   min-width: 150px;
 }
+/* Small BT lo–hi axis label under the "95% interval" header — tells the reader the value span the
+   whisker bars are drawn across, so a bar's width reads as a magnitude, not just a relative shape. */
+.ci-axis {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
 .ci-bar {
   position: relative;
   height: 8px;
   background: var(--panel2);
+  /* Faint quartile ticks (25/50/75/100%) so a whisker's WIDTH reads against a scale, not only
+     against its neighbours; the axis endpoints are labelled in the column header (.ci-axis). */
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0,
+    transparent calc(25% - 1px),
+    color-mix(in oklch, var(--border) 55%, transparent) calc(25% - 1px),
+    color-mix(in oklch, var(--border) 55%, transparent) 25%
+  );
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
   margin-bottom: 0.3rem;
