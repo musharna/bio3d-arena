@@ -60,6 +60,56 @@ WHAT_THIS_MEASURES: dict[str, str] = {
 }
 
 
+def classify_paradigm(slug: str, kind: str, sources: set[str]) -> str | None:
+    """Return a paradigm for a generator, or None if no rule matches. Source-prefix rules (how the
+    asset entered the arena) take priority over slug keywords — this ordering is load-bearing: a
+    text→3D generator like ``fal:meshy-v6-text`` carries the ``meshy`` slug keyword (→ image_recon)
+    but its ``api:text:`` source must win (→ text_native). Shared by the backfill script, promote
+    (which auto-heals a blank paradigm at the study boundary), and any at-ingest tagging."""
+    s = slug.lower()
+    src = {x.lower() for x in sources}
+
+    def any_src_prefix(*prefixes: str) -> bool:
+        return any(h.startswith(p) for h in src for p in prefixes)
+
+    if s.startswith("openrouter-"):
+        return "procedural_llm"
+    if any_src_prefix("procedural:"):
+        return "procedural_expert"
+    if any_src_prefix("found:"):
+        return "retrieval"
+    if any_src_prefix("scan:", "ct:", "mri:"):
+        return "capture_scan"
+    if any_src_prefix("api:text:"):  # text→3D (a text PROMPT input) — must precede the api: rule
+        return "text_native"
+    if any_src_prefix("agentic:"):
+        return "agentic"
+    if any_src_prefix("api:"):
+        return "image_recon"
+    if any(k in s for k in ("lpy", "l-py", "lsystem", "infinigen", "procedural", "helios")):
+        return "procedural_expert"
+    if "sketchfab" in s or "objaverse" in s:
+        return "retrieval"
+    if any(
+        k in s
+        for k in (
+            "hunyuan",
+            "tripo",
+            "triposr",
+            "partcrafter",
+            "meshy",
+            "trellis",
+            "hyper3d",
+            "recon",
+            "instantmesh",
+        )
+    ):
+        return "image_recon"
+    if any(k in s for k in ("icrisat", "romi", "scan")):
+        return "capture_scan"
+    return None
+
+
 def is_valid_paradigm(p: str) -> bool:
     return p in PARADIGMS
 

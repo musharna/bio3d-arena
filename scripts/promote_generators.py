@@ -28,6 +28,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.paradigms import classify_paradigm  # noqa: E402  (shared canonical source→paradigm rules)
+
 
 class PromoteError(RuntimeError):
     """A promote that would corrupt the target. Always fatal — never downgraded to a warning."""
@@ -175,6 +177,27 @@ def promote(source: str, target: str, slugs: list[str], *, apply: bool = False) 
         summary["generators"] = len(new_gens)
         summary["model_output"] = len(new_outs)
 
+        # Auto-heal a blank paradigm at the study boundary. A just-generated api:/api:text: generator
+        # is born blank (ingest doesn't tag it; a separate backfill pass does) and would land
+        # INVISIBLE on its board, which filters paradigm == X. Classify it from its output sources
+        # via the canonical classifier and carry the result to the target; fail loud if unmappable so
+        # nothing lands unclassified. Computed before the apply gate so a dry-run surfaces it too.
+        sources_by_gen: dict[int, set[str]] = {}
+        for o in outs:
+            sources_by_gen.setdefault(o["generator_id"], set()).add(o["source"])
+        resolved_paradigm: dict[int, str] = {}
+        for g in new_gens:
+            p = g["paradigm"]
+            if not p:
+                p = classify_paradigm(g["slug"], g["kind"], sources_by_gen.get(g["id"], set()))
+                if p is None:
+                    raise PromoteError(
+                        f"generator {g['slug']!r} has a blank paradigm and no classify rule matches "
+                        f"its sources {sorted(sources_by_gen.get(g['id'], set()))} — tag it (or add a "
+                        "rule) before promoting; a blank-paradigm generator is invisible on its board"
+                    )
+            resolved_paradigm[g["id"]] = p
+
         promoted_ids = [o["id"] for o in new_outs]
         for t in EVIDENCE_TABLES:
             if t not in {r[0] for r in src.execute("SELECT name FROM sqlite_master")}:
@@ -203,9 +226,10 @@ def promote(source: str, target: str, slugs: list[str], *, apply: bool = False) 
         # ---- write
         for g in new_gens:
             cols = [c for c in g.keys() if c in _cols(dst, "generator")]
+            vals = [resolved_paradigm[g["id"]] if c == "paradigm" else g[c] for c in cols]
             dst.execute(
                 f"INSERT INTO generator ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
-                [g[c] for c in cols],
+                vals,
             )
         for o in new_outs:
             cols = [c for c in o.keys() if c in _cols(dst, "model_output")]

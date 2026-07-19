@@ -218,6 +218,57 @@ def test_unknown_generator_fails_loud(tmp_path):
         promote(src, dst, ["fal:typo"], apply=True)
 
 
+def _seed_blank_paradigm_source(con, *, slug, source):
+    """A generator born with a BLANK paradigm (the ingest default) + one output carrying `source`.
+    This is the exact state a just-generated api:text/api: generator is in before backfill runs."""
+    _seed_common(con)
+    con.execute(
+        "INSERT INTO generator (id, slug, name, description, kind, is_anonymous, paradigm) "
+        f"VALUES (85,'{slug}','New','','model',0,'')"
+    )
+    con.execute(
+        "INSERT INTO model_output (id, task_id, generator_id, title, asset_path, asset_format, "
+        "meta_json, n_comparisons, is_gold, created, source) "
+        f"VALUES (581,1,85,'o','a.glb','glb','{{}}',0,0,'2026-01-01','{source}')"
+    )
+    con.commit()
+
+
+def test_blank_paradigm_generator_is_classified_on_promote(tmp_path):
+    """A generator promoted with a blank paradigm (backfill not yet run) would land INVISIBLE on
+    its board (boards filter paradigm==X). Promote auto-heals it from the output source via the
+    canonical classifier — api:text: → text_native, even though the 'meshy' slug alone says
+    image_recon. This removes the must-remember-to-backfill-before-promote dependency."""
+    src, dst = _fresh_db(tmp_path / "src.db"), _fresh_db(tmp_path / "dst.db")
+    with sqlite3.connect(src) as c:
+        _seed_blank_paradigm_source(
+            c, slug="fal:meshy-v6-text", source="api:text:fal:meshy-v6-text"
+        )
+    with sqlite3.connect(dst) as c:
+        _seed_common(c)
+        c.commit()
+
+    promote(src, dst, ["fal:meshy-v6-text"], apply=True)
+
+    with sqlite3.connect(dst) as c:
+        p = c.execute("SELECT paradigm FROM generator WHERE slug='fal:meshy-v6-text'").fetchone()[0]
+    assert p == "text_native"  # source prefix wins over the 'meshy' slug keyword
+
+
+def test_unclassifiable_blank_paradigm_fails_loud(tmp_path):
+    """A blank-paradigm generator the classifier can't map must NOT land on a board unclassified —
+    promote fails loud so the omission is fixed deliberately, never silently."""
+    src, dst = _fresh_db(tmp_path / "src.db"), _fresh_db(tmp_path / "dst.db")
+    with sqlite3.connect(src) as c:
+        _seed_blank_paradigm_source(c, slug="mystery-gen", source="weird:unmapped")
+    with sqlite3.connect(dst) as c:
+        _seed_common(c)
+        c.commit()
+
+    with pytest.raises(PromoteError, match="paradigm"):
+        promote(src, dst, ["mystery-gen"], apply=True)
+
+
 def test_rerun_is_idempotent(tmp_path):
     src, dst = _fresh_db(tmp_path / "src.db"), _fresh_db(tmp_path / "dst.db")
     with sqlite3.connect(src) as c:
