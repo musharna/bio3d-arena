@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -235,6 +236,131 @@ def run_batch(
     return {"written": written, "skipped": skipped, "errors": errors}
 
 
+def build_judge_request(task, crit, item, a_b64, b_b64) -> tuple[str, dict]:
+    """(custom_id, params) for one work item as a Message Batches request. params replicates
+    judge.judge_pair's synchronous call exactly (same model / forced verdict tool / A-then-B
+    images), so a batch result parses with judge.parse_verdict unchanged. custom_id encodes the
+    ordered pair (swap_group + a + b) so results map back and both A/B orders stay distinct;
+    swap_group is 16 hex chars so the id stays well under the 64-char batch limit."""
+    custom_id = f"{item['swap_group']}-{item['output_a_id']}-{item['output_b_id']}"
+    params = {
+        "model": judge.JUDGE_MODEL,
+        "max_tokens": 400,
+        "tools": [judge.VERDICT_TOOL],
+        "tool_choice": {"type": "tool", "name": "record_verdict"},
+        "messages": judge.build_messages(
+            task.category.name if task.category else "",
+            task.prompt,
+            crit.name,
+            crit.description,
+            a_b64,
+            b_b64,
+        ),
+    }
+    return custom_id, params
+
+
+def submit_batch(
+    batches_client, requests, *, sleep_fn=time.sleep, poll_interval: int = 30, max_polls: int = 2880
+) -> dict:
+    """Submit `requests` (list of {custom_id, params}) as one Message Batch, poll until the batch's
+    processing_status is 'ended', then return {custom_id: result-body}. `max_polls * poll_interval`
+    bounds the wait (default 24h, the batch SLA). batches_client is client.messages.batches (or a
+    fake in tests) — it needs create(requests=)/retrieve(id)/results(id)."""
+    batch = batches_client.create(requests=requests)
+    for _ in range(max_polls):
+        if batches_client.retrieve(batch.id).processing_status == "ended":
+            break
+        sleep_fn(poll_interval)
+    else:
+        raise RuntimeError(f"batch {batch.id} did not end within {max_polls * poll_interval}s")
+    return {r.custom_id: r.result for r in batches_client.results(batch.id)}
+
+
+def _chunks(seq, size):
+    for i in range(0, len(seq), size):
+        yield seq[i : i + size]
+
+
+def run_batch_api(
+    db,
+    *,
+    sheet_b64,
+    batches_client,
+    grid_condition: str = GRID_CONDITION,
+    criteria_slugs=None,
+    max_votes: int | None = None,
+    calibration_only: bool = False,
+    work=None,
+    chunk_size: int = 100,
+    sleep_fn=time.sleep,
+) -> dict:
+    """Message-Batches variant of run_batch: same enumeration / resume / cap, but the VLM verdicts
+    go through the async Batch API (50% cheaper, server-side parallel). Renders each pair's sheets
+    locally, submits a batch per `chunk_size` requests (bounding the 256MB batch-body limit),
+    polls to completion, then parses + persists a JudgeVote per succeeded result. Commits per vote
+    so a killed run resumes. `sheet_b64` and `batches_client` are injected (fakes in tests)."""
+    if work is None:
+        work = enumerate_work(db, grid_condition, criteria_slugs, calibration_only=calibration_only)
+    seen = existing_swap_orders(db)
+    todo, skipped = [], 0
+    for item in work:
+        key = (item["swap_group"], item["output_a_id"], item["output_b_id"])
+        if key in seen:
+            skipped += 1
+            continue
+        if max_votes is not None and len(todo) >= max_votes:
+            break
+        todo.append(item)
+
+    written = errors = 0
+    for chunk in _chunks(todo, chunk_size):
+        requests, meta = [], {}
+        for item in chunk:
+            task = db.get(Task, item["task_id"])
+            crit = db.get(Criterion, item["criterion_id"])
+            try:
+                a_b64 = sheet_b64(item["output_a_id"], item["condition"])
+                b_b64 = sheet_b64(item["output_b_id"], item["condition"])
+            except Exception as e:  # noqa: BLE001 — a render failure drops that pair, not the run
+                errors += 1
+                print(f"render error on {item['swap_group']}: {e}", file=sys.stderr)
+                continue
+            cid, params = build_judge_request(task, crit, item, a_b64, b_b64)
+            requests.append({"custom_id": cid, "params": params})
+            meta[cid] = item
+        if not requests:
+            continue
+        results = submit_batch(batches_client, requests, sleep_fn=sleep_fn)
+        for cid, item in meta.items():
+            body = results.get(cid)
+            if body is None or getattr(body, "type", None) != "succeeded":
+                errors += 1
+                continue
+            try:
+                winner, rationale = judge.parse_verdict(body.message)
+                db.add(
+                    JudgeVote(
+                        task_id=item["task_id"],
+                        output_a_id=item["output_a_id"],
+                        output_b_id=item["output_b_id"],
+                        criterion_id=item["criterion_id"],
+                        winner=winner,
+                        view_condition=item["condition"],
+                        judge_model=judge.JUDGE_MODEL,
+                        swap_group=item["swap_group"],
+                        rationale=rationale,
+                    )
+                )
+                db.commit()
+                written += 1
+            except Exception as e:  # noqa: BLE001 — a bad verdict drops that vote, not the run
+                db.rollback()
+                errors += 1
+                print(f"verdict parse error on {cid}: {e}", file=sys.stderr)
+    return {"written": written, "skipped": skipped, "errors": errors}
+
+
 def _real_sheet_b64_factory(db, capture_multi):
     """Render-on-demand sheet provider for production runs."""
 
@@ -280,6 +406,12 @@ def main() -> int:
         "--dry-run",
         action="store_true",
         help="with --sample: print the uncovered call count and exit (no API/browser)",
+    )
+    ap.add_argument(
+        "--batch",
+        action="store_true",
+        help="submit verdicts via the Message Batches API (50%% cheaper, async ~1h) instead of "
+        "synchronous per-call requests",
     )
     args = ap.parse_args()
 
@@ -328,14 +460,24 @@ def main() -> int:
     with SessionLocal() as db:
         capture_multi = browser_capture_multi_factory()
         sheet_b64 = _real_sheet_b64_factory(db, capture_multi)
-        res = run_batch(
-            db,
-            judge_fn=judge_fn,
-            sheet_b64=sheet_b64,
-            max_votes=args.max,
-            calibration_only=args.calibration_only,
-            work=sample_work,
-        )
+        if args.batch:
+            res = run_batch_api(
+                db,
+                sheet_b64=sheet_b64,
+                batches_client=client.messages.batches,
+                max_votes=args.max,
+                calibration_only=args.calibration_only,
+                work=sample_work,
+            )
+        else:
+            res = run_batch(
+                db,
+                judge_fn=judge_fn,
+                sheet_b64=sheet_b64,
+                max_votes=args.max,
+                calibration_only=args.calibration_only,
+                work=sample_work,
+            )
     print(res)
     return 0
 
