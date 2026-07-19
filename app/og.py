@@ -265,6 +265,59 @@ def render_model_card(
     return to_png(img)
 
 
+def render_leaderboard_card(
+    *,
+    scope_label: str,
+    n_models: int,
+    n_methods: int,
+    votes: int,
+) -> bytes:
+    """The leaderboard share card, as PNG bytes.
+
+    Deliberately states NO cross-method ranking. Every board ranks exactly ONE paradigm
+    (paradigms are disconnected match pools), so a single "top model of the leaderboard" would be
+    a claim the ranking math does not back — the same invariant `model_standing` enforces. The
+    card shows the board's SCOPE and size, the vote count, and points back at the arena.
+    """
+    img, d = new_card()
+    m = MARGIN
+    inner = W - 2 * m
+
+    draw_wordmark(d, m, 56)
+
+    head = f"{scope_label} leaderboard"
+    hf = fit_font(d, head, True, 72, 40, inner)
+    d.text((m, 122), _truncate(d, head, hf, inner), font=hf, fill=TEXT)
+
+    d.text(
+        (m, 214),
+        "Bradley–Terry rankings from blind human votes",
+        font=font(False, 30),
+        fill=MUTED,
+    )
+
+    py0, py1 = 300, 494
+    d.rounded_rectangle([m, py0, W - m, py1], radius=18, fill=PANEL, outline=BORDER, width=2)
+    stats = [
+        (str(n_models), "models ranked"),
+        (str(n_methods), "generation method" + ("" if n_methods == 1 else "s")),
+        (f"{votes:,}", "blind human votes"),
+    ]
+    step = (W - 2 * m - 80) // 3
+    for i, (big, label) in enumerate(stats):
+        x = m + 40 + i * step
+        d.text((x, py0 + 44), big, font=font(True, 60), fill=ACCENT if i == 0 else TEXT)
+        d.text((x, py0 + 130), label, font=font(False, 24), fill=MUTED)
+
+    d.text(
+        (m, 520),
+        "Ranked within each method · scores across methods aren't comparable",
+        font=font(True, 24),
+        fill=ACCENT,
+    )
+    return to_png(img)
+
+
 def render_default_card() -> Image.Image:
     """The site-default card (`/static/og-default.png`) — kept here so both cards share one
     canvas, one palette and one wordmark."""

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Leaderboard · Bio 3D Arena{% endblock %}
 {% block description %}Bradley–Terry rankings of 3D generative models by generation method — image→3D, text→3D, LLM procedural, and agentic — scored by blind human votes on real plants, fungi, and animals.{% endblock %}
+{% block og_image %}{{ lb_share.og_image_url }}{% endblock %}
 {% block content %}
 {# No board is shown on the hub, so no paradigm is selected — the shared controls partial keys
    its hidden `paradigm` input and its scope links off this. #}
@@ -14,6 +15,7 @@
       the models within it.
       <span class="mono lb-votecount">{{ total_votes }} votes cast.</span>
     </p>
+  {% include "_leaderboard_share.html" %}
   </header>
 
   {% if cards %}

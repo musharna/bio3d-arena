@@ -1290,6 +1290,15 @@ def leaderboard(
     # board. Derived from the merged all_rows so a tab never vanishes on click.
     paradigms_in_rows = sorted({r["paradigm"] for r in all_rows if r.get("paradigm")})
 
+    # Share affordance + kingdom-scoped OG card for this board (rides on both the hub and a single
+    # board, so it is built before the branch). See _leaderboard_share_context / render_leaderboard_card.
+    lb_scope_label = (
+        config.SITE_NAME
+        if kingdom == "all"
+        else kingdoms.KINGDOM_LABEL.get(kingdom, config.SITE_NAME)
+    )
+    lb_share = _leaderboard_share_context(lb_scope_label, kingdom)
+
     # Page-level chrome (_leaderboard_controls.html) — the category/criterion filters + the
     # Trusted/Verified scope toggle + the bias audit ride on BOTH the hub and a single board, so
     # they are built before the hub branch returns. `selected` flags are precomputed in Python so
@@ -1337,6 +1346,7 @@ def leaderboard(
             {
                 "cards": cards,
                 "total_votes": total,
+                "lb_share": lb_share,
                 "firm_vote_threshold": service.FIRM_VOTE_THRESHOLD,
                 **controls_ctx,
             },
@@ -1375,6 +1385,7 @@ def leaderboard(
             "board_what": paradigms.WHAT_THIS_MEASURES.get(paradigm, ""),
             "sel_paradigm": paradigm,
             "total_votes": total,
+            "lb_share": lb_share,
             "paradigm_options": paradigm_options,
             "paradigm_display_names": paradigms.DISPLAY_NAMES,
             "show_all": show_all,
@@ -1838,6 +1849,69 @@ def model_og_card(slug: str, db: Session = Depends(get_db)):
             firm_label=ctx["firm_label"],
         )
         _OG_CARD_CACHE[slug] = (key, png)
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=600"},
+    )
+
+
+def _leaderboard_card_facts(db: Session, kingdom: str) -> tuple[str, int, int, int]:
+    """(scope_label, n_models, n_methods, votes) for a kingdom's board card. Scope label is the
+    site name for the all-kingdoms view (a card headline of "All kingdoms leaderboard" reads worse
+    than "Bio 3D Arena leaderboard"); a specific kingdom keeps its own label. Vote count is the
+    site-wide total, matching the leaderboard page header's own framing."""
+    rows = _leaderboard_rows(db, "overall", "all", None, kingdom)
+    n_methods = len({r.get("paradigm") for r in rows if r.get("paradigm")})
+    scope_label = (
+        config.SITE_NAME
+        if kingdom == "all"
+        else kingdoms.KINGDOM_LABEL.get(kingdom, config.SITE_NAME)
+    )
+    return scope_label, len(rows), n_methods, matchmaking.total_votes(db)
+
+
+def _leaderboard_share_context(scope_label: str, kingdom: str) -> dict:
+    """Share affordance for a leaderboard view: the canonical page URL (humans keep their own
+    kingdom), the kingdom-scoped OG card (so the unfurl preview shows the sharer's board), and an
+    X-intent. Mirrors _model_share_context so leaderboard.js reuses the same share.js handlers."""
+    page_url = _abs_url("/leaderboard")
+    tweet = (
+        f"{scope_label} — Bradley–Terry 3D-generation rankings from blind human votes "
+        f"on {config.SITE_NAME}."
+    )
+    return {
+        "scope_label": scope_label,
+        "page_url": page_url,
+        "og_image_url": _abs_url(f"/og/leaderboard.png?scope={quote(kingdom)}"),
+        "x_intent_url": f"https://x.com/intent/post?text={quote(tweet)}&url={quote(page_url)}",
+    }
+
+
+# Cached like the per-model card: the BT refit inside _leaderboard_card_facts is not free, and an
+# unfurl bot may hit this repeatedly. Keyed on (kingdom, total_votes) so it self-invalidates the
+# moment a vote lands.
+_LB_OG_CACHE: dict[str, tuple[int, bytes]] = {}
+
+
+@app.get("/og/leaderboard.png")
+def leaderboard_og_card(scope: str = "all", db: Session = Depends(get_db)):
+    """The leaderboard Open Graph card, kingdom-scoped, drawn from current data (app.og).
+
+    The kingdom is passed as `scope`, NOT `kingdom`, on purpose: the http middleware reads a
+    `?kingdom=` query param on every request and persists it to a cookie, so naming it `kingdom`
+    here would let an unfurl of one kingdom's card flip the viewer's own board scope."""
+    kingdom = kingdoms.normalize_kingdom(scope)
+    total = matchmaking.total_votes(db)
+    cached = _LB_OG_CACHE.get(kingdom)
+    if cached is not None and cached[0] == total:
+        png = cached[1]
+    else:
+        scope_label, n_models, n_methods, votes = _leaderboard_card_facts(db, kingdom)
+        png = og.render_leaderboard_card(
+            scope_label=scope_label, n_models=n_models, n_methods=n_methods, votes=votes
+        )
+        _LB_OG_CACHE[kingdom] = (total, png)
     return Response(
         content=png,
         media_type="image/png",
