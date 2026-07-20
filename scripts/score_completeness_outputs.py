@@ -54,21 +54,49 @@ def build_work(db, output_ids: list[int]) -> list[dict]:
     return work
 
 
+def _already_scored(db, scorer_version: str) -> set[int]:
+    from app.models import Completeness
+
+    return {
+        c.output_id
+        for c in db.query(Completeness.output_id).filter(
+            Completeness.scorer_version == scorer_version
+        )
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("--outputs", required=True, help="comma-separated output ids")
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--outputs", help="comma-separated output ids")
+    src.add_argument("--outputs-file", help="file of comma/newline-separated output ids")
     ap.add_argument(
         "--invalidate-sheets",
         action="store_true",
         help="delete each output's cached turntable contact sheet first (force re-render)",
     )
+    ap.add_argument(
+        "--skip-scored",
+        action="store_true",
+        help="skip ids already scored at the current scorer version — makes a run resumable",
+    )
     args = ap.parse_args(argv)
-    output_ids = [int(x) for x in args.outputs.split(",") if x.strip()]
+    raw = args.outputs if args.outputs else Path(args.outputs_file).read_text()
+    output_ids = [int(x) for x in raw.replace("\n", ",").split(",") if x.strip()]
 
     init_db()
     with SessionLocal() as db:
+        if args.skip_scored:
+            done = _already_scored(db, sc.SCORER_VERSION)
+            before = len(output_ids)
+            output_ids = [o for o in output_ids if o not in done]
+            print(
+                f"skip-scored: {before - len(output_ids)} already done, {len(output_ids)} to do",
+                flush=True,
+            )
+
         work = build_work(db, output_ids)
         if args.invalidate_sheets:
             n = 0
@@ -82,16 +110,23 @@ def main(argv: list[str] | None = None) -> int:
             print(f"invalidated {n} cached contact sheets", flush=True)
 
         sheet_for = sc._sheet_provider(db, sc._capture_multi())
-        summary = score_outputs(
-            db,
-            work,
-            client=sc._build_client(),
-            sheet_for=sheet_for,
-            scorer_version=sc.SCORER_VERSION,
-        )
-        db.commit()
-    print(summary, flush=True)
-    return 0 if summary["errors"] == 0 else 1
+        client = sc._build_client()
+        totals = {"scored": 0, "skipped_no_inventory": 0, "errors": 0}
+        # Commit after EACH output so a long run is durable and --skip-scored can resume it.
+        for i, item in enumerate(work, 1):
+            s = score_outputs(
+                db, [item], client=client, sheet_for=sheet_for, scorer_version=sc.SCORER_VERSION
+            )
+            db.commit()
+            for k in totals:
+                totals[k] += s.get(k, 0)
+            print(
+                f"  [{i}/{len(work)}] output {item['output_id']} ({item['taxon']}): "
+                f"scored={s['scored']} err={s['errors']}",
+                flush=True,
+            )
+    print(totals, flush=True)
+    return 0 if totals["errors"] == 0 else 1
 
 
 if __name__ == "__main__":
