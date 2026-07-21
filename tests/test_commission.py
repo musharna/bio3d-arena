@@ -40,6 +40,29 @@ def test_run_bpy_known_good_script_produces_valid_glb(tmp_path):
     assert res["glb_path"] and commission.is_valid_mesh(out)[0] is True
 
 
+# A well-formed script that does NOT clear the scene before building — it only adds one sphere.
+# If the runner inherits Blender's default startup scene, the export ALSO contains the default
+# "Cube" (a harness artefact, not the model's work), so the scene would hold two geometries. The
+# runner must start from an empty scene, matching the render path (agentic.RENDER_SCRIPT).
+_NO_CLEAR_BPY = """
+import bpy, os
+bpy.ops.mesh.primitive_uv_sphere_add()
+bpy.ops.export_scene.gltf(filepath=os.environ['OUT_GLB'], export_format='GLB')
+"""
+
+
+@pytest.mark.skipif(shutil.which("blender") is None, reason="blender not installed")
+def test_run_bpy_starts_from_empty_scene_no_default_cube(tmp_path):
+    out = tmp_path / "out.glb"
+    res = commission.run_bpy(_NO_CLEAR_BPY, out_glb=out, timeout_s=120)
+    assert res["status"] == "ok"
+    scene = trimesh.load(str(out), force="scene")
+    assert len(scene.geometry) == 1, (
+        f"expected only the model's sphere, got {list(scene.geometry)} — "
+        "the default startup cube leaked into the export"
+    )
+
+
 def test_run_bpy_missing_blender_returns_error(tmp_path):
     res = commission.run_bpy(
         "print('x')", out_glb=tmp_path / "o.glb", blender_bin="definitely-not-blender"
