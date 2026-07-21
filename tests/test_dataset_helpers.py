@@ -11,7 +11,9 @@ def test_build_preference_records_shape(db_session):
     # rollback-isolated transaction by other test modules' setup_module(seed_all(...)) --
     # get-or-create to avoid a UNIQUE-constraint collision on full-suite runs (same pattern
     # as tests/test_recon_service.py, test_mode_a_scan_exclusion.py, test_difficulty_page.py).
-    crit = db_session.execute(select(Criterion).where(Criterion.slug == "overall")).scalars().first()
+    crit = (
+        db_session.execute(select(Criterion).where(Criterion.slug == "overall")).scalars().first()
+    )
     if crit is None:
         crit = Criterion(slug="overall", name="Overall")
         db_session.add(crit)
@@ -49,6 +51,36 @@ def test_license_rollup_dedupes_and_nullsafe():
     assert {"license": "CC-BY-4.0", "attribution": "A", "source": "external"} in roll
     assert {"license": "", "attribution": "", "source": "bio3d-arena"} in roll
     assert len(roll) == 2
+
+
+def test_render_license_declares_every_own_source_not_just_the_legacy_label():
+    """The LICENSE text blanket-releases our own assets CC-BY-4.0, but used to name only
+    `source=bio3d-arena`. Our generation harnesses actually write `commissioned` /
+    `agentic:<model>` / `procedural:<gen>`, so a reader saw those rows fall under a rule the
+    document said didn't cover them. The declaration must track the ownership predicate."""
+    roll = [
+        {"license": "", "attribution": "", "source": "commissioned"},
+        {"license": "", "attribution": "", "source": "agentic:x-ai/grok-4.5"},
+    ]
+    lic = dataset.render_license(roll)
+    # Assert on the DECLARATION section, not the per-asset listing below it — the listing
+    # echoes every source verbatim, so a substring check against the whole document would
+    # pass no matter what the declaration says. Split on the listing header rather than
+    # matching a single line, so re-wrapping the prose can't silently gut this test.
+    declaration = lic.split("Per-asset provenance")[0]
+    assert "released CC-BY-4.0" in declaration
+    assert "commissioned" in declaration, declaration
+    assert "agentic:" in declaration, declaration
+
+
+def test_render_license_does_not_claim_ownership_of_third_party_assets():
+    """The NULL-license fallback used to print '(bio3d-arena CC-BY-4.0)' for ANY blank license,
+    which would assert we own — and CC-BY-license — a third-party asset that merely lacked a
+    label. The fallback must be conditioned on the asset actually being ours."""
+    roll = [{"license": "", "attribution": "", "source": "objaverse"}]
+    lic = dataset.render_license(roll)
+    assert "CC-BY-4.0 | - | objaverse" not in lic
+    assert "bio3d-arena CC-BY-4.0) | - | objaverse" not in lic
 
 
 def test_render_license_and_datasheet_include_key_facts():

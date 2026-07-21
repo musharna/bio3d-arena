@@ -86,19 +86,36 @@ def license_rollup(output_rows: list[dict]) -> list[dict]:
 
 
 def render_license(rollup: list[dict]) -> str:
+    """Render the bundle's LICENSE text.
+
+    The CC-BY-4.0 blanket applies to assets OUR pipeline produced, so both the declaration
+    and the per-asset fallback are driven by public_export.is_own_output — the same predicate
+    the export gate uses. Naming one source literal here (it used to say only
+    `source=bio3d-arena`) silently mis-declared our commissioned/agentic/procedural assets,
+    and the unconditional fallback claimed CC-BY-4.0 over any third-party asset that merely
+    arrived without a license label."""
+    from .public_export import is_own_output
+
     lines = [
         "Bio 3D Arena — Benchmark Dataset License",
         "",
         "Each 3D asset retains its original license and attribution, listed below. Assets",
-        "authored by Bio 3D Arena (source=bio3d-arena) are released CC-BY-4.0. Redistribution",
+        "authored by Bio 3D Arena's own generation pipeline (source=bio3d-arena, commissioned,",
+        "agentic:<model>, procedural:<generator>) are released CC-BY-4.0. Redistribution",
         "of any asset is bound by its stated license.",
         "",
         "Per-asset provenance (license | attribution | source):",
     ]
     for r in rollup:
-        lines.append(
-            f"- {r['license'] or '(bio3d-arena CC-BY-4.0)'} | {r['attribution'] or '-'} | {r['source']}"
-        )
+        if r["license"]:
+            label = r["license"]
+        elif is_own_output(r["source"]):
+            label = "(bio3d-arena CC-BY-4.0)"
+        else:
+            # Never assert a license we were not granted: an unlabeled third-party asset is
+            # unknown, not ours. The export gate should have blocked it long before here.
+            label = "(UNKNOWN — not cleared for redistribution)"
+        lines.append(f"- {label} | {r['attribution'] or '-'} | {r['source']}")
     return "\n".join(lines) + "\n"
 
 
