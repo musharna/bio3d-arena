@@ -21,6 +21,16 @@ def test_judge_leaderboard_rows_ranked():
         )
         db.query(Task).filter(Task.title == "jl-task").delete(synchronize_session=False)
         db.query(Generator).filter(Generator.slug.like("jl-%")).delete(synchronize_session=False)
+        # Also purge any LEFTOVER generator sharing the display names this test asserts on.
+        # The board disambiguates a duplicated display name by appending the slug ("Strong ·
+        # strong"), so a sibling module's fixture surviving in the shared DB silently changes
+        # what this test sees. That made the assertion ORDER-DEPENDENT: it passed in a full
+        # alphabetical run (leaderboard before recompute) and failed whenever
+        # test_judge_recompute ran first. Purge by name, not by the sibling's slug prefix, so
+        # this stays correct if another module introduces a "Strong" too.
+        db.query(Generator).filter(Generator.name.in_(("Strong", "Weak"))).delete(
+            synchronize_session=False
+        )
         db.query(Category).filter_by(slug="jl-cat").delete(synchronize_session=False)
         db.commit()
         cat = Category(slug="jl-cat", name="C")
