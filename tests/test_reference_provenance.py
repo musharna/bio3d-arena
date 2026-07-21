@@ -18,18 +18,105 @@ ALLOWED_LICENSES = {"CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0", "CC-BY-3.0", "CC-BY-
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def _write_sidecar(d, name, file_field, license="CC-BY-4.0"):
+    """Minimal VALID sidecar under `name`, describing the image `file_field`."""
+    (d / name).write_text(
+        json.dumps(
+            {
+                "subject": "s",
+                "file": file_field,
+                "source": "Wikimedia",
+                "source_url": "http://example.org/x",
+                "download_url": "http://example.org/x.jpg",
+                "license": license,
+                "author": "a",
+                "attribution": "a, CC",
+                "title": "t",
+                "note": "n",
+            }
+        )
+    )
+
+
+def test_clearance_is_keyed_by_image_not_by_taxon(tmp_path, monkeypatch):
+    """A cleared photo must not launder a DIFFERENT, unrecorded photo of the same taxon.
+
+    Copyright attaches to an individual photograph, but clearance used to be keyed by taxon
+    (`_taxon_of` collapses `rose_ref.jpg` and `rose_ref_clean.jpg` to "rose"). That granularity
+    mismatch let one sidecar clear every photo sharing its taxon prefix -- production shape:
+    `tomato_ref_roma.jpg` (7 outputs) read as cleared purely because `tomato_ref.json` covers a
+    different tomato photo."""
+    from app import config
+    from app.reference_provenance import cleared_reference_images
+
+    ref = tmp_path / "reference"
+    ref.mkdir()
+    _write_sidecar(ref, "tomato_ref.json", "tomato_ref.jpg")
+    monkeypatch.setattr(config, "ASSET_DIR", tmp_path)
+
+    cleared = cleared_reference_images()
+    assert "tomato_ref.jpg" in cleared
+    # A second photo of the SAME taxon with no record of its own must NOT be cleared.
+    assert "tomato_ref_roma.jpg" not in cleared
+
+
+def test_sidecar_clears_the_image_its_file_field_names(tmp_path, monkeypatch):
+    """Clearance follows the sidecar's `file` field, not the sidecar's own filename.
+
+    The established convention (dog/mallard/monarch/goldfish) is a `{taxon}_ref.json` sidecar
+    whose `file` names the current canonical photo, e.g. `dog_ref_clean.jpg`. rose/soybean were
+    re-sourced off that path as `rose_ref_clean.json`, so a taxon-keyed glob silently ignored
+    two perfectly valid CC records (21 outputs)."""
+    from app import config
+    from app.reference_provenance import cleared_reference_images
+
+    ref = tmp_path / "reference"
+    ref.mkdir()
+    _write_sidecar(ref, "dog_ref.json", "dog_ref_clean.jpg")  # convention: file != sidecar stem
+    _write_sidecar(ref, "rose_ref_clean.json", "rose_ref_clean.jpg")  # off-convention filename
+    monkeypatch.setattr(config, "ASSET_DIR", tmp_path)
+
+    cleared = cleared_reference_images()
+    assert "dog_ref_clean.jpg" in cleared
+    assert "rose_ref_clean.jpg" in cleared, (
+        "a valid record must clear its image whatever it is named"
+    )
+    # The sidecar's own stem is NOT what gets cleared.
+    assert "dog_ref.jpg" not in cleared
+
+
+def test_invalid_sidecar_clears_nothing(tmp_path, monkeypatch):
+    """A record with a non-allowlisted licence must not clear its image (gourd: CC-BY-2.0)."""
+    from app import config
+    from app.reference_provenance import cleared_reference_images
+
+    ref = tmp_path / "reference"
+    ref.mkdir()
+    _write_sidecar(ref, "gourd_ref.json", "gourd_ref.jpg", license="CC-BY-2.0")
+    monkeypatch.setattr(config, "ASSET_DIR", tmp_path)
+
+    assert cleared_reference_images() == set()
+
+
 @pytest.mark.parametrize("slug", ["arabidopsis", "maize", "rose", "soybean", "tomato", "pinus"])
 def test_reference_has_image_and_valid_provenance(slug):
     img = os.path.join(REPO_ROOT, f"data/assets/reference/{slug}_ref.jpg")
-    meta = os.path.join(REPO_ROOT, f"data/assets/reference/{slug}_ref.json")
-    if not (os.path.exists(img) and os.path.exists(meta)):
+    if not os.path.exists(img):
         # data/ is gitignored runtime state — absent on a checkout without the runtime volume.
-        pytest.skip(f"runtime reference asset absent (gitignored): {slug}")
+        pytest.skip(f"runtime reference image absent (gitignored): {slug}")
+    # The image EXISTS, so a missing/invalid record is a real provenance gap, not an absent
+    # runtime volume — fail loud. Skipping on a missing sidecar is how rose and soybean went
+    # unchecked: the .jpg was present, the record was not, and this test reported green.
+    meta = os.path.join(REPO_ROOT, f"data/assets/reference/{slug}_ref.json")
+    assert os.path.exists(meta), f"{slug}_ref.jpg has no {slug}_ref.json provenance record"
     assert os.path.getsize(img) > 5000, img
     with open(meta) as f:
         d = json.load(f)
     assert REQUIRED <= set(d), REQUIRED - set(d)
-    assert d["file"] == f"{slug}_ref.jpg"
+    # `file` names the photo this record covers; it need not equal {slug}_ref.jpg (the canonical
+    # photo may be a re-sourced `_clean` variant), but it MUST name a file that exists.
+    covered = os.path.join(REPO_ROOT, "data/assets/reference", d["file"])
+    assert os.path.exists(covered), f"{slug}: record covers {d['file']!r}, which is not on disk"
     assert d["license"] in ALLOWED_LICENSES, d["license"]
     assert d["source_url"].startswith("http") and d["download_url"].startswith("http")
     for k in ("author", "attribution", "title", "subject"):
@@ -42,7 +129,8 @@ def test_bio3darena_recon_gated_on_redistribute(monkeypatch):
     from app.database import SessionLocal
     from app.models import Category, Generator, ModelOutput, Task
 
-    monkeypatch.setattr(rp, "cleared_reference_taxa", lambda: {"tomato"})  # rose NOT cleared
+    # the tomato photo is cleared; rose_ref.jpg is NOT
+    monkeypatch.setattr(rp, "cleared_reference_images", lambda: {"tomato_ref.jpg"})
 
     with SessionLocal() as db:
         cat = Category(slug="plants2", name="P")
@@ -90,7 +178,8 @@ def test_gold_twin_bio3darena_recon_gated(monkeypatch):
     from app.database import SessionLocal
     from app.models import Category, Generator, ModelOutput, Task
 
-    monkeypatch.setattr(rp, "cleared_reference_taxa", lambda: {"tomato"})  # rose NOT cleared
+    # the tomato photo is cleared; rose_ref.jpg is NOT
+    monkeypatch.setattr(rp, "cleared_reference_images", lambda: {"tomato_ref.jpg"})
 
     with SessionLocal() as db:
         cat = Category(slug="plants-gold", name="P")

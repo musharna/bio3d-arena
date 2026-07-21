@@ -49,7 +49,9 @@ def _task_with_outputs(db, meta_list):
 def test_reference_list_includes_input_photo_with_credit(monkeypatch):
     from app import reference_provenance
 
-    monkeypatch.setattr(reference_provenance, "cleared_reference_taxa", lambda: {"puffball"})
+    monkeypatch.setattr(
+        reference_provenance, "cleared_reference_images", lambda: {"puffball_ref.jpg"}
+    )
     with SessionLocal() as db:
         _clean(db)
         t = _task_with_outputs(
@@ -83,7 +85,13 @@ def test_reference_excludes_hidden_output_input_photo(monkeypatch):
 
     # both tomato inputs are cleared here — this test's point is the hidden_at exclusion,
     # not the CC-clearance filter (that's covered by test_reference_suppresses_uncleared_input_photo).
-    monkeypatch.setattr(reference_provenance, "cleared_reference_taxa", lambda: {"tomato"})
+    # Clearance is per PHOTO, so both filenames must be listed; naming only one would let this
+    # test pass for the wrong reason (suppressed-as-uncleared rather than suppressed-as-hidden).
+    monkeypatch.setattr(
+        reference_provenance,
+        "cleared_reference_images",
+        lambda: {"tomato_ref_clean.jpg", "tomato_ref_roma.jpg"},
+    )
 
     with SessionLocal() as db:
         _clean(db)
@@ -110,7 +118,7 @@ def test_reference_excludes_hidden_output_input_photo(monkeypatch):
 def test_reference_dedups_and_survives_bad_meta_json(monkeypatch):
     from app import reference_provenance
 
-    monkeypatch.setattr(reference_provenance, "cleared_reference_taxa", lambda: {"rose"})
+    monkeypatch.setattr(reference_provenance, "cleared_reference_images", lambda: {"rose_ref.jpg"})
     with SessionLocal() as db:
         _clean(db)
         # a malformed meta row must not crash; the same input twice appears once (dedup)
@@ -128,15 +136,17 @@ def test_reference_dedups_and_survives_bad_meta_json(monkeypatch):
 
 
 def test_reference_suppresses_uncleared_input_photo(monkeypatch):
-    # A visible recon output whose input photo taxon is NOT cleared must not surface the photo;
+    # A visible recon output whose input PHOTO is NOT cleared must not surface the photo;
     # a cleared input still shows. (Gallery-less task title → refs == the shown input photos.)
     import json
     from app import reference_provenance
     from app.service import reference_images_for_task
     from app.storage import get_storage
 
-    # only 'tomato' is cleared; 'rose' is not
-    monkeypatch.setattr(reference_provenance, "cleared_reference_taxa", lambda: {"tomato"})
+    # only the tomato photo is cleared; rose_ref.jpg is not
+    monkeypatch.setattr(
+        reference_provenance, "cleared_reference_images", lambda: {"tomato_ref_clean.jpg"}
+    )
 
     with SessionLocal() as db:
         _clean(db)
