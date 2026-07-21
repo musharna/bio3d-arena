@@ -1,0 +1,182 @@
+# Changelog
+
+Notable changes to Bio 3D Arena, a multi-paradigm benchmark arena for biological 3D generation.
+
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This project has
+**not been released** — `version` in `pyproject.toml` is still `0.1.0` and no tag exists. Everything
+below therefore sits under Unreleased, with the history before this file grouped by milestone.
+
+Entries are milestone-level, not commit-level. For commit detail, see `git log`; most milestones
+also carry a design spec under `docs/superpowers/specs/`.
+
+## [Unreleased]
+
+### Changed
+
+- Pinned the seven previously-unpinned dependencies (`pillow`, `scikit-image`, `scipy`, `nibabel`,
+  `tifffile`, `anthropic`, `open_clip_torch`) to the versions the app is actually built and tested
+  against. `open_clip_torch` had no constraint at all, so a fresh install could resolve any future
+  major release.
+- Corrected `requires-python` from `>=3.10` to `>=3.12`. The old floor was untested and
+  unsatisfiable: pinned `scipy` and `tifffile` both require 3.12+, so no 3.10 or 3.11 environment
+  could resolve the real dependency set. Ruff's `target-version` moved to `py312` to match.
+
+### Added
+
+- This changelog, backfilled from git history.
+
+---
+
+## Milestones
+
+### Licensing and ranking correctness (2026-07-19 → 2026-07-21)
+
+- Reference-photo licence clearance is keyed by the **photograph**, not the taxon. Copyright attaches
+  to an individual image, so a cleared photo no longer launders a different, unrecorded photo that
+  merely shares a taxon prefix (#83).
+- A cached judge rating can no longer outlive the fit that produced it (#82).
+- Output ownership became a predicate instead of a repeated source literal (#81).
+- The agentic generation runner starts from an empty scene — previously Blender's startup cube was
+  exported as if it were a generated mesh (#80).
+- Message Batches API path for the VLM judge, halving judge cost (#75).
+
+### Roster expansion and harness honesty (2026-07-13 → 2026-07-18)
+
+- Grew the agentic roster from 3 to 8 entrants across 9 labs, with vision as a hard constraint.
+- Code-generation prompts and roster now derive from `ORGAN_INVENTORY`, so every kingdom is reachable.
+- Commissioned-generation scoring measures the organism rather than our own plumbing: a crash is no
+  longer recorded as an empty mesh, a billing failure is no longer a model failure, and a
+  re-measurement is no longer counted as a second entrant.
+- An attempt is modelled as a measurement under a harness, not as a fact about a model.
+- Same-model re-hosts fold under a single leaderboard entrant.
+
+### Leaderboard IA, sharing, and mobile (2026-07-10 → 2026-07-12)
+
+- Modality-primary information architecture: hub, per-modality boards, head-to-head view, and a clear
+  human/judge delineation (#61).
+- A model can never be compared against itself — fixed across the arena, the judge fit, and the judge
+  sampler, where self-matches were pumping strength (#62).
+- Honest Open Graph share cards; a zero-vote model shows no rank (#63).
+- Mobile voting pass — phone voters had been dead-ended after their first vote (#64).
+- Per-IP rate limiting, opaque output-scoped asset URLs, and a provisional-rank badge.
+
+### Design system v2 and kingdom filtering (2026-07-06 → 2026-07-09)
+
+- OKLCH light/dark token system, sidebar app shell, and a 3-state Auto/Light/Dark theme.
+- Kingdom became a global request-scoped filter (middleware + cookie) threading through the arena
+  pool, matchmaking, leaderboard, significance, coverage, dataset, difficulty, and spotlight.
+- Every public page rebuilt against the v2 prototype and certified at parity.
+- Real per-kingdom point-cloud hero on the landing page.
+- Internal research and analytics pages unpublished on the public instance, including the JSON
+  endpoints backing them.
+
+### Third kingdom: animals (2026-07-06)
+
+- Generalized plant-specific machinery to organisms: the semantic gate is taxon-parameterized and
+  admissibility-only, and the human flag reason became `not_the_organism`.
+- Animal body-plan completeness via `Organ.complement`, with a complement-aware `derive()` and a new
+  `malformed` category.
+- Dog, mallard, monarch, and goldfish inventories, recon/text generation, and difficulty tiering.
+
+### Reference-image integrity (2026-07-06)
+
+- CLIP/BioCLIP capability module with a photo-domain feasibility probe. The probe killed the naive
+  binary species-representativeness framing and established multi-class species ID (13/13).
+- Gallery QA scoring with a `passed_qa` filter; recon input photos excluded from the vote UI.
+- Semantic scoring renders each output in a timeout-guarded subprocess, so one wedged mesh cannot
+  stall a batch.
+
+### Publish safety and licensing posture (2026-07-04 → 2026-07-06)
+
+- Two-posture export: `display` versus `redistribute`, with admissibility exclusion.
+- Licence-string normalizer, licence backfill, and a fail-loud reference-photo provenance gate that
+  fails closed on unidentifiable recon input.
+- AI-generated labelling and attribution on display outputs, with no download affordance.
+- Gold-pair outputs gated by their true underlying provenance rather than the decoy row's.
+
+### Difficulty roster and fungi expansion (2026-07-04 → 2026-07-05)
+
+- Multi-axis geometric-difficulty rubric across 7 taxa with cited axes, and a `TaxonDifficulty` side
+  table as the per-taxon source of truth.
+- Paradigm × tier objective scorecard.
+- Second kingdom: 7 fungi taxa (puffball, gourd, lion's mane, bolete, fly agaric, morel, turkey tail).
+- Reference-free completeness extended to fungal body plans.
+
+### K-wise voting (2026-07-04)
+
+- Simultaneous 4-up pick-best ballots: `KBallot`, `pick_quad` over the least-compared same-paradigm
+  outputs, and a 4-up arena UI.
+- Ballot-level bootstrap so derived pairs do not artificially tighten confidence intervals.
+
+### Admissibility gating (2026-07-03)
+
+- Pluggable pre-vote gate: a `Predicate` protocol with a composer, admitting only when all predicates
+  pass.
+- Structural predicate using conservative degeneracy checks, reading assets through the storage
+  backend so it stays S3-safe.
+- VLM cardinality/identity semantic predicate, shipped advisory and promoted to a hard gate once it
+  earned it (0 real false positives; recall 11 → 13).
+- Bad-output handling: auto-gate on completeness category, per-session human flag with auto-hide at
+  K, and an admin moderation view.
+
+### Self-improving generation and completeness metrics (2026-07-01 → 2026-07-02)
+
+- **D-Complete**: organism-level completeness metric — per-taxon expected-organ inventory, VLM
+  organ-presence scorer, category derivation, and a validation harness. Validated at binary
+  kappa 0.64 (n=114).
+- **D-Gen**: rubric-in-the-loop self-improving generation — render → critique → refine with plateau
+  detection and best-round promotion. An independent blind cross-judge preferred the refined mesh
+  5/8 with zero flips.
+- Cross-paradigm biological-fidelity board.
+
+### Multi-paradigm foundation (2026-07-01)
+
+- `Generator.paradigm` with a fail-loud backfill classifier and a `same_paradigm` predicate.
+- Matchmaking pairs only within a paradigm, and cross-paradigm comparisons were dropped from rating
+  aggregation — they had been contaminating the Elo column.
+- New paradigms: `text_native` (text → 3D across 6 taxa) and `agentic` (LLM render-critique-revise).
+- Procedural code-generation scorecard (pass@1 plus morphology fidelity).
+
+### Go-public instance, dataset release, and auth (2026-06-30 → 2026-07-01)
+
+- Separate public instance: curated, licence-gated export with a fail-loud licence gate, a
+  referentially-complete include-set, and a real-execution round-trip leak test.
+- `SCORING_ENABLED` guard so the public instance never dials a scorer.
+- Dataset release bundles with a datasheet and leak guard.
+- Hugging Face OAuth login with a verified-only leaderboard scope.
+- Terms, privacy, and licences pages generated from output provenance.
+
+### Commissioned-generation arena (2026-06-30)
+
+- N LLMs write Blender Python against a 6-taxa prompt set, executed in a sandboxed `bpy` runner with
+  secrets scrubbed from the environment.
+- Resumable batch orchestrator, GLB mesh-validity checking, and a CLI driver.
+
+### Mode-C trait ground truth (2026-06-29 → 2026-06-30)
+
+- VLM trait-checking core with authored, provenance-validated rubrics and per-class kappa calibration.
+- Live rubric sourcing from Wikidata and Europe PMC, gated by `ghostcite` citation verification.
+- Human-calibration CSV round-trip and browser labeller. Calibration came back negative (no class
+  reached kappa 0.6), so Mode-C ships **experimental**.
+
+### Evaluation loop and governance (2026-06-27 → 2026-06-29)
+
+- VLM-as-judge evaluation loop with a bounded connected-pair sampler to densify per-tier ranking.
+- Per-tier perceptual ranking to test whether the winner shifts across difficulty tiers.
+- Plant input advisor: morphology → recipe plus a VLM photo grader.
+- `/coverage` governance and per-model/per-task disclosure page.
+- Six live audits covering data integrity, assets, client JS, admin auth, and write surfaces.
+- The test suite hard-refuses to run against a non-throwaway database, after a run wiped the study DB.
+
+### Foundation (2026-06-20 → 2026-06-26)
+
+- Pairwise voting arena with an Elo/Bradley-Terry leaderboard.
+- Research-grade evaluation: multi-criterion scoring, per-category slices, tie-aware BT, and export.
+- Ingestion API and Python client for registering generator GLBs programmatically.
+- Format-keyed viewer registry (model-viewer for meshes, 3Dmol.js for molecular formats).
+- Paired-bootstrap pairwise significance testing and a bias audit.
+- Vote integrity: gold attention checks, trust gating, rate limiting, and captcha.
+- Scale-out seams: storage abstraction (local/S3), pooled engine, Redis rate limiting.
+- Community submission with a moderation queue.
+- Initial taxon coverage across maize, rose, soybean, arabidopsis, pine, and tomato, including
+  image → 3D reconstruction, multi-view reconstruction, and procedural L-system sources.
