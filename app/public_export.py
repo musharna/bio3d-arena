@@ -44,9 +44,35 @@ HARD_EXCLUDE_SOURCES = frozenset(
 )
 _COMMERCIAL_MODEL_PREFIXES = ("api:", "recon:", "frontier:")
 
+# Sources our OWN pipeline produces. Ownership is a property of the harness that made the
+# artifact, not a permission someone granted us — so our own work has no third-party license
+# string to carry, and a NULL license on these rows is correct rather than a gap.
+#
+# This set exists because ownership used to be spelled as the single literal
+# `source == "bio3d-arena"` in three separate places, while our generators actually write
+# `commissioned` / `agentic:<model>` / `procedural:<gen>`. Equally-ours work therefore missed
+# the exemption and was gated as if it were an unlicensed third-party asset (441 outputs).
+# Adding a source here is the ONE place that decision now lives.
+#
+# Orthogonal to exclusion: `procedural:demeter` / `procedural:agrigen` are also ours, and are
+# kept out of public bundles by HARD_EXCLUDE_SOURCES for quality reasons — not rights ones.
+_OWN_OUTPUT_SOURCES = frozenset({"bio3d-arena", "commissioned"})
+_OWN_OUTPUT_PREFIXES = ("agentic:", "procedural:")
+
 
 def is_commercial_model(source: str | None) -> bool:
     return (source or "").startswith(_COMMERCIAL_MODEL_PREFIXES)
+
+
+def is_own_output(source: str | None) -> bool:
+    """True iff WE produced this artifact, so no redistribution license is required for it.
+
+    Covers every generation harness we run: the legacy `bio3d-arena` label, LLM code-gen
+    (`commissioned`), the render-critique-revise loop (`agentic:<model>`), and our authored
+    L-systems (`procedural:<gen>`). Third-party assets (objaverse, crops3d, sketchfab, …) and
+    commercial model APIs (`api:`/`recon:`/`frontier:`) are NOT ours and stay gated."""
+    s = source or ""
+    return s in _OWN_OUTPUT_SOURCES or s.startswith(_OWN_OUTPUT_PREFIXES)
 
 
 def effective_provenance(db: Session, o: ModelOutput) -> tuple[str | None, str | None]:
@@ -142,8 +168,8 @@ def filter_include_for_posture(
         o = db.get(ModelOutput, oid)
         if o is None or o.source in HARD_EXCLUDE_SOURCES:
             continue
-        redistributable = (
-            o.source == "bio3d-arena" or normalize_license(o.license) in REDISTRIBUTABLE_LICENSES
+        redistributable = is_own_output(o.source) or (
+            normalize_license(o.license) in REDISTRIBUTABLE_LICENSES
         )
         if posture == "redistribute":
             if redistributable and not is_commercial_model(o.source):
@@ -176,9 +202,8 @@ def filter_gold_for_posture(db: Session, inc: "IncludeSet", posture: str, gated:
         eff_source, eff_license = effective_provenance(db, o)
         if eff_source in HARD_EXCLUDE_SOURCES:
             continue
-        redistributable = (
-            eff_source == "bio3d-arena"
-            or normalize_license(eff_license) in REDISTRIBUTABLE_LICENSES
+        redistributable = is_own_output(eff_source) or (
+            normalize_license(eff_license) in REDISTRIBUTABLE_LICENSES
         )
         if posture == "redistribute":
             if redistributable and not is_commercial_model(eff_source):
@@ -203,7 +228,7 @@ def check_licenses(db: Session, output_ids: set[int]) -> None:
         o = db.get(ModelOutput, oid)
         if o is None:
             continue
-        if o.source == "bio3d-arena":  # our own asset — exempt
+        if is_own_output(o.source):  # our own asset — exempt, nothing licenses us to ourselves
             continue
         if normalize_license(o.license) not in REDISTRIBUTABLE_LICENSES:
             raise LicenseError(oid, o.license)
