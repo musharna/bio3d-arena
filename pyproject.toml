@@ -2,7 +2,10 @@
 name = "bio3d-arena"
 version = "0.1.0"
 description = "Anonymous pairwise comparison + voting platform for biological 3D generations"
-requires-python = ">=3.10"
+# 3.12 is the real floor, set by the pinned scipy/tifffile in requirements.txt — not an
+# aspiration. The previous ">=3.10" was untested: no 3.10 or 3.11 environment can resolve
+# the dependency set the app is actually built and tested against.
+requires-python = ">=3.12"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
@@ -10,4 +13,4 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py312"
