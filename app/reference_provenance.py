@@ -5,7 +5,7 @@ of that photo's work — so an uncleared reference photo blocks its recon output
 from __future__ import annotations
 
 import json
-import re
+from pathlib import PurePosixPath
 
 from sqlalchemy.orm import Session
 
@@ -35,15 +35,30 @@ def _ref_dir():
     return config.ASSET_DIR / "reference"
 
 
-def cleared_reference_taxa() -> set[str]:
-    """Taxa with a valid CC sidecar {taxon}_ref.json (all required fields, allowlisted license)."""
+def cleared_reference_images() -> set[str]:
+    """Filenames of reference photos carrying a valid CC provenance record.
+
+    Keyed by the IMAGE a record covers -- its `file` field -- NOT by taxon. Copyright attaches to
+    an individual photograph, so a cleared photo must never launder a different, unrecorded photo
+    that merely shares a taxon prefix. The previous taxon key was wrong in BOTH directions:
+    `tomato_ref_roma.jpg` (7 outputs) read as cleared because a *different* tomato photo had a
+    record, while `rose_ref_clean.jpg` / `soybean_ref_clean.jpg` (21 outputs) read as uncleared
+    even though their records were present and valid -- those sidecars are named off the
+    `{taxon}_ref.json` convention, so the old `*_ref.json` glob never saw them.
+
+    A record's own filename is therefore irrelevant; only its `file` field is. `*_old` records are
+    skipped: they describe a superseded photo, yet their `file` field can still name the current
+    one, which would attach stale provenance to a live image.
+    """
     ok: set[str] = set()
     d = _ref_dir()
     if not d.exists():
         return ok
     from .licensing import normalize_license
 
-    for meta in d.glob("*_ref.json"):
+    for meta in d.glob("*_ref*.json"):
+        if meta.stem.endswith("_old"):
+            continue
         try:
             data = json.loads(meta.read_text())
         except Exception:
@@ -55,23 +70,24 @@ def cleared_reference_taxa() -> set[str]:
             )
             and normalize_license(data.get("license")) in _CC_OK
         ):
-            taxon = meta.name[: -len("_ref.json")]
-            ok.add(taxon)
+            covered = str(data.get("file") or "").strip()
+            if covered:
+                ok.add(covered)
     return ok
 
 
-def _taxon_of(input_image: str | None) -> str | None:
+def _image_name(input_image: str | None) -> str | None:
+    """Basename of a recorded recon input, e.g. 'reference/rose_ref.jpg' -> 'rose_ref.jpg'."""
     if not input_image:
         return None
-    m = re.search(r"([a-z0-9]+)_ref", input_image.lower())
-    return m.group(1) if m else None
+    return PurePosixPath(str(input_image)).name or None
 
 
 def assert_recon_photos_cleared(db: Session, output_ids: set[int]) -> None:
-    """Raise if any recon output in the set uses a reference photo whose taxon lacks a cleared sidecar."""
+    """Raise if any recon output in the set uses a reference photo that lacks a cleared sidecar."""
     from .public_export import _COMMERCIAL_MODEL_PREFIXES
 
-    cleared = cleared_reference_taxa()
+    cleared = cleared_reference_images()
     for oid in sorted(output_ids):
         o = db.get(ModelOutput, oid)
         if o is None:
@@ -85,15 +101,16 @@ def assert_recon_photos_cleared(db: Session, output_ids: set[int]) -> None:
         is_internal_recon = (o.source == "bio3d-arena") and (img is not None)
         if not (is_commercial or is_internal_recon):
             continue
-        taxon = _taxon_of(img)
-        if taxon is None:
+        name = _image_name(img)
+        if name is None:
             raise ReferenceProvenanceError(
-                f"output {oid}: recon input '{img}' has no identifiable reference-photo taxon —"
+                f"output {oid}: recon input '{img}' has no identifiable reference-photo filename —"
                 " cannot verify provenance"
             )
-        if taxon not in cleared:
+        if name not in cleared:
             raise ReferenceProvenanceError(
-                f"output {oid}: recon input '{img}' (taxon {taxon!r}) has no cleared CC provenance sidecar"
+                f"output {oid}: recon input '{img}' has no cleared CC provenance record for"
+                f" {name!r} (a record for another photo of the same taxon does not cover it)"
             )
 
 
@@ -108,7 +125,7 @@ def assert_recon_photos_cleared_for_gold(db: Session, gold_output_ids: set[int])
 
     from .public_export import _COMMERCIAL_MODEL_PREFIXES
 
-    cleared = cleared_reference_taxa()
+    cleared = cleared_reference_images()
     for oid in sorted(gold_output_ids):
         o = db.get(ModelOutput, oid)
         if o is None:
@@ -132,14 +149,14 @@ def assert_recon_photos_cleared_for_gold(db: Session, gold_output_ids: set[int])
         is_internal_recon = (asset.source == "bio3d-arena") and (img is not None)
         if not (is_commercial or is_internal_recon):
             continue
-        taxon = _taxon_of(img)
-        if taxon is None:
+        name = _image_name(img)
+        if name is None:
             raise ReferenceProvenanceError(
                 f"gold output {oid} (twin asset {asset.id}): recon input '{img}' has no"
-                " identifiable reference-photo taxon — cannot verify provenance"
+                " identifiable reference-photo filename — cannot verify provenance"
             )
-        if taxon not in cleared:
+        if name not in cleared:
             raise ReferenceProvenanceError(
-                f"gold output {oid} (twin asset {asset.id}): recon input '{img}'"
-                f" (taxon {taxon!r}) has no cleared CC provenance sidecar"
+                f"gold output {oid} (twin asset {asset.id}): recon input '{img}' has no cleared"
+                f" CC provenance record for {name!r}"
             )

@@ -36,9 +36,10 @@ def test_writes_sidecar_that_clears(tmp_path):
     assert not (dest / "basil_ref_clean.json").exists()  # must NOT use the un-scanned name
 
 
-def test_ingested_sidecar_actually_clears_the_taxon(tmp_path, monkeypatch):
-    # The load-bearing behavior: after ingestion, cleared_reference_taxa() must report the taxon.
-    # (The original tests only checked the sidecar's fields, not that the gate scans it.)
+def test_ingested_sidecar_actually_clears_the_photo(tmp_path, monkeypatch):
+    # The load-bearing behavior: after ingestion, cleared_reference_images() must report the
+    # PHOTO the record covers. (The original tests only checked the sidecar's fields, not that
+    # the gate scans it.)
     from app import reference_provenance
 
     src = _img(tmp_path / "in.jpg")
@@ -57,7 +58,12 @@ def test_ingested_sidecar_actually_clears_the_taxon(tmp_path, monkeypatch):
         note="Owner-shot nursery photo.",
         dest_dirs=[dest],
     )
-    assert "basil" in reference_provenance.cleared_reference_taxa()
+    # The record is named basil_ref.json but its `file` names the copied basil_ref_clean.jpg —
+    # clearance follows the `file` field, so that is the photo which clears.
+    cleared = reference_provenance.cleared_reference_images()
+    assert "basil_ref_clean.jpg" in cleared
+    # ...and it must NOT clear some other basil photo that has no record of its own.
+    assert "basil_ref.jpg" not in cleared
 
 
 def test_rejects_non_cc_license(tmp_path):

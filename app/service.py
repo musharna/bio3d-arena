@@ -1982,7 +1982,7 @@ def reference_images_for_task(db: Session, task) -> list[dict]:
 
     from . import config
     from .models import ModelOutput
-    from .reference_provenance import _taxon_of, cleared_reference_taxa
+    from .reference_provenance import _image_name, cleared_reference_images
     from .storage import get_storage
 
     st = get_storage()
@@ -1992,9 +1992,10 @@ def reference_images_for_task(db: Session, task) -> list[dict]:
 
     # Recon input photos are shown ONLY for exempt tasks (barley-MRI). For everyone else the input
     # is not a reference — the independent gallery below is the anchor. Text→3D never contributed
-    # an image input, so this is paradigm-agnostic. Visible-only + cleared-taxon still apply.
+    # an image input, so this is paradigm-agnostic. Visible-only + cleared-photo still apply
+    # (clearance is per PHOTO, not per taxon — a cleared photo does not clear its taxon-mates).
     if slug in config.INPUT_REFERENCE_EXEMPT_SLUGS:
-        cleared_taxa = cleared_reference_taxa()
+        cleared_images = cleared_reference_images()
         for o in db.execute(
             select(ModelOutput).where(
                 ModelOutput.task_id == task.id, ModelOutput.hidden_at.is_(None)
@@ -2004,7 +2005,7 @@ def reference_images_for_task(db: Session, task) -> list[dict]:
                 img = (json.loads(o.meta_json or "{}") or {}).get("input_image")
             except (ValueError, TypeError):
                 continue
-            if img and img not in seen and _taxon_of(img) in cleared_taxa:
+            if img and img not in seen and _image_name(img) in cleared_images:
                 seen.add(img)
                 out.append({"url": st.url_for(img), "credit": "reconstruction input photo"})
 

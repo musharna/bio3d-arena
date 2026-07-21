@@ -79,12 +79,14 @@ def test_gold_aliasing_cleared_recon_twin_does_not_raise(monkeypatch):
             _gen(db),
             asset_path="c2.glb",
             source="api:fal:trellis",
-            meta_json=json.dumps({"input_image": "reference/okok_ref.jpg"}),  # 'okok' cleared
+            meta_json=json.dumps({"input_image": "reference/okok_ref.jpg"}),  # this photo cleared
         )
         gold = _output(
             db, t, _gen(db, "decoy"), asset_path="c2.glb", source="bio3d-arena", is_gold=True
         )
-        monkeypatch.setattr("app.reference_provenance.cleared_reference_taxa", lambda: {"okok"})
+        monkeypatch.setattr(
+            "app.reference_provenance.cleared_reference_images", lambda: {"okok_ref.jpg"}
+        )
         assert_recon_photos_cleared_for_gold(db, {gold.id})  # no raise
         db.rollback()
 

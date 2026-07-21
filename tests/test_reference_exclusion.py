@@ -32,7 +32,9 @@ def _task_with_input(db, title, input_image):
 
 
 def test_non_exempt_task_drops_input_photo(monkeypatch):
-    monkeypatch.setattr("app.reference_provenance.cleared_reference_taxa", lambda: {"tomato"})
+    monkeypatch.setattr(
+        "app.reference_provenance.cleared_reference_images", lambda: {"tomato_ref.jpg"}
+    )
     with SessionLocal() as db:
         t = _task_with_input(
             db,
@@ -46,7 +48,9 @@ def test_non_exempt_task_drops_input_photo(monkeypatch):
 
 
 def test_barley_mri_task_keeps_input_photo(monkeypatch):
-    monkeypatch.setattr("app.reference_provenance.cleared_reference_taxa", lambda: {"hordeum"})
+    monkeypatch.setattr(
+        "app.reference_provenance.cleared_reference_images", lambda: {"hordeum_ref.jpg"}
+    )
     assert "hordeum_vulgare" in config.INPUT_REFERENCE_EXEMPT_SLUGS
     with SessionLocal() as db:
         t = _task_with_input(

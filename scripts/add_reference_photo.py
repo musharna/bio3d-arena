@@ -1,10 +1,11 @@
 # scripts/add_reference_photo.py
 """Ingest an OWNED / CC-licensed reference photo as a recon input: copy it to
-{taxon}_ref_clean.jpg and write the provenance sidecar as {taxon}_ref.json — the sidecar name
-MUST end in `_ref.json` because reference_provenance.cleared_reference_taxa() globs `*_ref.json`
-and derives the cleared taxon from that filename (a `_ref_clean.json` sidecar would be silently
-skipped, so the taxon would never clear). Does NOT touch the DB or call any paid regen — after
-this, run:
+{taxon}_ref_clean.jpg and write the provenance sidecar as {taxon}_ref.json, whose `file` field
+names the copied photo. Clearance is keyed by that `file` field, not by the sidecar's own
+filename (reference_provenance.cleared_reference_images()), so the record covers exactly the one
+photo it describes and no other photo of the same taxon. Keep the `{taxon}_ref.json` name anyway
+— it is the house convention and keeps one obvious record per taxon. Does NOT touch the DB or
+call any paid regen — after this, run:
   scripts/generate_api_recon.py --crop {taxon} --force   (then completeness scoring)
 and point CROPS[{taxon}] at {taxon}_ref_clean.jpg if not already."""
 
@@ -19,6 +20,7 @@ from pathlib import Path
 # bootstrap: allow `python scripts/<name>.py` without PYTHONPATH (repo root on sys.path)
 import sys as _sys
 import pathlib as _pl
+
 _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent))
 
 from app.licensing import normalize_license
@@ -66,9 +68,9 @@ def write_reference_photo(
     for d in dest_dirs:
         d.mkdir(parents=True, exist_ok=True)
         jpg = d / f"{taxon}_ref_clean.jpg"
-        # Sidecar MUST be {taxon}_ref.json (not _ref_clean.json) so cleared_reference_taxa()'s
-        # `*_ref.json` glob scans it and derives taxon={taxon}. The `file` field still points at
-        # the actual {taxon}_ref_clean.jpg image.
+        # House convention: one record per taxon, named {taxon}_ref.json, whose `file` field
+        # points at the actual {taxon}_ref_clean.jpg image. Clearance follows that `file` field,
+        # so the record covers only the photo it names.
         sidecar_path = d / f"{taxon}_ref.json"
         # Guard the SIDECAR path too (not just the image): a taxon may already have a curated
         # original {taxon}_ref.json (e.g. morel_ref.json = Philip Precey/iNat/CC0) even when no
