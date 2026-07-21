@@ -892,7 +892,21 @@ def _judge_model_for_scope(db: Session, criterion_id: int, view_condition: str) 
 def recompute_judge_scope(
     db: Session, criterion: Criterion, view_condition: str, commit: bool = True
 ) -> dict:
-    """Refit Bradley-Terry over JudgeVote for (criterion, condition); cache JudgeRating."""
+    """Refit Bradley-Terry over JudgeVote for (criterion, condition); cache JudgeRating.
+
+    Delete-then-reinsert per scope, same rationale as `recompute_kingdom_judge_scope`: the
+    player set SHRINKS (a generator with no non-gold outputs left — hidden, deleted, or
+    reclassified — drops out of `_players_for_scope`). Upserting only the current players left
+    those rows stranded with whatever score the fit produced when they last qualified, and the
+    board still read them. That is how 40 rows kept pre-fix scores (-6403 .. +60292, including
+    a visible TRELLIS at 18029) across every later recompute. A cached rating must not outlive
+    the fit that produced it."""
+    db.query(JudgeRating).filter(
+        JudgeRating.criterion_id == criterion.id,
+        JudgeRating.view_condition == view_condition,
+        JudgeRating.category_id.is_(None),
+    ).delete(synchronize_session=False)
+    db.flush()
     matches = _judge_matches_for_scope(db, criterion.id, view_condition)
     judge_model = _judge_model_for_scope(db, criterion.id, view_condition)
     players = sorted(set(_players_for_scope(db, None)) | {p for m in matches for p in m})

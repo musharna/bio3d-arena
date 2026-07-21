@@ -66,6 +66,56 @@ def _seed_votes(db):
     return crit, strong, weak
 
 
+def test_recompute_judge_purges_rows_for_generators_no_longer_in_scope():
+    """A cached judge rating must never outlive the fit that produced it.
+
+    `_players_for_scope` drops a generator as soon as it has no non-gold outputs (hidden,
+    deleted, or reclassified). The old upsert-only recompute then never touched that
+    generator's row again, so a PRE-FIX Bradley-Terry score survived every later recompute and
+    still rendered on the board. Production shape: 40 rows stranded at 2026-07-02 with scores
+    from -6403 to +60292, including a VISIBLE model (TRELLIS, bt=18029) — long after the
+    evidence-scaled prior had brought live fits back into [655, 1390].
+
+    The kingdom sibling (`recompute_kingdom_judge_scope`) already delete-then-reinserts per
+    scope for exactly this reason; this asserts the global path behaves the same."""
+    with SessionLocal() as db:
+        crit, _strong, _weak = _seed_votes(db)
+        # A generator with NO outputs at all -> not in _players_for_scope, so an upsert-only
+        # recompute can never reach its row.
+        ghost = Generator(slug="jr2-ghost", name="Ghost")
+        db.add(ghost)
+        db.flush()
+        db.add(
+            JudgeRating(
+                generator_id=ghost.id,
+                criterion_id=crit.id,
+                view_condition="multi4",
+                category_id=None,
+                bt_score=18029.3,
+                bt_lower=8695.9,
+                bt_upper=27709.3,
+                n_games=119,
+            )
+        )
+        db.commit()
+
+        service.recompute_judge_scope(db, crit, "multi4")
+
+        stranded = (
+            db.query(JudgeRating)
+            .filter_by(generator_id=ghost.id, criterion_id=crit.id, view_condition="multi4")
+            .one_or_none()
+        )
+        assert stranded is None, (
+            "stale judge rating survived a recompute that no longer covers its generator "
+            f"(bt_score={stranded.bt_score if stranded else None})"
+        )
+        # The generators still in scope keep real, in-range ratings.
+        live = db.query(JudgeRating).filter_by(criterion_id=crit.id, view_condition="multi4").all()
+        assert live, "recompute must still write ratings for in-scope generators"
+        assert all(-2000 < r.bt_score < 4000 for r in live), [r.bt_score for r in live]
+
+
 def test_recompute_judge_orders_strong_above_weak():
     with SessionLocal() as db:
         crit, strong, weak = _seed_votes(db)
