@@ -110,9 +110,10 @@ def test_rose_requires_flower_soybean_does_not():
     # rose: stem+leaves but NO flower -> incomplete (partial), since flower is required
     assert derive(rose, mk(rose, "vegetative_axis", "foliage")) == ("partial-organism", 2 / 3)
     # rose: all three -> complete
-    assert derive(
-        rose, mk(rose, "vegetative_axis", "foliage", "reproductive_flower_hip")
-    ) == ("complete", 1.0)
+    assert derive(rose, mk(rose, "vegetative_axis", "foliage", "reproductive_flower_hip")) == (
+        "complete",
+        1.0,
+    )
     # rose: flower only (bloom-dominant recon) -> isolated-organ, 1/3
     assert derive(rose, mk(rose, "reproductive_flower_hip")) == ("isolated-organ", 1 / 3)
     # soybean: stem+leaves, no pod -> still complete (pod optional)

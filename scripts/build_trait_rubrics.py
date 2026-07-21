@@ -12,6 +12,15 @@ import json
 import sys
 from pathlib import Path
 
+# Aliased stdlib for the live HTTP/subprocess helpers below. Bound at module level so a test can
+# monkeypatch them (e.g. build_trait_rubrics._urlrequest); the alias, not the position, is what
+# makes that work. All stdlib, so they do not depend on the sys.path bootstrap below.
+import json as _json
+import subprocess as _subprocess
+import urllib.error as _urlerror
+import urllib.parse as _urlparse
+import urllib.request as _urlrequest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 RECON_TAXA = {  # taxon -> task_id placeholder; resolve real ids in main() via Task lookup
@@ -61,11 +70,6 @@ def upsert_rubric(db, taxon, task_id, traits):
 
 # --- Live HTTP / subprocess helpers (module-level so monkeypatch can replace them) -------------
 
-import json as _json
-import subprocess as _subprocess
-import urllib.error as _urlerror
-import urllib.parse as _urlparse
-import urllib.request as _urlrequest
 
 _UA = "bio3d-arena-rubrics/0.1 (research; contact: operator)"
 

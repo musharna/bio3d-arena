@@ -48,7 +48,7 @@ def test_roundtrip_matches_and_no_leak(db_session, tmp_path):
 
     dst_url = f"sqlite:///{tmp_path / 'public.db'}"
     dst_store = LocalStorageBackend(tmp_path / "dst")
-    counts = import_bundle(out, database_url=dst_url, storage=dst_store)
+    import_bundle(out, database_url=dst_url, storage=dst_store)
 
     eng = create_engine(dst_url)
     with Session(eng) as s:
@@ -80,6 +80,8 @@ def test_import_rejects_tampered_bundle(db_session, tmp_path):
             database_url=f"sqlite:///{tmp_path / 'p.db'}",
             storage=LocalStorageBackend(tmp_path / "dst"),
         )
+
+
 def test_roundtrip_imports_gold_pair_with_calibration_generator(db_session, tmp_path):
     """FIX 1 end-to-end: a gold pair's outputs belong to the "calibration" generator,
     which the curator's generator_slugs allowlist doesn't include. The exported bundle
@@ -89,7 +91,9 @@ def test_roundtrip_imports_gold_pair_with_calibration_generator(db_session, tmp_
     e = _mk(db_session)
     e["o_bad"].license = "CC-BY-4.0"
 
-    calib = Generator(slug="calibration", name="Calibration (gold)", kind="decoy", is_anonymous=True)
+    calib = Generator(
+        slug="calibration", name="Calibration (gold)", kind="decoy", is_anonymous=True
+    )
     db_session.add(calib)
     db_session.flush()
     o_good = ModelOutput(

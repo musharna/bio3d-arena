@@ -19,3 +19,5 @@ open_clip_torch==3.3.0  # CLIP/BioCLIP species-id judge
 # dev/test
 pytest==9.1.1
 httpx==0.28.1
+ruff==0.15.15  # lint + format; pinned because an unpinned formatter rewrites files differently
+               # per machine, and `ruff format` is run against this tree by hand

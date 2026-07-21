@@ -1,4 +1,10 @@
-from app.sourcing import classify_license, label_depiction, public_safe
+from app.sourcing import (
+    VOLUMETRIC_DATASETS,
+    classify_license,
+    label_depiction,
+    public_safe,
+    source_class,
+)
 
 
 def test_classify_license_hosts_cc_and_public_domain():
@@ -51,9 +57,6 @@ def test_label_depiction():
     assert label_depiction("cherry tomatoes") == "fruit"
     assert label_depiction("tomato leaf closeup") == "leaf"
     assert label_depiction("tomato soup can") == "other"
-
-
-from app.sourcing import VOLUMETRIC_DATASETS, source_class
 
 
 def test_source_class_volumetric():
