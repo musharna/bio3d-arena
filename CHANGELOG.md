@@ -35,6 +35,17 @@ also carry a design spec under `docs/superpowers/specs/`.
   derived from it; no output's redistributability changes, since nothing in the corpus is
   `CC-BY-SA-3.0`.
 
+- Split dependencies into runtime / research / dev layers. `requirements.txt` had conflated what
+  the web app needs to serve with offline corpus-building and scoring tooling, so deploying the
+  public instance installed `open_clip_torch` → `torch` → the full NVIDIA CUDA stack onto a host
+  that never imports it. Measured on a clean venv: **173 MB runtime-only vs 5.6 GB**. Verified by
+  booting `uvicorn` against a runtime-only install with the research stack genuinely absent — every
+  public route returns 200. `tests/test_runtime_deps.py` boots the real ASGI app in a subprocess
+  and fails if serving ever imports the research stack.
+- Fixed the deploy runbook, which had no dependency-install step at all, and which told the
+  deployer to confirm `/benchmark` returns 200 — it is an internal page and correctly hard-404s
+  under the public posture, so the documented smoke test failed against a correct instance.
+
 ### Added
 
 - This changelog, backfilled from git history.

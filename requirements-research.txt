@@ -1,0 +1,24 @@
+# RESEARCH / OFFLINE — corpus building, conversion, and scoring. Needed on the workstation and by
+# jobd jobs; NOT needed to serve the site, and deliberately absent from the public web host.
+#
+# The reason this file exists: open_clip_torch pulls torch, which on Linux ships the full NVIDIA
+# CUDA stack (cublas, cudnn, nccl, cusolver — multiple GB). That belongs nowhere near a web dyno
+# that never imports it. Verified: serving every public route loads none of the below.
+-r requirements.txt
+
+# Volumetric (CT/MRI) conversion — app.volume_convert, imported only by scripts and tests.
+# scipy and tifffile set the project's Python floor (3.12).
+scikit-image==0.26.0
+scipy==1.18.0
+nibabel==5.4.2
+tifffile==2026.6.1
+
+# Quadric decimation backend for app.mesh_convert.to_glb(max_faces=...) — dense laser scans.
+# trimesh calls it implicitly; mesh_convert is script/test-only, so this is offline.
+fast-simplification==0.1.13
+
+# Scoring / judging. Neither is imported anywhere under app/ at module level: `anthropic` not at
+# all, `open_clip` only inside app.species_id's functions (reached via reference_qa <-
+# input_verify <- scripts/verify_input_subjects.py).
+anthropic==0.112.0  # Claude vision judge caller; ANTHROPIC_API_KEY from env
+open_clip_torch==3.3.0  # CLIP/BioCLIP species-id judge; drags torch + CUDA — see above

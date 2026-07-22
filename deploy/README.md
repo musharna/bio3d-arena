@@ -53,11 +53,25 @@ python -m scripts.import_public --bundle public_bundle/v1
 Import verifies bundle checksums and fails loud on mismatch — do not proceed on a
 partial or corrupted transfer.
 
-## 4. Boot the app
+## 4. Install dependencies and boot the app
+
+Install the **runtime** set only:
 
 ```bash
+pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+`requirements.txt` is deliberately just what serving requires. Do **not** install
+`requirements-research.txt` or `requirements-dev.txt` on the public host: the research set pulls
+`open_clip_torch` → `torch` → the full NVIDIA CUDA stack (cublas, cudnn, nccl, cusolver), which the
+web app never imports. Measured on a clean venv: **173 MB runtime-only vs 5.6 GB** with the
+research stack.
+
+Nothing is lost by omitting it — scoring and judging are offline operations that run on the
+internal instance, and all scores are promoted in the bundle. `tests/test_runtime_deps.py` boots
+the real ASGI app in a subprocess and fails if serving a public route ever imports the research
+stack, so this stays true.
 
 Use the environment values from `deploy/.env.public.example`, with real secrets
 filled from the host's secret store (never commit real values):
@@ -77,10 +91,19 @@ Hit each of the following and confirm a 200 with sane content:
 
 - `/`
 - `/leaderboard`
-- `/benchmark`
+- `/arena`
 - `/coverage`
 - `/terms`
 - `/licenses`
+
+Then confirm the internal research pages are **404**, not 200 — with scoring off,
+`INTERNAL_PAGES_ENABLED` is false and they must hard-404 rather than render:
+
+- `/benchmark`
+
+(`/benchmark` was previously listed above as a route to confirm 200, which was wrong: it is an
+internal page and 404s under the public posture, so the smoke test failed against a correctly
+configured instance.)
 
 ## Free-tier hosting targets
 
