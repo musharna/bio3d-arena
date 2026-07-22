@@ -12,21 +12,12 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+# Defined in app.licensing (one allowlist for outputs AND reference photos); imported here rather
+# than re-declared, and still importable from this module, which was its home.
+from .licensing import REDISTRIBUTABLE_LICENSES
 from .models import Generator, GoldPair, ModelOutput, Task
 
 logger = logging.getLogger(__name__)
-
-REDISTRIBUTABLE_LICENSES = frozenset(
-    {
-        "CC0-1.0",
-        "CC-BY-4.0",
-        "CC-BY-SA-4.0",
-        "CC-BY-3.0",
-        "CC-BY-2.0",
-        "PUBLIC-DOMAIN",
-        "ODbL-1.0",
-    }
-)
 
 # Generators never promoted to the public instance, regardless of the curator's --generators
 # allowlist. Demeter + Helios are internal procedural_expert testers (agrigen) whose outputs are

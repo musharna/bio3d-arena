@@ -2,19 +2,12 @@ import json
 import os
 import pytest
 
-REQUIRED = {
-    "subject",
-    "file",
-    "source",
-    "source_url",
-    "download_url",
-    "license",
-    "author",
-    "attribution",
-    "title",
-    "note",
-}
-ALLOWED_LICENSES = {"CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0", "CC-BY-3.0", "CC-BY-SA-3.0"}
+# Imported, never restated. These two sets used to be copied here as literals, so this test
+# asserted the sidecars matched a SNAPSHOT of the gate rather than the gate itself — which is
+# exactly why the allowlist could drift away from public_export's copy without a red test.
+from app.licensing import REDISTRIBUTABLE_LICENSES, normalize_license  # noqa: E402
+from app.reference_provenance import _REQUIRED as REQUIRED  # noqa: E402
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -86,7 +79,29 @@ def test_sidecar_clears_the_image_its_file_field_names(tmp_path, monkeypatch):
 
 
 def test_invalid_sidecar_clears_nothing(tmp_path, monkeypatch):
-    """A record with a non-allowlisted licence must not clear its image (gourd: CC-BY-2.0)."""
+    """A record whose licence bars redistribution must not clear its image.
+
+    NC is the exemplar because it genuinely bars redistribution. This test previously used the
+    gourd's real CC-BY-2.0 to stand for 'non-allowlisted' -- but that only described the reference
+    gate's private copy of the allowlist, which had drifted from the export gate's copy (which
+    accepted CC-BY-2.0 all along). Pinning a drifted value as if it were policy is what kept the
+    drift invisible; see test_licensing.test_one_redistribution_allowlist_for_outputs_and_
+    reference_photos."""
+    from app import config
+    from app.reference_provenance import cleared_reference_images
+
+    ref = tmp_path / "reference"
+    ref.mkdir()
+    _write_sidecar(ref, "nc_ref.json", "nc_ref.jpg", license="CC-BY-NC-4.0")
+    monkeypatch.setattr(config, "ASSET_DIR", tmp_path)
+
+    assert cleared_reference_images() == set()
+
+
+def test_cc_by_2_0_clears_its_image(tmp_path, monkeypatch):
+    """CC-BY-2.0 permits redistribution with attribution, so it clears -- same as CC-BY-3.0/4.0.
+    Production case: gourd_ref.jpg (Wikimedia, CC-BY-2.0) and the 10 recon outputs derived from it,
+    which the reference gate had been blocking while the export gate accepted the same licence."""
     from app import config
     from app.reference_provenance import cleared_reference_images
 
@@ -95,7 +110,7 @@ def test_invalid_sidecar_clears_nothing(tmp_path, monkeypatch):
     _write_sidecar(ref, "gourd_ref.json", "gourd_ref.jpg", license="CC-BY-2.0")
     monkeypatch.setattr(config, "ASSET_DIR", tmp_path)
 
-    assert cleared_reference_images() == set()
+    assert cleared_reference_images() == {"gourd_ref.jpg"}
 
 
 @pytest.mark.parametrize("slug", ["arabidopsis", "maize", "rose", "soybean", "tomato", "pinus"])
@@ -117,7 +132,9 @@ def test_reference_has_image_and_valid_provenance(slug):
     # photo may be a re-sourced `_clean` variant), but it MUST name a file that exists.
     covered = os.path.join(REPO_ROOT, "data/assets/reference", d["file"])
     assert os.path.exists(covered), f"{slug}: record covers {d['file']!r}, which is not on disk"
-    assert d["license"] in ALLOWED_LICENSES, d["license"]
+    # Normalize first, exactly as cleared_reference_images() does — comparing the raw string
+    # would fail a legitimately-labelled 'CC-BY 4.0' that the real gate accepts.
+    assert normalize_license(d["license"]) in REDISTRIBUTABLE_LICENSES, d["license"]
     assert d["source_url"].startswith("http") and d["download_url"].startswith("http")
     for k in ("author", "attribution", "title", "subject"):
         assert d.get(k, "").strip(), k

@@ -1,6 +1,9 @@
-"""Enforce that every recon input reference photo has a cleared CC provenance sidecar before it
-may be published (even display). A render of a derivative of a copyrighted photo is still a display
-of that photo's work — so an uncleared reference photo blocks its recon outputs."""
+"""Enforce that every recon input reference photo has a cleared provenance sidecar before its recon
+outputs may be REDISTRIBUTED: a redistributed recon mesh is a derivative of its input photo, so
+that photo must itself be redistributable. Display is exempt — showing an AI-labeled mesh with no
+download does not redistribute the photo — and export_public calls this gate only under posture
+'redistribute' (scripts/export_public.py). Under display the uncleared photo is instead suppressed
+from the vote UI (service.reference_images_for_task): show the mesh, never the photo."""
 
 from __future__ import annotations
 
@@ -10,9 +13,9 @@ from pathlib import PurePosixPath
 from sqlalchemy.orm import Session
 
 from . import config
+from .licensing import REDISTRIBUTABLE_LICENSES
 from .models import ModelOutput
 
-_CC_OK = {"CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0", "CC-BY-3.0", "CC-BY-SA-3.0"}
 _REQUIRED = {
     "subject",
     "file",
@@ -68,7 +71,7 @@ def cleared_reference_images() -> set[str]:
             and all(
                 str(data.get(k, "")).strip() for k in ("author", "attribution", "title", "subject")
             )
-            and normalize_license(data.get("license")) in _CC_OK
+            and normalize_license(data.get("license")) in REDISTRIBUTABLE_LICENSES
         ):
             covered = str(data.get("file") or "").strip()
             if covered:
