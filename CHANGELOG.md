@@ -25,6 +25,16 @@ also carry a design spec under `docs/superpowers/specs/`.
   rewrites files differently per machine, and an unformatted tree means the next `ruff format`
   buries unrelated churn in someone's change. No `app/` code was touched.
 
+- Unified the redistribution allowlist. "May we redistribute this?" is one question, asked of both
+  a generated output and the reference photo a recon derives from, but it was written as two
+  hand-maintained literals that drifted in **both** directions: the export copy admitted
+  `CC-BY-2.0`, `PUBLIC-DOMAIN`, and `ODbL-1.0` that the reference copy rejected, while the
+  reference copy admitted `CC-BY-SA-3.0` that the export copy rejected. It now lives once, in
+  `app.licensing.REDISTRIBUTABLE_LICENSES`, imported by all four consumers. Net effect on real
+  data: `gourd_ref.jpg` (Wikimedia, CC-BY-2.0) is now cleared, unblocking the 10 recon outputs
+  derived from it; no output's redistributability changes, since nothing in the corpus is
+  `CC-BY-SA-3.0`.
+
 ### Added
 
 - This changelog, backfilled from git history.

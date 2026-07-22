@@ -23,8 +23,8 @@ import pathlib as _pl
 
 _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent))
 
-from app.licensing import normalize_license
-from app.reference_provenance import _CC_OK, _REQUIRED
+from app.licensing import REDISTRIBUTABLE_LICENSES, normalize_license
+from app.reference_provenance import _REQUIRED
 
 
 def write_reference_photo(
@@ -42,9 +42,10 @@ def write_reference_photo(
     force: bool = False,
 ) -> Path:
     norm = normalize_license(license_)
-    if norm not in _CC_OK:
+    if norm not in REDISTRIBUTABLE_LICENSES:
         raise ValueError(
-            f"license {license_!r} normalizes to {norm!r}, not in the CC allowlist {sorted(_CC_OK)}"
+            f"license {license_!r} normalizes to {norm!r}, not in the redistribution allowlist "
+            f"{sorted(REDISTRIBUTABLE_LICENSES)}"
         )
     sidecar = {
         "subject": subject,
