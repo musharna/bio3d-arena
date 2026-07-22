@@ -27,6 +27,8 @@ def test_captcha_rejects_missing_token_when_enabled(monkeypatch):
     monkeypatch.setattr(config, "REQUIRE_CAPTCHA", True)
     monkeypatch.setattr(config, "CAPTCHA_SECRET", "sek")
     assert integrity.verify_captcha(None) is False
+
+
 def test_captcha_fails_closed_on_non_dict_provider_response(monkeypatch):
     """FIX 3: a syntactically-valid but non-dict provider response (null, a list) must
     fail closed (False), not raise AttributeError out of verify_captcha (which would

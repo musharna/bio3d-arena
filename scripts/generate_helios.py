@@ -155,6 +155,7 @@ def main() -> int:
                 from pathlib import Path as _P
 
                 from scripts.helios_glb import DEFAULT_BLENDER, DEFAULT_LEAF_TEX
+
                 return _P(DEFAULT_BLENDER).exists() and _P(DEFAULT_LEAF_TEX).exists()
 
             if _probe():

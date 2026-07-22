@@ -62,16 +62,13 @@ def test_whole_plant_reference_not_flagged():
     assert res["fruit_only"] is False
 
 
-from app import reference_qa as rq
-
-
 def test_qa_combiner_fails_fruit_only():
-    r = rq.qa_reference_image(organ={"fruit_only": True, "category": "isolated-organ"})
+    r = reference_qa.qa_reference_image(organ={"fruit_only": True, "category": "isolated-organ"})
     assert r["passed"] is False and any("fruit" in x for x in r["reasons"])
 
 
 def test_qa_combiner_fails_species_mismatch():
-    r = rq.qa_reference_image(
+    r = reference_qa.qa_reference_image(
         organ={"fruit_only": False, "category": "complete"},
         species={"ok": False, "top": "Zea mays"},
     )
@@ -79,7 +76,7 @@ def test_qa_combiner_fails_species_mismatch():
 
 
 def test_qa_combiner_fails_isolated_composition():
-    r = rq.qa_reference_image(
+    r = reference_qa.qa_reference_image(
         organ={"fruit_only": None, "category": "complete"},  # body-plan: organ can't tell
         composition={"isolated": True, "note": "lone gourd on a table"},
     )
@@ -87,7 +84,7 @@ def test_qa_combiner_fails_isolated_composition():
 
 
 def test_qa_combiner_passes_good():
-    r = rq.qa_reference_image(
+    r = reference_qa.qa_reference_image(
         organ={"fruit_only": False, "category": "complete"},
         composition={"isolated": False},
         species={"ok": True, "top": "Solanum lycopersicum"},
@@ -106,7 +103,7 @@ def test_species_matches_flags_mismatch(monkeypatch):
             "ranked": [("Zea mays", 0.9)],
         },
     )
-    r = rq.species_matches(
+    r = reference_qa.species_matches(
         object(),
         b"x",
         claimed_taxon="Solanum lycopersicum",
@@ -125,7 +122,9 @@ def test_species_matches_ok_when_top_is_claimed(monkeypatch):
             "ranked": [],
         },
     )
-    r = rq.species_matches(object(), b"x", claimed_taxon="Solanum lycopersicum", panel=["Zea mays"])
+    r = reference_qa.species_matches(
+        object(), b"x", claimed_taxon="Solanum lycopersicum", panel=["Zea mays"]
+    )
     assert r["ok"] is True
 
 
@@ -143,7 +142,9 @@ def test_assess_composition_parses_isolated():
         def create(self, **kw):
             return _R()
 
-    res = rq.assess_composition(_C(), b"\xff\xd8\xff jpeg", taxon="Cucurbita pepo", common="gourd")
+    res = reference_qa.assess_composition(
+        _C(), b"\xff\xd8\xff jpeg", taxon="Cucurbita pepo", common="gourd"
+    )
     assert res["isolated"] is True and "gourd" in res["note"]
 
 

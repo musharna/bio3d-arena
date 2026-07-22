@@ -67,9 +67,7 @@ def _leaflet_mesh(length, width, name):
 
 def _cyl(r0, r1, length, name, mat, verts=8):
     bm = bmesh.new()
-    bmesh.ops.create_cone(
-        bm, cap_ends=True, segments=verts, radius1=r0, radius2=r1, depth=length
-    )
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=verts, radius1=r0, radius2=r1, depth=length)
     bmesh.ops.translate(bm, verts=bm.verts, vec=(0, 0, length / 2))  # base at origin, grows +Z
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)

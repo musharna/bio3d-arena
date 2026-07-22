@@ -16,7 +16,7 @@ def test_config_defaults():
 
 
 def test_hidden_at_and_outputflag_exist():
-    with SessionLocal() as db:
+    with SessionLocal():
         cols = {c.name for c in ModelOutput.__table__.columns}
         assert "hidden_at" in cols
         fcols = {c.name for c in OutputFlag.__table__.columns}

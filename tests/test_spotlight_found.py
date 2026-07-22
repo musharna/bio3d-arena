@@ -1,4 +1,3 @@
-
 from app import ingest, spotlight
 from app.database import SessionLocal, init_db
 from app.assets_gen import build_asset

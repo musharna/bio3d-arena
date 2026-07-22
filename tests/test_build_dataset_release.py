@@ -66,9 +66,7 @@ def test_preference_records_scoped_to_release_bundle(db_session, tmp_path):
     db_session.flush()
 
     crit = (
-        db_session.execute(select(Criterion).where(Criterion.slug == "overall"))
-        .scalars()
-        .first()
+        db_session.execute(select(Criterion).where(Criterion.slug == "overall")).scalars().first()
     )
     if crit is None:
         crit = Criterion(slug="overall", name="Overall")

@@ -20,6 +20,10 @@ also carry a design spec under `docs/superpowers/specs/`.
 - Corrected `requires-python` from `>=3.10` to `>=3.12`. The old floor was untested and
   unsatisfiable: pinned `scipy` and `tifffile` both require 3.12+, so no 3.10 or 3.11 environment
   could resolve the real dependency set. Ruff's `target-version` moved to `py312` to match.
+- Pinned `ruff`, previously an undeclared dev dependency, and made the tree clean under it —
+  `ruff check` goes from 11 errors to 0 and all 433 files are formatted. An unpinned formatter
+  rewrites files differently per machine, and an unformatted tree means the next `ruff format`
+  buries unrelated churn in someone's change. No `app/` code was touched.
 
 ### Added
 

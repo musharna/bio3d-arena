@@ -332,7 +332,7 @@ def test_dry_run_plan_counts_uncovered_pairs(tmp_path):
     from scripts import commission_arena
 
     with SessionLocal() as db:
-        tid = _rubric_task(db, "Zea mays")
+        _rubric_task(db, "Zea mays")  # the task must exist for plan() to count it
         plan = commission_arena.plan(db, roster=["m1", "m2"])
         assert plan["tasks"] == 1 and plan["roster"] == 2 and plan["calls_needed"] == 2
 
