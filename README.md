@@ -87,10 +87,22 @@ criteria are added by inserting rows — no schema change.
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # runtime + research + test/lint (see below)
 python -m app.seed                 # creates demo data + procedural GLB assets
 uvicorn app.main:app --reload      # http://127.0.0.1:8000
 ```
+
+Dependencies are layered, each file including the one above it:
+
+| File                        | Contains                                                          | Install it when                |
+| --------------------------- | ----------------------------------------------------------------- | ------------------------------ |
+| `requirements.txt`          | what serving needs, and nothing else                              | deploying the public instance  |
+| `requirements-research.txt` | + volumetric conversion, mesh decimation, VLM judge, CLIP/BioCLIP | building or scoring the corpus |
+| `requirements-dev.txt`      | + pytest, httpx, ruff                                             | contributing                   |
+
+The split is load-bearing, not cosmetic: `open_clip_torch` pulls `torch` and the full NVIDIA CUDA
+stack, so a runtime-only install is **173 MB against 5.6 GB**. `tests/test_runtime_deps.py`
+enforces it.
 
 Open <http://127.0.0.1:8000> to vote, `/leaderboard` for rankings, `/tasks` to
 browse benchmark tasks, `/admin` for admin tools (token below).

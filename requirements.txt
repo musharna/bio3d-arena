@@ -1,23 +1,19 @@
+# RUNTIME — exactly what the web app needs to serve requests. This is what a deployer installs
+# (deploy/README.md step 4), so anything added here lands on the public web host.
+#
+# Offline tooling lives in requirements-research.txt; test/lint tools in requirements-dev.txt.
+# Both layer on top of this file, so a research or dev install is a superset, never a rival list.
+#
+# The split is enforced by tests/test_runtime_deps.py, which boots the real ASGI app in a
+# subprocess and fails if serving a public route pulls in the research stack.
 fastapi==0.138.0
 uvicorn[standard]==0.49.0
 SQLAlchemy==2.0.51
 Jinja2==3.1.6
 python-multipart==0.0.32
 pydantic==2.13.4
+pillow==12.2.0  # loaded at app import; also downscales reference photos for the image3d providers
+# Request-reachable via POST /api/submit -> app.submissions -> app.ingest (trimesh, lazily) ->
+# app.structural (numpy). A community submission is validated in-process, so these are runtime.
 numpy==2.4.6
 trimesh==4.12.2
-pillow==12.2.0  # downscale reference photos before inlining as data URIs (image3d providers)
-fast-simplification==0.1.13  # quadric decimation backend for to_glb(max_faces=...) — dense laser scans
-# volumetric (CT/MRI) conversion. scipy and tifffile set the project's Python floor (3.12).
-scikit-image==0.26.0
-scipy==1.18.0
-nibabel==5.4.2
-tifffile==2026.6.1
-# VLM-as-judge (runtime)
-anthropic==0.112.0  # Claude vision judge caller; ANTHROPIC_API_KEY from env
-open_clip_torch==3.3.0  # CLIP/BioCLIP species-id judge
-# dev/test
-pytest==9.1.1
-httpx==0.28.1
-ruff==0.15.15  # lint + format; pinned because an unpinned formatter rewrites files differently
-               # per machine, and `ruff format` is run against this tree by hand
