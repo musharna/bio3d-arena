@@ -16,12 +16,14 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
 
 import trimesh
 
+from . import mesh_subject
 from .organ_inventory import ORGAN_INVENTORY, inventory_for
 
 
@@ -439,6 +441,18 @@ def run_bpy(
                 "glb_path": None,
                 "mesh_stats": {},
             }
+        # Drop any stray scenery ground/floor plane the model left behind (a
+        # code-gen model that ignored "ONE whole specimen — not a scene") BEFORE
+        # validating, so mesh stats and the ingested GLB reflect the organism,
+        # not a floor the subject sits on (see app.mesh_subject). The strip is
+        # atomic + verified, so on any failure the original GLB is untouched: log
+        # loudly and fall through to validation rather than turn a real organism
+        # into a harness error.
+        if out_glb.exists() and out_glb.stat().st_size > 0:
+            try:
+                mesh_subject.strip_scenery_from_glb(out_glb, apply=True)
+            except Exception as exc:  # noqa: BLE001 — never fail a run on a guard hiccup
+                print(f"scenery strip failed for {out_glb.name}: {exc!r}", file=sys.stderr)
         ok, stats = is_valid_mesh(out_glb)
         return {
             "status": "ok" if ok else "invalid_mesh",
