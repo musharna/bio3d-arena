@@ -46,6 +46,28 @@ also carry a design spec under `docs/superpowers/specs/`.
   deployer to confirm `/benchmark` returns 200 — it is an internal page and correctly hard-404s
   under the public posture, so the documented smoke test failed against a correct instance.
 
+### Removed
+
+- Removed the `Cucurbita pepo` (pumpkin) task from the corpus. It is a plant fruit that had been
+  filed under the Fungi kingdom and scored "complete" as a lone fruit — but a plant's organism is
+  the whole plant, not one organ. It was the only such misfit; the six remaining Fungi taxa are all
+  genuine fungal fruiting bodies (for which the fruiting body _is_ the whole macro-organism).
+
+### Fixed
+
+- Stray ground/floor planes in LLM-authored meshes. Some code-gen models (grok-4.20 in the
+  commissioned paradigm, gpt-5-6-sol in the agentic paradigm) added a large horizontal plane the
+  organism sits on, despite the prompt asking for a single whole specimen; it rendered as a slab
+  through the subject in the turntable that both human voters and the VLM judge score. Added a
+  world-space subject-isolation guard (`app.mesh_subject`) wired into `commission.run_bpy` — which
+  both paradigms author their mesh through — and stripped the 25 affected meshes retroactively. A
+  corpus-wide sweep of all 847 votable GLBs confirms none remain (and 0 leftover default cubes).
+- A plant fruit could be scored a "complete organism". `Cucurbita pepo`'s completeness inventory
+  used the fungal single-body model (`_body_inv`), so a lone fruit satisfied the sole required organ
+  and scored complete. `_body_inv` is now fungi-only; plants use `_inv`, which requires a vegetative
+  axis + foliage, so a lone fruit correctly reads as an isolated organ. An invariant test forbids
+  any plants-kingdom taxon from single-body completeness scoring.
+
 ### Added
 
 - This changelog, backfilled from git history.
