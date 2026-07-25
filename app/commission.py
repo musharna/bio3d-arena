@@ -45,7 +45,6 @@ SPECIES_COMMON: dict[str, str] = {
     "Arabidopsis thaliana": "Arabidopsis (thale cress)",
     # Fungi
     "Lycoperdon perlatum": "common puffball",
-    "Cucurbita pepo": "field pumpkin (gourd)",
     "Hericium erinaceus": "lion's mane mushroom",
     "Boletus edulis": "porcini",
     "Amanita muscaria": "fly agaric",

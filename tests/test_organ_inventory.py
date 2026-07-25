@@ -9,10 +9,12 @@ PLANT_TAXA = {
     "Glycine max",
     "Arabidopsis thaliana",
 }
-# Single-body-plan organisms: fungal fruiting bodies + a depicted fruit (see _body_inv).
-BODY_PLAN_TAXA = {
+# Single-body-plan organisms — fungal fruiting bodies ONLY (see _body_inv). A fungus's whole
+# macro-organism IS its fruiting body; a PLANT's organism is the whole plant, so no plant taxon
+# may be single-body. Cucurbita pepo (a pumpkin fruit = one organ of the vine) was wrongly listed
+# here and removed — a plant fruit is not a complete organism.
+FUNGI_TAXA = {
     "Lycoperdon perlatum",
-    "Cucurbita pepo",
     "Hericium erinaceus",
     "Boletus edulis",
     "Amanita muscaria",
@@ -33,7 +35,7 @@ ALL_REQUIRED_TAXA = {"Rosa"} | ANIMAL_TAXA
 
 
 def test_expected_taxa_present():
-    assert set(ORGAN_INVENTORY) == PLANT_TAXA | BODY_PLAN_TAXA | ANIMAL_TAXA
+    assert set(ORGAN_INVENTORY) == PLANT_TAXA | FUNGI_TAXA | ANIMAL_TAXA
 
 
 def test_every_taxon_has_required_and_optional_organs_with_visuals():
@@ -61,11 +63,25 @@ def test_plant_taxa_require_vegetative_axis_and_foliage():
             assert req == {"vegetative_axis", "foliage"}, taxon
 
 
-def test_body_plan_taxa_have_single_required_body_organ():
-    # The fruiting/fruit body is the SOLE required organ; features are optional.
-    for taxon in BODY_PLAN_TAXA:
+def test_fungi_have_single_required_body_organ():
+    # The fruiting body is the SOLE required organ; features are optional.
+    for taxon in FUNGI_TAXA:
         req = [o.key for o in ORGAN_INVENTORY[taxon].organs if o.required]
         assert len(req) == 1, taxon
+
+
+def test_single_body_scope_is_fungi_only():
+    """A plant's organism is the whole plant (axis + foliage), so a plant fruit must never be
+    scored 'complete' as a lone body — only a fungus (its fruiting body) is a single-required-body
+    organism. Guards the Cucurbita-pepo-as-fruit regression: a pumpkin fruit is one organ of the
+    vine, not a complete organism, and must not re-enter the inventory as a body plan."""
+    single_body = {
+        t for t, inv in ORGAN_INVENTORY.items() if sum(o.required for o in inv.organs) == 1
+    }
+    assert single_body == FUNGI_TAXA, (
+        f"non-fungi with single-body scope: {single_body - FUNGI_TAXA}"
+    )
+    assert inventory_for("Cucurbita pepo") is None  # plant-fruit-as-body entry removed
 
 
 def test_inventory_for_unknown_taxon_is_none():

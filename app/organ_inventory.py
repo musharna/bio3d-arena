@@ -3,8 +3,9 @@
 
 For plants, required organs = the vegetative body (an axis + foliage), with the reproductive
 organ OPTIONAL so a lone fruit/cone/pod registers as an isolated organ, not a complete plant.
-For single-body-plan organisms (fungi, a depicted fruit) the body is the sole required organ
-(see _body_inv). Visual descriptors are image-judgeable phrases for the VLM checklist.
+For single-body-plan organisms (fungi ONLY) the body is the sole required organ (see _body_inv);
+a plant's organism is the whole plant, so a plant fruit is never scored as a lone body. Visual
+descriptors are image-judgeable phrases for the VLM checklist.
 Taxon keys equal TraitRubric.taxon (the completeness scorer gates on a TraitRubric existing +
 inventory_for(taxon); it does NOT require the taxon to be in MORPHOLOGY_TRAITS — the fungi are
 completeness-scored but carry no Mode-C morphology rubric).
@@ -57,12 +58,14 @@ def _inv(
 
 
 def _body_inv(taxon: str, body_key: str, body: str, *optional: tuple[str, str]) -> TaxonInventory:
-    """Body-plan inventory for organisms whose whole body is a single unit — fungal fruiting
-    bodies and a depicted fruit (the arena's Cucurbita reference shows the pumpkin fruit, not
-    the vine). The body is the SOLE required organ (approved 'body required, features optional'
-    completeness model, 2026-07-04); diagnostic surface features and basal attachment are
-    optional, so their absence in a render makes an output 'partial', not incomplete. This is an
-    UNCALIBRATED cross-kingdom extension of the plant-calibrated (κ=0.64) completeness metric."""
+    """Body-plan inventory for organisms whose whole macro-organism IS a single body — the fungal
+    fruiting body. FUNGI ONLY: a plant's organism is the whole plant, so a plant fruit (one organ)
+    must never be scored here — it belongs in _inv, which requires a vegetative axis + foliage (a
+    lone fruit then reads as isolated-organ, not complete). See test_single_body_scope_is_fungi_only.
+    The body is the SOLE required organ (approved 'body required, features optional' completeness
+    model, 2026-07-04); diagnostic surface features and basal attachment are optional, so their
+    absence in a render makes an output 'partial', not incomplete. This is an UNCALIBRATED
+    cross-kingdom extension of the plant-calibrated (κ=0.64) completeness metric."""
     organs = [Organ(body_key, body, True)]
     organs += [Organ(k, v, False) for k, v in optional]
     return TaxonInventory(taxon=taxon, organs=tuple(organs))
@@ -121,20 +124,15 @@ ORGAN_INVENTORY: dict[str, TaxonInventory] = {
         "reproductive_silique",
         "thin elongated upright siliques along the stem",
     ),
-    # Kingdom Fungi + a depicted fruit — single-body-plan organisms (see _body_inv).
+    # Kingdom Fungi — single-body-plan organisms (see _body_inv). Fungi ONLY: a plant's organism
+    # is the whole plant, so a plant fruit is never a body plan here (a pumpkin/gourd was wrongly
+    # listed and removed — see test_single_body_scope_is_fungi_only).
     "Lycoperdon perlatum": _body_inv(
         "Lycoperdon perlatum",
         "fruiting_body",
         "a rounded pear-/globe-shaped pale fungal fruiting body",
         ("sterile_base", "a short tapered stalk-like base beneath the body"),
         ("surface_ornament", "fine conical warts or granular spines on the surface"),
-    ),
-    "Cucurbita pepo": _body_inv(
-        "Cucurbita pepo",
-        "fruit_body",
-        "a single rounded gourd/pumpkin fruit",
-        ("peduncle", "a short woody stem attached to the fruit"),
-        ("surface_ribbing", "vertical ribs or furrows running down the fruit"),
     ),
     "Hericium erinaceus": _body_inv(
         "Hericium erinaceus",

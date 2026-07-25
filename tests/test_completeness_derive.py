@@ -72,7 +72,7 @@ def test_fungal_body_absent_is_incomplete():
 def test_fungal_inventory_has_single_required_body():
     req = [o for o in FUNGAL.organs if o.required]
     assert [o.key for o in req] == ["fruiting_body"]
-    assert all(inventory_for(t) is not None for t in ("Cucurbita pepo", "Hericium erinaceus"))
+    assert all(inventory_for(t) is not None for t in ("Boletus edulis", "Hericium erinaceus"))
 
 
 def test_extraneous_present_key_does_not_inflate_count():

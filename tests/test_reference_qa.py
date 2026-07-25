@@ -41,15 +41,15 @@ def test_fruit_only_plant_reference_is_flagged():
 
 
 def test_body_plan_taxon_defers_fruit_only():
-    # Cucurbita/fungi are _body_inv (fruit/body is the SOLE required organ). Organ-coverage
-    # cannot distinguish fruit-only from complete -> fruit_only must be None (deferred), not False.
-    inv = inventory_for("Cucurbita pepo")
+    # Fungi are _body_inv (the fruiting body is the SOLE required organ). Organ-coverage cannot
+    # distinguish body-only from complete -> fruit_only must be None (deferred), not False.
+    inv = inventory_for("Boletus edulis")
     assert inv is not None
+    body_key = next(o.key for o in inv.organs if o.required)  # the sole required body organ
     present = [
-        {"key": o.key, "status": ("present" if o.key == "fruit_body" else "absent")}
-        for o in inv.organs
+        {"key": o.key, "status": ("present" if o.key == body_key else "absent")} for o in inv.organs
     ]
-    client = _FakeClient({"organs_present": present, "note": "a whole gourd fruit"})
+    client = _FakeClient({"organs_present": present, "note": "a whole fungal fruiting body"})
     res = reference_qa.assess_organ_coverage(client, b"\x89PNG", inventory=inv)
     assert res["fruit_only"] is None
 
