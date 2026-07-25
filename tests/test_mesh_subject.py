@@ -134,3 +134,96 @@ def test_strip_glb_is_idempotent_and_backs_up(tmp_path):
 
     second = mesh_subject.strip_scenery_from_glb(glb, apply=True, backup_dir=backups)
     assert second["action"] == "skip_no_scenery"
+
+
+# --- targeted strip: pedestals the scenery classifier structurally cannot see -
+
+
+def _pedestal(half: float = 1.5, thickness: float = 0.6) -> trimesh.Trimesh:
+    """A chunky display plinth — thick and blockish, not a thin floor quad."""
+    return trimesh.creation.box((2 * half, thickness, 2 * half))
+
+
+def test_scenery_classifier_does_not_see_a_pedestal():
+    """Why strip_named_geometry_from_glb exists (live audit 2026-07-25).
+
+    Six outputs stand on a plinth the ground-plane classifier misses on three
+    independent axes AT ONCE: primitive name (``Cube.001``/``Cylinder`` vs the
+    scenery regex), face count (up to 5172 vs _FACE_CAP=200), and thickness
+    (0.32-0.42 of footprint vs _FLAT_RATIO=0.10). Widening the classifier far
+    enough to reach them also reaches a dog's torso — an actual false positive
+    that audit produced — so verified pedestals are stripped by explicit NAME
+    and the classifier stays conservative. This test pins that gap open on
+    purpose: if it ever starts failing, the classifier has been widened and the
+    false-positive risk needs re-examining.
+    """
+    s = _scene(Dome=trimesh.creation.icosphere(radius=0.5), **{"Cube.001": _pedestal()})
+    assert mesh_subject.scenery_plane_names(s) == []
+
+
+def test_strip_named_removes_only_the_named_geometry(tmp_path):
+    s = _scene(Dome=trimesh.creation.icosphere(radius=0.5), **{"Cube.001": _pedestal()})
+    glb = tmp_path / "hericium.glb"
+    s.export(str(glb))
+
+    res = mesh_subject.strip_named_geometry_from_glb(glb, ["Cube.001"], apply=True)
+    assert res["action"] == "stripped"
+    assert res["stripped"] == ["Cube.001"]
+
+    reloaded = trimesh.load(str(glb), force="scene")
+    assert set(reloaded.geometry) == {"Dome"}
+
+
+def test_strip_named_dry_run_does_not_write(tmp_path):
+    s = _scene(Dome=trimesh.creation.icosphere(radius=0.5), **{"Cube.001": _pedestal()})
+    glb = tmp_path / "dry.glb"
+    s.export(str(glb))
+    before = glb.read_bytes()
+
+    res = mesh_subject.strip_named_geometry_from_glb(glb, ["Cube.001"], apply=False)
+    assert res["action"] == "would_strip"
+    assert res["stripped"] == ["Cube.001"]
+    assert glb.read_bytes() == before
+
+
+def test_strip_named_is_idempotent_and_backs_up(tmp_path):
+    """Re-running must be a no-op, so a half-finished batch can be resumed."""
+    s = _scene(Dome=trimesh.creation.icosphere(radius=0.5), **{"Cube.001": _pedestal()})
+    glb = tmp_path / "once.glb"
+    s.export(str(glb))
+    backups = tmp_path / "bak"
+
+    first = mesh_subject.strip_named_geometry_from_glb(
+        glb, ["Cube.001"], apply=True, backup_dir=backups
+    )
+    assert first["action"] == "stripped"
+    assert (backups / "once.glb").exists()
+
+    second = mesh_subject.strip_named_geometry_from_glb(
+        glb, ["Cube.001"], apply=True, backup_dir=backups
+    )
+    assert second["action"] == "skip_absent"
+
+
+def test_strip_named_refuses_to_empty_the_scene(tmp_path):
+    """The hard invariant: never strip everything, however the caller asks."""
+    s = _scene(**{"Cube.001": _pedestal()})
+    glb = tmp_path / "only.glb"
+    s.export(str(glb))
+    before = glb.read_bytes()
+
+    res = mesh_subject.strip_named_geometry_from_glb(glb, ["Cube.001"], apply=True)
+    assert res["action"] == "skip_would_empty"
+    assert glb.read_bytes() == before
+
+
+def test_strip_named_ignores_names_that_are_not_present(tmp_path):
+    """A stale name in the strip list must not take the organism with it."""
+    s = _scene(Dome=trimesh.creation.icosphere(radius=0.5), **{"Cube.001": _pedestal()})
+    glb = tmp_path / "partial.glb"
+    s.export(str(glb))
+
+    res = mesh_subject.strip_named_geometry_from_glb(glb, ["Cube.001", "NotThere"], apply=True)
+    assert res["action"] == "stripped"
+    assert res["stripped"] == ["Cube.001"]
+    assert set(trimesh.load(str(glb), force="scene").geometry) == {"Dome"}
