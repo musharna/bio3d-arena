@@ -28,10 +28,26 @@ def test_color0_is_not_geometry_only():
     assert is_geometry_only_glb(glb) is False
 
 
-def test_material_is_not_geometry_only():
+def test_colourless_material_is_still_geometry_only():
+    """CONTRACT CHANGE (live audit 2026-07-25): the mere PRESENCE of a materials array no
+    longer clears a GLB. A material with no baseColorFactor defaults to white and tints
+    nothing, so this renders as the same flat blob as no material at all — and because a
+    Blender export always writes a materials array, the old assertion made every
+    LLM-authored colourless mesh invisible to the detector. See test_texture_audit_colourless.py."""
     glb = _mk_glb(
         {
             "materials": [{"name": "m"}],
+            "meshes": [{"primitives": [{"attributes": {"POSITION": 0}}]}],
+        }
+    )
+    assert is_geometry_only_glb(glb) is True
+
+
+def test_coloured_material_is_not_geometry_only():
+    """What the replaced test was reaching for: a material that actually tints the mesh."""
+    glb = _mk_glb(
+        {
+            "materials": [{"pbrMetallicRoughness": {"baseColorFactor": [0.85, 0.12, 0.09, 1.0]}}],
             "meshes": [{"primitives": [{"attributes": {"POSITION": 0}}]}],
         }
     )
