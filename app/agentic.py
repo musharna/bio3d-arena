@@ -231,6 +231,11 @@ def agentic_generate(
         rel = Path("agentic") / f"{gen.slug}_{task_id}.glb"
         dst = Path(asset_dir) / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
+        # best_path is a run_fn output. In production run_fn is commission.run_bpy,
+        # which strips a stray scenery ground/floor plane (app.mesh_subject) before
+        # returning — so the copied artifact inherits that guard. A run_fn that does
+        # NOT strip (a test double) would let a floor reach dst; strip here too if
+        # that ever becomes a real path.
         shutil.copyfile(best_path, dst)
         out = ModelOutput(
             task_id=task_id,

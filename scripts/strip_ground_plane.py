@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""Strip stray scenery ground/floor planes from existing commissioned GLBs.
+"""Strip stray scenery ground/floor planes from existing LLM-authored GLBs.
 
 Background
 ----------
-Some code-gen models (grok-4.20 systematically; a few others as one-offs) added
-a large horizontal ``Plane``/``Soil`` the organism sits on, despite the prompt
-asking for "ONE whole specimen — not a scene". That floor is not the organism:
-it renders as a slab through the subject in the turntable that both human voters
-and the VLM judge score. The commission runner now strips it at generation time
-(``app.commission.run_bpy`` -> ``app.mesh_subject``); this script removes it from
-GLBs generated before that fix.
+Some code-gen models (grok-4.20 in the commissioned paradigm, gpt-5-6-sol in the
+agentic paradigm; a few others as one-offs) added a large horizontal
+``Plane``/``Soil`` the organism sits on, despite the prompt asking for "ONE whole
+specimen — not a scene". That floor is not the organism: it renders as a slab
+through the subject in the turntable that both human voters and the VLM judge
+score. Both paradigms author their mesh through ``app.commission.run_bpy`` (the
+agentic runner injects it as its ``run_fn``), which now strips the floor at
+generation time (-> ``app.mesh_subject``); this script removes it from GLBs
+generated before that fix. Point ``--dir`` at ``data/assets/commissioned`` or
+``data/assets/agentic`` (with a paradigm-specific ``--backup-dir``).
 
 It is the ground-plane analogue of ``strip_default_cube.py`` and reuses the same
 classifier the runner uses, so on-disk files and future outputs stay consistent.
