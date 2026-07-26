@@ -130,28 +130,14 @@ def scenery_plane_names(scene) -> list[str]:
     return strip
 
 
-def strip_scenery_from_glb(path, *, apply: bool, backup_dir=None) -> dict:
-    """Remove scenery ground/floor planes from one GLB.
+def _rewrite_without(path: Path, scene, strip: list[str], kept: list[str], backup_dir) -> None:
+    """Drop ``strip`` from ``scene`` and rewrite ``path`` in place, safely.
 
-    Dry-run unless ``apply``. When applying and ``backup_dir`` is given, the
-    original is copied there first. Writes atomically (temp + ``os.replace``)
-    and verifies the rewrite kept exactly the intended geometry before it
-    replaces the original, so a concurrent reader never sees a truncated GLB and
-    a bad rewrite never lands.
-
-    Returns a status dict with ``action`` in
-    {``skip_no_scenery``, ``would_strip``, ``stripped``}.
+    Backs up first when ``backup_dir`` is given, writes to a temp file and
+    verifies the reloaded geometry set is exactly ``kept`` BEFORE swapping it in
+    via ``os.replace``. So a concurrent reader (a running server) never sees a
+    truncated GLB, and a rewrite that lost or gained geometry never lands.
     """
-    path = Path(path)
-    scene = trimesh.load(str(path), force="scene")
-    strip = scenery_plane_names(scene)
-    if not strip:
-        return {"file": path.name, "action": "skip_no_scenery"}
-
-    kept = [n for n in scene.geometry if n not in strip]
-    if not apply:
-        return {"file": path.name, "action": "would_strip", "stripped": strip, "kept": len(kept)}
-
     if backup_dir is not None:
         backup_dir = Path(backup_dir)
         backup_dir.mkdir(parents=True, exist_ok=True)
@@ -172,4 +158,62 @@ def strip_scenery_from_glb(path, *, apply: bool, backup_dir=None) -> dict:
         )
 
     os.replace(tmp, path)
+
+
+def strip_scenery_from_glb(path, *, apply: bool, backup_dir=None) -> dict:
+    """Remove scenery ground/floor planes from one GLB.
+
+    Dry-run unless ``apply``. Classification is ``scenery_plane_names``; the
+    rewrite itself is ``_rewrite_without`` (backup + atomic + verified).
+
+    Returns a status dict with ``action`` in
+    {``skip_no_scenery``, ``would_strip``, ``stripped``}.
+    """
+    path = Path(path)
+    scene = trimesh.load(str(path), force="scene")
+    strip = scenery_plane_names(scene)
+    if not strip:
+        return {"file": path.name, "action": "skip_no_scenery"}
+
+    kept = [n for n in scene.geometry if n not in strip]
+    if not apply:
+        return {"file": path.name, "action": "would_strip", "stripped": strip, "kept": len(kept)}
+
+    _rewrite_without(path, scene, strip, kept, backup_dir)
+    return {"file": path.name, "action": "stripped", "stripped": strip, "kept": len(kept)}
+
+
+def strip_named_geometry_from_glb(path, names, *, apply: bool, backup_dir=None) -> dict:
+    """Remove geometries by EXPLICIT NAME from one GLB.
+
+    The escape hatch for artefacts ``scenery_plane_names`` structurally cannot
+    classify. Live audit 2026-07-25: six outputs stand on a display plinth that
+    misses the classifier on three axes at once — primitive name (``Cube.001``,
+    ``Cylinder``), face count (up to 5172 vs ``_FACE_CAP``), and thickness
+    (0.32-0.42 of footprint vs ``_FLAT_RATIO``). Widening the classifier to
+    reach them also reached a dog's TORSO in that same audit, so the classifier
+    stays conservative and genuinely-verified artefacts are named instead.
+
+    That makes the caller, not a heuristic, responsible for correctness: pass
+    only names a human has confirmed on a render. Names absent from the scene
+    are ignored rather than fatal, so a partly-applied batch can be re-run.
+
+    Dry-run unless ``apply``. Returns a status dict with ``action`` in
+    {``skip_absent``, ``skip_would_empty``, ``would_strip``, ``stripped``}.
+    """
+    path = Path(path)
+    scene = trimesh.load(str(path), force="scene")
+
+    strip = [n for n in names if n in scene.geometry]
+    if not strip:
+        return {"file": path.name, "action": "skip_absent"}
+
+    kept = [n for n in scene.geometry if n not in strip]
+    if not kept:  # same hard invariant as the classifier: never empty the scene
+        return {"file": path.name, "action": "skip_would_empty", "stripped": strip}
+
+    if not apply:
+        return {"file": path.name, "action": "would_strip", "stripped": strip, "kept": len(kept)}
+
+    _rewrite_without(path, scene, strip, kept, backup_dir)
     return {"file": path.name, "action": "stripped", "stripped": strip, "kept": len(kept)}
