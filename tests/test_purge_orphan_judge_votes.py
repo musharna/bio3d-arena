@@ -9,15 +9,27 @@ is a separate decision.
 
 from __future__ import annotations
 
+import itertools
+
 from app.models import Category, Criterion, Generator, JudgeVote, ModelOutput, Task
 from scripts.purge_orphan_judge_votes import orphan_judge_vote_ids, purge
 
 
+_seq = itertools.count()
+
+
 def _fixture(db):
-    """Two live outputs + one that we delete out from under its judge votes."""
-    cat = Category(name="Plants", slug="plants")
-    crit = Criterion(name="Overall", slug="overall")
-    gen = Generator(name="G", slug="g", kind="model")
+    """Two live outputs + one that we delete out from under its judge votes.
+
+    Slugs are made unique per call: the shared db_session can already contain
+    seeded rows (a 'plants' category, an 'overall' criterion), and hardcoded
+    slugs collide on category.slug/criterion.slug depending on test order —
+    passing in isolation while failing the full suite.
+    """
+    n = next(_seq)
+    cat = Category(name=f"Cat{n}", slug=f"purge-cat-{n}")
+    crit = Criterion(name=f"Crit{n}", slug=f"purge-crit-{n}")
+    gen = Generator(name=f"G{n}", slug=f"purge-gen-{n}", kind="model")
     db.add_all([cat, crit, gen])
     db.flush()
     task = Task(category_id=cat.id, title="T", prompt="p", criteria_note="n", active=True)
