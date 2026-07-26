@@ -114,6 +114,10 @@ const inSessionMode = () => new URLSearchParams(location.search).has("set");
 // Show an explicit in-stage empty state with a way back to "All" — never leave the
 // stage stuck on "Loading a comparison…" with two empty boxes (reads as a hung page).
 function renderNoComparisons() {
+  // The empty state replaces the stage without going through render(), so it clears the
+  // reveal too — otherwise filtering into an empty category from a reveal strands the
+  // winner border and name pills on top of the "no pairs here" message.
+  clearReveal();
   current = null;
   setKwiseVisible(false);
   const cat = el("task-cat");
@@ -152,6 +156,15 @@ function resetFilters() {
 }
 
 function render(data) {
+  // Reveal decorations belong to the comparison that produced them, so they are torn down
+  // HERE — at the moment a new comparison is rendered — rather than in the "Next pair"
+  // click handler. render() is the single funnel every comparison passes through
+  // (loadNext, vote, submitKvote, Next-pair), so no route can strand the previous pair's
+  // name pills / rank chips / winner border on a fresh pair. Binding teardown to the
+  // button instead let a mid-reveal filter change do exactly that: a never-voted pair
+  // rendered wearing the prior pair's model names and a gold winner border, with the vote
+  // bar still collapsed. See tests/test_reveal_state_bleed.py.
+  clearReveal();
   // Leaving the no-comparisons empty state: restore the category chip the empty
   // state hid (the viewer slots are cleared by Bio3DViewer.mount / renderKwise).
   const catChip = el("task-cat");
@@ -608,6 +621,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const btn = el("next-pair-btn");
   if (!btn) return;
   btn.addEventListener("click", () => {
+    // Correctness lives in render() (see its clearReveal call) — this one is for TIMING:
+    // when there is no stashed `next`, loadNext() awaits a fetch, and without clearing now
+    // the reveal would sit on screen through "Loading next comparison…".
     clearReveal();
     const n = pendingNext;
     pendingNext = null;
