@@ -22,8 +22,36 @@ DB_PATH = Path(os.environ.get("BIO3D_DB_PATH", DATA_DIR / "arena.db"))
 
 DATABASE_URL = os.environ.get("BIO3D_DATABASE_URL", f"sqlite:///{DB_PATH}")
 
-# Shared bearer token for the admin UI/endpoints. Change in production.
-ADMIN_TOKEN = os.environ.get("BIO3D_ADMIN_TOKEN", "changeme-admin-token")
+# Mode-B recon-accuracy scorer (AgriGen's /score microservice). Read HERE rather than beside
+# its siblings below because the deploy-safety guards under it need the public/internal signal.
+RECON_SCORER_URL = os.environ.get("BIO3D_RECON_SCORER_URL", "http://127.0.0.1:8800")
+
+# One source of truth for "is this the PUBLIC deploy?". The public instance runs with an empty
+# scorer URL (scores are promoted, never recomputed), so this is the signal the codebase already
+# uses to separate public from internal — see SCORING_ENABLED / INTERNAL_PAGES_ENABLED. Reusing
+# it means the security guards below need NO extra knob a deployer could forget to set.
+IS_PUBLIC_DEPLOY = not RECON_SCORER_URL.strip()
+
+# Shared bearer token for the admin UI/endpoints (create/modify generators, tasks and outputs;
+# trigger recomputes — i.e. full write access to the benchmark).
+#
+# This used to fall back to the literal below on ANY deploy. The 2026-07-26 pre-launch audit
+# confirmed the consequence live: `GET /admin?token=changeme-admin-token` -> 200. A public
+# instance that forgot BIO3D_ADMIN_TOKEN was administrable with a token published in the source
+# tree. So the public deploy now FAILS LOUD at import instead of silently falling back — and it
+# rejects the literal itself, or copy-pasting the documented default would reopen the same hole.
+# Internal/local instances keep the convenience default: they bind loopback, and breaking every
+# dev run and test would buy nothing.
+_DEV_ADMIN_TOKEN = "changeme-admin-token"  # local-only; never valid on a public deploy
+_admin_token_env = os.environ.get("BIO3D_ADMIN_TOKEN", "").strip()
+if IS_PUBLIC_DEPLOY and _admin_token_env in ("", _DEV_ADMIN_TOKEN):
+    raise RuntimeError(
+        "Refusing to start a PUBLIC deploy without a real admin token. "
+        "Set BIO3D_ADMIN_TOKEN to a secret value (not the local default "
+        f"{_DEV_ADMIN_TOKEN!r}). A public deploy is one with an empty "
+        "BIO3D_RECON_SCORER_URL; set that if this is meant to be the internal instance."
+    )
+ADMIN_TOKEN = _admin_token_env or _DEV_ADMIN_TOKEN
 
 # Elo K-factor for online updates.
 ELO_K = float(os.environ.get("BIO3D_ELO_K", "32"))
@@ -113,12 +141,19 @@ SITE_TAGLINE = (
     "reconstruction best matches the real thing."
 )
 OG_IMAGE_PATH = os.environ.get("BIO3D_OG_IMAGE", "/static/og-default.png")
-# Set Secure flag on cookies when served over HTTPS (auto from PUBLIC_BASE_URL; env override).
-COOKIE_SECURE = os.environ.get("BIO3D_COOKIE_SECURE", "").lower() in (
-    "1",
-    "true",
-    "yes",
-) or PUBLIC_BASE_URL.startswith("https://")
+# Set the Secure flag on session cookies.
+#
+# This used to be DERIVED from PUBLIC_BASE_URL.startswith("https://") alone, which made cookie
+# security a side effect of remembering an unrelated URL setting: a public deploy that forgot
+# BIO3D_PUBLIC_BASE_URL silently shipped cookies without Secure (2026-07-26 audit, P1). The
+# deploy type — not a URL string — is what decides this, so a public deploy defaults to Secure
+# whatever the base URL says. An explicit BIO3D_COOKIE_SECURE still wins in BOTH directions
+# (the old expression could only turn it on), for a public instance genuinely served over http.
+_cookie_secure_env = os.environ.get("BIO3D_COOKIE_SECURE", "").strip().lower()
+if _cookie_secure_env:
+    COOKIE_SECURE = _cookie_secure_env in ("1", "true", "yes")
+else:
+    COOKIE_SECURE = IS_PUBLIC_DEPLOY or PUBLIC_BASE_URL.startswith("https://")
 
 # --- Scale-out: storage, DB pooling, distributed rate limiting ---
 # Asset storage backend: "local" (filesystem + StaticFiles) or "s3" (object store).
@@ -137,11 +172,12 @@ REDIS_URL = os.environ.get("BIO3D_REDIS_URL", "")
 
 # Mode-B recon-accuracy scorer (AgriGen's /score microservice). bio3d-arena POSTs GLB
 # bytes here for objective chamfer/F-score grading vs held-out GT (never imports agrigen).
-RECON_SCORER_URL = os.environ.get("BIO3D_RECON_SCORER_URL", "http://127.0.0.1:8800")
+# RECON_SCORER_URL itself is read at the top of this file — the deploy-safety guards there
+# need it — so this stays a single definition rather than a second env read that could drift.
 
 # Public instances run with an empty scorer URL → scoring disabled (scores are promoted,
 # never recomputed). Keeps the public deploy free of the Agrigen scoring microservice.
-SCORING_ENABLED = bool(RECON_SCORER_URL.strip())
+SCORING_ENABLED = not IS_PUBLIC_DEPLOY
 
 # Internal research/analytics pages: /benchmark, /significance, /difficulty, /fidelity,
 # /procedural, /trait/{id}. Served only on the internal instance; the public deploy hard-404s
