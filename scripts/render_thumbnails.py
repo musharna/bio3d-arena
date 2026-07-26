@@ -86,7 +86,16 @@ def main() -> int:
                 ]
             )
             pg = b.new_page(viewport={"width": 420, "height": 420})
-            pg.goto(f"{args.base}/methodology", wait_until="domcontentloaded")
+            # Must be a page that actually LOADS model-viewer. base.html gates the viewer
+            # bundle behind the `viewer_assets` block, so data-dense pages (methodology,
+            # leaderboard, models, …) deliberately omit it. This used to point at
+            # /methodology: after that split the injected <model-viewer> never upgraded,
+            # so it had no layout box and every screenshot() failed "element is not
+            # visible" after a 30s timeout — 0 thumbnails written, silently, for the
+            # whole batch. /arena mounts a viewer, so the bundle is present.
+            pg.goto(f"{args.base}/arena", wait_until="domcontentloaded")
+            # Fail loud rather than time out once per output if that ever changes again.
+            pg.wait_for_function("() => !!customElements.get('model-viewer')", timeout=15000)
             for o in todo:
                 try:
                     loaded = pg.evaluate(INJECT, o.asset_path)
