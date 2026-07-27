@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Research · Bio 3D Arena{% endblock %}
+{% block content %}
+{# Internal-only hub. Route is gated by require_internal_pages, so this template never renders
+   on the public deploy — but the boards it links are gated individually too, so a stale
+   bookmark to any one of them still 404s rather than relying on this page being hidden.
+
+   Reuses .lb-hub-grid / .lb-hub-card from the leaderboard hub rather than introducing a
+   parallel card system for five static links. #}
+<section class="lb-hub">
+  <header class="b3d-page-head">
+    <h1>Research</h1>
+    <p class="b3d-page-lede">
+      Analysis surfaces for evaluating the benchmark itself rather than ranking models.
+      Internal only — these hard-404 on the public instance, since they carry methodology
+      that hasn't been published yet.
+    </p>
+  </header>
+
+  <div class="lb-hub-grid">
+    <a class="lb-hub-card" href="/benchmark">
+      <h3 class="lb-hub-title">Benchmark</h3>
+      <p class="lb-hub-what subtle">
+        Per-task inspection of every output against held-out ground truth, with the
+        objective geometric metrics side by side.
+      </p>
+      <span class="lb-hub-cta">Open →</span>
+    </a>
+
+    <a class="lb-hub-card" href="/significance">
+      <h3 class="lb-hub-title">Significance</h3>
+      <p class="lb-hub-what subtle">
+        Whether leaderboard gaps survive their confidence intervals, plus the vote-bias
+        audit (position, tie rate, bad-output rate).
+      </p>
+      <span class="lb-hub-cta">Open →</span>
+    </a>
+
+    <a class="lb-hub-card" href="/difficulty">
+      <h3 class="lb-hub-title">Difficulty</h3>
+      <p class="lb-hub-what subtle">
+        The multi-axis geometric difficulty tiers and the paradigm × tier grid — how model
+        performance degrades as specimens get harder.
+      </p>
+      <span class="lb-hub-cta">Open →</span>
+    </a>
+
+    <a class="lb-hub-card" href="/fidelity">
+      <h3 class="lb-hub-title">Fidelity</h3>
+      <p class="lb-hub-what subtle">
+        Cross-paradigm biological fidelity scored against organ inventories rather than
+        human preference.
+      </p>
+      <span class="lb-hub-cta">Open →</span>
+    </a>
+
+    <a class="lb-hub-card" href="/procedural">
+      <h3 class="lb-hub-title">Procedural</h3>
+      <p class="lb-hub-what subtle">
+        The code-generation scorecard: pass@1 for LLM-authored procedural geometry, with
+        experimental morphological fidelity.
+      </p>
+      <span class="lb-hub-cta">Open →</span>
+    </a>
+  </div>
+</section>
+{% endblock %}

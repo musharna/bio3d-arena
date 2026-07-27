@@ -12,8 +12,17 @@ from starlette.testclient import TestClient
 from app import config
 from app.main import app
 
-# The six Tier-C page routes (trait/{id} tested separately — it takes a path param).
-INTERNAL_PATHS = ["/benchmark", "/significance", "/difficulty", "/fidelity", "/procedural"]
+# The Tier-C page routes (trait/{id} tested separately — it takes a path param). /research is
+# the hub that lists the rest; it is gated by the same dependency, so a public visitor cannot
+# use it to enumerate the boards.
+INTERNAL_PATHS = [
+    "/benchmark",
+    "/significance",
+    "/difficulty",
+    "/fidelity",
+    "/procedural",
+    "/research",
+]
 
 # The JSON APIs backing those pages carry the SAME sensitive data, so they must be gated too —
 # otherwise the page 404s but `curl /api/fidelity.json` still leaks the full scorecard.
@@ -72,17 +81,32 @@ def test_internal_pages_served_on_internal_instance(client, monkeypatch):
 def test_nav_strips_internal_links_on_public_instance(client, monkeypatch):
     monkeypatch.setattr(config, "INTERNAL_PAGES_ENABLED", False, raising=False)
     html = client.get("/").text
-    for href in ['href="/benchmark"', 'href="/significance"', 'href="/difficulty"']:
+    # /research is the hub that now holds these boards — it must be stripped too, else the
+    # public nav advertises a door that 404s.
+    for href in [
+        'href="/benchmark"',
+        'href="/significance"',
+        'href="/difficulty"',
+        'href="/research"',
+    ]:
         assert href not in html, f"nav must not contain {href} on public instance"
-    # Tier-B Coverage stays public.
-    assert 'href="/coverage"' in html
 
 
-def test_nav_shows_internal_links_on_internal_instance(client, monkeypatch):
+def test_coverage_stays_public(client, monkeypatch):
+    # Tier-B Coverage is still public — it just moved out of the sidebar and is reached
+    # through /dataset now. Asserted on the route + its new parent rather than on nav.
+    monkeypatch.setattr(config, "INTERNAL_PAGES_ENABLED", False, raising=False)
+    assert client.get("/coverage").status_code == 200
+    assert 'href="/coverage"' in client.get("/dataset").text
+
+
+def test_nav_shows_research_hub_on_internal_instance(client, monkeypatch):
     monkeypatch.setattr(config, "INTERNAL_PAGES_ENABLED", True, raising=False)
-    html = client.get("/").text
+    assert 'href="/research"' in client.get("/").text
+    # The boards are advertised one level in, from the hub.
+    hub = client.get("/research").text
     for href in ['href="/benchmark"', 'href="/significance"', 'href="/difficulty"']:
-        assert href in html, f"nav must contain {href} on internal instance"
+        assert href in hub, f"research hub must contain {href} on internal instance"
 
 
 def test_significance_crosslinks_hidden_on_public_instance(client, monkeypatch):

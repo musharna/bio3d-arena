@@ -2080,6 +2080,19 @@ def api_coverage(db: Session = Depends(get_db)):
 
 
 @app.get(
+    "/research",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
+def research_hub(request: Request):
+    """Single sidebar entry point for the analysis boards, which used to occupy three
+    separate top-level slots (/benchmark, /significance, /difficulty) while /fidelity and
+    /procedural had no nav entry at all. Static links only — each board loads its own data,
+    so the hub adds no queries."""
+    return templates.TemplateResponse(request, "research.html", {})
+
+
+@app.get(
     "/procedural",
     response_class=HTMLResponse,
     dependencies=[Depends(require_internal_pages)],

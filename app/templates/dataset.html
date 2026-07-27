@@ -95,6 +95,22 @@
   <p class="subtle">No outputs at this scope yet.</p>
   {% endif %}
 
+  {# Coverage and Tasks used to hold their own top-level sidebar slots while nothing else in
+     the product linked to them. They're facts about the corpus, so Dataset adopts them. #}
+  <div class="ds-panel">
+    <h3>Explore the corpus</h3>
+    <ul class="ds-release-list">
+      <li>
+        <a href="/coverage">Coverage matrix</a> — which generators have produced an output for
+        which reference specimen, and where the gaps are.
+      </li>
+      <li>
+        <a href="/tasks">Reference specimens</a> — every task in the corpus with its kingdom,
+        difficulty tier and vote count.
+      </li>
+    </ul>
+  </div>
+
   <div class="ds-panel">
     <h3>Releases</h3>
     {% if releases %}
