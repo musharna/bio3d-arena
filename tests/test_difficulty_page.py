@@ -59,9 +59,11 @@ def test_difficulty_page_renders_tiers_and_gradient():
     assert "Perceptual ranking by tier" in t  # the judge-BT-per-tier section header
 
 
-def test_difficulty_in_nav():
-    page = TestClient(app).get("/")
-    assert '/difficulty"' in page.text  # nav link present
+def test_difficulty_discoverable_from_research_hub():
+    # Was: a top-level sidebar link. The board now sits behind the internal-only /research
+    # hub, so discoverability is asserted there. What this test protects is that the board
+    # is reachable by clicking — not that it holds a sidebar slot.
+    assert '/difficulty"' in TestClient(app).get("/research").text
 
 
 def test_tier_perceptual_ranking_ranks_judge_votes():
