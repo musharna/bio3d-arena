@@ -33,26 +33,13 @@ def engine_kwargs(url: str) -> dict:
     }
 
 
-def normalize_database_url(url: str) -> str:
-    """Point a bare Postgres URL at the driver that is actually installed.
+# Re-exported so existing callers keep working; the single implementation lives in config,
+# applied where the URL enters the process so EVERY engine inherits it — including the ones
+# scripts build for themselves. See config.normalize_database_url for why.
+normalize_database_url = config.normalize_database_url
 
-    Every managed provider — Neon, Supabase, RDS — hands out a URL beginning `postgresql://`
-    (some still emit `postgres://`). SQLAlchemy maps that bare scheme to **psycopg2**, while
-    the pinned driver is **psycopg v3**, whose dialect is `postgresql+psycopg://`. So an
-    operator who pastes exactly the string their provider gave them gets an ImportError
-    naming a driver nobody told them to install.
-
-    The URL they were handed is correct; requiring them to know SQLAlchemy's dialect naming
-    to use it is a trap with no upside. An explicit `+driver` is always respected, so anyone
-    who deliberately wants psycopg2 still gets it, and non-Postgres URLs are untouched.
-    """
-    for prefix in ("postgresql://", "postgres://"):
-        if url.startswith(prefix):
-            return "postgresql+psycopg://" + url[len(prefix) :]
-    return url
-
-
-DATABASE_URL = normalize_database_url(config.DATABASE_URL)
+# config.DATABASE_URL is already normalised; this alias just keeps the name available here.
+DATABASE_URL = config.DATABASE_URL
 engine = create_engine(DATABASE_URL, future=True, **engine_kwargs(DATABASE_URL))
 
 if config.DATABASE_URL.startswith("sqlite"):
