@@ -1163,11 +1163,19 @@ def _leaderboard_rows(
         ratings = (
             db.execute(select(Rating).where(Rating.criterion_id == crit.id, scope)).scalars().all()
         )
+        # One bulk load instead of a db.get() per rating row — 54 single-row generator SELECTs
+        # on the live corpus, each a network round trip against managed Postgres.
+        _gens = {
+            g.id: g
+            for g in db.execute(
+                select(Generator).where(Generator.id.in_({r.generator_id for r in ratings}))
+            ).scalars()
+        }
         rows = []
         for r in ratings:
             if r.generator_id in ref_gens:
                 continue  # GT/reference scans don't compete in the Mode-A perceptual board
-            gen = db.get(Generator, r.generator_id)
+            gen = _gens.get(r.generator_id)
             if gen is None:
                 continue  # stale rating row (generator deleted); skip rather than crash
             if paradigm and gen.paradigm != paradigm:
