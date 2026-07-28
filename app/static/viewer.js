@@ -124,6 +124,13 @@
     mv.setAttribute("shadow-intensity", "1");
     mv.setAttribute("exposure", "1.0");
     mv.setAttribute("loading", "eager");
+    // Do not show ANY geometry until the whole mesh has arrived. model-viewer renders a GLB
+    // progressively, so a partly-streamed mesh appears as a handful of loose triangles — which
+    // is indistinguishable from an output that genuinely IS a degenerate few-triangle blob (the
+    // corpus contains some, and the gold decoy looks like that on purpose). A voter who sees
+    // that cannot tell "still loading" from "this model produced garbage", and votes on it.
+    // `reveal="manual"` holds the frame blank until we dismiss it on `load`.
+    mv.setAttribute("reveal", "manual");
     mv.setAttribute(
       "aria-label",
       "Interactive 3D model — drag to rotate, scroll to zoom",
@@ -133,12 +140,31 @@
     mv.style.height = "100%";
     mv.addEventListener("load", () => {
       if (stale()) return;
+      try {
+        mv.dismissPoster();
+      } catch (_) {
+        /* older model-viewer without manual reveal — it was already visible */
+      }
       loading.remove();
       hint(slot, "drag to rotate · scroll to zoom");
+      slot.dispatchEvent(
+        new CustomEvent("bio3d:viewer-settled", {
+          bubbles: true,
+          detail: { ok: true },
+        }),
+      );
     });
     mv.addEventListener("error", () => {
       if (stale()) return;
       failed(slot, "Model failed to load");
+      // A failure is SETTLED too: the voter can see it did not load and "both bad" is a
+      // legitimate call. Not emitting this would wedge the vote controls forever.
+      slot.dispatchEvent(
+        new CustomEvent("bio3d:viewer-settled", {
+          bubbles: true,
+          detail: { ok: false },
+        }),
+      );
     });
     slot.appendChild(mv);
     slot._resetView = () => {
