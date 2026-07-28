@@ -143,6 +143,8 @@ leaderboards.{% endblock %} {% block content %}
        when the server has no admitted same-paradigm quad for a task. -->
   <div id="kwise-grid" class="kwise-grid" hidden></div>
 
+  {% include "_captcha.html" %}
+
   <div class="vote-bar">
     <button class="vote-btn win" data-winner="a">
       <span class="win-dot" aria-hidden="true"></span>A is better <kbd>←</kbd>
