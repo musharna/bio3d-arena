@@ -37,6 +37,8 @@ def test_judge_boards_ship_but_only_for_generators_that_ship(db_session, tmp_pat
     dangling generator_id and ranks an entrant the public site never shows."""
     import json
 
+    import sqlalchemy as sa
+
     from app.models import Criterion, Generator, JudgeRating, KingdomJudgeRating, KingdomRating
     from app.storage import LocalStorageBackend
     from scripts.export_public import export_bundle
@@ -49,8 +51,18 @@ def test_judge_boards_ship_but_only_for_generators_that_ship(db_session, tmp_pat
 
     e = _mk(db_session)
     e["o_bad"].license = "CC-BY-4.0"  # the license gate is not what this test is about
-    crit = Criterion(slug="overall", name="Overall")
-    db_session.add(crit)
+    # Reuse the seeded "overall" criterion when it exists. Inserting one unconditionally passed
+    # locally and failed in CI on `UNIQUE constraint failed: criterion.slug` — a prior module
+    # reseeding demo data on the shared suite engine leaves a real, non-rolled-back row, so
+    # whether this insert collides depends on test ORDER.
+    crit = (
+        db_session.execute(sa.select(Criterion).where(Criterion.slug == "overall"))
+        .scalars()
+        .first()
+    )
+    if crit is None:
+        crit = Criterion(slug="overall", name="Overall")
+        db_session.add(crit)
     db_session.flush()
 
     kept = e["g_ok"].id  # slug "lpy" — in the allowlist below
