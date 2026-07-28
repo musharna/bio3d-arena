@@ -714,6 +714,39 @@ textarea:focus-visible,
   vertical-align: middle;
 }
 /* Arena — vote bar (floating pill) */
+/* Skip is visually subordinate to the vote bar on purpose: it is an escape hatch, not a fifth
+   verdict. Making it look like a peer of "Tie" would invite it as a shrug, and every skip is a
+   comparison the board does not get. */
+.skip-bar {
+  display: flex;
+  justify-content: center;
+  margin: 0.55rem auto 0;
+}
+.skip-btn {
+  background: none;
+  border: 0;
+  color: var(--muted, #6b7280);
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--r-pill, 999px);
+}
+.skip-btn:hover {
+  color: var(--fg, inherit);
+  background: var(--panel, transparent);
+}
+.skip-btn:focus-visible {
+  outline: 2px solid var(--accent, currentColor);
+  outline-offset: 2px;
+}
+/* Voting is locked until both meshes have settled — see armVoteGate() in arena.js. */
+.vote-bar.is-waiting {
+  opacity: 0.55;
+}
+.vote-bar .vote-btn:disabled {
+  cursor: progress;
+}
 .vote-bar {
   display: flex;
   justify-content: center;

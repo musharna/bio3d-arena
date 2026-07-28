@@ -193,6 +193,7 @@ function render(data) {
 function renderPair(data) {
   setKwiseVisible(false);
   current = data;
+  armVoteGate(); // re-lock: this pair's meshes have not arrived yet
   el("task-cat").textContent = data.task.category;
   el("task-title").textContent = data.task.title;
   el("task-prompt").textContent = data.task.prompt;
@@ -772,6 +773,49 @@ document.querySelectorAll(".vote-bar .vote-btn").forEach((btn) => {
   btn.addEventListener("click", () => vote(btn.dataset.winner));
 });
 
+// --- "can't tell" ---------------------------------------------------------------------
+// Advances WITHOUT recording anything. Deliberately not a winner value: "tie" and "bad" are
+// real judgements the fit consumes, and routing an "I can't tell" into either would inject
+// noise into precisely the comparisons where the signal is weakest.
+async function skipPair() {
+  if (busy || !current) return;
+  setStatus("Skipped — no vote recorded.");
+  await loadNext();
+}
+
+const skipBtn = document.getElementById("skip-btn");
+if (skipBtn) skipBtn.addEventListener("click", skipPair);
+
+// --- vote gating ----------------------------------------------------------------------
+// Both models must have SETTLED (loaded, or visibly failed) before a vote can be cast. A
+// GLB streams in progressively, so a half-arrived mesh is a few loose triangles — the same
+// thing a genuinely degenerate output looks like. Voting on that records a judgement about
+// network timing rather than about the model.
+let settledCount = 0;
+
+function setVoteEnabled(on) {
+  document
+    .querySelectorAll(".vote-bar .vote-btn")
+    .forEach((b) => (b.disabled = !on));
+  const bar = document.querySelector(".vote-bar");
+  if (bar) bar.classList.toggle("is-waiting", !on);
+}
+
+function armVoteGate() {
+  settledCount = 0;
+  setVoteEnabled(false);
+}
+
+document.addEventListener("bio3d:viewer-settled", () => {
+  settledCount += 1;
+  if (settledCount >= 2) setVoteEnabled(true);
+});
+
+// Never let a stuck viewer strand a voter: settle the gate regardless after a grace period.
+setInterval(() => {
+  if (current && settledCount < 2) setVoteEnabled(true);
+}, 12000);
+
 // Re-fetch when the filters change.
 el("sel-category").addEventListener("change", loadNext);
 el("sel-criterion").addEventListener("change", loadNext);
@@ -783,6 +827,7 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "ArrowRight") vote("b");
   else if (e.key === "t") vote("tie");
   else if (e.key === "x") vote("bad");
+  else if (e.key === "s" || e.key === "S") skipPair();
 });
 
 // Preselect category/criterion from the URL (?category=plants&criterion=overall) so a

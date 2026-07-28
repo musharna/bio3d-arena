@@ -155,6 +155,15 @@ leaderboards.{% endblock %} {% block content %}
       <span class="win-dot" aria-hidden="true"></span>B is better <kbd>→</kbd>
     </button>
   </div>
+  {# Skip is NOT a vote and must never be mistaken for one. "Tie" means equally good and "Both
+     bad" means both are poor — each is a real judgement worth 0.5/0 in the fit. "I can't tell"
+     is the absence of a judgement, and folding it into Tie would inject noise into exactly the
+     pairs where the signal is weakest. So this records nothing and just advances. #}
+  <div class="skip-bar">
+    <button type="button" id="skip-btn" class="skip-btn">
+      Can’t tell — skip this pair <kbd>S</kbd>
+    </button>
+  </div>
   <!-- Post-vote reveal (Feature C): shown by arena.js after a vote commits, in place of the
        vote bar. Hidden by default; never present before a vote. -->
   <button type="button" id="next-pair-btn" hidden>Next pair →</button>
