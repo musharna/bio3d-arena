@@ -1,0 +1,62 @@
+# Public instance. Everything here is non-secret by construction — credentials live in
+# `fly secrets`, never in this file (it is committed).
+#
+# The posture this file encodes: BIO3D_RECON_SCORER_URL is empty, which is what makes this a
+# PUBLIC deploy (app/config.py). That single switch turns scoring off and hard-404s the internal
+# research pages, so the public instance can never recompute a score or expose an internal
+# surface — see deploy/README.md.
+
+app = "bio3d-arena"
+primary_region = "ord"          # Chicago: the Neon database is in aws us-east-2 (Ohio)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # Empty = public posture. Do not set this on the public instance.
+  BIO3D_RECON_SCORER_URL = ""
+
+  # Assets are in Cloudflare R2, not on the machine. The bucket name is not a secret; the
+  # credentials and the account endpoint are, and are set with `fly secrets`.
+  BIO3D_STORAGE_BACKEND = "s3"
+  AWS_DEFAULT_REGION = "auto"   # R2 ignores region, but boto3 refuses to build a client without one
+
+  # Absolute URLs in share cards, OG tags and canonical links. Left unset, the app would
+  # advertise itself as localhost to every crawler and every shared link.
+  BIO3D_PUBLIC_BASE_URL = "https://bio3d-arena.fly.dev"
+
+  BIO3D_REQUIRE_CAPTCHA = "true"
+  BIO3D_CAPTCHA_PROVIDER = "turnstile"
+
+  # Fly terminates TLS at its edge and forwards, so every request arrives from the proxy's
+  # address. Without this, per-IP vote rate limiting sees ONE client — every visitor on earth
+  # would share a single 300-votes-per-60s bucket, and the anti-farming layer would be both
+  # useless (one farmer looks like the crowd) and harmful (real voters throttle each other).
+  BIO3D_TRUST_FORWARDED_FOR = "true"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  # Never scale to zero. A cold start pays for a Python import plus a Bradley-Terry fit on
+  # first request, and the first thing a launch visitor does is load the leaderboard.
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 40
+    hard_limit = 80
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "20s"
+  method = "GET"
+  path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  # 1 GB, not the 512 MB default: the leaderboard fits Bradley-Terry with a 200-sample bootstrap
+  # (config.BT_BOOTSTRAP) and holds the rating tables in memory while it does.
+  memory = "1gb"

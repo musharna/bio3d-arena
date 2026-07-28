@@ -72,6 +72,23 @@ python -m scripts.import_public --bundle public_bundle/v1
 Import verifies bundle checksums and fails loud on mismatch — do not proceed on a
 partial or corrupted transfer.
 
+The import has two phases: rows into the database, then blobs into storage. The blob phase is
+**resumable** — it skips objects already present (a HEAD, not a PUT) and retries transient
+transport faults — so a broken transfer is re-run, never restarted. Re-run the blob phase alone
+with:
+
+```bash
+python -m scripts.import_public --bundle public_bundle/v1 --assets-only
+```
+
+This matters more than it sounds. A release bundle is multiple GB over whatever link the
+operator has, and on the first real deploy the upload died ~40 minutes in on a single corrupted
+TLS record (`SSLV3_ALERT_BAD_RECORD_MAC`). Nothing was wrong with the bundle or the credentials.
+
+`--assets-only` is also the right flag when only the blobs changed. Its opposite case — promoting
+recomputed leaderboards without moving 4 GB of unchanged meshes — is just a normal import: the
+row phase rewrites the boards and the blob phase skips every object it already finds.
+
 ## 4. Install dependencies and boot the app
 
 Install the **runtime** set only:
@@ -124,12 +141,35 @@ Then confirm the internal research pages are **404**, not 200 — with scoring o
 internal page and 404s under the public posture, so the smoke test failed against a correctly
 configured instance.)
 
+## Never recompute on the public instance
+
+Do not call `/admin/recompute` or `/admin/recompute_judge` against a public deploy. The
+Bradley-Terry fit runs a 200-sample bootstrap (`config.BT_BOOTSTRAP`) while holding the rating
+tables in memory; on a 1 GB web machine, inside an HTTP request, it OOM-killed the VM ("Virtual
+machine exited abruptly") after ~220 seconds.
+
+It also should never be necessary. Every board the public site renders — global, per-kingdom,
+and both AI-judge boards — is **promoted in the bundle**, fitted on the internal instance where
+the database is local. If a board looks stale, the fix is to re-run the recompute internally and
+export a new bundle, not to compute anything in production.
+
 ## Free-tier hosting targets
 
 - **App**: Fly.io or Render (either works; pick whichever the deployer already has
   an account on — nothing in the app is Fly- or Render-specific)
 - **Postgres**: Neon or Supabase
 - **Assets (S3-compatible)**: Cloudflare R2
+
+The live deployment uses Fly (`fly.toml`, committed) + Neon + R2. Two settings there are easy to
+get wrong and are worth repeating for any other host:
+
+- **Trust the proxy's forwarded-for header** (`BIO3D_TRUST_FORWARDED_FOR=true` on Fly). Any
+  platform that terminates TLS at an edge makes every request appear to come from the proxy.
+  Without this the per-IP vote limiter sees ONE client, so every visitor on earth shares a single
+  300-per-60s bucket — useless against a farmer, and actively harmful to real voters.
+- **Give the machine 1 GB, not 512 MB.** Assets stream _through_ the app on remote storage (so
+  the object key never leaks to the client — see `media_asset`), and the corpus contains meshes
+  up to ~124 MB.
 
 ## What the public instance deliberately does not have
 

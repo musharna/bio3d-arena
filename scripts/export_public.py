@@ -29,6 +29,9 @@ from app.models import (  # noqa: E402
     Comparison,
     Vote,
     Rating,
+    KingdomRating,
+    JudgeRating,
+    KingdomJudgeRating,
     Metric,
     GoldPair,
     ReconTask,
@@ -45,6 +48,19 @@ EXPORT_MODELS = [
     Comparison,
     Vote,
     Rating,
+    # The other three cached boards. `Rating` alone used to ship, which quietly meant the public
+    # instance could show the global human board and nothing else: the kingdom boards had no cache
+    # to read, and the AI-judge board rendered its empty state ("No automated LLM-judge rankings
+    # for this selection yet") on a project that has judged four paradigms.
+    #
+    # The judge boards are the ones that MUST be promoted rather than recomputed. A cached rating
+    # is normally reproducible from the votes beside it, but `judge_vote` is not exported — a judge
+    # ballot references outputs the posture filter may drop, so shipping the ballots would dangle.
+    # Without the fitted ratings there is therefore no path to a populated judge board at all, and
+    # the page is blank forever. This is exactly the runbook's "promote, don't recompute".
+    KingdomRating,
+    JudgeRating,
+    KingdomJudgeRating,
     Metric,
     GoldPair,
     ReconTask,
@@ -100,7 +116,13 @@ def _filtered_rows(db, inc: public_export.IncludeSet) -> dict[str, list[dict]]:
                 continue
             if name == "metric" and getattr(r, "output_id", None) not in all_out:
                 continue
-            if name == "rating" and getattr(r, "generator_id", None) not in inc.generator_ids:
+            # Every cached board is keyed by generator, and a generator the posture dropped is not
+            # in the bundle — so its rating row would dangle on import and, worse, would rank an
+            # entrant the public site does not show.
+            if (
+                name in ("rating", "kingdom_rating", "judge_rating", "kingdom_judge_rating")
+                and getattr(r, "generator_id", None) not in inc.generator_ids
+            ):
                 continue
             if name == "gold_pair" and (
                 r.task_id not in inc.task_ids
