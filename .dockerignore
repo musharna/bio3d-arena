@@ -1,0 +1,35 @@
+# The Dockerfile copies only `requirements*.txt` and `app/`, but the build context is uploaded
+# to the remote builder in full before any COPY runs. Without this file that upload includes
+# `data/` — 8 GB of GLBs and SQLite databases the image never uses, since the public instance
+# reads its assets from R2 and its rows from Postgres.
+#
+# Everything the running app needs lives under `app/` (templates, static, app/data) and is NOT
+# excluded here.
+
+data/
+public_bundle/
+*.db
+*.db-wal
+*.db-shm
+
+.git/
+.github/
+.claude/
+.venv/
+venv/
+
+tests/
+docs/
+scripts/
+notebooks/
+
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+node_modules/
+
+# The research stack is deliberately not installed in the image (deploy/README.md); keeping the
+# file out of the context makes that hard to undo by accident.
+requirements-research.txt
+requirements-dev.txt
