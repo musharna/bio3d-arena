@@ -121,10 +121,20 @@ def test_sitemap_lists_the_public_pages_and_no_internal_ones(client):
     assert r.status_code == 200
     assert "xml" in r.headers["content-type"]
     body = r.text
-    for path in ("/arena", "/leaderboard", "/models", "/dataset", "/spotlight", "/methodology"):
+    for path in ("/arena", "/leaderboard", "/models", "/dataset", "/methodology"):
         assert f"<loc>{config.PUBLIC_BASE_URL}{path}</loc>" in body, f"{path} missing from sitemap"
-    # Internal research surfaces must never be advertised to crawlers.
-    for path in ("/research", "/benchmark", "/significance", "/fidelity", "/procedural", "/admin"):
+    # Internal surfaces must never be advertised to crawlers. /spotlight joined them on
+    # 2026-07-28 (see tests/test_spotlight_is_internal.py): it 404s on the public instance now,
+    # so listing it here would hand crawlers a dead URL.
+    for path in (
+        "/research",
+        "/benchmark",
+        "/significance",
+        "/fidelity",
+        "/procedural",
+        "/spotlight",
+        "/admin",
+    ):
         assert f"<loc>{config.PUBLIC_BASE_URL}{path}</loc>" not in body, (
             f"{path} leaked into sitemap"
         )

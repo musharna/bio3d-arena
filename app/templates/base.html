@@ -283,6 +283,10 @@
               ></span>
               <span class="b3d-nav-label">Dataset</span>
             </a>
+            {# Internal only: every spotlight subject is a plant, so under the Fungi or Animals
+            kingdom filter this page is empty — a nav item leading nowhere for two of the three
+            kingdoms. Hidden, not deleted; see tests/test_spotlight_is_internal.py. #}
+            {% if internal_pages() %}
             <a
               href="/spotlight"
               class="b3d-nav-link{{ ' is-active' if path == '/spotlight' else '' }}"
@@ -300,6 +304,7 @@
               ></span>
               <span class="b3d-nav-label">Spotlight</span>
             </a>
+            {% endif %}
           </div>
 
           <div class="b3d-navgroup">

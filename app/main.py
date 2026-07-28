@@ -755,7 +755,8 @@ _SITEMAP_PATHS = (
     "/leaderboard",
     "/models",
     "/dataset",
-    "/spotlight",
+    # No /spotlight: it is an internal page (see spotlight_index) and 404s on the public
+    # instance, so advertising it here would hand crawlers a dead URL.
     "/methodology",
     "/coverage",
     "/tasks",
@@ -2403,7 +2404,11 @@ def tasks_page(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(request, "tasks.html", {"tasks": rows, "stats": stats})
 
 
-@app.get("/spotlight", response_class=HTMLResponse)
+@app.get(
+    "/spotlight",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def spotlight_index(request: Request, db: Session = Depends(get_db)):
     from . import spotlight
 
@@ -2416,7 +2421,11 @@ def spotlight_index(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(request, "spotlight_index.html", {"subjects": subjects})
 
 
-@app.get("/spotlight/{slug}", response_class=HTMLResponse)
+@app.get(
+    "/spotlight/{slug}",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def spotlight_page(slug: str, request: Request, db: Session = Depends(get_db)):
     from . import spotlight
 
