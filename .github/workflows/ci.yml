@@ -1,0 +1,109 @@
+name: CI
+
+# Until now this repo had NO CI: every merge was gated only by whoever remembered to run
+# pytest locally, and `statusCheckRollup` was empty on every PR. That is survivable while one
+# person merges deliberately; it is not survivable for a hotfix under launch-day pressure.
+#
+# Two jobs, deliberately split:
+#   lint     — seconds, runtime deps only, catches the cheap class of mistake fast
+#   test     — the full suite, which needs the research stack (see below)
+# They run in parallel, so a formatting slip fails in ~30s instead of behind a multi-GB install.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A new push to the same branch supersedes the old run — no point burning minutes on a diff
+  # nobody will merge.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The suite refuses to run if these point anywhere real (conftest.py guards it), and CI has no
+  # real data anyway. Setting them empty documents the intent rather than relying on absence.
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12" # pyproject: requires-python >=3.12
+          cache: pip
+      - name: Install lint tooling only
+        # Not requirements-dev.txt: that layers on requirements-research.txt, which pulls
+        # torch and the NVIDIA CUDA stack (multiple GB) for a job that only runs ruff.
+        run: pip install "ruff==0.15.15"
+      - run: ruff check .
+      - run: ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-research.txt
+            requirements-dev.txt
+      - name: Install
+        # requirements-dev layers research on runtime, and the suite genuinely needs it —
+        # tests/test_volume_convert.py imports app.volume_convert (tifffile, nibabel). A
+        # runtime-only install cannot run the full suite.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Run the suite
+        # No BIO3D_DATABASE_URL / BIO3D_DB_PATH: conftest.py isolates into a temp dir and
+        # REFUSES to run if either points at a non-throwaway DB. A CI runner has neither, but
+        # unsetting explicitly keeps the local and CI invocations identical.
+        run: |
+          env -u BIO3D_DATABASE_URL -u BIO3D_DB_PATH python -m pytest -q
+
+  # Guards that only fail on a PUBLIC deploy, which no other job exercises: the app must refuse
+  # to boot without an admin token or a public base URL. These are import-time RuntimeErrors, so
+  # a plain `python -c "import app.config"` is the whole test.
+  deploy-guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: A public deploy must refuse to boot without an admin token
+        env:
+          BIO3D_RECON_SCORER_URL: "" # empty scorer url == public deploy
+          BIO3D_PUBLIC_BASE_URL: "https://arena.example"
+        run: |
+          if python -c "import app.config" 2>/dev/null; then
+            echo "::error::public deploy booted with no BIO3D_ADMIN_TOKEN"; exit 1
+          fi
+          echo "correctly refused"
+      - name: A public deploy must refuse to boot without a public base URL
+        env:
+          BIO3D_RECON_SCORER_URL: ""
+          BIO3D_ADMIN_TOKEN: "a-real-secret"
+        run: |
+          if python -c "import app.config" 2>/dev/null; then
+            echo "::error::public deploy booted with the localhost base URL"; exit 1
+          fi
+          echo "correctly refused"
+      - name: A correctly configured public deploy DOES boot
+        # The positive control. Without it, a config file that raises unconditionally would
+        # pass both checks above.
+        env:
+          BIO3D_RECON_SCORER_URL: ""
+          BIO3D_ADMIN_TOKEN: "a-real-secret"
+          BIO3D_PUBLIC_BASE_URL: "https://arena.example"
+        run: python -c "import app.config; print('booted:', app.config.PUBLIC_BASE_URL)"
