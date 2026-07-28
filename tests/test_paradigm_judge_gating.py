@@ -5,6 +5,7 @@ import uuid
 from app import service
 from app.database import SessionLocal, init_db
 from app.models import Category, Criterion, Generator, JudgeVote, ModelOutput, Task
+from tests.factories import foreign_keys_suspended
 
 
 def setup_module(_m):
@@ -80,19 +81,22 @@ def test_judge_matches_skips_dangling_votes():
         g1, o1 = _out(db, t.id, "image_recon")
         g2, o2 = _out(db, t.id, "image_recon")
 
-        # Create a JudgeVote with non-existent output IDs (simulating a dangling vote)
-        db.add(
-            JudgeVote(
-                task_id=t.id,
-                criterion_id=crit.id,
-                view_condition="multi4",
-                output_a_id=999999998,  # does not exist
-                output_b_id=999999999,  # does not exist
-                winner="a",
-                swap_group=uuid.uuid4().hex,
-                judge_model="claude-3-opus",
+        # Create a JudgeVote with non-existent output IDs (simulating a dangling vote).
+        # Enforcement refuses this now, so it is written with enforcement suspended — the
+        # test's subject is a DB that already holds dangling votes.
+        with foreign_keys_suspended(db):
+            db.add(
+                JudgeVote(
+                    task_id=t.id,
+                    criterion_id=crit.id,
+                    view_condition="multi4",
+                    output_a_id=999999998,  # does not exist
+                    output_b_id=999999999,  # does not exist
+                    winner="a",
+                    swap_group=uuid.uuid4().hex,
+                    judge_model="claude-3-opus",
+                )
             )
-        )
         # Also add a valid vote
         db.add(
             JudgeVote(

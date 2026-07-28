@@ -6,13 +6,18 @@ import json
 from app.database import SessionLocal, init_db
 from app.models import ModelScope
 from scripts import scope_judge
+from tests.factories import make_outputs
+
+
+# These were the literals _OIDS[0]/_OIDS[1] — ids of outputs that never existed. FK enforcement
+# refuses a model_scope row pointing at a missing output, so mint real ones.
+_OIDS: list[int] = []
 
 
 def setup_module(_m):
     init_db()
-
-
-_OIDS = [9101, 9102]
+    with SessionLocal() as db:
+        _OIDS[:] = [o.id for o in make_outputs(db, 2)]
 
 
 def _clear(db):
@@ -24,8 +29,8 @@ def test_run_batch_persists_scope_and_is_resumable():
     with SessionLocal() as db:
         _clear(db)
         work = [
-            {"output_id": 9101, "species": "Solanum lycopersicum", "prompt": "a tomato"},
-            {"output_id": 9102, "species": "Zea mays", "prompt": "a maize plant"},
+            {"output_id": _OIDS[0], "species": "Solanum lycopersicum", "prompt": "a tomato"},
+            {"output_id": _OIDS[1], "species": "Zea mays", "prompt": "a maize plant"},
         ]
 
         def classify_fn(species, prompt, b64):
@@ -38,7 +43,7 @@ def test_run_batch_persists_scope_and_is_resumable():
             db, classify_fn=classify_fn, sheet_b64=sheet_b64, work=work, judge_model="m"
         )
         assert res["written"] == 2 and res["errors"] == 0
-        row = db.query(ModelScope).filter_by(output_id=9101, judge_model="m").one()
+        row = db.query(ModelScope).filter_by(output_id=_OIDS[0], judge_model="m").one()
         assert row.is_plant is True and json.loads(row.parts_json) == ["fruit"]
 
         # resumable: a second run skips already-scoped outputs (no re-spend)
@@ -52,8 +57,8 @@ def test_run_batch_counts_errors_and_continues():
     with SessionLocal() as db:
         _clear(db)
         work = [
-            {"output_id": 9101, "species": "Rosa", "prompt": "a rose"},
-            {"output_id": 9102, "species": "Rosa", "prompt": "a rose"},
+            {"output_id": _OIDS[0], "species": "Rosa", "prompt": "a rose"},
+            {"output_id": _OIDS[1], "species": "Rosa", "prompt": "a rose"},
         ]
 
         def classify_fn(species, prompt, b64):
@@ -62,7 +67,7 @@ def test_run_batch_counts_errors_and_continues():
             return {"is_plant": True, "visible_parts": [], "rationale": ""}
 
         def sheet_b64(oid):
-            return "boom" if oid == 9101 else "ok"
+            return "boom" if oid == _OIDS[0] else "ok"
 
         res = scope_judge.run_batch(
             db, classify_fn=classify_fn, sheet_b64=sheet_b64, work=work, judge_model="m"

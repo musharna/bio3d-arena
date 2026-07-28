@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.database import SessionLocal, init_db
 from app.models import CalibrationPair, Category, Criterion, Generator, JudgeVote, ModelOutput, Task
+from tests.factories import cascade_delete, delete_outputs_matching
 
 
 def setup_module(_m):
@@ -12,11 +13,9 @@ def _seed(db):
     # Clean previous run's jb-prefixed rows (Category+Generator slugs are unique).
     db.query(JudgeVote).delete()
     db.query(CalibrationPair).delete()
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like("seed/%.glb")).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter(Task.title == "jb-task").delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like("jb-g%")).delete(synchronize_session=False)
+    delete_outputs_matching(db, ModelOutput.asset_path.like("seed/%.glb"))
+    cascade_delete(db, Task, Task.title == "jb-task")
+    cascade_delete(db, Generator, Generator.slug.like("jb-g%"))
     db.query(Category).filter_by(slug="jb-cat").delete(synchronize_session=False)
     db.commit()
     cat = Category(slug="jb-cat", name="C")

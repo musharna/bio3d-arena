@@ -4,6 +4,7 @@ from app import service
 from app.database import SessionLocal, init_db
 from app.main import _judge_leaderboard_rows
 from app.models import Category, Criterion, Generator, JudgeRating, JudgeVote, ModelOutput, Task
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -16,11 +17,9 @@ def test_judge_leaderboard_rows_ranked():
         # Generator slugs are unique, so a re-run would otherwise hit a UNIQUE collision).
         db.query(JudgeVote).delete()
         db.query(JudgeRating).delete()
-        db.query(ModelOutput).filter(ModelOutput.asset_path.like("seed/%.glb")).delete(
-            synchronize_session=False
-        )
-        db.query(Task).filter(Task.title == "jl-task").delete(synchronize_session=False)
-        db.query(Generator).filter(Generator.slug.like("jl-%")).delete(synchronize_session=False)
+        cascade_delete(db, ModelOutput, ModelOutput.asset_path.like("seed/%.glb"))
+        cascade_delete(db, Task, Task.title == "jl-task")
+        cascade_delete(db, Generator, Generator.slug.like("jl-%"))
         # Also purge any LEFTOVER generator sharing the display names this test asserts on.
         # The board disambiguates a duplicated display name by appending the slug ("Strong ·
         # strong"), so a sibling module's fixture surviving in the shared DB silently changes
@@ -28,9 +27,7 @@ def test_judge_leaderboard_rows_ranked():
         # alphabetical run (leaderboard before recompute) and failed whenever
         # test_judge_recompute ran first. Purge by name, not by the sibling's slug prefix, so
         # this stays correct if another module introduces a "Strong" too.
-        db.query(Generator).filter(Generator.name.in_(("Strong", "Weak"))).delete(
-            synchronize_session=False
-        )
+        cascade_delete(db, Generator, Generator.name.in_(("Strong", "Weak")))
         db.query(Category).filter_by(slug="jl-cat").delete(synchronize_session=False)
         db.commit()
         cat = Category(slug="jl-cat", name="C")

@@ -25,6 +25,7 @@ from app.models import (
     Rating,
     Task,
 )
+from tests.factories import foreign_keys_suspended
 
 
 def setup_module(_m):
@@ -51,8 +52,10 @@ def test_leaderboard_rows_skips_orphan_generator():
             )
         )
         db.commit()
-        db.delete(gen)  # SQLite has no FK cascade → rating is now an orphan
-        db.commit()
+        # Enforcement now refuses this delete, so the orphan is manufactured deliberately:
+        # the test is about rendering a DB that ALREADY contains one.
+        with foreign_keys_suspended(db):
+            db.delete(gen)
 
         rows = _leaderboard_rows(db, criterion_slug="dm1-crit")  # must not raise
         assert rows == []  # orphan skipped, not rendered

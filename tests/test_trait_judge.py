@@ -4,6 +4,7 @@ import json
 
 from app.database import SessionLocal, init_db
 from app.models import Category, Generator, ModelOutput, Task, TraitRubric, TraitVerdict
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -12,10 +13,10 @@ def setup_module(_m):
 
 def _seed(db):
     db.query(TraitVerdict).filter(TraitVerdict.judge_model == "stub").delete(False)
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like("tj/%")).delete(False)
+    cascade_delete(db, ModelOutput, ModelOutput.asset_path.like("tj/%"))
     db.query(TraitRubric).filter_by(taxon="TJ").delete(False)
     db.query(Task).filter_by(title="tj-task").delete(False)
-    db.query(Generator).filter(Generator.slug.like("tj-%")).delete(False)
+    cascade_delete(db, Generator, Generator.slug.like("tj-%"))
     db.query(Category).filter_by(slug="tj-cat").delete(False)
     db.commit()
     cat = Category(slug="tj-cat", name="C")

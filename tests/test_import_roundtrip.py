@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, delete, select
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from app.models import Generator, GoldPair, ModelOutput, Task
 from app.storage import LocalStorageBackend
@@ -6,6 +6,7 @@ from scripts.export_public import export_bundle
 from scripts.import_public import import_bundle, BundleChecksumError
 from tests.test_public_export import _mk
 import pytest
+from tests.factories import cascade_delete
 
 
 def _clear_leaked_lpy_generator(db) -> None:
@@ -24,7 +25,7 @@ def _clear_leaked_lpy_generator(db) -> None:
     setup_module()) also unconditionally inserts Generator(slug="calibration"), which
     collides with this file's own gold-pair tests that insert that slug.
     """
-    db.execute(delete(Generator).where(Generator.slug.in_(["lpy", "calibration"])))
+    cascade_delete(db, Generator, Generator.slug.in_(["lpy", "calibration"]))
     db.flush()
 
 

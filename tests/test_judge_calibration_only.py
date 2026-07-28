@@ -10,6 +10,7 @@ from __future__ import annotations
 from app.database import SessionLocal, init_db
 from app.judge_render import CONDITIONS
 from app.models import CalibrationPair, Category, Criterion, Generator, JudgeVote, ModelOutput, Task
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -19,11 +20,9 @@ def setup_module(_m):
 def _seed(db):
     db.query(JudgeVote).delete()
     db.query(CalibrationPair).delete()
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like("jco/%.glb")).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter(Task.title == "jco-task").delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like("jco-g%")).delete(synchronize_session=False)
+    cascade_delete(db, ModelOutput, ModelOutput.asset_path.like("jco/%.glb"))
+    cascade_delete(db, Task, Task.title == "jco-task")
+    cascade_delete(db, Generator, Generator.slug.like("jco-g%"))
     db.query(Category).filter_by(slug="jco-cat").delete(synchronize_session=False)
     db.commit()
     cat = Category(slug="jco-cat", name="C")

@@ -6,6 +6,7 @@ from __future__ import annotations
 import app.config as config
 from app.database import SessionLocal, init_db
 from app.models import Category, Generator, GoldPair, ModelOutput, Task
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -14,14 +15,10 @@ def setup_module(_m):
 
 def _clear(db):
     db.query(GoldPair).filter(GoldPair.note.like("reseed:%")).delete(synchronize_session=False)
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like("rsg/%")).delete(
-        synchronize_session=False
-    )
-    db.query(ModelOutput).filter(ModelOutput.title.in_(["gold-good", "gold-bad"])).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter(Task.title == "rsg-task").delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like("rsg-g%")).delete(synchronize_session=False)
+    cascade_delete(db, ModelOutput, ModelOutput.asset_path.like("rsg/%"))
+    cascade_delete(db, ModelOutput, ModelOutput.title.in_(["gold-good", "gold-bad"]))
+    cascade_delete(db, Task, Task.title == "rsg-task")
+    cascade_delete(db, Generator, Generator.slug.like("rsg-g%"))
     db.query(Category).filter_by(slug="rsg-cat").delete(synchronize_session=False)
     db.commit()
 

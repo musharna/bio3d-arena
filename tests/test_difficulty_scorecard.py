@@ -12,6 +12,7 @@ from app.models import (
     Task,
     TaskDifficulty,
 )
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -31,11 +32,9 @@ def _clean(db):
     db.query(Completeness).filter(Completeness.output_id.in_(td3_out_ids)).delete(
         synchronize_session=False
     )
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like("td3/%.glb")).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter(Task.title.like("td3-%")).delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like("td3-%")).delete(synchronize_session=False)
+    cascade_delete(db, ModelOutput, ModelOutput.asset_path.like("td3/%.glb"))
+    cascade_delete(db, Task, Task.title.like("td3-%"))
+    cascade_delete(db, Generator, Generator.slug.like("td3-%"))
     db.query(Category).filter_by(slug="td3-cat").delete(synchronize_session=False)
     db.commit()
 

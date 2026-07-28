@@ -12,6 +12,7 @@ from app.database import SessionLocal, init_db
 from app.models import Category, ModelOutput, Task
 
 from scripts.generate_multiview_recon import run_subject
+from tests.factories import cascade_delete
 
 
 def _write_stub_ref(ref_rel: str) -> None:
@@ -29,10 +30,8 @@ PINE = "Pinus sylvestris — single-image → 3D reconstruction"
 
 
 def _seed(db):
-    db.query(ModelOutput).filter(ModelOutput.source.like("recon:%mvt%")).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter_by(title=PINE).delete(synchronize_session=False)
+    cascade_delete(db, ModelOutput, ModelOutput.source.like("recon:%mvt%"))
+    cascade_delete(db, Task, Task.title == PINE)
     cat = db.query(Category).filter_by(slug="plants").first() or Category(slug="plants", name="P")
     db.add(cat)
     db.flush()

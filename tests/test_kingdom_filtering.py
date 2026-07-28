@@ -22,6 +22,7 @@ from app.models import (
     TaskDifficulty,
     Vote,
 )
+from tests.factories import cascade_delete, delete_outputs_matching
 
 
 def setup_module(_m):
@@ -74,12 +75,10 @@ _PFX = "kfx"
 
 
 def _clear_builder_fixtures(db):
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like(f"{_PFX}/%")).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter(Task.title.like("KFX %")).delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like(f"{_PFX}-g%")).delete(synchronize_session=False)
-    db.query(Category).filter(Category.slug.like(f"{_PFX}-%")).delete(synchronize_session=False)
+    delete_outputs_matching(db, ModelOutput.asset_path.like(f"{_PFX}/%"))
+    cascade_delete(db, Task, Task.title.like("KFX %"))
+    cascade_delete(db, Generator, Generator.slug.like(f"{_PFX}-g%"))
+    cascade_delete(db, Category, Category.slug.like(f"{_PFX}-%"))
     db.commit()
 
 
@@ -207,17 +206,11 @@ def _clear_lb_fixtures(db):
             synchronize_session=False
         )
     db.query(Vote).filter(Vote.session_id.like(f"{_LBPFX}-%")).delete(synchronize_session=False)
-    db.query(Comparison).filter(Comparison.session_id.like(f"{_LBPFX}-%")).delete(
-        synchronize_session=False
-    )
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like(f"{_LBPFX}/%")).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter(Task.title.like("KLB %")).delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like(f"{_LBPFX}-g%")).delete(
-        synchronize_session=False
-    )
-    db.query(Category).filter(Category.slug.like(f"{_LBPFX}-%")).delete(synchronize_session=False)
+    cascade_delete(db, Comparison, Comparison.session_id.like(f"{_LBPFX}-%"))
+    delete_outputs_matching(db, ModelOutput.asset_path.like(f"{_LBPFX}/%"))
+    cascade_delete(db, Task, Task.title.like("KLB %"))
+    cascade_delete(db, Generator, Generator.slug.like(f"{_LBPFX}-g%"))
+    cascade_delete(db, Category, Category.slug.like(f"{_LBPFX}-%"))
     db.commit()
 
 
@@ -470,18 +463,12 @@ _T7PFX = "kt7"
 
 
 def _clear_t7_fixtures(db):
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like(f"{_T7PFX}/%")).delete(
-        synchronize_session=False
-    )
-    db.query(Comparison).filter(Comparison.session_id.like(f"{_T7PFX}-%")).delete(
-        synchronize_session=False
-    )
+    delete_outputs_matching(db, ModelOutput.asset_path.like(f"{_T7PFX}/%"))
+    cascade_delete(db, Comparison, Comparison.session_id.like(f"{_T7PFX}-%"))
     db.query(Vote).filter(Vote.session_id.like(f"{_T7PFX}-%")).delete(synchronize_session=False)
-    db.query(Task).filter(Task.title.like("KT7 %")).delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like(f"{_T7PFX}-g%")).delete(
-        synchronize_session=False
-    )
-    db.query(Category).filter(Category.slug.like(f"{_T7PFX}-%")).delete(synchronize_session=False)
+    cascade_delete(db, Task, Task.title.like("KT7 %"))
+    cascade_delete(db, Generator, Generator.slug.like(f"{_T7PFX}-g%"))
+    cascade_delete(db, Category, Category.slug.like(f"{_T7PFX}-%"))
     db.commit()
 
 

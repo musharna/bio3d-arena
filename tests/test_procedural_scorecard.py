@@ -5,6 +5,7 @@ import uuid
 
 from app import judge, service
 from app.database import SessionLocal, init_db
+from tests.factories import make_rubric
 from app.models import (
     Category,
     CommissionAttempt,
@@ -104,7 +105,7 @@ def test_scorecard_pass_at_1_fidelity_rank_and_exclusion():
             [
                 TraitVerdict(
                     output_id=out.id,
-                    rubric_id=0,
+                    rubric_id=make_rubric(db, task_id=t1).id,
                     trait_key="k1",
                     trait_class="presence",
                     verdict="present_correct",
@@ -112,7 +113,7 @@ def test_scorecard_pass_at_1_fidelity_rank_and_exclusion():
                 ),
                 TraitVerdict(
                     output_id=out.id,
-                    rubric_id=0,
+                    rubric_id=make_rubric(db, task_id=t1).id,
                     trait_key="k2",
                     trait_class="presence",
                     verdict="present_wrong",
@@ -120,7 +121,7 @@ def test_scorecard_pass_at_1_fidelity_rank_and_exclusion():
                 ),
                 TraitVerdict(
                     output_id=out.id,
-                    rubric_id=0,
+                    rubric_id=make_rubric(db, task_id=t1).id,
                     trait_key="k3",
                     trait_class="presence",
                     verdict="not_assessable",
@@ -240,7 +241,7 @@ def test_scorecard_morph_fidelity_0_sorts_before_none():
         db.add(
             TraitVerdict(
                 output_id=out_a.id,
-                rubric_id=0,
+                rubric_id=make_rubric(db, task_id=t1).id,
                 trait_key="test_key",
                 trait_class="presence",
                 verdict="present_wrong",  # 0 correct, 1 assessable → fidelity 0.0
@@ -315,7 +316,7 @@ def test_procedural_scorecard_filters_by_judge_model():
             [
                 TraitVerdict(
                     output_id=out.id,
-                    rubric_id=0,
+                    rubric_id=make_rubric(db, task_id=t).id,
                     trait_key="trait_v1",
                     trait_class="presence",
                     verdict="present_correct",
@@ -323,7 +324,7 @@ def test_procedural_scorecard_filters_by_judge_model():
                 ),
                 TraitVerdict(
                     output_id=out.id,
-                    rubric_id=0,
+                    rubric_id=make_rubric(db, task_id=t).id,
                     trait_key="trait_v1",  # same trait_key
                     trait_class="presence",
                     verdict="present_correct",

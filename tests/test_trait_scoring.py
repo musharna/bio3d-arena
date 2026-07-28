@@ -4,13 +4,22 @@ from __future__ import annotations
 from app import service
 from app.database import SessionLocal, init_db
 from app.models import ModelScope, TraitCalibration, TraitScore, TraitVerdict
+from tests.factories import cascade_delete, make_outputs, make_rubric
+
+# These were the literals 9001..9004 and rubric_id=1 — ids of rows that never existed. FK
+# enforcement refuses a child pointing at a missing parent, so the fixture now mints real
+# outputs and a real rubric once per module and the tests key off their ids.
+_OIDS: list[int] = []
+_RUBRIC_ID = 0
 
 
 def setup_module(_m):
     init_db()
-
-
-_OIDS = [9001, 9002, 9003, 9004]
+    global _RUBRIC_ID
+    with SessionLocal() as db:
+        outs = make_outputs(db, 4)
+        _OIDS[:] = [o.id for o in outs]
+        _RUBRIC_ID = make_rubric(db, task_id=outs[0].task_id).id
 
 
 def _clear(db):
@@ -35,8 +44,8 @@ def test_scores_use_only_accepted_classes_and_skip_not_assessable():
         for i, (cls, v) in enumerate(vs):
             db.add(
                 TraitVerdict(
-                    output_id=9001,
-                    rubric_id=1,
+                    output_id=_OIDS[0],
+                    rubric_id=_RUBRIC_ID,
                     trait_key=f"k{i}",
                     trait_class=cls,
                     verdict=v,
@@ -45,7 +54,7 @@ def test_scores_use_only_accepted_classes_and_skip_not_assessable():
             )
         db.commit()
         service.recompute_trait_scores(db, judge_model="m")
-        ts = db.query(TraitScore).filter_by(output_id=9001).one()
+        ts = db.query(TraitScore).filter_by(output_id=_OIDS[0]).one()
         # accepted+assessable color verdicts: 1 correct of 2 → 0.5
         assert ts.n_scored == 2 and ts.botanical_accuracy == 0.5
 
@@ -58,12 +67,14 @@ def test_scores_gate_on_model_scope():
         _clear(db)
         db.add(TraitCalibration(trait_class="organ_shape", kappa=0.8, n=30, accepted=True))
         db.add(TraitCalibration(trait_class="habit", kappa=0.8, n=30, accepted=True))
-        db.add(ModelScope(output_id=9001, is_plant=True, parts_json='["fruit"]', judge_model="m"))
+        db.add(
+            ModelScope(output_id=_OIDS[0], is_plant=True, parts_json='["fruit"]', judge_model="m")
+        )
         for key, cls in [("fruit_form", "organ_shape"), ("plant_habit", "habit")]:
             db.add(
                 TraitVerdict(
-                    output_id=9001,
-                    rubric_id=1,
+                    output_id=_OIDS[0],
+                    rubric_id=_RUBRIC_ID,
                     trait_key=key,
                     trait_class=cls,
                     verdict="present_correct",
@@ -72,7 +83,7 @@ def test_scores_gate_on_model_scope():
             )
         db.commit()
         service.recompute_trait_scores(db, judge_model="m")
-        ts = db.query(TraitScore).filter_by(output_id=9001).one()
+        ts = db.query(TraitScore).filter_by(output_id=_OIDS[0]).one()
         # only fruit_form is assessable on a fruit-only model; habit dropped by scope
         assert ts.n_scored == 1 and ts.botanical_accuracy == 1.0
 
@@ -82,7 +93,9 @@ def test_calibration_gates_on_model_scope():
     scope — so a VLM habit over-read on a single-fruit model doesn't enter calibration either."""
     with SessionLocal() as db:
         _clear(db)
-        db.add(ModelScope(output_id=9002, is_plant=True, parts_json='["fruit"]', judge_model="m"))
+        db.add(
+            ModelScope(output_id=_OIDS[1], is_plant=True, parts_json='["fruit"]', judge_model="m")
+        )
         rows = [
             ("fruit_form", "organ_shape", "present_correct", "present_correct"),  # kept
             ("plant_habit", "habit", "not_assessable", "present_correct"),  # scope drops
@@ -91,15 +104,15 @@ def test_calibration_gates_on_model_scope():
         for key, cls, human, vlm in rows:
             db.add(
                 TraitVerdict(
-                    output_id=9002,
-                    rubric_id=1,
+                    output_id=_OIDS[1],
+                    rubric_id=_RUBRIC_ID,
                     trait_key=key,
                     trait_class=cls,
                     verdict=vlm,
                     judge_model="m",
                 )
             )
-            labels.append((9002, key, cls, human))
+            labels.append((_OIDS[1], key, cls, human))
         db.commit()
         service.recompute_trait_calibration(db, labels, judge_model="m")
         assert db.query(TraitCalibration).filter_by(trait_class="organ_shape").one().n == 1
@@ -109,11 +122,11 @@ def test_calibration_gates_on_model_scope():
 def test_calibration_gate_threshold():
     with SessionLocal() as db:
         _clear(db)
-        labels = [(9002, "k", "color", "present_correct")]
+        labels = [(_OIDS[1], "k", "color", "present_correct")]
         db.add(
             TraitVerdict(
-                output_id=9002,
-                rubric_id=1,
+                output_id=_OIDS[1],
+                rubric_id=_RUBRIC_ID,
                 trait_key="k",
                 trait_class="color",
                 verdict="present_correct",
@@ -146,15 +159,15 @@ def test_calibration_drops_vlm_not_assessable_but_keeps_human_na_overreads():
         for key, human, vlm in rows:
             db.add(
                 TraitVerdict(
-                    output_id=9003,
-                    rubric_id=1,
+                    output_id=_OIDS[2],
+                    rubric_id=_RUBRIC_ID,
                     trait_key=key,
                     trait_class="color",
                     verdict=vlm,
                     judge_model="m",
                 )
             )
-            labels.append((9003, key, "color", human))
+            labels.append((_OIDS[2], key, "color", human))
         db.commit()
         service.recompute_trait_calibration(db, labels, judge_model="m")
         cal = db.query(TraitCalibration).filter_by(trait_class="color").one()
@@ -172,15 +185,15 @@ def test_calibration_gate_accepts_above_threshold():
             v = "present_correct" if i % 2 == 0 else "absent"  # 2 categories, 15/15
             db.add(
                 TraitVerdict(
-                    output_id=9004,
-                    rubric_id=1,
+                    output_id=_OIDS[3],
+                    rubric_id=_RUBRIC_ID,
                     trait_key=f"a{i}",
                     trait_class="color",
                     verdict=v,
                     judge_model="m",
                 )
             )
-            labels.append((9004, f"a{i}", "color", v))  # human == VLM (perfect)
+            labels.append((_OIDS[3], f"a{i}", "color", v))  # human == VLM (perfect)
         db.commit()
         service.recompute_trait_calibration(db, labels, judge_model="m")
         cal = db.query(TraitCalibration).filter_by(trait_class="color").one()
@@ -196,8 +209,8 @@ def test_scores_partition_by_judge_model():
         # Model A says correct, model B says wrong, on the SAME trait of the SAME output.
         db.add(
             TraitVerdict(
-                output_id=9003,
-                rubric_id=1,
+                output_id=_OIDS[2],
+                rubric_id=_RUBRIC_ID,
                 trait_key="c",
                 trait_class="color",
                 verdict="present_correct",
@@ -206,8 +219,8 @@ def test_scores_partition_by_judge_model():
         )
         db.add(
             TraitVerdict(
-                output_id=9003,
-                rubric_id=1,
+                output_id=_OIDS[2],
+                rubric_id=_RUBRIC_ID,
                 trait_key="c",
                 trait_class="color",
                 verdict="present_wrong",
@@ -216,7 +229,7 @@ def test_scores_partition_by_judge_model():
         )
         db.commit()
         service.recompute_trait_scores(db, judge_model="A")
-        ts = db.query(TraitScore).filter_by(output_id=9003).one()
+        ts = db.query(TraitScore).filter_by(output_id=_OIDS[2]).one()
         assert ts.n_total == 1 and ts.n_scored == 1
         assert ts.botanical_accuracy == 1.0 and ts.judge_model == "A"
 
@@ -231,8 +244,8 @@ def test_tier_trait_accuracy_groups_scored_outputs_by_tier():
         olds = db.query(ModelOutput).filter(ModelOutput.asset_path.like("tta/%.glb")).all()
         db.query(TraitScore).filter(TraitScore.output_id.in_([o.id for o in olds])).delete(False)
         db.query(ModelOutput).filter(ModelOutput.asset_path.like("tta/%.glb")).delete(False)
-        db.query(Task).filter(Task.title.like("tta-%")).delete(False)
-        db.query(Generator).filter(Generator.slug.like("tta-%")).delete(False)
+        cascade_delete(db, Task, Task.title.like("tta-%"))
+        cascade_delete(db, Generator, Generator.slug.like("tta-%"))
         db.query(Category).filter_by(slug="tta-cat").delete(False)
         db.commit()
 
