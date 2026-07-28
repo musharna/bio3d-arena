@@ -613,4 +613,21 @@ def _seed_gold(db: Session, task_by_slug: dict[str, tuple[Task, str]]) -> int:
 
 
 if __name__ == "__main__":
-    print(seed_all(force=True))
+    # force is OPT-IN. It used to be the default here, which made `python -m app.seed` a
+    # database-destroying command that looked like a setup step — and the production
+    # Dockerfile ran exactly that on every container boot. Containers restart for ordinary
+    # reasons (deploys, health checks, host migrations), so a public instance would have
+    # wiped every collected vote and reseeded demo data, repeatedly. Votes are the one
+    # irreplaceable thing this project holds.
+    #
+    # The safe default is the same one seed_all() already had; only this entry point
+    # disagreed with it. See tests/test_seed_entrypoint_is_not_destructive.py.
+    import argparse
+
+    ap = argparse.ArgumentParser(description="Seed demo data. Idempotent unless --force.")
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="WIPE every seeded table and rebuild. Destroys votes. Never use on a live instance.",
+    )
+    print(seed_all(force=ap.parse_args().force))
