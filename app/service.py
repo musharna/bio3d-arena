@@ -1474,9 +1474,18 @@ def coverage_summary(db: Session, category_ids: set[int] | None = None) -> dict:
     names = generator_display_names(db)
     excluded = mode_a_excluded_generator_ids(db)
 
+    # Bulk-load the non-gold outputs ONCE, grouped by generator and by task. `g.outputs` /
+    # `t.outputs` are lazy relationships: touching them per row cost one round trip each (57
+    # generators + 20 tasks on the live corpus) on top of the paradigm tally above.
+    _outs_by_gen: dict[int, list] = defaultdict(list)
+    _outs_by_task: dict[int, list] = defaultdict(list)
+    for o in db.execute(select(ModelOutput).where(ModelOutput.is_gold.is_(False))).scalars():
+        _outs_by_gen[o.generator_id].append(o)
+        _outs_by_task[o.task_id].append(o)
+
     gen_rows = []
     for g in db.execute(select(Generator)).scalars().all():
-        outs = [o for o in g.outputs if not o.is_gold]
+        outs = _outs_by_gen.get(g.id, [])
         if not outs:
             continue  # gold-only / empty generators don't appear on the public board
         votes = sum(o.n_comparisons for o in outs)
@@ -1497,48 +1506,66 @@ def coverage_summary(db: Session, category_ids: set[int] | None = None) -> dict:
     _tasks_stmt = select(Task).where(Task.active.is_(True))
     if category_ids is not None:
         _tasks_stmt = _tasks_stmt.where(Task.category_id.in_(category_ids))
-    for t in db.execute(_tasks_stmt).scalars().all():
-        outs = [o for o in t.outputs if not o.is_gold]
-        cat = db.get(Category, t.category_id)
-        diff = (
-            db.execute(select(TaskDifficulty).where(TaskDifficulty.task_id == t.id))
-            .scalars()
-            .first()
-        )
-        mode_a_votes = db.execute(
-            select(func.count(Vote.id))
+    _cats = {
+        c.id: c for c in db.execute(select(Category)).scalars()
+    }  # was db.get(Category, ...) per task
+    tasks = db.execute(_tasks_stmt).scalars().all()
+
+    # Everything the per-task loop used to fetch one task at a time, as six grouped queries.
+    # The loop cost 5-6 round trips PER TASK; on the live corpus that was ~100 statements for
+    # 20 tasks, and it grows with the corpus. These are the same aggregates, grouped.
+    _diff = {d.task_id: d for d in db.execute(select(TaskDifficulty)).scalars()}
+    _mode_a_votes = dict(
+        db.execute(
+            select(Comparison.task_id, func.count(Vote.id))
             .select_from(Vote)
             .join(Comparison, Vote.comparison_id == Comparison.id)
-            .where(Comparison.task_id == t.id, Comparison.is_gold.is_(False))
-        ).scalar_one()
-        judge_votes = db.execute(
-            select(func.count(JudgeVote.id)).where(JudgeVote.task_id == t.id)
-        ).scalar_one()
-        out_ids = [o.id for o in outs]
-        has_mode_b = bool(
-            out_ids
-            and db.execute(
-                select(func.count(Metric.id)).where(Metric.output_id.in_(out_ids))
-            ).scalar_one()
+            .where(Comparison.is_gold.is_(False))
+            .group_by(Comparison.task_id)
+        ).all()
+    )
+    _judge_votes = dict(
+        db.execute(
+            select(JudgeVote.task_id, func.count(JudgeVote.id)).group_by(JudgeVote.task_id)
+        ).all()
+    )
+    _rubric_tasks = {tid for (tid,) in db.execute(select(TraitRubric.task_id).distinct()).all()}
+    # Metric / TraitScore are keyed by OUTPUT, so group them by the output's task. The is_gold
+    # filter is load-bearing, not incidental: the per-task loop scoped both to the task's
+    # NON-GOLD outputs, so dropping it would light up has_mode_b — and pull gold rows into the
+    # accuracy mean — for a task whose only scored output is a gold reference.
+    _metric_tasks = {
+        tid
+        for (tid,) in db.execute(
+            select(ModelOutput.task_id)
+            .join(Metric, Metric.output_id == ModelOutput.id)
+            .where(ModelOutput.is_gold.is_(False))
+            .distinct()
+        ).all()
+    }
+    _acc: dict[int, list[float]] = defaultdict(list)
+    for tid, acc in db.execute(
+        select(ModelOutput.task_id, TraitScore.botanical_accuracy)
+        .join(TraitScore, TraitScore.output_id == ModelOutput.id)
+        .where(
+            ModelOutput.is_gold.is_(False),
+            TraitScore.botanical_accuracy.is_not(None),
         )
+    ).all():
+        _acc[tid].append(acc)
+
+    for t in tasks:
+        outs = _outs_by_task.get(t.id, [])
+        cat = _cats.get(t.category_id)
+        diff = _diff.get(t.id)
+        mode_a_votes = _mode_a_votes.get(t.id, 0)
+        judge_votes = _judge_votes.get(t.id, 0)
+        has_mode_b = t.id in _metric_tasks
         # Mode-C: this task has a literature-sourced trait rubric, and the mean
         # botanical-accuracy over its scored (calibrated-class) outputs.
-        has_rubric = bool(
-            db.execute(
-                select(func.count(TraitRubric.id)).where(TraitRubric.task_id == t.id)
-            ).scalar_one()
-        )
-        mode_c_accuracy = None
-        if out_ids:
-            accs = [
-                ts.botanical_accuracy
-                for ts in db.execute(
-                    select(TraitScore).where(TraitScore.output_id.in_(out_ids))
-                ).scalars()
-                if ts.botanical_accuracy is not None
-            ]
-            if accs:
-                mode_c_accuracy = round(sum(accs) / len(accs), 3)
+        has_rubric = t.id in _rubric_tasks
+        accs = _acc.get(t.id, [])
+        mode_c_accuracy = round(sum(accs) / len(accs), 3) if accs else None
         task_rows.append(
             {
                 "task": t.title,
@@ -1555,12 +1582,21 @@ def coverage_summary(db: Session, category_ids: set[int] | None = None) -> dict:
         )
     task_rows.sort(key=lambda r: (-r["outputs"], r["task"]))
 
-    # Count non-gold outputs by paradigm
-    by_paradigm: dict[str, int] = {}
-    for o in db.execute(select(ModelOutput).where(ModelOutput.is_gold.is_(False))).scalars():
-        g = db.get(Generator, o.generator_id)
-        key = g.paradigm if g else ""
-        by_paradigm[key] = by_paradigm.get(key, 0) + 1
+    # Count non-gold outputs by paradigm. This is a GROUP BY, and used to be written as a Python
+    # loop that hydrated every non-gold ModelOutput row and then re-fetched that row's Generator
+    # by primary key to read ONE column — 352 single-row generator SELECTs on the live instance,
+    # 17.9s of /models' 8s page (and /coverage's, which calls this too). Microseconds against
+    # in-process SQLite, a network round trip each against managed Postgres.
+    by_paradigm: dict[str, int] = {
+        (paradigm or ""): n
+        for paradigm, n in db.execute(
+            select(Generator.paradigm, func.count(ModelOutput.id))
+            .select_from(ModelOutput)
+            .join(Generator, Generator.id == ModelOutput.generator_id)
+            .where(ModelOutput.is_gold.is_(False))
+            .group_by(Generator.paradigm)
+        )
+    }
 
     return {"generators": gen_rows, "tasks": task_rows, "by_paradigm": by_paradigm}
 
