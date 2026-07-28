@@ -119,6 +119,46 @@ def resolve_kballot(
     return len(losers)
 
 
+def _comparison_output_ids(pairs) -> set[int]:  # noqa: ANN001
+    """Every output id referenced by a sequence of (vote, comparison) rows."""
+    ids: set[int] = set()
+    for _vote, comp in pairs:
+        ids.add(comp.output_a_id)
+        ids.add(comp.output_b_id)
+    return ids
+
+
+def _output_generator_ids(db: Session, pairs) -> dict[int, int]:  # noqa: ANN001
+    """{output_id: generator_id} for every output the given comparisons reference, in ONE query.
+
+    Replaces a `db.get(ModelOutput, ...)` per comparison side. That pattern was free on the
+    internal instance — SQLite, in-process, a primary-key lookup is microseconds — and became the
+    entire cost of the public leaderboard, where every lookup is a network round trip to managed
+    Postgres. Measured on the live deploy: 1103 statements per `/leaderboard`, 965 of them these
+    single-row selects, ~12s per render. Worse, it scaled with the vote count, which is the one
+    number this project is trying to grow.
+    """
+    ids = _comparison_output_ids(pairs)
+    if not ids:
+        return {}
+    rows = db.execute(
+        select(ModelOutput.id, ModelOutput.generator_id).where(ModelOutput.id.in_(ids))
+    ).all()
+    return {oid: gid for oid, gid in rows}
+
+
+def _output_asset_formats(db: Session, pairs) -> dict[int, str]:  # noqa: ANN001
+    """{output_id: asset_format} for every output the given comparisons reference, in ONE query.
+    Same N+1 removal as _output_generator_ids; see its docstring."""
+    ids = _comparison_output_ids(pairs)
+    if not ids:
+        return {}
+    rows = db.execute(
+        select(ModelOutput.id, ModelOutput.asset_format).where(ModelOutput.id.in_(ids))
+    ).all()
+    return {oid: fmt for oid, fmt in rows}
+
+
 def reference_scan_generator_ids(db: Session) -> set[int]:
     """Generator ids whose outputs are raw-scan/volumetric GT references.
 
@@ -574,14 +614,15 @@ def generator_trend_series(
     ref_gens = mode_a_excluded_generator_ids(db)
     records: list[tuple[dt.datetime, int, int, str]] = []  # (created, gen_a, gen_b, winner)
     gen_paradigm: dict[int, str] = {}
-    for vote, comparison in db.execute(stmt).all():
+    pairs = db.execute(stmt).all()
+    out_gen = _output_generator_ids(db, pairs)
+    for vote, comparison in pairs:
         if vote.winner == "bad":
             continue
-        out_a = db.get(ModelOutput, comparison.output_a_id)
-        out_b = db.get(ModelOutput, comparison.output_b_id)
-        if out_a is None or out_b is None:
+        gen_a = out_gen.get(comparison.output_a_id)
+        gen_b = out_gen.get(comparison.output_b_id)
+        if gen_a is None or gen_b is None:
             continue  # dangling vote (output deleted)
-        gen_a, gen_b = out_a.generator_id, out_b.generator_id
         if gen_a in ref_gens or gen_b in ref_gens:
             continue
         if gen_a == gen_b:
@@ -1269,17 +1310,18 @@ def compute_bias(db: Session) -> dict:
     rows = db.execute(
         select(Vote, Comparison).join(Comparison, Vote.comparison_id == Comparison.id)
     ).all()
+    fmt_of = _output_asset_formats(db, rows)
     a = b = tie = bad = cross_format = n = 0
     fmt_wins: dict[str, int] = defaultdict(int)
     fmt_games: dict[str, int] = defaultdict(int)
     for vote, comp in rows:
-        out_a = db.get(ModelOutput, comp.output_a_id)
-        out_b = db.get(ModelOutput, comp.output_b_id)
-        if out_a is None or out_b is None:
+        fmt_a = fmt_of.get(comp.output_a_id)
+        fmt_b = fmt_of.get(comp.output_b_id)
+        if fmt_a is None or fmt_b is None:
             continue  # dangling vote (output deleted) — not a valid comparison, mirrors the
             # identical guard in _matches_for_scope
         n += 1
-        is_cross = out_a.asset_format != out_b.asset_format
+        is_cross = fmt_a != fmt_b
         if is_cross:
             cross_format += 1
         if vote.winner == "a":
@@ -1291,10 +1333,10 @@ def compute_bias(db: Session) -> dict:
         else:
             bad += 1
         if is_cross and vote.winner in ("a", "b"):
-            win_out, lose_out = (out_a, out_b) if vote.winner == "a" else (out_b, out_a)
-            fmt_wins[win_out.asset_format] += 1
-            fmt_games[win_out.asset_format] += 1
-            fmt_games[lose_out.asset_format] += 1
+            win_fmt, lose_fmt = (fmt_a, fmt_b) if vote.winner == "a" else (fmt_b, fmt_a)
+            fmt_wins[win_fmt] += 1
+            fmt_games[win_fmt] += 1
+            fmt_games[lose_fmt] += 1
     decisive = a + b
 
     # Gold attention-check + trust stats.
