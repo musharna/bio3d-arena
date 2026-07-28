@@ -519,6 +519,14 @@ textarea:focus-visible,
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.1rem;
+  /* Orbiting a model is a DRAG, and a drag over normal content is also a text selection. On
+     Safari/macOS especially, rotating a mesh painted the label and surrounding text in selection
+     highlight, which then sat on top of the very model being judged. Suppress selection across
+     the comparison — there is nothing here anyone needs to select, and a highlight over one of
+     two candidates is a presentation difference between them, which is exactly what this
+     comparison must not introduce. -webkit- prefix is load-bearing for Safari. */
+  -webkit-user-select: none;
+  user-select: none;
 }
 .model-col {
   position: relative;

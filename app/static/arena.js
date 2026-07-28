@@ -353,13 +353,54 @@ async function submitKvote(ballotId, bestOutputId) {
 // The server verifies ONCE PER SESSION (integrity.captcha_ok_for_session), so this token is
 // needed for the first vote of a visit, not every vote — which is why a spent token is simply
 // cleared rather than re-requested after each vote.
+//
+// But a token is SINGLE-USE and expires in about five minutes, and the widget fires its
+// callback once. So if the server ever stops recognising the session, resending this same
+// stale token can only fail, and the voter is locked out with no way back. That is what
+// "the captcha occasionally loses authorization" looked like from the outside. The server
+// side now persists verification, and this side can ask the widget for a FRESH token and
+// retry, so the two failure modes no longer compound into a dead end.
 let captchaToken = "";
+let captchaWaiters = [];
 
 window.bio3dCaptchaDone = function (token) {
   captchaToken = token || "";
   const field = document.getElementById("captcha-token");
   if (field) field.value = captchaToken;
+  // Wake anyone waiting on a re-solve.
+  const waiters = captchaWaiters;
+  captchaWaiters = [];
+  waiters.forEach((resolve) => resolve(captchaToken));
 };
+
+// Ask the provider for a new token. Resolves with "" if no widget is present or it does not
+// answer in time, so a caller never hangs waiting on a challenge that will not arrive.
+function refreshCaptchaToken(timeoutMs = 8000) {
+  const slot = document.getElementById("captcha-slot");
+  const provider = slot && slot.getAttribute("data-captcha-provider");
+  const api = provider === "hcaptcha" ? window.hcaptcha : window.turnstile;
+  if (!slot || !api || typeof api.reset !== "function")
+    return Promise.resolve("");
+  captchaToken = "";
+  const field = document.getElementById("captcha-token");
+  if (field) field.value = "";
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => {
+      if (!done) {
+        done = true;
+        resolve(v);
+      }
+    };
+    captchaWaiters.push(finish);
+    setTimeout(() => finish(""), timeoutMs);
+    try {
+      api.reset();
+    } catch (_) {
+      finish("");
+    }
+  });
+}
 
 function captchaHeaders() {
   // Only attach the header when we actually hold a token — sending an empty or "undefined"
@@ -374,11 +415,22 @@ async function vote(winner) {
   busy = true;
   setStatus("Recording vote…");
   try {
-    const res = await fetch("/api/vote" + qs(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...captchaHeaders() },
-      body: JSON.stringify({ comparison_id: current.comparison_id, winner }),
-    });
+    const post = () =>
+      fetch("/api/vote" + qs(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...captchaHeaders() },
+        body: JSON.stringify({ comparison_id: current.comparison_id, winner }),
+      });
+    let res = await post();
+    if (res.status === 403) {
+      // Human verification lapsed (server restarted, or our token was spent/expired). The
+      // token we hold is single-use, so retrying with it can only fail again — ask the widget
+      // for a fresh one and retry ONCE. Without this the voter is stuck permanently, which is
+      // how a transient 403 turned into "the captcha stopped working".
+      setStatus("Re-checking human verification…");
+      const fresh = await refreshCaptchaToken();
+      if (fresh) res = await post();
+    }
     if (!res.ok) {
       // Failed vote (rate-limit 429, already-voted/dup 409, captcha 403, unknown 404):
       // surface the reason and do NOT claim success or advance.
@@ -387,6 +439,10 @@ async function vote(winner) {
         detail = (await res.json()).detail || detail;
       } catch (_) {
         /* non-JSON error body */
+      }
+      if (res.status === 403) {
+        detail +=
+          " — tick the verification box below the models, then vote again";
       }
       setStatus("Could not record vote: " + detail);
       return;
