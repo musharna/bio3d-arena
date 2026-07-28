@@ -865,7 +865,7 @@ def api_vote(
     sid = request.state.session_id
 
     # 1. Human verification (no-op unless REQUIRE_CAPTCHA is enabled).
-    if not integrity.captcha_ok_for_session(sid, x_captcha_token):
+    if not integrity.captcha_ok_for_session(db, sid, x_captcha_token):
         raise HTTPException(403, "Captcha verification required/failed")
     # 2. Rate limiting — per session AND per IP (the IP layer caps cookie-reset farming).
     if not integrity.check_rate_limit(sid):
@@ -929,7 +929,7 @@ def api_kvote(
     import json as _json
 
     sid = request.state.session_id
-    if not integrity.captcha_ok_for_session(sid, x_captcha_token):
+    if not integrity.captcha_ok_for_session(db, sid, x_captcha_token):
         raise HTTPException(403, "Captcha verification required/failed")
     if not integrity.check_rate_limit(sid):
         raise HTTPException(429, "Rate limit exceeded — slow down")
@@ -2992,7 +2992,7 @@ async def api_submit(
 ):
     """Public: queue a community 3D output for moderation (rate-limited, validated)."""
     sid = request.state.session_id
-    if not integrity.captcha_ok_for_session(sid, x_captcha_token):
+    if not integrity.captcha_ok_for_session(db, sid, x_captcha_token):
         raise HTTPException(403, "Captcha verification required/failed")
     if not integrity.check_rate_limit(sid):
         raise HTTPException(429, "Rate limit exceeded — slow down")
