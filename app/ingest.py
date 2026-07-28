@@ -13,14 +13,18 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import logging
 import uuid
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import config
 from .models import Category, Generator, ModelOutput, Task
 from .storage import get_storage
+
+logger = logging.getLogger(__name__)
 
 MESH_FORMATS = {"glb", "gltf"}  # rendered by <model-viewer>
 PDB_FORMATS = {"pdb", "cif", "mmcif", "ent"}  # rendered by 3Dmol.js (atomic coords)
@@ -143,12 +147,37 @@ def upsert_category(
 
 
 def upsert_generator(
-    db: Session, slug: str, name: str | None = None, kind: str = "model", description: str = ""
+    db: Session,
+    slug: str,
+    name: str | None = None,
+    kind: str = "model",
+    description: str = "",
+    paradigm: str | None = None,
 ) -> Generator:
+    """Fetch or create a generator.
+
+    `paradigm` is load-bearing, not decorative: the arena vote pool is an allowlist over
+    paradigms (config.ARENA_VOTE_PARADIGMS) and a NULL paradigm is off-roster, so a generator
+    created without one is ingested, displayed, and then never served for voting. That is a
+    silent dead end, so it warns rather than passing quietly.
+    """
     gen = db.execute(select(Generator).where(Generator.slug == slug)).scalars().first()
     if gen is None:
+        if not paradigm and config.ARENA_VOTE_PARADIGMS:
+            logger.warning(
+                "generator %r created with no paradigm — it is OFF the arena vote roster "
+                "(config.ARENA_VOTE_PARADIGMS=%s) and will never be served for voting. "
+                "Pass paradigm= to make it votable.",
+                slug,
+                sorted(config.ARENA_VOTE_PARADIGMS),
+            )
         gen = Generator(
-            slug=slug, name=name or slug, kind=kind, description=description, is_anonymous=True
+            slug=slug,
+            name=name or slug,
+            kind=kind,
+            description=description,
+            is_anonymous=True,
+            paradigm=paradigm,
         )
         db.add(gen)
         db.flush()

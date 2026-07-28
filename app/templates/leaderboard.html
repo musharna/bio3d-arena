@@ -123,6 +123,20 @@
          provenance of its ranks. The AI-judge board is a SEPARATE surface — linked, never
          intermixed: its BT scores come from VLM ballots, not human votes. #}
       <p class="b3d-page-lede lb-what-measures">{{ board_what }}</p>
+      {# This modality is outside the current human vote roster: its scores are frozen at the
+         votes already cast. Say so plainly and send the reader to the board that DOES still
+         rank it, rather than leaving every row reading "provisional" with no explanation. #}
+      {% if off_roster %}
+      <p class="subtle off-roster-note">
+        Human voting is currently focused on the commercial image&#8594;3D and text&#8594;3D
+        models, so these scores are paused where the votes so far left them. The
+        <a
+          href="/leaderboard/judge?criterion={{ sel_criterion }}&category={{ sel_category }}{% if sel_paradigm %}&modality={{ sel_paradigm }}{% endif %}"
+          >AI-judge board</a
+        >
+        still ranks this modality.
+      </p>
+      {% endif %}
       <p class="subtle lb-source-note">
         Ranked by human votes ·
         <span class="mono lb-votecount">{{ total_votes }} cast</span> ·
