@@ -306,7 +306,7 @@ async function submitKvote(ballotId, bestOutputId) {
     // the follow-up ballot) — dropping it here would silently reset the user's filter every pick.
     const res = await fetch("/api/kvote" + qs(), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...captchaHeaders() },
       body: JSON.stringify({
         ballot_id: ballotId,
         best_output_id: bestOutputId,
@@ -345,6 +345,30 @@ async function submitKvote(ballotId, bestOutputId) {
   }
 }
 
+// --- Human verification -------------------------------------------------------------
+// The widget (templates/_captcha.html) renders only when the operator enabled a captcha, so
+// on a normal deployment everything below is inert and no header is sent. The provider calls
+// bio3dCaptchaDone() with a token; we stash it and hand it to the next vote.
+//
+// The server verifies ONCE PER SESSION (integrity.captcha_ok_for_session), so this token is
+// needed for the first vote of a visit, not every vote — which is why a spent token is simply
+// cleared rather than re-requested after each vote.
+let captchaToken = "";
+
+window.bio3dCaptchaDone = function (token) {
+  captchaToken = token || "";
+  const field = document.getElementById("captcha-token");
+  if (field) field.value = captchaToken;
+};
+
+function captchaHeaders() {
+  // Only attach the header when we actually hold a token — sending an empty or "undefined"
+  // value would make every request carry a junk credential.
+  const field = document.getElementById("captcha-token");
+  const token = captchaToken || (field && field.value) || "";
+  return token ? { "X-Captcha-Token": token } : {};
+}
+
 async function vote(winner) {
   if (busy || !current) return;
   busy = true;
@@ -352,7 +376,7 @@ async function vote(winner) {
   try {
     const res = await fetch("/api/vote" + qs(), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...captchaHeaders() },
       body: JSON.stringify({ comparison_id: current.comparison_id, winner }),
     });
     if (!res.ok) {

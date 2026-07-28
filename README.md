@@ -119,6 +119,23 @@ browse benchmark tasks, `/admin` for admin tools (token below).
 
 **Change `BIO3D_ADMIN_TOKEN` before deploying.**
 
+### Human verification (optional)
+
+Off by default: with no captcha configured the arena loads no third-party script at all.
+Turning it on requires **both** keys — the app refuses to start with the switch on and either
+key missing, because an enabled-but-unconfigured captcha does not weaken voting, it blocks it.
+
+| Variable                 | Default     | Purpose                                           |
+| ------------------------ | ----------- | ------------------------------------------------- |
+| `BIO3D_REQUIRE_CAPTCHA`  | `false`     | master switch for human verification              |
+| `BIO3D_CAPTCHA_PROVIDER` | `turnstile` | `turnstile` (Cloudflare) or `hcaptcha`            |
+| `BIO3D_CAPTCHA_SITE_KEY` | _(empty)_   | **public** key; renders the widget in the browser |
+| `BIO3D_CAPTCHA_SECRET`   | _(empty)_   | **private** key; verifies the token server-side   |
+
+A voter is challenged **once per session**, not once per vote: provider tokens are single-use
+and short-lived, so per-vote verification would put a round-trip in front of every vote. A
+rejected token leaves the session unverified, so the next vote is challenged again.
+
 ### Production scale-out (optional)
 
 Each seam is a config switch; the core app stays dependency-free until you enable

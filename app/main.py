@@ -112,6 +112,13 @@ templates.env.globals["og_image_path"] = config.OG_IMAGE_PATH
 # Read live (not the value at import) so tests/deploys can toggle config.INTERNAL_PAGES_ENABLED
 # and both the route guard and the nav conditionals see the same current value.
 templates.env.globals["internal_pages"] = lambda: config.INTERNAL_PAGES_ENABLED
+# Same live-read reason as above. Returns a dict rather than two globals so a template can
+# never render the widget while missing the key it needs — the two travel together.
+templates.env.globals["captcha"] = lambda: {
+    "enabled": bool(config.REQUIRE_CAPTCHA),
+    "provider": config.CAPTCHA_PROVIDER,
+    "site_key": config.CAPTCHA_SITE_KEY,
+}
 
 app = FastAPI(title="Bio 3D Arena", version="0.1.0")
 app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
@@ -794,7 +801,7 @@ def api_vote(
     sid = request.state.session_id
 
     # 1. Human verification (no-op unless REQUIRE_CAPTCHA is enabled).
-    if not integrity.verify_captcha(x_captcha_token):
+    if not integrity.captcha_ok_for_session(sid, x_captcha_token):
         raise HTTPException(403, "Captcha verification required/failed")
     # 2. Rate limiting — per session AND per IP (the IP layer caps cookie-reset farming).
     if not integrity.check_rate_limit(sid):
@@ -858,7 +865,7 @@ def api_kvote(
     import json as _json
 
     sid = request.state.session_id
-    if not integrity.verify_captcha(x_captcha_token):
+    if not integrity.captcha_ok_for_session(sid, x_captcha_token):
         raise HTTPException(403, "Captcha verification required/failed")
     if not integrity.check_rate_limit(sid):
         raise HTTPException(429, "Rate limit exceeded — slow down")
@@ -2899,7 +2906,7 @@ async def api_submit(
 ):
     """Public: queue a community 3D output for moderation (rate-limited, validated)."""
     sid = request.state.session_id
-    if not integrity.verify_captcha(x_captcha_token):
+    if not integrity.captcha_ok_for_session(sid, x_captcha_token):
         raise HTTPException(403, "Captcha verification required/failed")
     if not integrity.check_rate_limit(sid):
         raise HTTPException(429, "Rate limit exceeded — slow down")

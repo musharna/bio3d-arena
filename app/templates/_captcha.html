@@ -1,0 +1,29 @@
+{# Human-verification widget. Renders NOTHING unless the operator configured a captcha, so a
+   page that loads no third-party script keeps loading none by default — the script appears
+   if and only if BIO3D_REQUIRE_CAPTCHA is on (and config.py refuses to boot with the switch
+   on but no keys, so "enabled" always implies a usable site key).
+
+   The widget writes its token into a hidden input; arena.js reads it from there and sends it
+   as X-Captcha-Token. Verification is once per session (see integrity.captcha_ok_for_session),
+   so this challenge runs on the first vote of a visit, not on every vote. #}
+{% set cap = captcha() %}
+{% if cap.enabled %}
+<div
+  class="captcha-slot"
+  id="captcha-slot"
+  data-captcha-provider="{{ cap.provider }}"
+  data-captcha-sitekey="{{ cap.site_key }}"
+>
+  {% if cap.provider == "hcaptcha" %}
+  <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+  <div class="h-captcha" data-sitekey="{{ cap.site_key }}" data-callback="bio3dCaptchaDone"></div>
+  {% else %}
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <div class="cf-turnstile" data-sitekey="{{ cap.site_key }}" data-callback="bio3dCaptchaDone"></div>
+  {% endif %}
+  <input type="hidden" id="captcha-token" value="" />
+  <noscript>
+    <p class="subtle">Voting needs JavaScript enabled for human verification.</p>
+  </noscript>
+</div>
+{% endif %}

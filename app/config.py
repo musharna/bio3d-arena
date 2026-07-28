@@ -88,11 +88,26 @@ GOLD_RATE = float(os.environ.get("BIO3D_GOLD_RATE", "0.1"))
 # Sessions below this trust score are excluded from the authoritative BT leaderboard.
 TRUST_THRESHOLD = float(os.environ.get("BIO3D_TRUST_THRESHOLD", "0.5"))
 # Optional human-verification (captcha). Off by default so local/dev needs no keys.
+#
+# TWO keys are needed, and they are not interchangeable. The SECRET verifies a token
+# server-side against the provider; the SITE key is public and is what the browser needs to
+# render a widget at all. Only the secret existed until 2026-07-27, so there was no way to
+# obtain a token — turning REQUIRE_CAPTCHA on would have rejected every vote with a 403.
 REQUIRE_CAPTCHA = os.environ.get("BIO3D_REQUIRE_CAPTCHA", "false").lower() in ("1", "true", "yes")
 CAPTCHA_PROVIDER = os.environ.get(
     "BIO3D_CAPTCHA_PROVIDER", "turnstile"
 ).lower()  # turnstile|hcaptcha
-CAPTCHA_SECRET = os.environ.get("BIO3D_CAPTCHA_SECRET", "")
+CAPTCHA_SITE_KEY = os.environ.get("BIO3D_CAPTCHA_SITE_KEY", "").strip()
+CAPTCHA_SECRET = os.environ.get("BIO3D_CAPTCHA_SECRET", "").strip()
+if REQUIRE_CAPTCHA and not (CAPTCHA_SITE_KEY and CAPTCHA_SECRET):
+    # Fail loud, like the admin-token guard above. Enabled-but-unconfigured does not merely
+    # weaken a control here — it makes voting impossible, and only on the deploy that has the
+    # switch on. A boot failure is cheap; a silently unvotable arena is not.
+    raise RuntimeError(
+        "BIO3D_REQUIRE_CAPTCHA is on but the captcha is not configured. Set BOTH "
+        "BIO3D_CAPTCHA_SITE_KEY (public, renders the widget) and BIO3D_CAPTCHA_SECRET "
+        "(private, verifies the token), or leave BIO3D_REQUIRE_CAPTCHA unset."
+    )
 
 # --- Bad-output handling ---
 # Vote pool drops outputs D-Complete classified into these completeness categories

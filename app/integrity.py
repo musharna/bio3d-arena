@@ -13,7 +13,7 @@ import json as _json
 import time
 import urllib.parse as _urlparse
 import urllib.request as _urlreq
-from collections import defaultdict, deque
+from collections import OrderedDict, defaultdict, deque
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -120,6 +120,45 @@ def verify_captcha(token: str | None, *, _post=_post_form) -> bool:
         return bool(res.get("success")) if isinstance(res, dict) else False
     except Exception:
         return False
+
+
+# Sessions that have passed a challenge. In-process and deliberately not persisted: it is
+# soft state (losing it costs one extra challenge, never a wrong vote), and the arena runs a
+# single process. Bounded so a flood of one-shot sessions cannot grow it without limit.
+_CAPTCHA_VERIFIED: "OrderedDict[str, bool]" = OrderedDict()
+_CAPTCHA_VERIFIED_MAX = 50_000
+
+
+def reset_captcha_sessions() -> None:
+    """Clear remembered verifications (used by tests)."""
+    _CAPTCHA_VERIFIED.clear()
+
+
+def captcha_ok_for_session(session_id: str, token: str | None, *, _post=_post_form) -> bool:
+    """Verify a voter ONCE per session rather than once per vote.
+
+    Turnstile/hCaptcha tokens are single-use and short-lived, so checking one on every vote
+    means a challenge round-trip per vote. This arena's binding constraint is vote VOLUME —
+    as of the 2026-07-26 measurement it needs roughly 1000 more vote-units before most
+    entrants are rankable at all — so per-vote friction would cost more than the automation
+    it deters. One challenge per session, then the session carries it.
+
+    Fails closed in both directions: an unverified session with no token is refused, and a
+    REJECTED token leaves the session unverified, so the next vote is challenged again
+    instead of being waved through.
+    """
+    if not config.REQUIRE_CAPTCHA:
+        return True
+    if _CAPTCHA_VERIFIED.get(session_id):
+        _CAPTCHA_VERIFIED.move_to_end(session_id)
+        return True
+    if not verify_captcha(token, _post=_post):
+        return False
+    _CAPTCHA_VERIFIED[session_id] = True
+    _CAPTCHA_VERIFIED.move_to_end(session_id)
+    while len(_CAPTCHA_VERIFIED) > _CAPTCHA_VERIFIED_MAX:
+        _CAPTCHA_VERIFIED.popitem(last=False)  # evict least-recently-verified
+    return True
 
 
 def get_or_create_session(db: Session, session_id: str) -> VoterSession:
