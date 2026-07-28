@@ -14,6 +14,11 @@
     <meta property="og:title" content="{% block og_title %}{{ self.title() }}{% endblock %}" />
     <meta property="og:description" content="{{ self.description() }}" />
     <meta property="og:url" content="{{ abs_url(request.url.path) }}" />
+    {# Canonical deliberately drops the query string: the same board is reachable under many
+       filter combinations (?kingdom=, ?show=all, ?criterion=), and without this each one
+       claims to be its own document — splitting the page's own search ranking and making
+       shared links inconsistent. The unfiltered path is the one true address. #}
+    <link rel="canonical" href="{{ abs_url(request.url.path) }}" />
     <meta
       property="og:image"
       content="{% block og_image %}{{ abs_url(og_image_path) }}{% endblock %}"

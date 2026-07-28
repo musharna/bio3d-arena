@@ -26,6 +26,7 @@ from fastapi.responses import (
     FileResponse,
     HTMLResponse,
     JSONResponse,
+    PlainTextResponse,
     RedirectResponse,
     Response,
 )
@@ -738,6 +739,63 @@ def home(request: Request, db: Session = Depends(get_db)):
             "kingdom_cards": kingdom_cards,
         },
     )
+
+
+# Crawler-facing files. Both 404'd until the 2026-07-27 pre-release audit — a public launch
+# with nothing telling a crawler what to index or skip.
+#
+# The allowlist below is deliberately explicit rather than derived from app.routes: the router
+# also carries internal research pages, admin surfaces, JSON APIs and parameterised media
+# routes, and a sitemap built by filtering all of those would advertise a new internal page the
+# day someone adds one. Listing the public product surface by hand means a new page is absent
+# until someone says otherwise, which is the safe direction to fail.
+_SITEMAP_PATHS = (
+    "/",
+    "/arena",
+    "/leaderboard",
+    "/models",
+    "/dataset",
+    "/spotlight",
+    "/methodology",
+    "/coverage",
+    "/tasks",
+    "/submit",
+    "/terms",
+    "/privacy",
+    "/licenses",
+)
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots_txt():
+    """Allow the product surface, keep crawlers off write/admin/API paths.
+
+    Disallowing /api/ is not secrecy — those endpoints are already public where they should
+    be. It stops a crawler burning the vote endpoints' rate limit and indexing JSON that has
+    no standalone meaning.
+    """
+    lines = [
+        "User-agent: *",
+        "Disallow: /admin",
+        "Disallow: /api/",
+        "Disallow: /media/",
+        "Allow: /",
+        "",
+        f"Sitemap: {config.PUBLIC_BASE_URL}/sitemap.xml",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    urls = "".join(f"<url><loc>{config.PUBLIC_BASE_URL}{p}</loc></url>" for p in _SITEMAP_PATHS)
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"{urls}</urlset>"
+    )
+    return Response(content=body, media_type="application/xml")
 
 
 @app.get("/arena", response_class=HTMLResponse)

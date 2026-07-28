@@ -44,6 +44,8 @@ os.environ["BIO3D_DATA_DIR"] = tmp
 os.environ["BIO3D_DB_PATH"] = os.path.join(tmp, "bio3d_test_runtime.db")
 os.environ.pop("BIO3D_DATABASE_URL", None)
 os.environ["BIO3D_RECON_SCORER_URL"] = ""
+# Public deploys must declare their base URL (2026-07-27 audit guard).
+os.environ["BIO3D_PUBLIC_BASE_URL"] = "https://arena.example"
 sys.path.insert(0, %(root)r)
 
 from app.database import Base, engine

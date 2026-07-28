@@ -25,7 +25,13 @@ import pytest
 
 from app import config
 
-PUBLIC_ENV = {"BIO3D_RECON_SCORER_URL": ""}  # empty scorer url == the public deploy
+# A public deploy must supply BOTH required settings, so the baseline carries both and each
+# test drops the ONE it is about. The base URL joined this list in the 2026-07-27 pre-release
+# audit — see tests/test_release_hardening.py for the guard itself.
+PUBLIC_ENV = {
+    "BIO3D_RECON_SCORER_URL": "",  # empty scorer url == the public deploy
+    "BIO3D_PUBLIC_BASE_URL": "https://arena.example",
+}
 INTERNAL_ENV = {"BIO3D_RECON_SCORER_URL": "http://127.0.0.1:8800"}
 
 
@@ -80,11 +86,23 @@ def test_the_published_default_token_is_never_accepted_on_a_public_deploy(monkey
 # --- 2. cookie Secure -----------------------------------------------------
 
 
-def test_cookie_secure_is_on_for_a_public_deploy_even_without_a_base_url(monkeypatch):
-    """The audited chain: forgetting BIO3D_PUBLIC_BASE_URL used to silently disable
-    Secure. Cookie security must not depend on a URL string being remembered."""
-    monkeypatch.delenv("BIO3D_PUBLIC_BASE_URL", raising=False)
-    cfg = _reload(monkeypatch, **PUBLIC_ENV, BIO3D_ADMIN_TOKEN="s")
+def test_cookie_secure_is_on_for_a_public_deploy_behind_a_tls_proxy(monkeypatch):
+    """The audited chain: Secure used to be DERIVED from the base URL starting with https://,
+    so cookie security was a side effect of a URL string.
+
+    This originally proved the point with the base URL UNSET. That state is now unreachable —
+    the 2026-07-27 audit added a guard refusing to boot a public deploy without one — so the
+    property is pinned in the case that still exists and still breaks under the old
+    expression: a public instance whose base URL is **http://**, i.e. TLS terminated at a
+    proxy in front of it. `startswith("https://")` would drop Secure here; keying on the
+    deploy type does not.
+    """
+    cfg = _reload(
+        monkeypatch,
+        BIO3D_RECON_SCORER_URL="",
+        BIO3D_PUBLIC_BASE_URL="http://arena.example",  # deliberately not https
+        BIO3D_ADMIN_TOKEN="s",
+    )
     assert cfg.COOKIE_SECURE is True
 
 

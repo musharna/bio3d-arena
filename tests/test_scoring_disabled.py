@@ -12,6 +12,9 @@ def test_default_scorer_raises_when_disabled(monkeypatch):
 
 def test_default_scorer_enabled_flag_reads_url(monkeypatch):
     monkeypatch.setenv("BIO3D_RECON_SCORER_URL", "")
+    # A public deploy also requires a real base URL (2026-07-27 audit guard); this test is
+    # about SCORING_ENABLED, so satisfy the unrelated guard rather than trip over it.
+    monkeypatch.setenv("BIO3D_PUBLIC_BASE_URL", "https://arena.example")
     import importlib
 
     importlib.reload(config)

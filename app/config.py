@@ -147,7 +147,22 @@ SEMANTIC_ADMISSIBILITY_MODE = _valid_semantic_mode(
 # --- Verified login (Hugging Face OAuth). Off unless client id+secret are set. ---
 HF_CLIENT_ID = os.environ.get("BIO3D_HF_CLIENT_ID", "")
 HF_CLIENT_SECRET = os.environ.get("BIO3D_HF_CLIENT_SECRET", "")
-PUBLIC_BASE_URL = os.environ.get("BIO3D_PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+_DEV_BASE_URL = "http://127.0.0.1:8000"  # local-only; never correct on a public deploy
+PUBLIC_BASE_URL = os.environ.get("BIO3D_PUBLIC_BASE_URL", _DEV_BASE_URL).rstrip("/")
+if IS_PUBLIC_DEPLOY and PUBLIC_BASE_URL == _DEV_BASE_URL:
+    # Same posture as the admin-token guard above, for the same reason: a public deploy that
+    # forgets this ships a silently-wrong default. Here the damage is externally visible and
+    # hard to notice from inside — every og:url, og:image and canonical link points at
+    # 127.0.0.1, so every pasted link previews broken and every crawler is told the site
+    # lives on localhost (2026-07-27 pre-release audit, P1). The cookie half of that finding
+    # was fixed by keying COOKIE_SECURE on the deploy type; the URL genuinely needs the
+    # operator to supply the real domain, so the only safe default is to refuse.
+    raise RuntimeError(
+        "Refusing to start a PUBLIC deploy without a real public base URL. Set "
+        "BIO3D_PUBLIC_BASE_URL to the https:// domain this instance is served on — it is "
+        "what share cards, canonical links and the sitemap advertise. A public deploy is one "
+        "with an empty BIO3D_RECON_SCORER_URL; set that if this is the internal instance."
+    )
 
 # Social / Open Graph share cards — a pasted link previews with a title, description and image.
 SITE_NAME = "Bio 3D Arena"
