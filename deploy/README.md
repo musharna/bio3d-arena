@@ -9,6 +9,25 @@ Scoring is OFF on the public instance (`BIO3D_RECON_SCORER_URL=` empty in
 `.env.public.example`) — scores shown publicly are the ones promoted in the bundle,
 never recomputed live.
 
+## Which database is the release built from?
+
+**`data/study/arena-study.db` — always.** Step 1 exports from whatever DB the internal
+instance is pointed at, and that must be the study DB.
+
+`data/arena-preview.db` is **not** a release artifact. It is a hand-refreshed mirror of study
+used for previewing, it is not gate-filtered (it carries the same generators and tasks study
+does, including app-hidden ones), and nothing in this runbook reads it. Treat it as scratch.
+
+This matters because hand-refreshed mirrors drift. On 2026-07-27 the preview mirror was found
+178 votes behind study and still holding 8 outputs whose GLBs had been deleted — it had missed
+both a vote migration and a corpus deletion. Nothing shipped from it, because the release path
+is the export below; but anyone who assumed "preview == what we publish" would have shipped a
+leaderboard computed on 60% of the votes.
+
+If you refresh the mirror anyway, use `sqlite3`'s backup API (`.backup` / `Connection.backup`),
+never `cp` — copying a WAL database with `cp` silently drops whatever is still in the `-wal`,
+which is how 80 rescued votes were lost on 2026-07-26.
+
 ## 1. Export (run on the internal instance)
 
 ```bash
