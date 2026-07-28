@@ -3,8 +3,16 @@ FROM python:3.12-slim
 # trimesh needs nothing heavy for GLB export; keep the image lean.
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Runtime deps PLUS the scale backends. The public deploy is configured for managed Postgres
+# and S3-compatible object storage (deploy/README.md) — BIO3D_DATABASE_URL=postgresql://... and
+# BIO3D_STORAGE_BACKEND=s3 — and neither driver ships in requirements.txt. An image built from
+# requirements.txt alone booted and could reach neither its database nor its assets.
+#
+# This does NOT undo the runtime/research split: requirements-scale.txt is psycopg + boto3 +
+# redis, a few MB. The split exists to keep torch and the NVIDIA CUDA stack (5.6 GB) off the web
+# host, and requirements-research.txt is still deliberately absent here.
+COPY requirements.txt requirements-scale.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-scale.txt
 
 COPY app ./app
 
