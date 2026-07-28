@@ -138,6 +138,71 @@ def _filtered_rows(db, inc: public_export.IncludeSet) -> dict[str, list[dict]]:
     return tables
 
 
+class ReferenceLicenseError(RuntimeError):
+    """A gallery photo cannot be redistributed under its license."""
+
+
+def copy_reference_gallery(out: Path, posture: str) -> int:
+    """Ship the CC species galleries into the bundle. Returns the photo count.
+
+    They go under `assets/reference/gallery/<slug>/`, which is not decorative placement: the
+    uploader (`import_public._bundle_assets`) keys everything under `assets/` relative to it, so
+    a photo lands in storage at exactly `reference/gallery/<slug>/<file>` — the key
+    `service.reference_images_for_task` asks for. Any other layout uploads real files under a
+    path nothing reads, which looks like a successful publish and still shows no images.
+
+    Before this the galleries shipped nowhere at all: the export wrote only output blobs and
+    gt/, and the image excludes `data/`, so the public instance had no galleries in either place
+    and every task rendered `references: []`.
+
+    QA-failed photos are withheld AND pruned from the shipped manifest, so a manifest entry can
+    never point at a file that was not shipped (which would render a broken image).
+
+    Licensing follows the posture split already used for recon input photos: shipping the photo
+    FILES for redistribution requires a redistributable license, and that gate is fail-loud.
+    `display` does not redistribute — the photos are shown with their required attribution, the
+    same posture under which the meshes are displayed — so it does not gate.
+    """
+    from app.licensing import REDISTRIBUTABLE_LICENSES, normalize_license
+
+    src = config.ASSET_DIR / "reference" / "gallery"
+    if not src.is_dir():
+        return 0
+    n = 0
+    for manifest_path in sorted(src.glob("*/manifest.json")):
+        slug = manifest_path.parent.name
+        try:
+            items = json.loads(manifest_path.read_text())
+        except ValueError as e:
+            raise ReferenceLicenseError(f"unreadable gallery manifest for {slug}: {e}") from e
+        keep = [i for i in items if isinstance(i, dict) and i.get("passed_qa", True)]
+
+        if posture == "redistribute":
+            bad = [
+                (slug, i.get("file"), i.get("license"))
+                for i in keep
+                if normalize_license(i.get("license")) not in REDISTRIBUTABLE_LICENSES
+            ]
+            if bad:
+                raise ReferenceLicenseError(
+                    f"{len(bad)} reference photo(s) are not redistributable under their license "
+                    f"— refusing to ship them in a redistribute bundle: {bad[:5]}"
+                )
+
+        dst = out / "assets" / "reference" / "gallery" / slug
+        dst.mkdir(parents=True, exist_ok=True)
+        shipped = []
+        for i in keep:
+            f = manifest_path.parent / str(i.get("file", ""))
+            if not i.get("file") or not f.is_file():
+                continue
+            (dst / i["file"]).write_bytes(f.read_bytes())
+            shipped.append(i)
+            n += 1
+        (dst / "manifest.json").write_text(json.dumps(shipped, indent=1))
+    return n
+
+
 def export_bundle(
     db,
     storage: StorageBackend,
@@ -200,6 +265,8 @@ def export_bundle(
         rel = d["asset_path"]
         (out / "assets" / rel).parent.mkdir(parents=True, exist_ok=True)
         (out / "assets" / rel).write_bytes(storage.read(rel))
+
+    manifest["reference_photos"] = copy_reference_gallery(out, posture)
 
     # Baked GT reference GLBs only (never raw .npy). Copy whatever exists under gt/.
     # INVARIANT: gt/ reference GLBs are bio3d's own held-out meshes / CC-licensed scans -- not
