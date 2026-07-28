@@ -407,13 +407,19 @@ CRITERIA = [
     ("scientific_usefulness", "Scientific usefulness", "Useful for downstream science"),
 ]
 
-# (slug, name, kind)
+# (slug, name, kind, paradigm)
+#
+# The demo generators carry a real paradigm rather than NULL. Two reasons: the matchmaker
+# groups by paradigm (a NULL key is one degenerate group, unlike any real corpus), and the
+# vote roster (config.ARENA_VOTE_PARADIGMS) is an allowlist in which NULL is off-roster — a
+# null-paradigm demo corpus produces no servable pair at all. They share ONE paradigm so the
+# demo task still has a pairable group of >=2 distinct generators.
 GENERATORS = [
-    ("gen-alpha", "Generator Alpha", "model"),
-    ("gen-beta", "Generator Beta", "model"),
-    ("gen-gamma", "Generator Gamma", "model"),
-    ("gen-delta", "Generator Delta", "model"),
-    ("baseline-blob", "Baseline (blob)", "baseline"),
+    ("gen-alpha", "Generator Alpha", "model", "image_recon"),
+    ("gen-beta", "Generator Beta", "model", "image_recon"),
+    ("gen-gamma", "Generator Gamma", "model", "image_recon"),
+    ("gen-delta", "Generator Delta", "model", "image_recon"),
+    ("baseline-blob", "Baseline (blob)", "baseline", "image_recon"),
 ]
 
 # (slug, category_slug, title, prompt, shape) — all demo tasks render to GLB meshes.
@@ -481,8 +487,8 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
             crits[slug] = cr
 
         gens = {}
-        for slug, name, kind in GENERATORS:
-            g = Generator(slug=slug, name=name, kind=kind, is_anonymous=True)
+        for slug, name, kind, paradigm in GENERATORS:
+            g = Generator(slug=slug, name=name, kind=kind, is_anonymous=True, paradigm=paradigm)
             db.add(g)
             gens[slug] = g
         db.flush()  # assign ids

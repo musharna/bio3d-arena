@@ -11,7 +11,7 @@ import datetime as dt
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from . import config, kingdoms, matchmaking, paradigms, ranking
@@ -216,6 +216,33 @@ def app_hidden_generator_ids(db: Session) -> set[int]:
             ).scalars()
         )
     return ids
+
+
+def vote_pool_excluded_generator_ids(db: Session) -> set[int]:
+    """Generators off the HUMAN vote roster (config.ARENA_VOTE_PARADIGMS).
+
+    Deliberately NOT part of app_hidden_generator_ids / mode_a_excluded_generator_ids: these
+    generators stay fully visible — model pages, leaderboard rows, and the VLM-judge boards
+    that rank them without spending human attention. The only thing they lose is a slot in the
+    arena, because human votes are the scarce input and spreading them over every paradigm
+    leaves every entrant provisional. See config.ARENA_VOTE_PARADIGMS for the measurement.
+
+    An empty allowlist means "no scoping" — every generator stays in the pool.
+    """
+    if not config.ARENA_VOTE_PARADIGMS:
+        return set()
+    # `paradigm` is nullable and SQL `NOT IN` never matches NULL, so a null-paradigm generator
+    # would slip INTO the pool without the explicit is_(None) arm.
+    return set(
+        db.execute(
+            select(Generator.id).where(
+                or_(
+                    Generator.paradigm.is_(None),
+                    Generator.paradigm.notin_(config.ARENA_VOTE_PARADIGMS),
+                )
+            )
+        ).scalars()
+    )
 
 
 def mode_a_excluded_generator_ids(db: Session) -> set[int]:

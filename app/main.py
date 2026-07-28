@@ -401,6 +401,46 @@ def _serialize_output(o: ModelOutput) -> dict:
     }
 
 
+def _vote_pool_predicate(db: Session):
+    """The ONE definition of "not servable to a human voter", shared by the pairwise and k-wise
+    builders and by pick_task/pick_pair within each.
+
+    Both builders previously carried their own copy of this closure. That duplication is the
+    exact shape of a bug already fixed once here: pick_task and pick_pair disagreeing about
+    what was excluded made pick_task offer a task pick_pair then rejected, which surfaced as
+    intermittent /api/next 404s. One definition, four call sites.
+
+    Excluded:
+      * raw reference scans — render as ugly point clouds and confound metric<->vote agreement
+      * untextured (geometry-only) outputs — flat grey blobs lose votes for lack of texture,
+        not shape. Both of the above stay on the Mode-B board.
+      * outputs auto-hidden by the flag threshold, or gated by the admissibility rubric
+        (structural u completeness u semantic-when-gating)
+      * app-hidden generators — AgriGen internal testers, never in the pool anywhere
+      * generators off the vote roster (config.ARENA_VOTE_PARADIGMS) — these are NOT hidden;
+        they keep their pages and boards, they just don't spend scarce human votes
+    """
+    from . import admissibility
+    from .sourcing import is_reference_scan, is_untextured_output
+
+    # Precomputed ONCE per request so the per-output predicate stays O(1).
+    gated = admissibility.non_admitted_output_ids(db)
+    app_hidden_gids = service.app_hidden_generator_ids(db)
+    off_roster_gids = service.vote_pool_excluded_generator_ids(db)
+
+    def excluded(o) -> bool:
+        return (
+            is_reference_scan(o.source)
+            or is_untextured_output(o)
+            or o.hidden_at is not None
+            or o.id in gated
+            or o.generator_id in app_hidden_gids
+            or o.generator_id in off_roster_gids
+        )
+
+    return excluded
+
+
 def _build_gold_comparison(db: Session, session_id: str, crit: Criterion) -> dict | None:
     """Build a gold attention-check comparison (good vs decoy) with a known answer."""
     gp = matchmaking.pick_gold_pair(db)
@@ -458,33 +498,11 @@ def _build_comparison(
         if gold is not None:
             return gold
 
-    from .sourcing import is_reference_scan, is_untextured_output
-    from . import admissibility
-
     category_id = _resolve_category_id(db, category_slug)
 
-    # Precompute the gated output ids ONCE (per-output exclude_fn stays O(1)): the
-    # admissibility composer unions structural ∪ completeness (∪ semantic when
-    # SEMANTIC_ADMISSIBILITY_MODE=gate) behind one call.
-    _gated = admissibility.non_admitted_output_ids(db)  # structural ∪ completeness ∪ semantic(gate)
-
-    # Exclude from the perceptual vote pool: raw-scan reference outputs (render as ugly
-    # point clouds, confound metric↔vote agreement) AND geometry-only outputs (flat grey
-    # blobs that lose votes for lack of texture, not shape). Both stay in the Mode-B board.
-    # Also exclude outputs auto-hidden (flag threshold) or D-Complete classified into a bad
-    # completeness category (config.POOL_EXCLUDED_COMPLETENESS_CATEGORIES).
-    # Same predicate for task AND pair selection so pick_task never returns a task whose
-    # only outputs pick_pair then excludes (which caused intermittent /api/next 404s).
-    _app_hidden_gids = service.app_hidden_generator_ids(db)
-
-    def _vote_excluded(o):
-        return (
-            is_reference_scan(o.source)
-            or is_untextured_output(o)
-            or o.hidden_at is not None
-            or o.id in _gated
-            or o.generator_id in _app_hidden_gids  # AgriGen internal testers: never in the pool
-        )
+    # Same predicate for task AND pair selection so pick_task never returns a task whose only
+    # outputs pick_pair then excludes (which caused intermittent /api/next 404s).
+    _vote_excluded = _vote_pool_predicate(db)
 
     # Pairings this session already voted on: the /api/vote guard 409s a re-vote of any of
     # them, so exclude them from BOTH task and pair selection (same set for both, mirroring
@@ -533,9 +551,6 @@ def _build_kwise_comparison(
     import json as _json
     import random as _random
 
-    from .sourcing import is_reference_scan, is_untextured_output
-    from . import admissibility
-
     crit = None
     if criterion_slug:
         crit = (
@@ -545,17 +560,7 @@ def _build_kwise_comparison(
         crit = _default_criterion(db)
 
     category_id = _resolve_category_id(db, category_slug)
-    _gated = admissibility.non_admitted_output_ids(db)
-    _app_hidden_gids = service.app_hidden_generator_ids(db)
-
-    def _vote_excluded(o):
-        return (
-            is_reference_scan(o.source)
-            or is_untextured_output(o)
-            or o.hidden_at is not None
-            or o.id in _gated
-            or o.generator_id in _app_hidden_gids  # AgriGen internal testers: never in the pool
-        )
+    _vote_excluded = _vote_pool_predicate(db)
 
     seen = integrity.seen_quads_for(db, session_id, crit.id)
     stmt = select(Task).where(Task.active.is_(True))
@@ -1462,6 +1467,12 @@ def leaderboard(
             # Plain-language "what this measures" line for THIS modality (never hard-coded copy —
             # paradigms.WHAT_THIS_MEASURES is the one source, shared with the hub cards).
             "board_what": paradigms.WHAT_THIS_MEASURES.get(paradigm, ""),
+            # True when this modality is outside the current human vote roster
+            # (config.ARENA_VOTE_PARADIGMS). Its rows keep the votes already cast but accrue no
+            # new ones, so the board must say that rather than let permanently-"provisional"
+            # rows read as an un-voted backlog. Keyed off live config, not a hard-coded list.
+            "off_roster": bool(config.ARENA_VOTE_PARADIGMS)
+            and paradigm not in config.ARENA_VOTE_PARADIGMS,
             "sel_paradigm": paradigm,
             "total_votes": total,
             "lb_share": lb_share,

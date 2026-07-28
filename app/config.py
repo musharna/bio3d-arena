@@ -292,6 +292,28 @@ APP_HIDDEN_SOURCES = frozenset({"found:xfrog", "frontier:partcrafter"})
 #     internal analysis.
 APP_HIDDEN_PARADIGMS = frozenset({"retrieval", "procedural_expert", "capture_scan"})
 
+# Paradigms eligible for the HUMAN vote pool — an ALLOWLIST, and a different axis from
+# APP_HIDDEN_PARADIGMS above. Off-roster paradigms keep everything except a slot in the arena:
+# their outputs, their model pages, their leaderboard rows, and above all their VLM-judge
+# boards, which rank them without spending any human attention.
+#
+# Why scope it at all: human votes are the scarce input, and a pairwise vote credits n_games to
+# BOTH entrants, so V votes buy 2V games. Measured on the live instance 2026-07-28 at the scope
+# the launch board uses (criterion 'overall', category_id IS NULL):
+#     everything          53 entrants  1110 games  555 votes to firm   (0/53 firm)
+#     commercial models   19 entrants   334 games  167 votes to firm
+# 555 votes is not reachable at launch traffic, and a board whose every row reads "provisional"
+# ranks nothing. 19 models WITH confidence intervals beats 53 without.
+#
+# Why this cut: the game-count distribution runs 20 down to 0 with no natural cliff, so "keep
+# the top N by games" would be selecting on the dependent variable — picking winners by how
+# often the matchmaker happened to serve them. Paradigm is independent of vote counts, and it
+# matches the existing per-modality boards, which already state that BT scores from different
+# paradigms come from disconnected match pools and are not comparable.
+#
+# Empty frozenset = unscoped (every paradigm votable). Widen this as vote volume grows.
+ARENA_VOTE_PARADIGMS = frozenset({"image_recon", "text_native"})
+
 
 def is_safe_test_db_target(value: str | None) -> bool:
     """True if a DB URL/path is a throwaway that's safe for the test suite to drop/recreate.
