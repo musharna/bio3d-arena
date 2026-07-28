@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlalchemy import create_engine, inspect as sqla_inspect  # noqa: E402
+from sqlalchemy import create_engine, inspect as sqla_inspect, text  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.database import Base, engine_kwargs  # noqa: E402
@@ -89,6 +89,43 @@ def _upload_assets(b: Path, storage: StorageBackend, *, attempts: int = 4) -> di
     return {"uploaded": sent, "already_present": skipped}
 
 
+def sync_id_sequences(conn) -> dict[str, int]:
+    """Advance every id sequence to max(id) of the table it feeds. Returns {table: new_value}.
+
+    `s.merge()` writes rows with EXPLICIT primary keys, and an explicit-id INSERT does not
+    advance a Postgres sequence. So after an import each `<table>_id_seq` still sits where it
+    started while the imported rows occupy ids far above it, and the FIRST insert that reaches
+    an occupied id fails on a duplicate key. Nothing complains at import time — the live
+    instance ran for hours with vote_id_seq at 1 against max(id)=461, i.e. 48 votes from
+    500ing every /api/vote.
+
+    SQLite derives the next rowid from max(rowid) and has no sequences, so this is a no-op
+    there — which is precisely why the suite stayed green while production was broken.
+    """
+    if conn.dialect.name != "postgresql":
+        return {}
+    seqs = conn.execute(
+        text("""
+        select s.sequencename, s.last_value, t.relname as tbl, a.attname as col
+        from pg_sequences s
+        join pg_class sc on sc.relname = s.sequencename
+        join pg_depend d on d.objid = sc.oid and d.deptype = 'a'
+        join pg_class t on t.oid = d.refobjid
+        join pg_attribute a on a.attrelid = t.oid and a.attnum = d.refobjsubid
+        where s.schemaname = 'public'
+        """)
+    ).all()
+    fixed: dict[str, int] = {}
+    for s in seqs:
+        mx = conn.execute(text(f'select max("{s.col}") from "{s.tbl}"')).scalar()
+        if mx is None:  # empty table: setval(seq, NULL) raises
+            continue
+        if (s.last_value or 0) < mx:
+            conn.execute(text("select setval(:s, :v, true)"), {"s": s.sequencename, "v": mx})
+            fixed[s.tbl] = mx
+    return fixed
+
+
 def import_bundle(
     bundle_dir, *, database_url: str, storage: StorageBackend, rows: bool = True
 ) -> dict:
@@ -110,6 +147,13 @@ def import_bundle(
                     s.merge(model(**_coerce_datetimes(model, d)))  # merge = idempotent by PK
                 counts[name] = len(tables.get(name, []))
             s.commit()
+        # Must run AFTER the merges land: explicit-id inserts leave every sequence behind, and
+        # the next organic insert would collide. Reported so an import that silently fixed a
+        # lagging sequence is visible in the output rather than invisible.
+        with eng.begin() as conn:
+            synced = sync_id_sequences(conn)
+        if synced:
+            counts["sequences_synced"] = len(synced)
 
     counts.update(_upload_assets(b, storage))
     return counts
