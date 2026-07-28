@@ -40,11 +40,20 @@ if config.DATABASE_URL.startswith("sqlite"):
     @event.listens_for(engine, "connect")
     def _sqlite_pragmas(dbapi_conn, _record):  # noqa: ANN001
         """WAL so readers never block on the single writer; NORMAL sync is durable enough
-        for a dev arena and far faster; busy_timeout backstops the connect-arg timeout."""
+        for a dev arena and far faster; busy_timeout backstops the connect-arg timeout.
+
+        foreign_keys=ON because SQLite parses `REFERENCES` and then ignores it unless this is
+        set — per connection, every connection. Without it every FK in models.py is decorative
+        and a parent delete strands its children instead of being refused: that is how 45
+        judge_vote rows and 12 calibration_pair rows were orphaned (the latter 500'd a live
+        page). Both were fixed by purging the rows, which is remediation — this is the
+        mechanism. Enforcement is checked at DML time only, so it never retroactively
+        invalidates an existing DB; both live DBs measured 0 violations when this landed."""
         cur = dbapi_conn.cursor()
         cur.execute("PRAGMA journal_mode=WAL")
         cur.execute("PRAGMA synchronous=NORMAL")
         cur.execute("PRAGMA busy_timeout=30000")
+        cur.execute("PRAGMA foreign_keys=ON")
         cur.close()
 
 

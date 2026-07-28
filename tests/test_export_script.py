@@ -1,11 +1,11 @@
 import json
-from sqlalchemy import delete
 from scripts.export_public import export_bundle
 from app.models import Generator
 from app.storage import LocalStorageBackend
 
 # reuse the _mk seed from test_public_export
 from tests.test_public_export import _mk
+from tests.factories import cascade_delete
 
 
 def _clear_leaked_generators(db) -> None:
@@ -15,7 +15,7 @@ def _clear_leaked_generators(db) -> None:
     Generator(slug="lpy") / Generator(slug="calibration") rows that collide with this
     file's own inserts of the same slugs. Scoped to this test's own rolled-back
     transaction."""
-    db.execute(delete(Generator).where(Generator.slug.in_(["lpy", "calibration"])))
+    cascade_delete(db, Generator, Generator.slug.in_(["lpy", "calibration"]))
     db.flush()
 
 

@@ -10,6 +10,7 @@ from app.models import (
     Task,
     TaskDifficulty,
 )
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -28,11 +29,9 @@ def _clean(db):
     db.query(Completeness).filter(Completeness.output_id.in_(pts_out_ids)).delete(
         synchronize_session=False
     )
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like("pts/%.glb")).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter(Task.title.like("pts-%")).delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like("pts-%")).delete(synchronize_session=False)
+    cascade_delete(db, ModelOutput, ModelOutput.asset_path.like("pts/%.glb"))
+    cascade_delete(db, Task, Task.title.like("pts-%"))
+    cascade_delete(db, Generator, Generator.slug.like("pts-%"))
     db.query(Category).filter_by(slug="pts-cat").delete(synchronize_session=False)
     db.commit()
 

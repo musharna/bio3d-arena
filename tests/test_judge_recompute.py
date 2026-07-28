@@ -11,6 +11,7 @@ from app.models import (
     ModelOutput,
     Task,
 )
+from tests.factories import cascade_delete, delete_outputs_matching
 
 
 def setup_module(_m):
@@ -21,11 +22,9 @@ def _seed_votes(db):
     # Clean previous run's jr2-prefixed rows (Category+Generator slugs are unique).
     db.query(JudgeVote).delete()
     db.query(JudgeRating).delete()
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like("seed/%.glb")).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter(Task.title == "jr2-task").delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like("jr2-%")).delete(synchronize_session=False)
+    delete_outputs_matching(db, ModelOutput.asset_path.like("seed/%.glb"))
+    cascade_delete(db, Task, Task.title == "jr2-task")
+    cascade_delete(db, Generator, Generator.slug.like("jr2-%"))
     db.query(Category).filter_by(slug="jr2-cat").delete(synchronize_session=False)
     db.commit()
     cat = Category(slug="jr2-cat", name="C")

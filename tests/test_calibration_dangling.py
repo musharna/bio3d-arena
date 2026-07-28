@@ -6,6 +6,7 @@ from __future__ import annotations
 from app.database import SessionLocal, init_db
 from app.main import _build_calibration_comparison
 from app.models import CalibrationPair, Category, Criterion, Generator, ModelOutput, Task
+from tests.factories import cascade_delete, foreign_keys_suspended
 
 
 def setup_module(_m):
@@ -14,11 +15,9 @@ def setup_module(_m):
 
 def _clear(db):
     db.query(CalibrationPair).delete(synchronize_session=False)
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like("cdg/%.glb")).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter(Task.title == "cdg-task").delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like("cdg-g%")).delete(synchronize_session=False)
+    cascade_delete(db, ModelOutput, ModelOutput.asset_path.like("cdg/%.glb"))
+    cascade_delete(db, Task, Task.title == "cdg-task")
+    cascade_delete(db, Generator, Generator.slug.like("cdg-g%"))
     db.query(Category).filter_by(slug="cdg-cat").delete(synchronize_session=False)
     db.commit()
 
@@ -53,13 +52,15 @@ def test_dangling_pair_skipped_usable_served():
     with SessionLocal() as db:
         _clear(db)
         task, crit, outs = _seed_base(db)
-        # dangling pair FIRST (lower id) so a naive impl would pick it as target and crash
-        db.add(
-            CalibrationPair(
-                task_id=task.id, output_a_id=10**9, output_b_id=10**9 + 1, criterion_id=crit.id
+        # dangling pair FIRST (lower id) so a naive impl would pick it as target and crash.
+        # Enforcement now refuses to create this, so it is written with enforcement
+        # suspended — the point of the test is a DB that ALREADY holds dangling rows.
+        with foreign_keys_suspended(db):
+            db.add(
+                CalibrationPair(
+                    task_id=task.id, output_a_id=10**9, output_b_id=10**9 + 1, criterion_id=crit.id
+                )
             )
-        )
-        db.flush()
         db.add(
             CalibrationPair(
                 task_id=task.id,
@@ -83,11 +84,11 @@ def test_only_dangling_returns_done_not_crash():
     with SessionLocal() as db:
         _clear(db)
         task, crit, _outs = _seed_base(db)
-        db.add(
-            CalibrationPair(
-                task_id=task.id, output_a_id=10**9, output_b_id=10**9 + 1, criterion_id=crit.id
+        with foreign_keys_suspended(db):
+            db.add(
+                CalibrationPair(
+                    task_id=task.id, output_a_id=10**9, output_b_id=10**9 + 1, criterion_id=crit.id
+                )
             )
-        )
-        db.commit()
         res = _build_calibration_comparison(db, "cdg-sess2")
         assert res == {"set": "calibration", "done": True, "progress": {"voted": 0, "total": 0}}

@@ -7,6 +7,7 @@ from app import matchmaking
 from app.database import SessionLocal, init_db
 from app.models import Category, Generator, ModelOutput, Task
 from app.sourcing import is_reference_scan, is_untextured_output
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -17,11 +18,9 @@ _EXCL = lambda o: is_reference_scan(o.source) or is_untextured_output(o)  # noqa
 
 
 def _clear(db):
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like("mmx/%.glb")).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter(Task.title.like("mmx-%")).delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like("mmx-g%")).delete(synchronize_session=False)
+    cascade_delete(db, ModelOutput, ModelOutput.asset_path.like("mmx/%.glb"))
+    cascade_delete(db, Task, Task.title.like("mmx-%"))
+    cascade_delete(db, Generator, Generator.slug.like("mmx-g%"))
     db.query(Category).filter_by(slug="mmx-cat").delete(synchronize_session=False)
     db.commit()
 
@@ -80,9 +79,7 @@ def test_pick_task_returns_none_when_all_tasks_thin():
     with SessionLocal() as db:
         thin, healthy = _seed(db)
         # Drop the healthy task's outputs so every task in the category is thin.
-        db.query(ModelOutput).filter(ModelOutput.task_id == healthy.id).delete(
-            synchronize_session=False
-        )
+        cascade_delete(db, ModelOutput, ModelOutput.task_id == healthy.id)
         db.commit()
         assert matchmaking.pick_task(db, category_id=thin.category_id, exclude_fn=_EXCL) is None
 

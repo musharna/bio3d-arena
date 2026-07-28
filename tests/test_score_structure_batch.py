@@ -13,6 +13,7 @@ from app.models import Category, Generator, ModelOutput, OrganMetric, ReconTask,
 from app.storage import get_storage
 
 from scripts.score_structure_batch import run_batch
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -62,15 +63,13 @@ def _mk_output(db, key, *, source, species_slug="zea_mays", variant="maize"):
 
 def _clean(db):
     db.query(OrganMetric).delete()
-    db.query(ModelOutput).filter(ModelOutput.asset_path == "seed/ssb.glb").delete(
-        synchronize_session=False
-    )
+    cascade_delete(db, ModelOutput, ModelOutput.asset_path == "seed/ssb.glb")
     db.query(ReconTask).filter(ReconTask.species_name == "zea_mays").delete(
         synchronize_session=False
     )
-    db.query(Task).filter(Task.title.like("ssb-t-%")).delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like("ssb-g-%")).delete(synchronize_session=False)
-    db.query(Category).filter(Category.slug.like("ssb-c-%")).delete(synchronize_session=False)
+    cascade_delete(db, Task, Task.title.like("ssb-t-%"))
+    cascade_delete(db, Generator, Generator.slug.like("ssb-g-%"))
+    cascade_delete(db, Category, Category.slug.like("ssb-c-%"))
     db.commit()
 
 

@@ -3,6 +3,7 @@ from app.completeness import enumerate_completeness_work
 from app.database import SessionLocal, init_db
 from app.models import Category, Generator, ModelOutput, Task, TraitRubric
 from scripts.seed_completeness_rubrics import seed_scope_rubrics, taxon_for_task_title
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -14,11 +15,9 @@ def _clean(db):
     db.query(TraitRubric).filter(TraitRubric.task_id.in_(seedtest_task_ids)).delete(
         synchronize_session=False
     )
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like("scr/%.glb")).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter(Task.title.like("%SEEDTEST%")).delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug == "scr-gen").delete(synchronize_session=False)
+    cascade_delete(db, ModelOutput, ModelOutput.asset_path.like("scr/%.glb"))
+    cascade_delete(db, Task, Task.title.like("%SEEDTEST%"))
+    cascade_delete(db, Generator, Generator.slug == "scr-gen")
     db.query(Category).filter_by(slug="scr-cat").delete(synchronize_session=False)
     db.commit()
 

@@ -28,8 +28,11 @@ from .models import (
     DGenIteration,
     Generator,
     GoldPair,
+    JudgeRating,
     JudgeVote,
     KBallot,
+    KingdomJudgeRating,
+    KingdomRating,
     Metric,
     ModelOutput,
     ModelScope,
@@ -39,6 +42,8 @@ from .models import (
     ReconTask,
     Submission,
     Task,
+    TaskDifficulty,
+    TraitRubric,
     TraitScore,
     TraitVerdict,
     Vote,
@@ -75,7 +80,12 @@ _FORCE_DELETE_MODELS = (
     VoterSession,
     ModelOutput,
     ReconTask,  # child of Task — delete before it
+    TaskDifficulty,  # child of Task — delete before it
+    TraitRubric,  # child of Task — delete before it
     Task,
+    JudgeRating,  # child of Generator/Criterion/Category — delete before them
+    KingdomRating,  # child of Generator/Criterion — delete before them
+    KingdomJudgeRating,  # child of Generator/Criterion — delete before them
     Generator,
     Criterion,
     Category,
@@ -447,6 +457,12 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
         if existing and not force:
             return {"status": "already-seeded"}
         if force:
+            # task.reference_asset_id points AT model_output, which points back at task — the
+            # one reference cycle in the schema, so no ordering of the deletes below can be
+            # correct for both. Clear the optional side first (it is nullable precisely because
+            # a task need not have a reference asset), which turns the cycle into a plain tree
+            # for the wipe that follows.
+            db.query(Task).update({Task.reference_asset_id: None}, synchronize_session=False)
             # Delete children before parents to respect FKs.
             for model in _FORCE_DELETE_MODELS:
                 db.query(model).delete()

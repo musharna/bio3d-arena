@@ -15,6 +15,7 @@ from app.models import (
     TaskDifficulty,
     Vote,
 )
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -23,20 +24,16 @@ def setup_module(_m):
 
 def _clear(db):
     db.query(Vote).filter(Vote.session_id == "cov-sess").delete(synchronize_session=False)
-    db.query(Comparison).filter(Comparison.session_id == "cov-sess").delete(
-        synchronize_session=False
-    )
+    cascade_delete(db, Comparison, Comparison.session_id == "cov-sess")
     db.query(Metric).filter(
         Metric.output_id.in_(db.query(ModelOutput.id).filter(ModelOutput.asset_path.like("cov/%")))
     ).delete(synchronize_session=False)
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like("cov/%")).delete(
-        synchronize_session=False
-    )
+    cascade_delete(db, ModelOutput, ModelOutput.asset_path.like("cov/%"))
     db.query(TaskDifficulty).filter(
         TaskDifficulty.task_id.in_(db.query(Task.id).filter(Task.title == "cov-task"))
     ).delete(synchronize_session=False)
-    db.query(Task).filter(Task.title == "cov-task").delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like("cov-g%")).delete(synchronize_session=False)
+    cascade_delete(db, Task, Task.title == "cov-task")
+    cascade_delete(db, Generator, Generator.slug.like("cov-g%"))
     db.query(Category).filter_by(slug="cov-cat").delete(synchronize_session=False)
     db.commit()
 

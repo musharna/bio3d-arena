@@ -34,6 +34,7 @@ from app.models import (
     Task,
     Vote,
 )
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -72,15 +73,11 @@ def _clear_fixtures(db):
             synchronize_session=False
         )
     db.query(Vote).filter(Vote.session_id.like(f"{_PFX}-%")).delete(synchronize_session=False)
-    db.query(Comparison).filter(Comparison.session_id.like(f"{_PFX}-%")).delete(
-        synchronize_session=False
-    )
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like(f"{_PFX}/%")).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter(Task.title.like("KC %")).delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like(f"{_PFX}-g%")).delete(synchronize_session=False)
-    db.query(Category).filter(Category.slug.like(f"{_PFX}-%")).delete(synchronize_session=False)
+    cascade_delete(db, Comparison, Comparison.session_id.like(f"{_PFX}-%"))
+    cascade_delete(db, ModelOutput, ModelOutput.asset_path.like(f"{_PFX}/%"))
+    cascade_delete(db, Task, Task.title.like("KC %"))
+    cascade_delete(db, Generator, Generator.slug.like(f"{_PFX}-g%"))
+    cascade_delete(db, Category, Category.slug.like(f"{_PFX}-%"))
     db.commit()
 
 

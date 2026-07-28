@@ -10,6 +10,7 @@ from app.models import (
     TaskDifficulty,
     TraitRubric,
 )
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -22,15 +23,13 @@ def _clean(db):
     db.query(Completeness).filter(Completeness.output_id.in_(out_ids)).delete(
         synchronize_session=False
     )
-    db.query(ModelOutput).filter(ModelOutput.task_id.in_(seen_ids)).delete(
-        synchronize_session=False
-    )
+    cascade_delete(db, ModelOutput, ModelOutput.task_id.in_(seen_ids))
     db.query(TraitRubric).filter(TraitRubric.taxon.like("RR %")).delete(synchronize_session=False)
     db.query(TaskDifficulty).filter(TaskDifficulty.task_id.in_(seen_ids)).delete(
         synchronize_session=False
     )
-    db.query(Task).filter(Task.title.like("rr-%")).delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like("rr-%")).delete(synchronize_session=False)
+    cascade_delete(db, Task, Task.title.like("rr-%"))
+    cascade_delete(db, Generator, Generator.slug.like("rr-%"))
     db.query(Category).filter_by(slug="rr-cat").delete(synchronize_session=False)
     db.commit()
 

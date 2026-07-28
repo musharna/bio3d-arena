@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from app.database import SessionLocal, init_db
 from app.difficulty import TIER_ORDER, TIERS
 from app.models import Category, Task, TaskDifficulty
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -31,7 +32,7 @@ def _task(db):
 def test_task_difficulty_roundtrip_and_unique():
     with SessionLocal() as db:
         db.query(TaskDifficulty).delete()
-        db.query(Task).filter(Task.title == "td1-task").delete(synchronize_session=False)
+        cascade_delete(db, Task, Task.title == "td1-task")
         db.query(Category).filter_by(slug="td1-cat").delete(synchronize_session=False)
         db.commit()
         task = _task(db)

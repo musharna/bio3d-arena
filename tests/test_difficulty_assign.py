@@ -5,6 +5,7 @@ import pytest
 from app.database import SessionLocal, init_db
 from app.difficulty import set_task_difficulty
 from app.models import Category, Task, TaskDifficulty
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -23,7 +24,7 @@ def _task(db):
 
 def _clean(db):
     db.query(TaskDifficulty).delete()
-    db.query(Task).filter(Task.title == "td2-task").delete(synchronize_session=False)
+    cascade_delete(db, Task, Task.title == "td2-task")
     db.query(Category).filter_by(slug="td2-cat").delete(synchronize_session=False)
     db.commit()
 

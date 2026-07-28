@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.database import SessionLocal, init_db
 from app.models import Category, Criterion, Generator, JudgeVote, ModelOutput, Task
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -12,11 +13,9 @@ def setup_module(_m):
 
 def _seed(db):
     db.query(JudgeVote).delete()
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like("smp/%.glb")).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter(Task.title == "smp-task").delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like("smp-g%")).delete(synchronize_session=False)
+    cascade_delete(db, ModelOutput, ModelOutput.asset_path.like("smp/%.glb"))
+    cascade_delete(db, Task, Task.title == "smp-task")
+    cascade_delete(db, Generator, Generator.slug.like("smp-g%"))
     db.query(Category).filter_by(slug="smp-cat").delete(synchronize_session=False)
     db.commit()
     cat = Category(slug="smp-cat", name="C")
@@ -109,11 +108,9 @@ def _seed_gens(db, tag: str, gen_of_output: list[str]):
     Returns (task, [output ids in creation order], {output_id: generator_id}).
     """
     db.query(JudgeVote).delete()
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like(f"{tag}/%.glb")).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter(Task.title == f"{tag}-task").delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like(f"{tag}-g%")).delete(synchronize_session=False)
+    cascade_delete(db, ModelOutput, ModelOutput.asset_path.like(f"{tag}/%.glb"))
+    cascade_delete(db, Task, Task.title == f"{tag}-task")
+    cascade_delete(db, Generator, Generator.slug.like(f"{tag}-g%"))
     db.query(Category).filter_by(slug=f"{tag}-cat").delete(synchronize_session=False)
     db.commit()
 

@@ -12,6 +12,7 @@ from app.models import (
     TraitRubric,
     TraitScore,
 )
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -42,9 +43,7 @@ def _cleanup_fidtest():
                 synchronize_session=False
             )
             db.query(Task).filter(Task.id.in_(task_ids)).delete(synchronize_session=False)
-        db.query(Generator).filter(Generator.slug.like("%-FidTest-%")).delete(
-            synchronize_session=False
-        )
+        cascade_delete(db, Generator, Generator.slug.like("%-FidTest-%"))
         db.commit()
 
 

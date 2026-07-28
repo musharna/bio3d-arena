@@ -5,6 +5,7 @@ from app.database import SessionLocal, init_db
 from app.models import Category, Generator, ModelOutput, Task
 from app.service import reference_images_for_task
 from app.storage import get_storage
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -17,9 +18,9 @@ def _clean(db):
     cat = db.query(Category).filter_by(slug="refimg-cat").first()
     if cat is not None:
         ids = db.query(Task.id).filter(Task.category_id == cat.id).scalar_subquery()
-        db.query(ModelOutput).filter(ModelOutput.task_id.in_(ids)).delete(synchronize_session=False)
-        db.query(Task).filter(Task.category_id == cat.id).delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like("refimg-%")).delete(synchronize_session=False)
+        cascade_delete(db, ModelOutput, ModelOutput.task_id.in_(ids))
+        cascade_delete(db, Task, Task.category_id == cat.id)
+    cascade_delete(db, Generator, Generator.slug.like("refimg-%"))
     db.query(Category).filter_by(slug="refimg-cat").delete(synchronize_session=False)
     db.commit()
 

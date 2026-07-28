@@ -62,8 +62,24 @@ def _reset_commission_db(request):
     if "test_commission_ingest" in request.node.nodeid:
         from app.database import Base, engine
 
-        Base.metadata.drop_all(bind=engine)
-        Base.metadata.create_all(bind=engine)
+        # Dropping every table is whole-schema surgery, not DML — per-statement FK checks are
+        # meaningless when the referents are being removed too. It also cannot be ordered
+        # safely: task ↔ model_output is a reference cycle and SQLite has no ALTER to break it,
+        # so SQLAlchemy cannot sort the DROPs (it says so, as an SAWarning). With enforcement
+        # on, the first DROP whose referents still exist fails and leaves the schema half torn
+        # down, which then errors every later test in the run.
+        #
+        # AUTOCOMMIT because `PRAGMA foreign_keys` is a silent no-op inside a transaction, and
+        # restore it in a finally: this connection goes back to the pool, and the connect-time
+        # listener in app/database.py fires only for NEW connections — so a stale OFF would
+        # leak enforcement-off into whatever checks out next.
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            try:
+                Base.metadata.drop_all(bind=conn)
+                Base.metadata.create_all(bind=conn)
+            finally:
+                conn.exec_driver_sql("PRAGMA foreign_keys=ON")
     yield
 
 

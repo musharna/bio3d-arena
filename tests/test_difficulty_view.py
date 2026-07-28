@@ -12,6 +12,7 @@ from app.models import (
     Task,
     TaskDifficulty,
 )
+from tests.factories import cascade_delete
 
 
 def setup_module(_m):
@@ -21,11 +22,9 @@ def setup_module(_m):
 def _clean(db):
     db.query(TaskDifficulty).delete()
     db.query(Metric).filter(Metric.detail == "dvw").delete(synchronize_session=False)
-    db.query(ModelOutput).filter(ModelOutput.asset_path.like("dvw/%.glb")).delete(
-        synchronize_session=False
-    )
-    db.query(Task).filter(Task.title.like("dvw-%")).delete(synchronize_session=False)
-    db.query(Generator).filter(Generator.slug.like("dvw-%")).delete(synchronize_session=False)
+    cascade_delete(db, ModelOutput, ModelOutput.asset_path.like("dvw/%.glb"))
+    cascade_delete(db, Task, Task.title.like("dvw-%"))
+    cascade_delete(db, Generator, Generator.slug.like("dvw-%"))
     db.query(Category).filter_by(slug="dvw-cat").delete(synchronize_session=False)
     db.commit()
 

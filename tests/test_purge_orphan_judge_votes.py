@@ -1,10 +1,15 @@
 """The orphan-JudgeVote purge must be precise: orphans go, everything else stays.
 
-Context: SQLite does not enforce declared foreign keys unless PRAGMA foreign_keys=ON,
-which this app never sets, so deleting a ModelOutput silently orphans the JudgeVote rows
-referencing it (47 such rows found in the 2026-07-26 pre-launch audit, from the 12
-cube-only outputs removed in task #90). This purge is remediation for that; enforcement
-is a separate decision.
+Context: SQLite does not enforce declared foreign keys unless PRAGMA foreign_keys=ON, so
+deleting a ModelOutput silently orphaned the JudgeVote rows referencing it (47 such rows
+found in the 2026-07-26 pre-launch audit, from the 12 cube-only outputs removed in task
+#90). This purge is the remediation.
+
+The app now sets that pragma, so this corruption can no longer originate here. The purge is
+still needed and still tested, because enforcement is per-connection: a database written by
+the sqlite3 CLI, by another tool, or by any build predating the change can still arrive with
+dangling rows. These tests therefore manufacture the orphan deliberately, with enforcement
+suspended — see tests/factories.foreign_keys_suspended.
 """
 
 from __future__ import annotations
@@ -13,7 +18,7 @@ import itertools
 
 from app.models import Category, Criterion, Generator, JudgeVote, ModelOutput, Task
 from scripts.purge_orphan_judge_votes import orphan_judge_vote_ids, purge
-
+from tests.factories import foreign_keys_suspended
 
 _seq = itertools.count()
 
@@ -81,8 +86,8 @@ def test_purge_removes_only_votes_whose_output_is_gone(db_session):
 
     # Delete the output the way it happened in production: directly, with FKs unenforced.
     doomed_id = doomed.id
-    db.delete(doomed)
-    db.commit()
+    with foreign_keys_suspended(db):
+        db.delete(doomed)
     assert db.get(ModelOutput, doomed_id) is None
 
     found = set(orphan_judge_vote_ids(db))
@@ -100,8 +105,8 @@ def test_purge_dry_run_deletes_nothing(db_session):
     crit, task, outs = _fixture(db)
     doomed = outs[2]
     _jv(db, crit, task, doomed.id, outs[0].id)
-    db.delete(doomed)
-    db.commit()
+    with foreign_keys_suspended(db):
+        db.delete(doomed)
 
     res = purge(db, apply=False)
     assert res == {"orphans": 1, "deleted": 0}
