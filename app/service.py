@@ -8,6 +8,8 @@ full decisive-vote record.
 from __future__ import annotations
 
 import datetime as dt
+import functools
+import json
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 
@@ -19,6 +21,7 @@ from .calibration import cohens_kappa
 from .scope import is_assessable
 from .paradigms import same_paradigm
 from .sourcing import is_reference_scan, is_untextured_output
+from .storage import get_storage
 from .models import (
     Category,
     CommissionAttempt,
@@ -2038,6 +2041,40 @@ def _gallery_slug(title: str) -> str:
     return title.split("—")[0].strip().lower().replace(" ", "_")
 
 
+@functools.lru_cache(maxsize=128)
+def _gallery_manifest(slug: str) -> tuple[dict, ...]:
+    """The reference gallery manifest for `slug`, read through the STORAGE BACKEND.
+
+    Reading it off the local filesystem is what made the galleries vanish in production: the
+    image excludes `data/`, so `config.ASSET_DIR` is empty on the public instance and every
+    `Path.exists()` was False while the photos sat in R2. The image URLs beside this always went
+    through `storage.url_for()`; only the manifest test did not, so the whole gallery silently
+    disappeared while working perfectly in dev.
+
+    Cached because it is static for the lifetime of a deploy (the gallery only changes via a new
+    bundle import or image), and this sits on the /api/next hot path where an S3 round trip per
+    request would be pure latency. Tests mutating the gallery must call
+    `reference_gallery_cache_clear()`.
+
+    A missing gallery is normal — not every taxon has one — so a miss returns () rather than
+    raising.
+    """
+    st = get_storage()
+    rel = f"reference/gallery/{slug}/manifest.json"
+    try:
+        if not st.exists(rel):
+            return ()
+        items = json.loads(st.read(rel))
+    except (ValueError, TypeError, OSError):
+        return ()
+    return tuple(i for i in items if isinstance(i, dict))
+
+
+def reference_gallery_cache_clear() -> None:
+    """Drop the cached gallery manifests (tests, and any in-process gallery swap)."""
+    _gallery_manifest.cache_clear()
+
+
 def reference_images_for_task(db: Session, task) -> list[dict]:
     """Ordered reference images for a task, each {url, credit}: an independent CC species gallery
     (data/assets/reference/gallery/<slug>/, sourced from iNaturalist) so voters judge fidelity
@@ -2047,12 +2084,8 @@ def reference_images_for_task(db: Session, task) -> list[dict]:
     config.INPUT_REFERENCE_EXEMPT_SLUGS (barley-MRI: a root stand-in with no whole-plant gallery).
     Only QA-passed gallery images are shown. Task-scoped; empty list if nothing is on record.
     cc-by gallery photos carry their required attribution in `credit`."""
-    import json
-
-    from . import config
     from .models import ModelOutput
     from .reference_provenance import _image_name, cleared_reference_images
-    from .storage import get_storage
 
     st = get_storage()
     out: list[dict] = []
@@ -2078,19 +2111,13 @@ def reference_images_for_task(db: Session, task) -> list[dict]:
                 seen.add(img)
                 out.append({"url": st.url_for(img), "credit": "reconstruction input photo"})
 
-    gdir = config.ASSET_DIR / "reference" / "gallery" / slug
-    manifest = gdir / "manifest.json"
-    if manifest.exists():
-        try:
-            for item in json.loads(manifest.read_text()):
-                # QA-failed reference images (fruit-only / isolated / species mismatch) are not
-                # shown. Default-true so un-scored legacy manifests are unaffected until scored.
-                if not item.get("passed_qa", True):
-                    continue
-                rel = f"reference/gallery/{slug}/{item['file']}"
-                out.append(
-                    {"url": st.url_for(rel), "credit": item.get("attribution", "iNaturalist")}
-                )
-        except (ValueError, KeyError, OSError):
-            pass
+    for item in _gallery_manifest(slug):
+        # QA-failed reference images (fruit-only / isolated / species mismatch) are not
+        # shown. Default-true so un-scored legacy manifests are unaffected until scored.
+        if not item.get("passed_qa", True):
+            continue
+        if "file" not in item:
+            continue
+        rel = f"reference/gallery/{slug}/{item['file']}"
+        out.append({"url": st.url_for(rel), "credit": item.get("attribution", "iNaturalist")})
     return out
