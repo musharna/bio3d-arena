@@ -96,3 +96,42 @@ def test_the_image_installs_the_backends_the_public_deploy_needs():
         "the image must install the scale backends (psycopg, boto3) — the public deploy uses "
         "BIO3D_DATABASE_URL=postgresql://... and BIO3D_STORAGE_BACKEND=s3"
     )
+
+
+def test_normalisation_happens_at_the_source_not_per_engine():
+    """The regression this guards: normalisation first lived beside the app's own engine, which
+    left scripts/import_public.py — the step that loads the release bundle into the public
+    database — building its engine from the raw URL and failing in exactly the same way. One
+    consumer fixed, the mechanism untouched.
+
+    config.DATABASE_URL is the single point the URL enters the process, so anything reading it
+    (the app engine, the importer, any future script) inherits the fix.
+    """
+    import importlib
+    import os
+
+    from app import config as cfg
+
+    prev = os.environ.get("BIO3D_DATABASE_URL")
+    os.environ["BIO3D_DATABASE_URL"] = "postgresql://u:p@h/d"
+    try:
+        importlib.reload(cfg)
+        assert cfg.DATABASE_URL == "postgresql+psycopg://u:p@h/d"
+    finally:
+        if prev is None:
+            os.environ.pop("BIO3D_DATABASE_URL", None)
+        else:
+            os.environ["BIO3D_DATABASE_URL"] = prev
+        importlib.reload(cfg)
+
+
+def test_the_importer_uses_the_normalised_url():
+    """scripts/import_public.py reads config.DATABASE_URL directly. Assert the source it reads
+    is the normalised one — this is the path that loads the release bundle into Postgres."""
+    from app import config as cfg
+
+    src = (REPO / "scripts" / "import_public.py").read_text()
+    assert "DATABASE_URL" in src
+    assert cfg.DATABASE_URL == cfg.normalize_database_url(cfg.DATABASE_URL), (
+        "config.DATABASE_URL must already be normalised, so every consumer inherits it"
+    )

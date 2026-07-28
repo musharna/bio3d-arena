@@ -20,7 +20,32 @@ DATA_DIR = Path(os.environ.get("BIO3D_DATA_DIR", ROOT / "data"))
 ASSET_DIR = DATA_DIR / "assets"
 DB_PATH = Path(os.environ.get("BIO3D_DB_PATH", DATA_DIR / "arena.db"))
 
-DATABASE_URL = os.environ.get("BIO3D_DATABASE_URL", f"sqlite:///{DB_PATH}")
+
+def normalize_database_url(url: str) -> str:
+    """Point a bare Postgres URL at the driver that is actually installed.
+
+    Every managed provider — Neon, Supabase, RDS — hands out a URL beginning `postgresql://`
+    (some still emit `postgres://`). SQLAlchemy maps that bare scheme to **psycopg2**, while
+    the pinned driver is **psycopg v3**, whose dialect is `postgresql+psycopg://`. An operator
+    pasting exactly the string their provider gave them gets an ImportError naming a driver
+    nobody told them to install.
+
+    Applied HERE, at the single point the URL enters the process, rather than at each engine.
+    It first lived beside the app's own engine, which left `scripts/import_public.py` — the
+    step that loads the release bundle into the public database — building its engine from the
+    raw URL and failing exactly the same way. One consumer fixed, the mechanism untouched.
+    Normalising at the source means every present and future engine inherits it.
+
+    An explicit `+driver` is respected, so a deliberate psycopg2 still works, and non-Postgres
+    URLs (sqlite: local dev and the whole test suite) are returned unchanged.
+    """
+    for prefix in ("postgresql://", "postgres://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix) :]
+    return url
+
+
+DATABASE_URL = normalize_database_url(os.environ.get("BIO3D_DATABASE_URL", f"sqlite:///{DB_PATH}"))
 
 # Mode-B recon-accuracy scorer (AgriGen's /score microservice). Read HERE rather than beside
 # its siblings below because the deploy-safety guards under it need the public/internal signal.
