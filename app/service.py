@@ -1333,6 +1333,34 @@ def firm_status(n_games: int) -> dict:
     return {"firm": False, "label": f"{remaining} more {unit} → firm"}
 
 
+def next_firm_gap(rated: list[dict]) -> int | None:
+    """Votes needed to firm the CLOSEST not-yet-firm entrant, or None if there is no such step.
+
+    `firm_count`/`rated_count` tell a visitor where a board STANDS; this tells them what it
+    would take to move it. Without it, "0 of 20 firm" — which is every card's current state —
+    reads as a verdict on the board rather than an invitation to change it.
+
+    Deliberately the nearest entrant rather than the whole board: the honest total to firm
+    everything is a number that makes people close the tab, and a goal nobody believes they can
+    finish does not convert. The nearest one is both true and reachable.
+
+    UNITS: a pairwise vote increments `n_games` by one for BOTH entrants, so lifting a SINGLE
+    entrant to the threshold costs `threshold - n_games` votes that include it — not half that.
+    (Halving is correct for a SET, where one vote advances two members at once; conflating the
+    two understates the ask by 2x.)
+
+    Unrated entrants (`n_games == 0`) are excluded: they are in the pool but unevaluated, and
+    counting them would make an untouched board advertise a full-threshold gap that the
+    matchmaker has no particular reason to close next.
+    """
+    remaining = [
+        FIRM_VOTE_THRESHOLD - r.get("n_games", 0)
+        for r in rated
+        if 0 < r.get("n_games", 0) < FIRM_VOTE_THRESHOLD
+    ]
+    return min(remaining) if remaining else None
+
+
 def modality_hub_cards(
     rows_fn: Callable[[str], list[dict]], modalities: Iterable[str]
 ) -> list[dict]:
@@ -1383,6 +1411,8 @@ def modality_hub_cards(
                 "rated_count": len(rated),
                 "firm_count": firm_count,
                 "firm": bool(rated) and firm_count == len(rated),
+                # The next achievable step for this board — see next_firm_gap().
+                "next_firm_gap": next_firm_gap(rated),
             }
         )
     return cards

@@ -44,6 +44,16 @@
         {{ c.rated_count }} model{{ 's' if c.rated_count != 1 else '' }} ranked ·
         {% if c.firm %}<span class="lb-hub-firm">all firm</span>{% else %}<span class="cov-badge cov-prov" title="A rank is firm once it is backed by {{ firm_vote_threshold }}+ votes; the rest are still being evaluated">{{ c.firm_count }} of {{ c.rated_count }} firm</span>{% endif %}
       </p>
+      {# The line above says where the board STANDS; this one says what moves it. Without it
+         "0 of 20 firm" — the state of every board pre-launch — reads as a verdict rather than
+         an invitation. The number is the nearest entrant's gap, not the whole board's, because
+         a goal nobody believes they can finish does not convert (see service.next_firm_gap). #}
+      {% if c.next_firm_gap %}
+      <p class="lb-hub-goal">
+        <a href="/arena?criterion=overall">{{ c.next_firm_gap }} more vote{{ 's' if c.next_firm_gap != 1 else '' }}</a>
+        firms the next model here
+      </p>
+      {% endif %}
       {% else %}
       {# No rated entrant in this scope. The board still EXISTS (and /api/leaderboard publishes it),
          so the card is still here and still clickable — an unvoted modality reads as
