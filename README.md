@@ -117,7 +117,15 @@ browse benchmark tasks, `/admin` for admin tools (token below).
 | `BIO3D_ELO_K`        | `32`                        | Elo K-factor                     |
 | `BIO3D_BT_BOOTSTRAP` | `200`                       | bootstrap resamples for BT CIs   |
 
-**Change `BIO3D_ADMIN_TOKEN` before deploying.**
+### Required on a public deploy
+
+A "public deploy" is one with an empty `BIO3D_RECON_SCORER_URL`. It **refuses to start**
+without these — each was a silently-wrong default that only showed up in production:
+
+| Variable                | Why it must be set                                                                                                    |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `BIO3D_ADMIN_TOKEN`     | otherwise `/admin` accepted a token published in this source tree                                                     |
+| `BIO3D_PUBLIC_BASE_URL` | share cards, `og:*`, `rel=canonical` and `/sitemap.xml` all advertise this origin — the default points at `127.0.0.1` |
 
 ### Human verification (optional)
 
