@@ -22,6 +22,17 @@ _CONTENT_TYPES = {
     "mmcif": "chemical/x-cif",
     "sdf": "chemical/x-mdl-sdfile",
     "mol": "chemical/x-mdl-molfile",
+    # Web assets. Absent until the reference galleries began travelling the S3 path: images had
+    # only ever been served by the LOCAL backend, where StaticFiles derives the type from the
+    # filename and the stored metadata never mattered. On S3 the stored ContentType IS what the
+    # browser gets, and every .jpg was landing as application/octet-stream.
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "webp": "image/webp",
+    "gif": "image/gif",
+    "svg": "image/svg+xml",
+    "json": "application/json",
 }
 
 
