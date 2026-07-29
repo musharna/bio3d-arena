@@ -155,8 +155,133 @@ def assess_composition(client, photo_png: bytes, *, taxon: str, common: str) -> 
     }
 
 
+# What the reference SHOULD depict, where the bare binomial is not enough to pin it down.
+# Only taxa whose galleries were measurably wrong on 2026-07-29 are listed; everything else
+# falls back to "<common> (<taxon>)", which is sufficient when the name is unambiguous.
+#
+# Two distinct causes are corrected here. `Rosa` is a genus whose iNaturalist text search
+# resolves to the ORDER Rosales (brambles, elms, figs), and the arena's rose tasks ask for
+# full-petalled garden roses, not wild dog-roses. The three `complex` taxa resolve to a
+# species-complex — by definition a group too similar to separate — so their curated photos
+# legitimately include sibling species (lion's mane came back 8/8 as coral tooth and bear's
+# head). Naming the intended form lets the subject check reject siblings the taxonomy accepts.
+MORPHOTYPE = {
+    "Rosa": "a cultivated garden rose in bloom, many overlapping petals — NOT a wild five-petalled dog-rose or a bramble",
+    "Canis familiaris": "a typical domestic dog breed — NOT a dingo, dhole, coyote or other wild canid",
+    "Hericium erinaceus": "lion's mane: a single unbranched cushion of long downward-hanging spines — NOT the branched, coral-like H. coralloides or H. americanum",
+    "Cucurbita pepo": "a whole pumpkin or squash fruit on the plant",
+    "Trametes versicolor": "turkey tail: thin concentrically-banded brackets in overlapping tiers",
+    "Carassius auratus": "a live goldfish, whole and unobstructed, in water",
+}
+
+
+def morphotype_for(taxon: str) -> str:
+    """The intended form for `taxon`, or "" to let `assess_subject` fall back to the name."""
+    return MORPHOTYPE.get(taxon, "")
+
+
+SUBJECT_TOOL = {
+    "name": "record_subject",
+    "description": "Record what a reference photo's MAIN SUBJECT actually is.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "subject": {
+                "type": "string",
+                "description": "The main subject actually shown (scientific name if confident).",
+            },
+            "verdict": {
+                "type": "string",
+                "enum": ["match", "different_organism", "wrong_form", "not_identifiable"],
+                "description": (
+                    "match = the claimed organism, in the expected form, as the main subject. "
+                    "different_organism = something else dominates the frame. "
+                    "wrong_form = the right taxon but the wrong morphotype. "
+                    "not_identifiable = too obscured/distant/damaged to judge a 3D model against."
+                ),
+            },
+            "note": {"type": "string"},
+        },
+        "required": ["subject", "verdict", "note"],
+    },
+}
+
+_SUBJECT_OK = "match"
+
+
+def assess_subject(
+    client, photo_png: bytes, *, taxon: str, common: str, morphotype: str = ""
+) -> dict:
+    """Is the claimed organism THIS photo's main subject, in the form the task expects?
+
+    Sourcing selects reference photos for taxonomic correctness — iNaturalist guarantees a
+    research-grade record is a true record of the taxon, and guarantees nothing about whether
+    the photo is a usable visual reference. Those are different properties, and only the first
+    was ever checked. This closes that gap, and deliberately asks a question `species_matches`
+    cannot express:
+
+    * a heron with a goldfish in its beak is a valid *Carassius auratus* record whose main
+      subject is a heron -> different_organism;
+    * a dingo is a valid *Canis familiaris* record but not the domestic dog the generators
+      produce, and a wild dog-rose is a valid *Rosa* record but not a garden rose ->
+      wrong_form, which no taxonomic test can catch because the taxon IS right.
+
+    VLM-based on purpose: `species_matches` routes through BioCLIP (open_clip/torch), which is
+    absent from the runtime deps, so the species half of gallery QA silently never ran on hosts
+    without them. Returns {"ok", "subject", "verdict", "note"}.
+    """
+    import base64
+
+    want = morphotype or f"{common} ({taxon})"
+    text = (
+        f"This photograph is used as a REFERENCE for {common} ({taxon}) — a voter looks at it to "
+        f"judge whether a 3D model resembles the real organism. The reference should show "
+        f"{want}.\n\n"
+        "Judge the MAIN SUBJECT of the frame, not merely what is present in it. Reject the photo "
+        "if something else dominates (a predator holding it, the habitat, a person), if it is the "
+        "right taxon in the wrong form (a wild ancestral type where a cultivated or domestic one "
+        "is wanted, or vice versa), or if it is too obscured, distant, dead or damaged to judge a "
+        "3D model against. A correct identification is NOT sufficient — an accurate record of the "
+        "species can still be a useless reference. Then call record_subject."
+    )
+    resp = client.messages.create(
+        model=JUDGE_MODEL,
+        max_tokens=400,
+        tools=[SUBJECT_TOOL],
+        tool_choice={"type": "tool", "name": "record_subject"},
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": _sniff_media_type(photo_png),
+                            "data": base64.b64encode(photo_png).decode("ascii"),
+                        },
+                    },
+                    {"type": "text", "text": text},
+                ],
+            }
+        ],
+    )
+    block = next(b for b in resp.content if getattr(b, "type", None) == "tool_use")
+    verdict = block.input.get("verdict", "not_identifiable")
+    return {
+        "ok": verdict == _SUBJECT_OK,
+        "subject": block.input.get("subject", ""),
+        "verdict": verdict,
+        "note": block.input.get("note", ""),
+    }
+
+
 def qa_reference_image(
-    *, organ: dict | None = None, composition: dict | None = None, species: dict | None = None
+    *,
+    organ: dict | None = None,
+    composition: dict | None = None,
+    species: dict | None = None,
+    subject: dict | None = None,
 ) -> dict:
     """Combine QA signals into a pass/fail verdict. `composition` = assess_composition output
     (isolated=True → a detached/harvested part, not the whole organism) is the calibrated
@@ -175,4 +300,9 @@ def qa_reference_image(
         reasons.append("isolated part, not the whole organism (VLM composition)")
     if species is not None and not species.get("ok", True):
         reasons.append(f"species mismatch — reads as {species.get('top')!r}, not the claimed taxon")
+    if subject is not None and not subject.get("ok", True):
+        reasons.append(
+            f"subject is {subject.get('subject')!r} ({subject.get('verdict')}), "
+            "not the claimed organism in the expected form"
+        )
     return {"passed": not reasons, "reasons": reasons}

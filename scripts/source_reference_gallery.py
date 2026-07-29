@@ -56,12 +56,31 @@ def _slug(binomial: str) -> str:
     return binomial.lower().replace(" ", "_")
 
 
+# Ranks whose photo pool is, by construction, NOT one organism's likeness. `complex` is a group
+# of species too similar to separate; anything above genus is broader still. Measured 2026-07-29:
+# `q=Rosa` returned the ORDER **Rosales** (brambles, elms, figs, nettles) and three taxa returned
+# rank `complex`, between them accounting for 15 of 47 wrong reference photos. The old code took
+# `results[0]` from a FUZZY text search and never looked at what came back.
+ALLOWED_RANKS = {"species", "subspecies", "variety", "genus"}
+
+# Where the arena's taxon name and iNaturalist's differ. The arena keeps its own name (it is the
+# key for organ inventories, gallery slugs and task titles); only the QUERY is translated. Kept
+# explicit rather than loosening the name match, which would re-admit the fuzzy hits above.
+INAT_NAME = {"Canis lupus familiaris": "Canis familiaris"}
+
+
 def _resolve_taxon_id(binomial: str) -> int | None:
+    """Resolve to a taxon whose NAME MATCHES what was asked and whose rank is narrow enough for
+    its photos to depict one organism. A fuzzy top-1 hit is not evidence of either."""
+    binomial = INAT_NAME.get(binomial, binomial)
     url = "https://api.inaturalist.org/v1/taxa?" + urllib.parse.urlencode(
-        {"q": binomial, "per_page": 1}
+        {"q": binomial, "per_page": 10}
     )
-    res = _get(url).get("results", [])
-    return res[0]["id"] if res else None
+    want = binomial.strip().lower()
+    for r in _get(url).get("results", []):
+        if (r.get("name") or "").strip().lower() == want and r.get("rank") in ALLOWED_RANKS:
+            return r["id"]
+    return None
 
 
 def _photo_row(ph: dict) -> dict | None:
