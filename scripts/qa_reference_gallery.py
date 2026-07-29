@@ -24,6 +24,7 @@ from app.organ_inventory import ORGAN_INVENTORY, inventory_for  # noqa: E402
 from app.reference_qa import (  # noqa: E402
     assess_composition,
     assess_subject,
+    composition_applies,
     morphotype_for,
     qa_reference_image,
     species_matches,
@@ -70,7 +71,12 @@ def qa_gallery(slug: str, *, client, bundle) -> dict:
         # Calibrated reference QA (2026-07-06): the VLM composition question is the fruit-only /
         # isolation signal for ALL taxa — organ-coverage's 'isolated-organ' over-fires on good
         # single-organ views (e.g. an Arabidopsis rosette). Species check via multi-class BioCLIP.
-        composition = assess_composition(client, png, taxon=taxon, common=_common(taxon))
+        # Plant/fungus-framed; misfires on animals (see reference_qa.composition_applies).
+        composition = (
+            assess_composition(client, png, taxon=taxon, common=_common(taxon))
+            if composition_applies(inv)
+            else None
+        )
         species = species_matches(bundle, png, claimed_taxon=taxon, panel=panel) if bundle else None
         # The subject check (2026-07-29) is what makes this gate meaningful without BioCLIP, and
         # asks something BioCLIP cannot: is the claimed organism the photo's MAIN SUBJECT, in the

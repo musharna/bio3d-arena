@@ -98,15 +98,47 @@ def _photo_row(ph: dict) -> dict | None:
     }
 
 
-def _cc_photos_from_observations(taxon_id: int, n: int) -> list[dict]:
+# Taxa whose arena task depicts the DOMESTICATED form — cultivated crops and pet/farm animals
+# alike. iNaturalist's `quality_grade=research` requires an observation to be WILD, so for these
+# it systematically selects against the very form the task asks generators to produce. Measured
+# 2026-07-29, CC-licensed observations:
+#
+#   Solanum lycopersicum  20,742 wild /  4,410 captive  -> gallery was feral volunteers in drains
+#   Carassius auratus    291,436 wild /  7,199 captive  -> gallery was feral/dead pond fish
+#   Canis familiaris       2,084 wild /  2,908 captive  -> gallery was dingoes, dholes, a coyote
+#
+# For the dog there are MORE captive than wild records: a domestic dog observed "wild" is by
+# definition a feral or dingo-type animal, which is why the taxonomic check waved them through.
+#
+# Deliberately ABSENT:
+#   Rosa               2,446 wild /      1 captive  -> no cultivated pool exists; garden-rose
+#                      references must come from somewhere other than iNaturalist.
+#   Danaus plexippus  33,752 wild /    142 captive  -> genuinely wild; its low pass rate is the
+#                      lifecycle question (chrysalis/caterpillar), not the pool.
+DOMESTICATED = {
+    "Solanum lycopersicum",
+    "Zea mays",
+    "Glycine max",
+    "Cucurbita pepo",
+    "Carassius auratus",
+    "Canis lupus familiaris",  # the ARENA's name; INAT_NAME translates it for the query
+}
+
+
+def _cc_photos_from_observations(taxon_id: int, n: int, *, cultivated: bool = False) -> list[dict]:
     """Fallback: the curated taxon_photos are only ~7-12 and for some taxa are all NC-licensed
-    (e.g. Cucurbita pepo). The full research-grade observation pool has thousands, many cc0/cc-by
-    — query it with a photo-license filter, most-faved first."""
+    (e.g. Cucurbita pepo). The observation pool has thousands, many cc0/cc-by — query it with a
+    photo-license filter, most-faved first.
+
+    `cultivated` swaps the wild-only research grade for captive/cultivated observations. The two
+    are mutually exclusive on iNaturalist: research grade REQUIRES wild, so sending both returns
+    an empty set rather than a union."""
+    scope = {"captive": "true"} if cultivated else {"quality_grade": "research"}
     url = "https://api.inaturalist.org/v1/observations?" + urllib.parse.urlencode(
         {
             "taxon_id": taxon_id,
             "photo_license": "cc0,cc-by",
-            "quality_grade": "research",
+            **scope,
             "photos": "true",
             "per_page": max(n * 3, 12),
             "order_by": "votes",
@@ -126,7 +158,12 @@ def _cc_photos_from_observations(taxon_id: int, n: int) -> list[dict]:
     return out
 
 
-def _cc_photos(taxon_id: int, n: int) -> list[dict]:
+def _cc_photos(taxon_id: int, n: int, *, cultivated: bool = False) -> list[dict]:
+    # For a cultivated taxon the curated taxon_photos are wild-biased too — tomato's first two
+    # were urban stormwater drains — so draw straight from the cultivated pool rather than
+    # topping up from it, or the wild photos simply fill the gallery first.
+    if cultivated:
+        return _cc_photos_from_observations(taxon_id, n, cultivated=True)
     res = _get(f"https://api.inaturalist.org/v1/taxa/{taxon_id}").get("results", [])
     photos = res[0].get("taxon_photos", []) if res else []
     out: list[dict] = []
@@ -140,7 +177,7 @@ def _cc_photos(taxon_id: int, n: int) -> list[dict]:
                 return out
     # Top up from the observation pool when the curated taxon_photos have too few CC photos.
     if len(out) < n:
-        for row in _cc_photos_from_observations(taxon_id, n - len(out)):
+        for row in _cc_photos_from_observations(taxon_id, n - len(out), cultivated=cultivated):
             if row["photo_id"] not in seen:
                 seen.add(row["photo_id"])
                 out.append(row)
@@ -160,7 +197,7 @@ def source_taxon(binomial: str, n: int, force: bool) -> dict:
     tid = _resolve_taxon_id(binomial)
     if tid is None:
         return {"taxon": binomial, "status": "no-taxon"}
-    photos = _cc_photos(tid, n)
+    photos = _cc_photos(tid, n, cultivated=binomial in DOMESTICATED)
     if not photos:
         return {"taxon": binomial, "status": "no-cc-photos"}
     d.mkdir(parents=True, exist_ok=True)

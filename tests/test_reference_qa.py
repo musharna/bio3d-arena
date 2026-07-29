@@ -275,3 +275,31 @@ def test_combiner_still_passes_when_the_subject_is_right():
 def test_combiner_is_unchanged_when_no_subject_signal_is_supplied():
     """Back-compat: existing callers pass organ/composition/species only."""
     assert reference_qa.qa_reference_image(composition={"isolated": False})["passed"] is True
+
+
+# --- composition is plant/fungus-framed and must not judge animals ------------------------
+#
+# `assess_composition`'s prompt asks whether the photo shows "a plant with stems/leaves/roots,
+# or a whole intact fungus on its substrate" versus "a single picked fruit/gourd sitting on a
+# table or a lone cut mushroom". It predates animals as a third kingdom, and on 2026-07-29 it
+# rejected 6 of 8 remaining dog photos as "isolated part" — including a clean head-and-shoulders
+# portrait of a poodle in a meadow, which is not a detached part of anything. The subject check
+# already covers whether an animal photo is usable (`not_identifiable`), so composition is
+# simply not applicable outside the body plans it was written for.
+
+
+@pytest.mark.parametrize(
+    "taxon",
+    ["Canis lupus familiaris", "Anas platyrhynchos", "Danaus plexippus", "Carassius auratus"],
+)
+def test_composition_does_not_apply_to_animals(taxon):
+    """All four pinned explicitly: the animal test is indirect (a paired part), so every animal
+    taxon must be checked rather than assumed to follow from one."""
+    assert reference_qa.composition_applies(inventory_for(taxon)) is False
+
+
+def test_composition_still_applies_to_plants_and_fungi():
+    """Positive control — without this the test would pass if the function returned False for
+    everything, silently disabling the fruit-only gate that composition exists to provide."""
+    assert reference_qa.composition_applies(inventory_for("Solanum lycopersicum")) is True
+    assert reference_qa.composition_applies(inventory_for("Boletus edulis")) is True

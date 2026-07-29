@@ -111,6 +111,28 @@ COMPOSITION_TOOL = {
 }
 
 
+def composition_applies(inventory: TaxonInventory | None) -> bool:
+    """Is `assess_composition` meaningful for this taxon?
+
+    Its prompt is written entirely in plant/fungus terms — "a plant with stems/leaves/roots, or
+    a whole intact fungus on its substrate" against "a single picked fruit/gourd sitting on a
+    table or a lone cut mushroom" — because it predates animals as a third kingdom. Applied to
+    an animal it misfires: on 2026-07-29 it rejected 6 of 8 surviving dog photos as "isolated
+    part", including a clean head-and-shoulders portrait of a poodle in a meadow, which is not a
+    detached part of anything.
+
+    Animals are detected by a PAIRED part — an organ whose expected complement exceeds 1 (dog
+    legs x4, duck wings x2, monarch legs x6, goldfish pectoral fins x2). `Organ.complement`
+    defaults to 1, so plants and fungi never trip it; `_animal_inv` is the only constructor that
+    passes anything else. This is indirect — `TaxonInventory` carries no kingdom — so the test
+    pins all four animal taxa explicitly, and a future animal whose parts were all singular
+    would need one. For animals `assess_subject` already judges usability via its
+    `not_identifiable` verdict, so the fruit-only question is simply not applicable."""
+    if inventory is None:
+        return False
+    return not any(o.complement > 1 for o in inventory.organs)
+
+
 def assess_composition(client, photo_png: bytes, *, taxon: str, common: str) -> dict:
     """Direct VLM composition judgment for BODY-PLAN taxa (gourd/fungi) where organ-coverage
     cannot tell fruit-only from complete. Asks whether the photo shows the whole living organism

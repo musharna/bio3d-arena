@@ -79,3 +79,58 @@ def test_the_arena_name_is_translated_to_the_inaturalist_name(monkeypatch):
 def test_no_match_resolves_to_none_rather_than_a_wrong_guess(monkeypatch):
     _stub(monkeypatch, [])
     assert srg._resolve_taxon_id("Nothing here") is None
+
+
+# --- cultivated taxa ---------------------------------------------------------------------
+#
+# Measured on the live API, 2026-07-29. iNaturalist's `quality_grade=research` requires an
+# observation to be WILD, so for a crop or ornamental it selects against exactly the form the
+# arena's task asks generators to produce:
+#
+#   Solanum lycopersicum  20,742 wild / 4,410 cultivated (CC-licensed)
+#   Rosa (genus)           2,446 wild /     1 cultivated
+#
+# The tomato gallery came back as feral volunteers in urban stormwater drains — every one a
+# valid wild record, none of them the cultivated plant the task depicts. Those 4,410 cultivated
+# observations were never reachable. (Rosa is NOT fixable this way: iNaturalist simply has no
+# CC-licensed cultivated roses. Recorded here so the null is not re-derived.)
+
+
+def test_a_cultivated_taxon_asks_for_cultivated_observations(monkeypatch):
+    seen = {}
+
+    def _get(url):
+        seen["url"] = url
+        return {"results": []}
+
+    monkeypatch.setattr(srg, "_get", _get)
+    srg._cc_photos_from_observations(50623, 8, cultivated=True)
+    assert "captive=true" in seen["url"]
+    assert "quality_grade=research" not in seen["url"], (
+        "research grade REQUIRES wild — combining it with captive returns nothing"
+    )
+
+
+def test_a_wild_taxon_still_asks_for_research_grade(monkeypatch):
+    """Regression guard: the wild path must not change. Most arena taxa are genuinely wild
+    organisms where research-grade is exactly the right filter."""
+    seen = {}
+
+    def _get(url):
+        seen["url"] = url
+        return {"results": []}
+
+    monkeypatch.setattr(srg, "_get", _get)
+    srg._cc_photos_from_observations(55779, 8)
+    assert "quality_grade=research" in seen["url"]
+    assert "captive=true" not in seen["url"]
+
+
+def test_the_domesticated_roster_covers_crops_and_pets():
+    """These are the taxa whose tasks depict a cultivated plant. Rosa is deliberately absent:
+    the cultivated pool does not exist for it, so routing it here would silently return nothing
+    instead of failing visibly."""
+    assert "Solanum lycopersicum" in srg.DOMESTICATED
+    assert "Rosa" not in srg.DOMESTICATED
+    assert "Canis lupus familiaris" in srg.DOMESTICATED
+    assert "Danaus plexippus" not in srg.DOMESTICATED
