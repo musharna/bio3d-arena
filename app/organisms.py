@@ -22,10 +22,10 @@ cannot drift into a second identifier — the failure mode this repo keeps redis
 from __future__ import annotations
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from . import kingdoms, paradigms, service
-from .models import Category, Comparison, Task, TaskDifficulty, Vote
+from .models import Category, Comparison, ModelOutput, Task, TaskDifficulty, Vote
 from .service import _gallery_slug
 
 
@@ -50,7 +50,24 @@ def gallery_slug(slug: str) -> str:
 
 
 def _active_tasks(db: Session) -> list[Task]:
-    return list(db.execute(select(Task).where(Task.active.is_(True)).order_by(Task.id)).scalars())
+    """The live corpus, with everything both callers walk already loaded.
+
+    Both `organism_index` and `build_organism` iterate `task.outputs` and, through it,
+    `output.generator`. Left lazy, that is one round trip per task and another per output —
+    ~1.2 and ~1.0 respectively when measured on the real corpus, which is what put /tasks at
+    137 statements and /organisms/{slug} at 72. Same defect as the ranking scan in
+    `service._scope_rows`, one module over; eager loading makes it a fixed handful.
+    """
+    stmt = (
+        select(Task)
+        .where(Task.active.is_(True))
+        .order_by(Task.id)
+        .options(
+            joinedload(Task.category),
+            selectinload(Task.outputs).joinedload(ModelOutput.generator),
+        )
+    )
+    return list(db.execute(stmt).unique().scalars())
 
 
 def organism_index(db: Session) -> list[dict]:
