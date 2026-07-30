@@ -187,13 +187,27 @@ def assess_composition(client, photo_png: bytes, *, taxon: str, common: str) -> 
 # species-complex — by definition a group too similar to separate — so their curated photos
 # legitimately include sibling species (lion's mane came back 8/8 as coral tooth and bear's
 # head). Naming the intended form lets the subject check reject siblings the taxonomy accepts.
+#
+# KEYS ARE ORGAN_INVENTORY TAXON NAMES — that is what a gallery slug resolves to, so any other
+# spelling is unreachable dead code (see test_every_morphotype_is_reachable_by_the_gate). The dog
+# was keyed on iNaturalist's 'Canis familiaris' while the gate passes the arena's trinomial, so
+# the dingo exclusion below never once reached the model; a stale pumpkin entry sat beside it,
+# left behind when Cucurbita pepo was removed from the corpus.
+#
+# A morphotype must describe WHAT THE TASK ASKS FOR and no more. The goldfish entry first added
+# "in water", a photographic condition task 31 never asks for, and threw away two specimens whose
+# whole lateral profile and fins were perfectly legible. Over-strict costs references as surely as
+# absent admits bad ones.
 MORPHOTYPE = {
     "Rosa": "a cultivated garden rose in bloom, many overlapping petals — NOT a wild five-petalled dog-rose or a bramble",
-    "Canis familiaris": "a typical domestic dog breed — NOT a dingo, dhole, coyote or other wild canid",
+    "Canis lupus familiaris": "a typical domestic dog breed — NOT a dingo, dhole, coyote or other wild canid",
     "Hericium erinaceus": "lion's mane: a single unbranched cushion of long downward-hanging spines — NOT the branched, coral-like H. coralloides or H. americanum",
-    "Cucurbita pepo": "a whole pumpkin or squash fruit on the plant",
     "Trametes versicolor": "turkey tail: thin concentrically-banded brackets in overlapping tiers",
-    "Carassius auratus": "a live goldfish, whole and unobstructed, in water",
+    "Carassius auratus": "a whole goldfish showing the full body with its fins — NOT one crushed in a predator's beak or with the body hidden by a hand",
+    # Task 30 asks for "a whole monarch butterfly". Left to the bare common name the verdict rested
+    # on the model's own reading of whether a caterpillar counts as a butterfly; iNaturalist's pool
+    # holds 9,259 CC research-grade larval records, so that reading is load-bearing.
+    "Danaus plexippus": "an adult monarch butterfly with its wings — NOT the striped caterpillar (larva) or the green chrysalis (pupa)",
 }
 
 

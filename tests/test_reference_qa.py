@@ -288,6 +288,53 @@ def test_combiner_is_unchanged_when_no_subject_signal_is_supplied():
 # simply not applicable outside the body plans it was written for.
 
 
+# --- the morphotype must describe the TASK, not a stricter ideal ---------------------------
+#
+# Task 31 asks for "a whole goldfish (Carassius auratus)". The first morphotype demanded "a live
+# goldfish, whole and unobstructed, IN WATER", which is a photographic condition the task never
+# asks for; it rejected two specimens showing a complete lateral profile with every fin legible.
+# The subject check is only as good as the form it is told to look for, so an over-strict
+# morphotype throws away usable references just as surely as a missing one admits bad ones.
+
+
+def test_the_goldfish_morphotype_asks_for_what_the_task_asks_for():
+    m = reference_qa.morphotype_for("Carassius auratus")
+    assert "whole" in m.lower() and "fin" in m.lower()
+    assert "in water" not in m.lower(), "task 31 asks for a whole goldfish, not a photo in water"
+
+
+def test_the_monarch_morphotype_pins_the_adult_because_the_task_does():
+    """Task 30 asks for "a whole monarch butterfly". Relying on the bare common name left the
+    verdict to the model's own reading of whether a caterpillar counts as a butterfly."""
+    m = reference_qa.morphotype_for("Danaus plexippus")
+    assert "adult" in m.lower()
+    assert "caterpillar" in m.lower() or "larva" in m.lower()
+
+
+@pytest.mark.parametrize("taxon", ["Rosa", "Hericium erinaceus", "Trametes versicolor"])
+def test_morphotypes_that_were_already_right_are_left_alone(taxon):
+    """Positive control on the edits above: they must not have emptied the table."""
+    assert reference_qa.morphotype_for(taxon) != ""
+
+
+def test_every_morphotype_is_reachable_by_the_gate():
+    """A morphotype is looked up by ORGAN_INVENTORY key (that is what qa_reference_gallery resolves
+    a gallery slug to), so an entry keyed on any other spelling of the name is silently dead code.
+    The dog's was keyed 'Canis familiaris' — iNaturalist's name for the domestic dog — while the
+    gate passes the arena's 'Canis lupus familiaris', so the dingo exclusion the entry exists to
+    state never reached the model once. A stale entry for the de-corpused pumpkin sat beside it."""
+    from app.organ_inventory import ORGAN_INVENTORY
+
+    unreachable = set(reference_qa.MORPHOTYPE) - set(ORGAN_INVENTORY)
+    assert unreachable == set(), f"morphotypes no gallery can ever look up: {sorted(unreachable)}"
+
+
+def test_the_dog_morphotype_actually_reaches_the_gate():
+    """The specific regression: this is the lookup qa_reference_gallery performs."""
+    m = reference_qa.morphotype_for("Canis lupus familiaris")
+    assert "dingo" in m.lower()
+
+
 @pytest.mark.parametrize(
     "taxon",
     ["Canis lupus familiaris", "Anas platyrhynchos", "Danaus plexippus", "Carassius auratus"],
