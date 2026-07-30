@@ -1,7 +1,8 @@
-{% extends "base.html" %} {% block title %}Arena · Bio 3D Arena{% endblock %} {%
-block description %}Compare two AI-generated 3D reconstructions of a real organism
-side by side and vote for the better one. Every vote feeds the Bradley–Terry
-leaderboards.{% endblock %} {% block content %}
+{% extends "base.html" %}
+{% block title %}Arena · Bio 3D Arena{% endblock %}
+{# One line: a source line-wrap here put literal newlines inside `content="…"`. #}
+{% block description %}Compare two AI-generated 3D reconstructions of a real organism side by side and vote for the better one. Every vote feeds the Bradley–Terry leaderboards.{% endblock %}
+{% block content %}
 <section class="arena" data-can-flag="{{ 'true' if internal_pages() else 'false' }}">
   <div class="arena-hero">
     <h1 class="arena-hero-h1">Which model rebuilds life best?</h1>
