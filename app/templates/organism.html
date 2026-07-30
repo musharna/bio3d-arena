@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}{{ org.binomial }} in 3D · Bio 3D Arena{% endblock %}
+{# The description is built in app.organisms.meta_description from counts that are true at render
+   time and never from a rank: most entrants here are explicitly unranked, and a snippet claiming a
+   standing the leaderboard refuses to assert would be the one dishonest line on the page. #}
+{% block description %}{{ description }}{% endblock %}
+{# Breadcrumbs are the honest structured-data claim for this page. Deliberately NOT
+   schema.org/Dataset — a Dataset is expected to describe something downloadable, and this page
+   offers no distribution, so marking it up as one to win a richer search result would assert
+   something about the page that isn't true. #}
+{% block head_extra %}
+<script type="application/ld+json">{{ breadcrumbs | tojson }}</script>
+{% endblock %}
+{% block content %}
+<section class="board">
+  <header class="b3d-page-head">
+    <h1><em>{{ org.binomial }}</em> in 3D</h1>
+    <p class="b3d-page-lede">
+      How well do generative 3D models rebuild <em>{{ org.binomial }}</em>? Every output below was
+      produced by a model from the same brief, then compared blind against reference photographs of
+      the real organism — so the question is biological fidelity, not which mesh looks prettiest.
+    </p>
+    <p><a href="/organisms">&larr; all organisms</a></p>
+  </header>
+
+  <div class="tk-stat-grid">
+    <div class="tk-stat-card">
+      <span class="tk-stat-num mono">{{ org.n_outputs }}</span>
+      <span class="tk-stat-label">3D outputs</span>
+    </div>
+    <div class="tk-stat-card">
+      <span class="tk-stat-num mono">{{ org.models|length }}</span>
+      <span class="tk-stat-label">Models attempted</span>
+    </div>
+    <div class="tk-stat-card">
+      <span class="tk-stat-num mono">{{ "{:,}".format(org.votes) }}</span>
+      <span class="tk-stat-label">Human votes</span>
+    </div>
+    <div class="tk-stat-card">
+      <span class="tk-stat-num mono">{{ org.kingdom_emoji }}</span>
+      <span class="tk-stat-label">{{ org.kingdom_label }}</span>
+    </div>
+  </div>
+
+  {% if org.references %}
+  {# The CC gallery, carrying the attribution its licences require. These are the images a voter
+     judges against, so showing them here is what makes the page about the organism rather than
+     about the meshes. #}
+  <div class="b3d-section-head">
+    <h2>The real organism</h2>
+    <span class="b3d-section-head-note">CC-licensed reference photographs</span>
+  </div>
+  <div class="b3d-org-refs">
+    {% for r in org.references %}
+    <figure class="b3d-org-ref">
+      <img src="{{ r.url }}" alt="Reference photograph of {{ org.binomial }}" loading="lazy" />
+      {% if r.credit %}<figcaption class="subtle">{{ r.credit }}</figcaption>{% endif %}
+    </figure>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="b3d-section-head">
+    <h2>Models that attempted it</h2>
+    <span class="b3d-section-head-note">grouped by generation method</span>
+  </div>
+  {% if org.models %}
+  <div class="ranktable-wrap">
+    <table class="ranktable">
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Method</th>
+          <th class="num">Outputs</th>
+          <th class="num">Votes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in org.models %}
+        <tr>
+          <td class="gen">
+            {% if m.slug %}<a href="/models/{{ m.slug }}">{{ m.name }}</a>{% else %}{{ m.name }}{% endif %}
+          </td>
+          <td class="subtle">{{ m.paradigm_display or "—" }}</td>
+          <td class="num mono">{{ m.outputs }}</td>
+          <td class="num mono">{{ m.votes }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {# No ranking here on purpose: models are ranked WITHIN a generation method, on separate boards,
+     because scores from different methods come from disconnected match pools. A single ordered
+     list of every model that touched this organism would be exactly the cross-method ranking the
+     rest of the site declines to publish. #}
+  <p class="subtle">
+    Models are ranked within their own method, not against each other across methods —
+    see the <a href="/leaderboard">leaderboards</a> for standings.
+  </p>
+  {% else %}
+  <p class="subtle">No models have attempted this organism yet.</p>
+  {% endif %}
+
+  <div class="b3d-section-head">
+    <h2>Tasks</h2>
+  </div>
+  <div class="ranktable-wrap">
+    <table class="ranktable">
+      <thead>
+        <tr>
+          <th>Task</th>
+          <th>Tier</th>
+          <th class="num">Outputs</th>
+          <th class="num">Votes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in org.tasks %}
+        <tr>
+          <td>{{ t.title }}</td>
+          <td class="subtle">{{ t.tier or "—" }}</td>
+          <td class="num mono">{{ t.n_outputs }}</td>
+          <td class="num mono">{{ t.votes }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="b3d-page-lede">
+    <a href="/arena">Vote on these models &rarr;</a>
+  </p>
+</section>
+{% endblock %}
