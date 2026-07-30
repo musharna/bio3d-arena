@@ -313,3 +313,51 @@ def test_the_organism_page_emits_breadcrumb_structured_data(client, corpus):
     kinds = [json.loads(b)["@type"] for b in blocks]
     assert "BreadcrumbList" in kinds, f"no BreadcrumbList in {kinds}"
     assert "Dataset" not in kinds, "organism page must not claim to be a downloadable Dataset"
+
+
+# --- cost ------------------------------------------------------------------------------
+
+
+def test_the_organism_helpers_do_not_cost_a_query_per_row(db, corpus):
+    """These two helpers were themselves the N+1 they were written alongside.
+
+    Measured on the real corpus after they shipped: `organism_index` cost ~1.2 queries per
+    active task (a lazy `task.outputs` load each) and `build_organism` ~1 per output (a lazy
+    `output.generator` load each) — 25 and 68 statements respectively. On SQLite that is
+    invisible; against Postgres every one is a network round trip, which is what put /tasks at
+    137 statements and /organisms/{slug} at 72.
+
+    It is the same defect the ranking scan was just fixed for (see
+    tests/test_matches_for_scope_perf.py), reintroduced one module over. Asserting the COUNT
+    rather than a duration for the same reason: a timing threshold on SQLite cannot fail.
+    """
+    from sqlalchemy import event
+
+    from app.database import engine
+
+    class Counter:
+        def __init__(self):
+            self.n = 0
+
+        def __enter__(self):
+            self._h = lambda *a, **k: setattr(self, "n", self.n + 1)
+            event.listen(engine, "before_cursor_execute", self._h)
+            return self
+
+        def __exit__(self, *exc):
+            event.remove(engine, "before_cursor_execute", self._h)
+            return False
+
+    # The fixture's organism carries 2 tasks x 2 generators = 4 outputs, one of which is
+    # app-hidden. A per-row implementation pays for each; a batched one does not.
+    db.expunge_all()
+    with Counter() as idx:
+        rows = organisms.organism_index(db)
+    assert rows, "fixture produced no organisms - bad fixture"
+    assert idx.n <= 8, f"organism_index cost {idx.n} queries for {len(rows)} organisms"
+
+    db.expunge_all()
+    with Counter() as build:
+        org = organisms.build_organism(db, corpus["slug"])
+    assert org["n_outputs"] > 0, "fixture organism has no outputs - bad fixture"
+    assert build.n <= 12, f"build_organism cost {build.n} queries for {org['n_outputs']} outputs"

@@ -34,7 +34,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from . import (
     config,
@@ -2516,10 +2516,21 @@ def tasks_page(request: Request, db: Session = Depends(get_db)):
     if roadmap is not None:
         return roadmap
     k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
-    stmt = select(Task).order_by(Task.id)
+    # Eager-loaded because every row below walks `t.outputs` (twice: the count and
+    # `_paradigm_label`) and `t.category`, and each output's `.generator`. Left lazy that is a
+    # round trip per task and per output — this page measured 137 statements on the real
+    # corpus, the same defect as service._scope_rows one layer up.
+    stmt = (
+        select(Task)
+        .order_by(Task.id)
+        .options(
+            joinedload(Task.category),
+            selectinload(Task.outputs).joinedload(ModelOutput.generator),
+        )
+    )
     if k_ids is not None:
         stmt = stmt.where(Task.category_id.in_(k_ids))
-    tasks = db.execute(stmt).scalars().all()
+    tasks = db.execute(stmt).unique().scalars().all()
     task_ids = [t.id for t in tasks]
 
     # Real vote totals per task (non-gold decisive votes) — reused for both the per-row
