@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+title: "Bio 3D Arena: a blind comparison benchmark for generative 3D models of organisms"
+message: "If you use this software or the benchmark, please cite it."
+type: software
+authors:
+  - family-names: Arnold
+    given-names: Jaret
+repository-code: "https://github.com/musharna/bio3d-arena"
+url: "https://bio3d-arena.fly.dev"
+abstract: >-
+  Bio 3D Arena evaluates generative 3D models on biological subjects rather than
+  generic objects. Voters compare two anonymised 3D outputs of the same organism
+  side by side, against CC-licensed reference photographs of the real organism, so
+  the judgement is biological fidelity rather than visual appeal. Rankings use
+  Bradley-Terry with bootstrap confidence intervals, and a generator without
+  enough comparisons is reported as unranked rather than given a point estimate.
+  The corpus spans plants, fungi and animals across four generation paradigms:
+  single-image reconstruction, text-to-3D, LLM-authored procedural geometry, and
+  agentic render-critique-revise pipelines.
+keywords:
+  - 3d-generation
+  - benchmark
+  - evaluation
+  - plant-phenotyping
+  - computer-vision
+  - bradley-terry
+license: MIT
