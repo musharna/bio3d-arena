@@ -10,6 +10,7 @@ import re
 import uuid
 from pathlib import Path
 from urllib.parse import quote
+from xml.sax.saxutils import escape as xml_escape
 
 from fastapi import (
     Depends,
@@ -793,9 +794,42 @@ def robots_txt():
     return "\n".join(lines)
 
 
+def _sitemap_content_paths(db: Session) -> list[str]:
+    """The per-model and per-modality pages, derived from the roster rather than hand-listed.
+
+    The static allowlist above is the right shape for the top-level product surface, where a new
+    page should be absent until someone says otherwise. It is the wrong shape for content that
+    arrives with the data: 37 model detail pages were serving 200 with unique titles and real
+    per-task tables while the sitemap named none of them, because nobody edits a tuple when a
+    generator is added.
+
+    Both visibility rules are read from the single source the ROUTES use, never restated:
+
+      * `_model_cards(db, None)` already drops app-hidden testers and generators with no
+        coverage row — exactly the set `/models` links to and `/models/{slug}` serves.
+      * A modality board is listed only if some visible generator carries that paradigm. That
+        covers the app-hidden paradigms for free (no visible generator has one) and, separately,
+        keeps the reserved-but-unused names — video, texturing, sketch — out: their boards
+        render empty, and advertising empty pages is thin content, not coverage.
+
+    Global scope (`k_ids=None`) on purpose: a sitemap is not viewed through a kingdom filter.
+    This costs one `_model_cards` pass, the same work `/models` does; the sitemap is fetched
+    rarely enough that sharing the route's own query beats a faster copy that can drift.
+    """
+    cards = _model_cards(db, None)
+    paths = [f"/models/{c['slug']}" for c in cards if c["slug"]]
+    populated = {c["paradigm"] for c in cards if c["paradigm"]}
+    paths += [f"/leaderboard/{p}" for p in paradigms.PARADIGMS if p in populated]
+    return paths
+
+
 @app.get("/sitemap.xml")
-def sitemap_xml():
-    urls = "".join(f"<url><loc>{config.PUBLIC_BASE_URL}{p}</loc></url>" for p in _SITEMAP_PATHS)
+def sitemap_xml(db: Session = Depends(get_db)):
+    # Escaped because the dynamic half interpolates generator slugs, and nothing in the schema
+    # keeps a slug free of `&` or `<`. An unescaped one does not cost you its own entry — it
+    # makes the whole document unparseable, so every URL in it goes unread.
+    paths = list(_SITEMAP_PATHS) + _sitemap_content_paths(db)
+    urls = "".join(f"<url><loc>{xml_escape(config.PUBLIC_BASE_URL + p)}</loc></url>" for p in paths)
     body = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
