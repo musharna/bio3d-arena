@@ -796,6 +796,62 @@ def robots_txt():
     return "\n".join(lines)
 
 
+@app.get("/llms.txt", response_class=PlainTextResponse)
+def llms_txt():
+    """A short factual map of the site for a model reading it directly.
+
+    Increasingly people arrive by asking a model rather than a search engine, and a model
+    answering "is there a benchmark for AI-generated 3D models of organisms" is reading text,
+    not rendering a page. This is that text: what the site is, what it covers, and what the
+    numbers currently do and do not support.
+
+    It states the unranked position on purpose. That is the single fact most likely to be
+    stated wrongly by something summarising this site — an arena with a leaderboard reads as
+    an arena with results — and it is the one this project has been most careful about
+    everywhere else.
+
+    Same rule as the sitemap: internal research surfaces 404 publicly and are not named here.
+    """
+    base = config.PUBLIC_BASE_URL
+    return "\n".join(
+        [
+            "# Bio 3D Arena",
+            "",
+            "> A blind comparison benchmark for generative 3D models of real organisms.",
+            "> Two anonymised 3D outputs of the same species are shown side by side against",
+            "> CC-licensed reference photographs, so the judgement is biological fidelity",
+            "> rather than visual appeal.",
+            "",
+            "Rankings use Bradley-Terry with bootstrap confidence intervals, computed within a",
+            "single generation method: scores from different methods come from disconnected",
+            "match pools and are not comparable. A generator without enough comparisons is",
+            "reported as unranked rather than given a point estimate, and at present most",
+            "entrants are unranked for want of votes.",
+            "",
+            "## Pages",
+            "",
+            f"- [Arena]({base}/arena): vote on a pair of anonymised outputs.",
+            f"- [Leaderboard]({base}/leaderboard): per-method Bradley-Terry standings.",
+            f"- [Models]({base}/models): every generator, its coverage and its record.",
+            f"- [Organisms]({base}/organisms): the corpus by species, with reference photos.",
+            f"- [Task catalog]({base}/tasks): every benchmarked task and its difficulty tier.",
+            f"- [Methodology]({base}/methodology): how ranking, matchmaking and gating work.",
+            f"- [Dataset]({base}/dataset): the citable, licensed benchmark release.",
+            f"- [Coverage]({base}/coverage): what the corpus covers and what it does not.",
+            f"- [Licenses]({base}/licenses): attribution for everything redistributed.",
+            "",
+            "## Scope",
+            "",
+            "Three kingdoms (plants, fungi, animals) across four generation methods:",
+            "single-image reconstruction, text-to-3D, LLM-authored procedural geometry, and",
+            "agentic render-critique-revise pipelines.",
+            "",
+            "Source code: https://github.com/musharna/bio3d-arena (MIT).",
+            "",
+        ]
+    )
+
+
 def _sitemap_content_paths(db: Session) -> list[str]:
     """The per-model, per-modality and per-organism pages, derived rather than hand-listed.
 
@@ -2188,8 +2244,62 @@ def dataset_page(request: Request, db: Session = Depends(get_db)):
     k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
     composition = dataset.dataset_composition(db, k_ids)
     return templates.TemplateResponse(
-        request, "dataset.html", {"releases": releases, "composition": composition}
+        request,
+        "dataset.html",
+        {
+            "releases": releases,
+            "composition": composition,
+            "dataset_ld": _dataset_jsonld(releases),
+        },
     )
+
+
+def _dataset_jsonld(releases: list[dict]) -> dict:
+    """schema.org/Dataset for the release page — the only markup Google Dataset Search reads.
+
+    `license` is the licences PAGE, not an SPDX identifier, and that is deliberate: a release's
+    LICENSE file is a ROLLUP of per-item terms (`dataset.license_rollup`), because the corpus
+    mixes CC0, several CC-BY variants and outputs whose model terms permit display but not
+    redistribution. There is no single identifier that is true of the whole thing, and naming
+    one would be a licence claim this project cannot support.
+
+    `distribution` is emitted only for releases that exist. The key asserts a retrievable file,
+    so on an instance with no release cut it is absent rather than pointing at a 404 — markup
+    promising a download that isn't there is worse than no markup.
+    """
+    ld: dict = {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "name": "Bio 3D Arena benchmark",
+        "description": (
+            "A blind comparison benchmark for generative 3D models of real organisms. Contains "
+            "benchmark tasks across plants, fungi and animals, generated 3D outputs from "
+            "multiple generation methods, baked ground-truth reference renders, CC-licensed "
+            "reference photographs, and objective completeness and fidelity metrics."
+        ),
+        "url": f"{config.PUBLIC_BASE_URL}/dataset",
+        "license": f"{config.PUBLIC_BASE_URL}/licenses",
+        "isAccessibleForFree": True,
+        "creator": {"@type": "Person", "name": "Jaret Arnold"},
+        "keywords": [
+            "3D generation",
+            "benchmark",
+            "plant phenotyping",
+            "computer vision",
+            "Bradley-Terry",
+        ],
+    }
+    if releases:
+        ld["version"] = releases[0]["version"]
+        ld["distribution"] = [
+            {
+                "@type": "DataDownload",
+                "name": r["version"],
+                "contentUrl": f"{config.PUBLIC_BASE_URL}/dataset",
+            }
+            for r in releases
+        ]
+    return ld
 
 
 @app.get("/methodology", response_class=HTMLResponse)
