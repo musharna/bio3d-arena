@@ -10,6 +10,7 @@ import re
 import uuid
 from pathlib import Path
 from urllib.parse import quote
+from xml.sax.saxutils import escape as xml_escape
 
 from fastapi import (
     Depends,
@@ -45,6 +46,7 @@ from . import (
     kingdoms,
     matchmaking,
     og,
+    organisms,
     paradigms,
     ranking,
     service,
@@ -765,6 +767,7 @@ _SITEMAP_PATHS = (
     "/methodology",
     "/coverage",
     "/tasks",
+    "/organisms",
     "/submit",
     "/terms",
     "/privacy",
@@ -793,9 +796,45 @@ def robots_txt():
     return "\n".join(lines)
 
 
+def _sitemap_content_paths(db: Session) -> list[str]:
+    """The per-model, per-modality and per-organism pages, derived rather than hand-listed.
+
+    The static allowlist above is the right shape for the top-level product surface, where a new
+    page should be absent until someone says otherwise. It is the wrong shape for content that
+    arrives with the data: 37 model detail pages were serving 200 with unique titles and real
+    per-task tables while the sitemap named none of them, because nobody edits a tuple when a
+    generator is added.
+
+    Both visibility rules are read from the single source the ROUTES use, never restated:
+
+      * `_model_cards(db, None)` already drops app-hidden testers and generators with no
+        coverage row — exactly the set `/models` links to and `/models/{slug}` serves.
+      * A modality board is listed only if some visible generator carries that paradigm. That
+        covers the app-hidden paradigms for free (no visible generator has one) and, separately,
+        keeps the reserved-but-unused names — video, texturing, sketch — out: their boards
+        render empty, and advertising empty pages is thin content, not coverage.
+
+    Global scope (`k_ids=None`) on purpose: a sitemap is not viewed through a kingdom filter.
+    This costs one `_model_cards` pass, the same work `/models` does; the sitemap is fetched
+    rarely enough that sharing the route's own query beats a faster copy that can drift.
+    """
+    cards = _model_cards(db, None)
+    paths = [f"/models/{c['slug']}" for c in cards if c["slug"]]
+    populated = {c["paradigm"] for c in cards if c["paradigm"]}
+    paths += [f"/leaderboard/{p}" for p in paradigms.PARADIGMS if p in populated]
+    # Organism pages come from the same index the /organisms hub renders, so a page that exists
+    # is declared and one that does not cannot be.
+    paths += [f"/organisms/{o['slug']}" for o in organisms.organism_index(db)]
+    return paths
+
+
 @app.get("/sitemap.xml")
-def sitemap_xml():
-    urls = "".join(f"<url><loc>{config.PUBLIC_BASE_URL}{p}</loc></url>" for p in _SITEMAP_PATHS)
+def sitemap_xml(db: Session = Depends(get_db)):
+    # Escaped because the dynamic half interpolates generator slugs, and nothing in the schema
+    # keeps a slug free of `&` or `<`. An unescaped one does not cost you its own entry — it
+    # makes the whole document unparseable, so every URL in it goes unread.
+    paths = list(_SITEMAP_PATHS) + _sitemap_content_paths(db)
+    urls = "".join(f"<url><loc>{xml_escape(config.PUBLIC_BASE_URL + p)}</loc></url>" for p in paths)
     body = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
@@ -2085,6 +2124,55 @@ def model_detail(slug: str, request: Request, db: Session = Depends(get_db)):
     )
 
 
+@app.get("/organisms", response_class=HTMLResponse)
+def organisms_index(request: Request, db: Session = Depends(get_db)):
+    """The corpus indexed by subject. Also the crawl hub for the detail pages: a crawler that
+    never fetches the sitemap still reaches every organism by following links from here."""
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
+    rows = organisms.organism_index(db)
+    grouped = []
+    for kingdom in ("plants", "fungi", "animals", "all"):
+        group = [r for r in rows if r["kingdom"] == kingdom]
+        if group:
+            grouped.append(
+                (
+                    {
+                        "label": kingdoms.KINGDOM_LABEL.get(kingdom, kingdom),
+                        "emoji": kingdoms.KINGDOM_EMOJI.get(kingdom, kingdoms.KINGDOM_EMOJI["all"]),
+                    },
+                    group,
+                )
+            )
+    return templates.TemplateResponse(request, "organisms_index.html", {"grouped": grouped})
+
+
+@app.get("/organisms/{slug}", response_class=HTMLResponse)
+def organism_page(slug: str, request: Request, db: Session = Depends(get_db)):
+    """One organism, every task set on it and every model that attempted it.
+
+    NOT kingdom-scoped: an organism page is about that organism, and rendering it differently
+    according to whichever kingdom filter the visitor happens to be carrying would give one URL
+    two bodies — which is the shape a crawler reads as unstable content.
+    """
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
+    org = organisms.build_organism(db, slug)
+    if org is None:
+        raise HTTPException(404, "Unknown organism")
+    return templates.TemplateResponse(
+        request,
+        "organism.html",
+        {
+            "org": org,
+            "description": organisms.meta_description(org),
+            "breadcrumbs": organisms.breadcrumbs(org, config.PUBLIC_BASE_URL),
+        },
+    )
+
+
 @app.get("/dataset", response_class=HTMLResponse)
 def dataset_page(request: Request, db: Session = Depends(get_db)):
     roadmap = _roadmap_or_none(request, db)
@@ -2395,11 +2483,19 @@ def tasks_page(request: Request, db: Session = Depends(get_db)):
             return "Multiple"
         return "—"
 
+    # Organisms that actually HAVE a page. This catalog lists retired tasks alongside live ones
+    # (see the `active` field below) but an organism page is built from the LIVE corpus only, so
+    # linking every row's subject unconditionally invents links to pages that do not exist —
+    # `cucurbita-pepo` (the de-corpused pumpkin) and `hordeum-vulgare` on the real corpus.
+    # Reading the set the /organisms hub renders means the link exists iff its target does.
+    linkable_organisms = {o["slug"] for o in organisms.organism_index(db)}
+
     rows = []
     for t in tasks:
         cat = t.category
         kingdom = kingdoms.KINGDOM_OF.get(cat.slug, "all")
         species_name = species_by_task.get(t.id) or ""
+        organism_slug = organisms.url_slug(organisms.binomial_of_title(t.title))
         rows.append(
             {
                 "id": t.id,
@@ -2410,6 +2506,10 @@ def tasks_page(request: Request, db: Session = Depends(get_db)):
                 "active": t.active,
                 "kingdom_emoji": kingdoms.KINGDOM_EMOJI.get(kingdom, kingdoms.KINGDOM_EMOJI["all"]),
                 "species_name": species_name,
+                # Derived from the title, not from `species_by_task`: only 5 of the 20 active
+                # tasks carry a ReconTask row, so keying the link off that would leave three
+                # quarters of the catalog unlinked. None when the organism has no live page.
+                "organism_slug": organism_slug if organism_slug in linkable_organisms else None,
                 "paradigm": _paradigm_label(t),
                 "tier": tier_by_task.get(t.id),
                 "votes": vote_counts.get(t.id, 0),

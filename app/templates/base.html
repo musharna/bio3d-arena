@@ -53,6 +53,9 @@
          the renderer off data-dense pages (leaderboard, models, methodology, …). -->
     {% block viewer_assets %}{% endblock %}
     <script defer src="{{ asset('shell.js') }}"></script>
+    {# Per-page <head> additions — currently structured data. Kept as an opt-in block so a page
+       contributes markup only when it has something true to declare about itself. #}
+    {% block head_extra %}{% endblock %}
   </head>
   <body>
     {% set path = request.url.path %} {% set kingdom = request.state.kingdom |

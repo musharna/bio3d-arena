@@ -45,9 +45,14 @@
           {% for t in tasks %}
           <tr>
             <td class="num mono">T-{{ "%02d"|format(loop.index) }}</td>
+            {# The subject links to its organism page — the contextual link that makes those
+               pages reachable (and tells a crawler what they are about) without a sitemap fetch.
+               Unlinked when the organism has no live page: a retired task still appears here,
+               and a link to a 404 is worse than no link. #}
             <td class="gen">
               <span aria-hidden="true">{{ t.kingdom_emoji }}</span>
-              {% if t.species_name %}<i>{{ t.species_name }}</i>{% else %}{{ t.title }}{% endif %}
+              {% set label %}{% if t.species_name %}<i>{{ t.species_name }}</i>{% else %}{{ t.title }}{% endif %}{% endset %}
+              {% if t.organism_slug %}<a href="/organisms/{{ t.organism_slug }}">{{ label }}</a>{% else %}{{ label }}{% endif %}
             </td>
             <td class="subtle">{{ t.paradigm }}</td>
             <td>

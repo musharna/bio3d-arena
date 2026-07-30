@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Organisms · Bio 3D Arena{% endblock %}
+{% block description %}Every organism in the Bio 3D Arena corpus — plants, fungi and animals — with the AI-generated 3D reconstructions each has drawn and the reference photographs they are judged against.{% endblock %}
+{% block content %}
+<section class="board">
+  <header class="b3d-page-head">
+    <h1>Organisms</h1>
+    <p class="b3d-page-lede">
+      The corpus by subject rather than by model. Each organism collects every task set on it,
+      every model that attempted it, and the reference photographs of the real thing that those
+      models are judged against.
+    </p>
+  </header>
+
+  {% for kingdom, group in grouped %}
+  <div class="b3d-section-head">
+    <h2>{{ kingdom.emoji }} {{ kingdom.label }}</h2>
+    <span class="b3d-section-head-note">{{ group|length }} organism{{ "" if group|length == 1 else "s" }}</span>
+  </div>
+  <div class="ranktable-wrap">
+    <table class="ranktable">
+      <thead>
+        <tr>
+          <th>Organism</th>
+          <th class="num">Tasks</th>
+          <th class="num">3D outputs</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in group %}
+        <tr>
+          <td><a href="/organisms/{{ o.slug }}"><em>{{ o.binomial }}</em></a></td>
+          <td class="num mono">{{ o.n_tasks }}</td>
+          <td class="num mono">{{ o.n_outputs }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+</section>
+{% endblock %}
