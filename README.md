@@ -1,17 +1,35 @@
 # 🧬 Bio 3D Arena
 
-A public, [Chatbot-Arena](https://lmarena.ai/)-style platform for **anonymous
-pairwise comparison and voting on biological 3D model generations**. Users see a
-biological task and two anonymous 3D outputs side-by-side, inspect/rotate/zoom
-both, and vote for the better one. Votes feed Elo + Bradley–Terry rankings and
-public leaderboards for the underlying generators.
+**Live: [bio3d-arena.fly.dev](https://bio3d-arena.fly.dev)** · [MIT](LICENSE) · [How to cite](CITATION.cff)
 
-Built to grow into (1) a community benchmark platform for biological 3D
-generation, (2) a repository of biological 3D assets + benchmark tasks, and
-(3) a research platform for evaluating biological realism, morphology,
-structural accuracy, visual quality, and scientific usefulness.
+A [Chatbot-Arena](https://lmarena.ai/)-style platform for **anonymous pairwise
+comparison of generative 3D models — of living organisms**. You see a biological
+task and two anonymised 3D outputs side by side, rotate and zoom both, and vote
+for the better one. Votes feed Elo + Bradley–Terry rankings with bootstrap
+confidence intervals.
 
-> MVP status: end-to-end working prototype. Functionality over polish.
+**Why organisms.** Most 3D-generation evaluation runs on furniture and game props,
+where "looks plausible" is close enough. A maize plant, a lion's mane mushroom and
+a monarch butterfly are harder targets: self-similar branching structure, thin
+surfaces, heavy self-occlusion, and a correctness criterion that is anatomical
+rather than aesthetic. Every comparison is shown alongside CC-licensed reference
+photographs of the real organism, so the question put to the voter is biological
+fidelity, not taste.
+
+### What's in it
+
+|           |                                                                                                           |
+| --------- | --------------------------------------------------------------------------------------------------------- |
+| Tasks     | 20 active, spanning plants, fungi and animals                                                             |
+| Outputs   | 502 votable 3D models from 54 entrants                                                                    |
+| Paradigms | single-image reconstruction · text→3D · LLM-authored procedural geometry · agentic render→critique→revise |
+| Ranking   | Bradley–Terry (MM) with bootstrap 95% CIs; CI-grouped ranks                                               |
+
+> **Status: live, and deliberately unranked.** The leaderboard refuses to rank a
+> generator that lacks enough comparisons, rather than printing a confident number
+> built on a handful of votes. At the time of writing no entrant has cleared that
+> bar. Votes are the only thing that changes it — which is the honest reason to
+> [try it](https://bio3d-arena.fly.dev/arena).
 
 ## Features
 
@@ -42,9 +60,10 @@ structural accuracy, visual quality, and scientific usefulness.
 
 ## Architecture
 
-Single FastAPI app, server-rendered (Jinja2) + vanilla JS, SQLite via SQLAlchemy,
-3D rendered client-side. One Docker container + a mounted volume for the DB and
-asset blobs. See [`docs/superpowers/specs/2026-06-20-bio3d-arena-design.md`](docs/superpowers/specs/2026-06-20-bio3d-arena-design.md)
+Single FastAPI app, server-rendered (Jinja2) + vanilla JS, SQLAlchemy over SQLite
+(dev) or Postgres (deployed), 3D rendered client-side. One Docker container; asset
+blobs on local disk or S3-compatible object storage. The live instance runs on
+Fly.io with Neon Postgres and Cloudflare R2 — see [`deploy/README.md`](deploy/README.md). See [`docs/superpowers/specs/2026-06-20-bio3d-arena-design.md`](docs/superpowers/specs/2026-06-20-bio3d-arena-design.md)
 for the full design (data model, ranking methodology, deployment, roadmap).
 
 ```
@@ -174,7 +193,7 @@ docker run -p 8000:8000 -e BIO3D_ADMIN_TOKEN=... -v $PWD/data:/data bio3d-arena
 ## Tests
 
 ```bash
-pytest -q        # ranking…integrity + scale-out seams (68 tests)
+pytest -q        # ranking, vote integrity, licensing gates, scale-out seams (~1,460 tests)
 ```
 
 ## Supported 3D formats
@@ -186,6 +205,43 @@ pytest -q        # ranking…integrity + scale-out seams (68 tests)
 | SDF / MOL   | 3Dmol.js         | small-molecule connection tables — preserves bond orders and stereo; unlocks docking poses, conformer sets (GEOM), and SBDD outputs natively. Do **not** convert SDF→PDB (drops bonds/stereo). |
 
 Point-cloud, voxel, and Gaussian-splat formats are planned (see `docs/audits/`).
+
+## License
+
+The **code** in this repository is MIT-licensed — see [LICENSE](LICENSE).
+
+The **corpus is not in this repository.** `data/` is gitignored; what you are cloning
+is the arena software, its tests and its documentation. That distinction is
+deliberate, because the corpus is not uniformly redistributable:
+
+- **Generated 3D outputs** carry the terms of whichever model produced them. Some are
+  freely redistributable (MIT-licensed generators such as TRELLIS, TripoSR and
+  PartCrafter; outputs authored by LLMs whose terms assign output to the caller).
+  Others are **display-only** — several hosted closed models grant the right to use
+  and show an output but no redistribution grant. The arena shows those and does not
+  offer them for download.
+- **Reference photographs and ground-truth scans** are Creative-Commons only, with
+  per-photo attribution recorded in each gallery manifest and rendered as the credit
+  line beside the image. Share-alike photos are included and carry their attribution;
+  non-commercial and no-derivatives licenses are excluded outright.
+
+One list answers "may we redistribute this?" — `REDISTRIBUTABLE_LICENSES` in
+[`app/licensing.py`](app/licensing.py). Export runs in one of two postures, _display_
+or _redistribute_, and `filter_include_for_posture` in
+[`app/public_export.py`](app/public_export.py) drops anything the posture does not
+clear. Do not re-declare that list elsewhere; it has drifted before.
+
+This is a description of how the project handles licensing, not legal advice.
+
+## Citing
+
+[`CITATION.cff`](CITATION.cff) — GitHub renders a "Cite this repository" button from it.
+
+## Acknowledgements
+
+Reference imagery comes from [iNaturalist](https://www.inaturalist.org/) observers and
+[Wikimedia Commons](https://commons.wikimedia.org/) contributors under Creative Commons
+licenses; each photograph's author is credited in the interface beside the image.
 
 ## Loading benchmark content
 
