@@ -14,7 +14,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable
 
 from sqlalchemy import delete, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from . import config, kingdoms, matchmaking, paradigms, ranking
 from .calibration import cohens_kappa
@@ -339,11 +339,80 @@ def _matches_for_scope(
     verified_only=True further restricts to votes from a session with a linked
     User (VoterSession.user_id set) — the "verified-only" leaderboard scope.
     """
+    rows = _scope_rows(
+        db,
+        criterion_id,
+        category_id,
+        verified_only=verified_only,
+        category_ids=category_ids,
+    )
+    matches: list[tuple[int, int]] = []
+    groups: list[int] = []
+    for gen_a, gen_b, winner, gkey in rows:
+        if winner == "a":
+            matches.append((gen_a, gen_b))
+            groups.append(gkey)
+        elif winner == "b":
+            matches.append((gen_b, gen_a))
+            groups.append(gkey)
+        elif winner == "tie" and include_ties:
+            matches.append((gen_a, gen_b))
+            groups.append(gkey)
+            matches.append((gen_b, gen_a))
+            groups.append(gkey)
+    return matches, groups
+
+
+def _scope_rows(
+    db: Session,
+    criterion_id: int,
+    category_id: int | None = None,
+    *,
+    verified_only: bool = False,
+    category_ids: set[int] | None = None,
+) -> list[tuple[int, int, str, int]]:
+    """(generator_a, generator_b, winner, bootstrap_group_key) for every ADMISSIBLE vote in a
+    scope — one row per comparison, before any tie is split.
+
+    This is the shared scan behind `_matches_for_scope` and `head_to_head_record`, and it is
+    ONE query. It used to be one query plus four per vote: the loop resolved each comparison's
+    two outputs and their two generators with `db.get`, which an in-process SQLite session
+    makes look free and Postgres charges a network round trip for. Measured on the public
+    instance, `/models/{slug}` spent 23 seconds here — 2079 statements for a page whose other
+    components cost 34 — because `head_to_head_record` ran the whole thing twice on top.
+
+    The outputs and generators are joined in rather than fetched per row, so the cost is flat
+    in the number of votes. Both output joins are OUTER: a comparison whose output was deleted
+    must be skipped, not raise, and real databases carry those (see the 2026-06-29 dangling
+    calibration_pair sweep).
+
+    One deliberate behaviour change, in the safe direction: an output whose GENERATOR row is
+    missing used to raise (the old code read `.paradigm` off a `db.get` that returned None) and
+    is now skipped like any other dangling row. FK enforcement (PRAGMA foreign_keys=ON, merged
+    2026-07-27) makes that state unreachable going forward; skipping is what the surrounding
+    code already does for every other broken reference. Output is otherwise identical — checked
+    row-for-row, order included, across all 112 (criterion x kingdom x ties x verified) scopes
+    of the real corpus.
+    """
+    out_a, out_b = aliased(ModelOutput), aliased(ModelOutput)
+    gen_a, gen_b = aliased(Generator), aliased(Generator)
     # Exclude gold attention-check comparisons, and (left outer join) any vote from
     # a session whose trust has fallen below TRUST_THRESHOLD — anti-abuse gating.
     stmt = (
-        select(Vote, Comparison)
+        select(
+            Vote.winner,
+            Comparison.id,
+            Comparison.ballot_id,
+            gen_a.id,
+            gen_a.paradigm,
+            gen_b.id,
+            gen_b.paradigm,
+        )
         .join(Comparison, Vote.comparison_id == Comparison.id)
+        .outerjoin(out_a, Comparison.output_a_id == out_a.id)
+        .outerjoin(out_b, Comparison.output_b_id == out_b.id)
+        .outerjoin(gen_a, out_a.generator_id == gen_a.id)
+        .outerjoin(gen_b, out_b.generator_id == gen_b.id)
         .outerjoin(VoterSession, VoterSession.session_id == Vote.session_id)
         .where(
             Comparison.criterion_id == criterion_id,
@@ -360,21 +429,22 @@ def _matches_for_scope(
     elif category_id is not None:
         stmt = stmt.join(Task, Comparison.task_id == Task.id).where(Task.category_id == category_id)
 
+    # Vote id order: the previous implementation had no ORDER BY and took whatever the driver
+    # returned, which was vote insertion order in practice. Pinned explicitly because the
+    # bootstrap resamples this list against a seeded RNG (app/ranking.py::_bootstrap_scores) —
+    # reordering it would silently move every published confidence interval.
+    stmt = stmt.order_by(Vote.id)
+
     ref_gens = mode_a_excluded_generator_ids(db)
-    matches: list[tuple[int, int]] = []
-    groups: list[int] = []
-    for vote, comparison in db.execute(stmt).all():
-        if vote.winner == "bad":
+    rows: list[tuple[int, int, str, int]] = []
+    for winner, comp_id, ballot_id, a_id, a_par, b_id, b_par in db.execute(stmt).all():
+        if winner == "bad":
             continue
-        out_a = db.get(ModelOutput, comparison.output_a_id)
-        out_b = db.get(ModelOutput, comparison.output_b_id)
-        if out_a is None or out_b is None:
+        if a_id is None or b_id is None:
             continue  # dangling vote (output deleted) — not a valid comparison
-        gen_a = out_a.generator_id
-        gen_b = out_b.generator_id
-        if gen_a in ref_gens or gen_b in ref_gens:
+        if a_id in ref_gens or b_id in ref_gens:
             continue  # GT/reference scans are not perceptual competitors (Mode-A exclusion)
-        if gen_a == gen_b:
+        if a_id == b_id:
             # Both outputs came from the SAME generator ("TRELLIS vs TRELLIS"). Matchmaking now
             # refuses to serve such a pair, but historic comparisons already carry real votes.
             # A (G, G) match is a model beating itself: meaningless as a preference signal and
@@ -382,24 +452,13 @@ def _matches_for_scope(
             # the DB (audit trail) — they are just inert here. The same_paradigm() guard below
             # can't catch this: same_paradigm(p, p) is trivially true.
             continue
-        if not same_paradigm(db.get(Generator, gen_a).paradigm, db.get(Generator, gen_b).paradigm):
+        if not same_paradigm(a_par, b_par):
             continue  # never rank across paradigms
         # Ballot-group key: comparisons derived from one K-wise ballot share ballot_id, so
         # their bootstrap resamples move together (not independently). Native pairwise votes
         # (ballot_id is None) each get a unique negative key — a singleton group.
-        gkey = comparison.ballot_id if comparison.ballot_id is not None else -comparison.id
-        if vote.winner == "a":
-            matches.append((gen_a, gen_b))
-            groups.append(gkey)
-        elif vote.winner == "b":
-            matches.append((gen_b, gen_a))
-            groups.append(gkey)
-        elif vote.winner == "tie" and include_ties:
-            matches.append((gen_a, gen_b))
-            groups.append(gkey)
-            matches.append((gen_b, gen_a))
-            groups.append(gkey)
-    return matches, groups
+        rows.append((a_id, b_id, winner, ballot_id if ballot_id is not None else -comp_id))
+    return rows
 
 
 def head_to_head_record(
@@ -429,8 +488,11 @@ def head_to_head_record(
     crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
     if crit is None:
         return []
-    decisive, _ = _matches_for_scope(db, crit.id, category_ids=category_ids, include_ties=False)
-    with_ties, _ = _matches_for_scope(db, crit.id, category_ids=category_ids, include_ties=True)
+    # ONE scan. This used to call _matches_for_scope twice over the same scope — once
+    # decisive-only, once with ties — which doubled the cost of the most expensive query on
+    # the page for two views of identical rows. The split-tie form is derivable from the
+    # per-comparison rows, so it is derived here instead of re-read.
+    rows = _scope_rows(db, crit.id, category_ids=category_ids)
 
     def _tally(matches: list[tuple[int, int]]) -> dict[int, dict]:
         t: dict[int, dict] = {}
@@ -444,6 +506,19 @@ def head_to_head_record(
                 t.setdefault(winner, {"wins": 0, "losses": 0})
                 t[winner]["losses"] += 1
         return t
+
+    decisive: list[tuple[int, int]] = []
+    with_ties: list[tuple[int, int]] = []
+    for gen_a, gen_b, winner, _gkey in rows:
+        if winner == "a":
+            decisive.append((gen_a, gen_b))
+            with_ties.append((gen_a, gen_b))
+        elif winner == "b":
+            decisive.append((gen_b, gen_a))
+            with_ties.append((gen_b, gen_a))
+        elif winner == "tie":
+            with_ties.append((gen_a, gen_b))
+            with_ties.append((gen_b, gen_a))
 
     decisive_tally = _tally(decisive)
     all_tally = _tally(with_ties)
