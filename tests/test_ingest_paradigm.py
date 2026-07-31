@@ -25,7 +25,7 @@ import trimesh
 
 from app import config, ingest
 from app.database import SessionLocal, init_db
-from app.models import Category, Generator, Task
+from app.models import Category, Generator, ModelOutput, Task
 
 
 def setup_module(_m):
@@ -174,6 +174,86 @@ def test_healing_never_overwrites_a_deliberate_paradigm():
 
         gen = db.query(Generator).filter_by(slug="paradigm-deliberate").first()
         assert gen.paradigm == first, "an existing, deliberate paradigm was overwritten"
+    finally:
+        db.rollback()
+        db.close()
+
+
+def test_a_recognisable_slug_is_classified_without_the_caller_saying_anything():
+    """The reason the ~19 existing call sites did not need editing.
+
+    paradigms.classify_paradigm resolves plenty of slugs on keyword rules alone, so wiring it
+    into register_output classifies those callers where they stand. The alternative -- a
+    paradigm hardcoded at every call site -- would copy that rule table N times and let the
+    copies drift, which is the failure this repo already has a canonical module to avoid.
+    """
+    db = SessionLocal()
+    try:
+        task = _task(db, "Classified By Slug")
+        ingest.register_output(
+            db,
+            task_id=task.id,
+            generator_slug="acme-trellis-v2",  # "trellis" -> image_recon, by slug alone
+            data=_glb(),
+            ext="glb",
+            title="classified by slug",
+        )
+        db.flush()
+        gen = db.query(Generator).filter_by(slug="acme-trellis-v2").first()
+        assert gen.paradigm == "image_recon"
+    finally:
+        db.rollback()
+        db.close()
+
+
+def test_a_source_prefix_classifies_what_the_slug_cannot():
+    """Source beats slug, and reaches slugs no keyword matches.
+
+    Callers used to assign `out.source` AFTER register_output returned, so the classifier
+    never saw it at the moment the generator was created. Passing it in is what makes the
+    prefix rules ("api:text:", "procedural:", "found:", "scan:") usable at ingest.
+    """
+    db = SessionLocal()
+    try:
+        task = _task(db, "Classified By Source")
+        ingest.register_output(
+            db,
+            task_id=task.id,
+            generator_slug="acme-unknown-gen",  # no keyword rule matches this
+            data=_glb(),
+            ext="glb",
+            title="classified by source",
+            source="api:text:acme",
+        )
+        db.flush()
+        gen = db.query(Generator).filter_by(slug="acme-unknown-gen").first()
+        assert gen.paradigm == "text_native"
+        out = db.query(ModelOutput).filter_by(generator_id=gen.id).first()
+        assert out.source == "api:text:acme", "source must be persisted, not just classified"
+    finally:
+        db.rollback()
+        db.close()
+
+
+def test_an_explicit_paradigm_beats_the_classifier():
+    """The override exists for slugs the rules resolve WRONGLY, so it has to win. If the
+    classifier took precedence, a caller correcting a misclassification would have no way to
+    do it short of renaming the generator."""
+    db = SessionLocal()
+    try:
+        task = _task(db, "Explicit Beats Classifier")
+        ingest.register_output(
+            db,
+            task_id=task.id,
+            generator_slug="acme-trellis-v3",  # slug alone would say image_recon
+            data=_glb(),
+            ext="glb",
+            title="explicit override",
+            paradigm="text_native",
+        )
+        db.flush()
+        gen = db.query(Generator).filter_by(slug="acme-trellis-v3").first()
+        assert gen.paradigm == "text_native"
     finally:
         db.rollback()
         db.close()
