@@ -20,7 +20,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import config
+from . import config, paradigms
 from .models import Category, Generator, ModelOutput, Task
 from .storage import get_storage
 
@@ -218,24 +218,46 @@ def register_output(
     meta: dict | None = None,
     generator_name: str | None = None,
     paradigm: str | None = None,
+    source: str | None = None,
 ) -> tuple[ModelOutput, bool]:
     """Validate + store a generator's 3D asset for a task. Returns (output, created).
 
     Idempotent within a (task, generator): re-posting identical bytes returns the
     existing output instead of duplicating it.
 
-    `paradigm` names what KIND of entrant this is, and is forwarded to upsert_generator.
-    It matters because the arena vote pool is an allowlist over paradigms: until this
-    parameter existed, every generator whose first appearance was an ingest got a NULL
-    paradigm and could never be served for voting, and the warning upsert_generator raised
-    told callers to "pass paradigm=" through a signature that had no such parameter. There
-    is no default because this is the generic registration path — a recon bake-off, a
-    text-to-3D run and a procedural sweep all arrive here, and guessing one for all of them
-    is how the wrong roster gets populated silently. The creator states what it knows.
+    `source` is the provenance prefix this asset arrived by ("procedural:blender",
+    "api:text:meshy", "found:sketchfab", …). Pass it here rather than assigning
+    `out.source` after the call: paradigms.classify_paradigm keys off exactly these
+    prefixes, so setting it afterwards means the generator is created, classified as
+    nothing, and left off the arena vote roster until somebody remembers to run
+    backfill_paradigms.
+
+    `paradigm` is the override for when the caller knows better than the classifier —
+    a slug the rules cannot resolve, or a deliberate re-tag. Prefer `source`: the
+    classifier is the single place these rules live, and a paradigm hardcoded at each
+    call site is that table copied N times, drifting independently.
+
+    Neither is defaulted. This is the generic registration path — a recon bake-off, a
+    text-to-3D run and a procedural sweep all arrive here, and guessing one for all of
+    them is how the wrong board gets populated silently.
     """
     task = db.get(Task, task_id)
     if task is None:
         raise IngestError(f"Unknown task_id {task_id}.")
+    if paradigm is None:
+        # The canonical rules, not a local copy of them — and attempted for EVERY caller,
+        # not only those that pass a source. classify_paradigm resolves a good share of
+        # slugs on keyword rules alone ("lpy", "infinigen", "helios", "sketchfab",
+        # "trellis", "recon", "scan", …), so the ~19 existing call sites that state
+        # nothing get classified without being touched. A source, when given, is stronger:
+        # its prefix rules take priority and catch what the slug cannot.
+        #
+        # Returns None when nothing matches, which leaves the generator blank exactly as
+        # before. Unclassifiable is not the same as wrong: backfill_paradigms still covers
+        # those, and guessing here is how the wrong board gets populated silently.
+        paradigm = paradigms.classify_paradigm(
+            generator_slug, "model", {source} if source else set()
+        )
     gen = upsert_generator(db, generator_slug, name=generator_name, paradigm=paradigm)
 
     stats = validate_3d_asset(data, ext)
@@ -269,6 +291,9 @@ def register_output(
         asset_path=str(rel).replace("\\", "/"),
         asset_format=ext.lower(),
         meta_json=json.dumps(provenance),
+        # Omitted rather than passed as None so the column default ("bio3d-arena") still
+        # applies for callers that do not state a source.
+        **({"source": source} if source else {}),
     )
     db.add(output)
     db.flush()
