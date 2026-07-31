@@ -36,7 +36,7 @@ def test_rate_limit(monkeypatch):
     integrity.reset_rate_limits()
     codes = []
     for _ in range(6):
-        nxt = client.get("/api/next").json()
+        nxt = client.get("/api/next?set=pair").json()
         r = client.post("/api/vote", json={"comparison_id": nxt["comparison_id"], "winner": "a"})
         codes.append(r.status_code)
     assert 429 in codes  # the limiter kicked in within the burst
@@ -138,10 +138,10 @@ def test_captcha_gate(monkeypatch):
     # test_captcha.py; a live provider call here would fail-close and 403 the valid leg.
     monkeypatch.setattr(integrity, "verify_captcha", lambda token, **kw: bool(token))
     integrity.reset_rate_limits()
-    nxt = client.get("/api/next").json()
+    nxt = client.get("/api/next?set=pair").json()
     blocked = client.post("/api/vote", json={"comparison_id": nxt["comparison_id"], "winner": "a"})
     assert blocked.status_code == 403
-    nxt2 = client.get("/api/next").json()
+    nxt2 = client.get("/api/next?set=pair").json()
     ok = client.post(
         "/api/vote",
         json={"comparison_id": nxt2["comparison_id"], "winner": "a"},

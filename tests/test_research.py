@@ -39,7 +39,8 @@ def test_meta_marks_empty_domains_coming_soon():
 
 
 def test_next_honors_criterion_and_category():
-    data = client.get("/api/next?criterion=realism&category=plants").json()
+    # ?set=pair: only the 2-up payload carries task.category, and this asserts on it.
+    data = client.get("/api/next?criterion=realism&category=plants&set=pair").json()
     assert data["criterion"]["slug"] == "realism"
     assert data["task"]["category"] == "Plants"
 
@@ -54,7 +55,7 @@ def test_sliced_leaderboard_and_export():
     random.seed(20260620)
     # Cast scoped votes (flowers × realism), including a tie.
     for i in range(14):
-        nxt = client.get("/api/next?criterion=realism&category=plants").json()
+        nxt = client.get("/api/next?criterion=realism&category=plants&set=pair").json()
         winner = "tie" if i == 0 else ("a" if i % 2 else "b")
         client.post(
             "/api/vote?criterion=realism&category=plants",

@@ -448,6 +448,17 @@ def _vote_pool_predicate(db: Session):
     return excluded
 
 
+def _criterion_or_default(db: Session, criterion_slug: str | None) -> Criterion:
+    """Resolve a criterion slug, falling back to the default when absent or unknown."""
+    if criterion_slug:
+        crit = (
+            db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+        )
+        if crit is not None:
+            return crit
+    return _default_criterion(db)
+
+
 def _build_gold_comparison(db: Session, session_id: str, crit: Criterion) -> dict | None:
     """Build a gold attention-check comparison (good vs decoy) with a known answer."""
     gp = matchmaking.pick_gold_pair(db)
@@ -490,20 +501,12 @@ def _build_comparison(
     category_slug: str | None = None,
     kingdom: str = "all",
 ) -> dict | None:
-    """Pick a task + pair (or inject a gold check), persist it, return anon payload."""
-    crit = None
-    if criterion_slug:
-        crit = (
-            db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
-        )
-    if crit is None:
-        crit = _default_criterion(db)
+    """Pick a task + pair, persist it, return anon payload.
 
-    # Occasionally serve a gold attention check instead of a real comparison.
-    if random.random() < config.GOLD_RATE:
-        gold = _build_gold_comparison(db, session_id, crit)
-        if gold is not None:
-            return gold
+    Gold attention checks are NOT injected here — see `_build_ballot`, which owns that decision
+    for every ballot shape.
+    """
+    crit = _criterion_or_default(db, criterion_slug)
 
     category_id = _resolve_category_id(db, category_slug)
 
@@ -558,13 +561,7 @@ def _build_kwise_comparison(
     import json as _json
     import random as _random
 
-    crit = None
-    if criterion_slug:
-        crit = (
-            db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
-        )
-    if crit is None:
-        crit = _default_criterion(db)
+    crit = _criterion_or_default(db, criterion_slug)
 
     category_id = _resolve_category_id(db, category_slug)
     _vote_excluded = _vote_pool_predicate(db)
@@ -593,7 +590,16 @@ def _build_kwise_comparison(
         return {
             "kind": "kwise",
             "ballot_id": ballot.id,
-            "task": {"id": task.id, "title": task.title, "prompt": task.prompt},
+            "task": {
+                "id": task.id,
+                "title": task.title,
+                "prompt": task.prompt,
+                # Same reference photos the 2-up ballot serves. Fidelity against a real organism
+                # is what this board measures, so the reference has to be on screen for EVERY
+                # ballot shape — omitting it here would have made the default ballot a beauty
+                # contest the moment k-wise stopped being opt-in.
+                "references": service.reference_images_for_task(db, task),
+            },
             "criterion": {"slug": crit.slug, "name": crit.name},
             "outputs": [_serialize_output(o) for o in quad],
         }
@@ -650,6 +656,61 @@ def _build_calibration_comparison(db: Session, session_id: str) -> dict | None:
     payload["set"] = "calibration"
     payload["progress"] = progress
     return payload
+
+
+#: `?set=` values that route to a builder other than the default. Anything else — including a
+#: typo — falls through to the default, which always serves *something* rather than 404ing on a
+#: malformed URL.
+BALLOT_MODE_PAIR = "pair"
+BALLOT_MODE_KWISE = "kwise"
+BALLOT_MODE_CALIBRATION = "calibration"
+
+
+def _build_ballot(
+    db: Session,
+    session_id: str,
+    criterion_slug: str | None = None,
+    category_slug: str | None = None,
+    *,
+    kingdom: str = "all",
+    mode: str | None = None,
+) -> dict | None:
+    """The ONE definition of "what ballot comes next", shared by /api/next and the follow-up
+    `next` embedded in the /api/vote and /api/kvote responses.
+
+    The default is K-WISE, which is not a preference for 4-up so much as a preference for the
+    largest ballot the task can support: `_build_kwise_comparison` degrades to a pairwise
+    comparison whenever no task has four admitted same-paradigm outputs from four distinct
+    generators. A pair yields one Bradley-Terry relation; a quad yields three. Human votes are
+    the scarce input on every board, so serving a pair where a quad exists discards two thirds
+    of what the voter just told us.
+
+    `?set=pair` is the explicit opt-out, and the reason this routing is centralized: /api/vote
+    used to build its follow-up with the pairwise builder unconditionally. With a k-wise default
+    that hardcoding becomes a trap — one pairwise ballot (the degrade, or an explicit opt-out)
+    would pin the voter to pairs for the rest of the session, because every follow-up came from
+    the pairwise builder regardless of what was available. The same divergence between two
+    copies of one decision already caused a live bug here once (see `_vote_pool_predicate`).
+    """
+    if mode == BALLOT_MODE_CALIBRATION:
+        # A calibration set is a fixed, fully-enumerated list of pairs; a gold check inserted
+        # into it would not belong to the set and would break its progress count.
+        return _build_calibration_comparison(db, session_id)
+
+    # Gold attention checks are a property of serving a ballot to a human, NOT of the pairwise
+    # builder that used to host them. While pairwise was the default entry point those two were
+    # indistinguishable; the moment the default changed, gold would have gone dark — the k-wise
+    # builder reaches `_build_comparison` only as a fallback, and most tasks can fill a quad, so
+    # the fallback (and with it every attention check) would almost never fire. Hoisting the
+    # injection to the routing point makes the check independent of which ballot shape follows.
+    if random.random() < config.GOLD_RATE:
+        gold = _build_gold_comparison(db, session_id, _criterion_or_default(db, criterion_slug))
+        if gold is not None:
+            return gold
+
+    if mode == BALLOT_MODE_PAIR:
+        return _build_comparison(db, session_id, criterion_slug, category_slug, kingdom=kingdom)
+    return _build_kwise_comparison(db, session_id, criterion_slug, category_slug, kingdom=kingdom)
 
 
 def _require_admin(token: str | None) -> None:
@@ -951,16 +1012,14 @@ def api_next(
     category: str | None = None,
     mode: str | None = Query(default=None, alias="set"),
 ):
-    if mode == "calibration":
-        payload = _build_calibration_comparison(db, request.state.session_id)
-    elif mode == "kwise":
-        payload = _build_kwise_comparison(
-            db, request.state.session_id, criterion, category, kingdom=request.state.kingdom
-        )
-    else:
-        payload = _build_comparison(
-            db, request.state.session_id, criterion, category, kingdom=request.state.kingdom
-        )
+    payload = _build_ballot(
+        db,
+        request.state.session_id,
+        criterion,
+        category,
+        kingdom=request.state.kingdom,
+        mode=mode,
+    )
     if payload is None:
         return JSONResponse({"error": "no-comparisons-available"}, status_code=404)
     return payload
@@ -973,6 +1032,7 @@ def api_vote(
     db: Session = Depends(get_db),
     criterion: str | None = None,
     category: str | None = None,
+    mode: str | None = Query(default=None, alias="set"),
     x_captcha_token: str | None = Header(default=None),
 ):
     sid = request.state.session_id
@@ -1009,8 +1069,10 @@ def api_vote(
     else:
         service.apply_vote(db, vote)
     db.commit()
-    # Keep the same criterion/category filter (+ active kingdom) for the follow-up comparison.
-    nxt = _build_comparison(db, sid, criterion, category, kingdom=request.state.kingdom)
+    # Keep the same criterion/category filter (+ active kingdom, + ballot mode) for the follow-up.
+    # Routed through _build_ballot so the follow-up is whatever /api/next would serve for these
+    # same params — a pairwise vote can hand back a k-wise ballot, which is the point.
+    nxt = _build_ballot(db, sid, criterion, category, kingdom=request.state.kingdom, mode=mode)
 
     # Post-vote reveal (Feature C): real generator names for the just-voted pair, ONLY for
     # non-gold comparisons — gold is an attention-check decoy, so revealing it would leak the
@@ -1037,6 +1099,7 @@ def api_kvote(
     db: Session = Depends(get_db),
     criterion: str | None = None,
     category: str | None = None,
+    mode: str | None = Query(default=None, alias="set"),
     x_captcha_token: str | None = Header(default=None),
 ):
     import json as _json
@@ -1059,7 +1122,7 @@ def api_kvote(
     service.resolve_kballot(db, ballot, kvote_in.best_output_id, sid)
     integrity.note_vote(db, sid)  # ONE rate-accounting per ballot, not per derived vote
     db.commit()
-    nxt = _build_kwise_comparison(db, sid, criterion, category, kingdom=request.state.kingdom)
+    nxt = _build_ballot(db, sid, criterion, category, kingdom=request.state.kingdom, mode=mode)
 
     # Post-vote reveal (Feature C): real generator names for every output shown in the ballot +
     # which one was picked, so the grid can label each card. K-wise never serves gold (see

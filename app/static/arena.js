@@ -61,9 +61,10 @@ const qs = () => {
   const p = new URLSearchParams();
   if (cat && cat !== "all") p.set("category", cat);
   if (crit) p.set("criterion", crit);
-  // Baseline arena is plain 1v1 pairwise (matches the design). K-wise 4-up is opt-in only:
-  // thread ?set=... from the page URL when present (e.g. ?set=kwise or ?set=calibration);
-  // with no ?set, /api/next serves a pairwise comparison.
+  // With no ?set, /api/next serves the largest ballot the task supports — a 4-up K-wise grid
+  // where one exists, a 1v1 pair where it doesn't. render() dispatches on payload.kind, so
+  // both shapes arrive through the same path. Thread ?set=... from the page URL when present
+  // (?set=pair forces 1v1, ?set=calibration runs a scoped set).
   const urlSet = new URLSearchParams(location.search).get("set");
   if (urlSet) p.set("set", urlSet);
   const s = p.toString();
@@ -107,8 +108,13 @@ async function loadNext() {
   }
 }
 
-// True when the page is in a scoped session mode (e.g. ?set=calibration).
-const inSessionMode = () => new URLSearchParams(location.search).has("set");
+// True when the page is in a SCOPED session — a fixed, fully-enumerated list of pairs with its
+// own progress/done payload, which is why the post-vote path re-fetches instead of showing the
+// reveal. Calibration is the only such set. This deliberately checks the VALUE, not merely the
+// presence of ?set: `pair` and `kwise` are ballot-shape hints for the ordinary open-ended arena,
+// and treating them as scoped sets would silently cost those voters the post-vote reveal.
+const inSessionMode = () =>
+  new URLSearchParams(location.search).get("set") === "calibration";
 
 // /api/next returned 404: the selected category+criterion has no available pairs.
 // Show an explicit in-stage empty state with a way back to "All" — never leave the
@@ -190,6 +196,34 @@ function render(data) {
   }
 }
 
+// Reference photos (what the organism actually looks like) — shown so voters judge FIDELITY
+// rather than aesthetics, which is the whole premise of the board. Hidden when a task has no
+// reference on record.
+//
+// Shared by both ballot shapes deliberately. K-wise used to hard-hide this panel, because its
+// payload carried no references at all; when k-wise became the default ballot that would have
+// silently taken the reference photo away from every voter — more votes, worse votes.
+function renderReferences(references) {
+  const refPanel = el("reference-panel");
+  const refGallery = el("reference-gallery");
+  if (!refPanel || !refGallery) return;
+  const refs = (references || []).filter((r) => r && r.url);
+  refGallery.textContent = "";
+  for (const r of refs) {
+    const img = document.createElement("img");
+    img.className = "reference-img";
+    img.src = r.url;
+    img.loading = "lazy";
+    img.alt = "Reference photo of this organism";
+    if (r.credit) img.title = r.credit; // CC attribution / "reconstruction input photo"
+    // Click to zoom: the thumbnail is cropped (object-fit:cover); the lightbox shows the
+    // full uncropped photo so a voter can actually inspect the organism.
+    img.addEventListener("click", () => openReferenceLightbox(r.url, r.credit));
+    refGallery.appendChild(img);
+  }
+  refPanel.hidden = refs.length === 0;
+}
+
 function renderPair(data) {
   setKwiseVisible(false);
   current = data;
@@ -198,29 +232,7 @@ function renderPair(data) {
   el("task-title").textContent = data.task.title;
   el("task-prompt").textContent = data.task.prompt;
   el("criterion-name").textContent = data.criterion.name;
-  // Reference photo (what the organism should look like) — shown so voters can judge fidelity,
-  // not just aesthetics. Hidden when a task has no reference on record.
-  const refPanel = el("reference-panel");
-  const refGallery = el("reference-gallery");
-  if (refPanel && refGallery) {
-    const refs = (data.task.references || []).filter((r) => r && r.url);
-    refGallery.textContent = "";
-    for (const r of refs) {
-      const img = document.createElement("img");
-      img.className = "reference-img";
-      img.src = r.url;
-      img.loading = "lazy";
-      img.alt = "Reference photo of this organism";
-      if (r.credit) img.title = r.credit; // CC attribution / "reconstruction input photo"
-      // Click to zoom: the thumbnail is cropped (object-fit:cover); the lightbox shows the
-      // full uncropped photo so a voter can actually inspect the organism.
-      img.addEventListener("click", () =>
-        openReferenceLightbox(r.url, r.credit),
-      );
-      refGallery.appendChild(img);
-    }
-    refPanel.hidden = refs.length === 0;
-  }
+  renderReferences(data.task.references);
   // Shared viewer registry (viewer.js) picks model-viewer vs 3Dmol by format. Flagging is a
   // curator-only tool: pass the ⚑ callback only on the internal instance (data-can-flag),
   // so the public deploy renders no flag button (viewer.js omits it when onFlag is falsy).
@@ -256,10 +268,7 @@ function setKwiseVisible(active) {
 function renderKwise(data) {
   current = null; // pairwise vote()/keyboard shortcuts must no-op while a K-wise ballot is shown
   setKwiseVisible(true);
-  // K-wise ballots carry no reference gallery — hide the strip thumbnail so it doesn't render as
-  // an empty circle (only 2-up pairs populate the subject thumbnail from data.task.references).
-  const kRefPanel = el("reference-panel");
-  if (kRefPanel) kRefPanel.hidden = true;
+  renderReferences(data.task.references);
   el("task-cat").textContent = "K-wise"; // kwise task payload has no `category` field
   el("task-title").textContent = data.task.title;
   el("task-prompt").textContent = data.task.prompt;

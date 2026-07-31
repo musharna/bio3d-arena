@@ -138,10 +138,11 @@
     </div>
   </div>
 
-  <!-- 4-up K-wise ballot: hidden by default (2-up pairwise is the default view); arena.js
-       shows this instead of .pair when /api/next?set=kwise returns a kind:"kwise" payload,
-       injecting 4 clickable model-col cards. Falls back to the 2-up above transparently
-       when the server has no admitted same-paradigm quad for a task. -->
+  <!-- 4-up K-wise ballot. Hidden in the markup because the 2-up above is the fallback shape,
+       NOT because it is the exceptional one: /api/next now serves a kind:"kwise" payload
+       whenever the task has an admitted same-paradigm quad, and arena.js swaps this grid in
+       (4 clickable model-col cards) in place of .pair. Tasks without a quad — and ?set=pair —
+       transparently render the 2-up above instead. -->
   <div id="kwise-grid" class="kwise-grid" hidden></div>
 
   {% include "_captcha.html" %}
