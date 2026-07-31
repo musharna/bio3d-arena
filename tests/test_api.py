@@ -26,7 +26,10 @@ def test_healthz():
 
 
 def test_next_returns_anonymized_pair():
-    r = client.get("/api/next")
+    # ?set=pair is explicit because the DEFAULT ballot is k-wise wherever a task can fill a quad.
+    # These tests are about the 2-up payload's own contract (opaque URLs, no identity leak), so
+    # they must pin the shape rather than take whatever the corpus happens to allow.
+    r = client.get("/api/next?set=pair")
     assert r.status_code == 200
     data = r.json()
     assert "comparison_id" in data
@@ -39,7 +42,7 @@ def test_next_returns_anonymized_pair():
 
 
 def test_vote_records_and_advances_and_moves_elo():
-    first = client.get("/api/next").json()
+    first = client.get("/api/next?set=pair").json()
     res = client.post("/api/vote", json={"comparison_id": first["comparison_id"], "winner": "a"})
     assert res.status_code == 200
     body = res.json()
@@ -53,7 +56,7 @@ def test_vote_records_and_advances_and_moves_elo():
 
 
 def test_double_vote_rejected():
-    first = client.get("/api/next").json()
+    first = client.get("/api/next?set=pair").json()
     cid = first["comparison_id"]
     assert client.post("/api/vote", json={"comparison_id": cid, "winner": "a"}).status_code == 200
     dup = client.post("/api/vote", json={"comparison_id": cid, "winner": "b"})
@@ -65,7 +68,7 @@ def test_leaderboard_and_recompute():
     # once (the /api/vote 409 guard); once its fresh pairs are exhausted /api/next returns 404,
     # so stop rather than KeyError — the votes cast so far are enough to populate the board.
     for _ in range(30):
-        nxt = client.get("/api/next").json()
+        nxt = client.get("/api/next?set=pair").json()
         if "comparison_id" not in nxt:
             break
         client.post("/api/vote", json={"comparison_id": nxt["comparison_id"], "winner": "a"})
@@ -106,7 +109,9 @@ def test_vote_reveal_present_for_real_comparison(monkeypatch):
     of the seeded pairing pool in earlier tests, so /api/next could 404 here otherwise."""
     monkeypatch.setattr(config, "GOLD_RATE", 0.0)
     fresh = TestClient(app)
-    nxt = fresh.get("/api/next").json()
+    # ?set=pair: the a/b reveal shape under test belongs to the 2-up ballot (k-wise reveals an
+    # `outputs` list via /api/kvote instead), and the default ballot is now k-wise.
+    nxt = fresh.get("/api/next?set=pair").json()
     res = fresh.post("/api/vote", json={"comparison_id": nxt["comparison_id"], "winner": "a"})
     assert res.status_code == 200
     reveal = res.json()["reveal"]

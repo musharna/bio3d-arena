@@ -14,7 +14,7 @@ def setup_module(_m):
 
 
 def test_next_payload_has_output_id_and_no_generator_leak():
-    data = client.get("/api/next").json()
+    data = client.get("/api/next?set=pair").json()
     assert "output_id" in data["a"] and "output_id" in data["b"]
     assert isinstance(data["a"]["output_id"], int)
     assert "generator" not in str(data).lower()  # still anonymized

@@ -58,7 +58,7 @@ def test_significance_matrix_has_colorblind_legend():
 
     random.seed(11)
     for i in range(12):
-        nxt = client.get("/api/next?criterion=overall&category=all").json()
+        nxt = client.get("/api/next?criterion=overall&category=all&set=pair").json()
         client.post(
             "/api/vote?criterion=overall&category=all",
             json={"comparison_id": nxt["comparison_id"], "winner": "a" if i % 2 else "b"},
