@@ -4,6 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}Bio 3D Arena{% endblock %}</title>
+    {# Search-engine ownership. Rendered ONLY when configured: a verification tag with an empty
+       content attribute is a malformed claim, and every dev and preview instance would ship one.
+       Tokens are issued against the operator's own Search Console / Webmaster account. #}
+    {% set gsv = google_site_verification() %}{% if gsv %}<meta name="google-site-verification" content="{{ gsv }}" />{% endif %}
+    {% set bsv = bing_site_verification() %}{% if bsv %}<meta name="msvalidate.01" content="{{ bsv }}" />{% endif %}
     {# Social / Open Graph share cards. Per-page overrides: block description / og_title / og_image. #}
     <meta
       name="description"

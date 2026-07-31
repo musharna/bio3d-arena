@@ -196,6 +196,20 @@ SITE_TAGLINE = (
     "reconstruction best matches the real thing."
 )
 OG_IMAGE_PATH = os.environ.get("BIO3D_OG_IMAGE", "/static/og-default.png")
+
+# --- search-engine submission -------------------------------------------------------------
+# All three are empty by default and every consumer treats empty as "not configured" rather
+# than emitting a blank value: an ownership <meta> with content="" is a malformed claim, and an
+# empty IndexNow key file verifies nothing (the API answers 403). Dev and preview instances
+# therefore ship none of this, which is what you want — a preview instance verifying the
+# production domain, or pinging IndexNow for URLs it does not serve, is worse than silence.
+#
+# The two verification tokens are issued against the operator's own Search Console / Webmaster
+# account, so they can only ever be configuration. IndexNow needs no account at all, which is
+# why it is the half that lives in the repo (see app/indexnow.py).
+GOOGLE_SITE_VERIFICATION = os.environ.get("BIO3D_GOOGLE_SITE_VERIFICATION", "").strip()
+BING_SITE_VERIFICATION = os.environ.get("BIO3D_BING_SITE_VERIFICATION", "").strip()
+INDEXNOW_KEY = os.environ.get("BIO3D_INDEXNOW_KEY", "").strip()
 # Set the Secure flag on session cookies.
 #
 # This used to be DERIVED from PUBLIC_BASE_URL.startswith("https://") alone, which made cookie

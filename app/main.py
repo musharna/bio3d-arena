@@ -44,6 +44,7 @@ from . import (
     ingest,
     integrity,
     kingdoms,
+    indexnow,
     matchmaking,
     og,
     organisms,
@@ -115,6 +116,10 @@ templates.env.globals["og_image_path"] = config.OG_IMAGE_PATH
 # Read live (not the value at import) so tests/deploys can toggle config.INTERNAL_PAGES_ENABLED
 # and both the route guard and the nav conditionals see the same current value.
 templates.env.globals["internal_pages"] = lambda: config.INTERNAL_PAGES_ENABLED
+# Same live-read reason: the verification tokens are set per deploy, and an instance that has
+# not been given one must render no tag at all rather than an empty ownership claim.
+templates.env.globals["google_site_verification"] = lambda: config.GOOGLE_SITE_VERIFICATION
+templates.env.globals["bing_site_verification"] = lambda: config.BING_SITE_VERIFICATION
 # Same live-read reason as above. Returns a dict rather than two globals so a template can
 # never render the widget while missing the key it needs — the two travel together.
 templates.env.globals["captcha"] = lambda: {
@@ -794,6 +799,19 @@ def robots_txt():
         "",
     ]
     return "\n".join(lines)
+
+
+@app.get(indexnow.KEY_PATH, response_class=PlainTextResponse)
+def indexnow_key_file():
+    """Proof of domain ownership for IndexNow — the file's whole content is the key.
+
+    404s when unconfigured rather than serving an empty file: an empty key file verifies
+    nothing and the API answers 403 for it, which is a confusing way to learn the key was
+    never set. See app/indexnow.py for why this is a fixed path rather than `/{key}.txt`.
+    """
+    if not config.INDEXNOW_KEY:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return config.INDEXNOW_KEY
 
 
 @app.get("/llms.txt", response_class=PlainTextResponse)

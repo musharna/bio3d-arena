@@ -120,6 +120,46 @@ filled from the host's secret store (never commit real values):
 - `BIO3D_REQUIRE_CAPTCHA=true` + `BIO3D_CAPTCHA_PROVIDER=turnstile` +
   `BIO3D_CAPTCHA_SECRET` — bot protection on public vote/submit endpoints
 - `BIO3D_RECON_SCORER_URL=` — left empty; scoring stays off on the public instance
+- `BIO3D_GOOGLE_SITE_VERIFICATION` / `BIO3D_BING_SITE_VERIFICATION` — ownership tokens from
+  Search Console / Bing Webmaster Tools. Optional; unset renders no tag at all (an ownership
+  `<meta>` with `content=""` is a malformed claim, so there is no safe default)
+- `BIO3D_INDEXNOW_KEY` — 8–128 chars of `[a-zA-Z0-9-]`; generate with
+  `python -c "from app.indexnow import generate_key; print(generate_key())"`. Serves the key
+  file at `/indexnow-key.txt`, which is how IndexNow verifies domain ownership. Unset means the
+  key file 404s and `scripts/submit_indexnow.py` refuses to run — deliberately, because the
+  alternative is a 403 from the API several steps removed from the cause
+
+## 4b. Search-engine submission (optional, after the first deploy)
+
+`robots.txt` advertises the sitemap, so a crawler that already knows the site will find it.
+These steps tell the search engines the site exists and report back on whether it worked:
+
+1. **Search Console** — add the property at `search.google.com/search-console`, choose the
+   HTML-tag method, put the token in `BIO3D_GOOGLE_SITE_VERIFICATION`, redeploy, then verify
+   and submit `/sitemap.xml`.
+2. **Bing Webmaster Tools** — `bing.com/webmasters`; it can import the Search Console property
+   directly, or use `BIO3D_BING_SITE_VERIFICATION` the same way.
+3. **IndexNow** — set `BIO3D_INDEXNOW_KEY`, redeploy, then
+   `python scripts/submit_indexnow.py --base-url https://<domain>`. One POST reaches Bing,
+   Yandex, Seznam and Naver; no account needed. Re-run after a deploy that adds or changes
+   URLs. `--dry-run` prints the payload without sending it.
+
+## 4c. Citable DOI via Zenodo (optional)
+
+**Order matters and is not recoverable:** Zenodo only mints a DOI for releases created _after_
+the GitHub integration is switched on. Enabling it later does not pick up existing releases —
+those have to be uploaded manually, oldest first.
+
+1. Sign in at `zenodo.org` with GitHub and authorise it.
+2. Under _GitHub_, flip the switch for the repository. (It must be public.)
+3. **Then** cut the release: `git tag -a v0.1.0 -m "..." && git push origin v0.1.0`, and
+   publish it on GitHub.
+4. Zenodo mints the DOI within a few minutes. Add the badge to `README.md` and the DOI to
+   `CITATION.cff`.
+
+Note what this DOIs: the **repository** — code, and the docs in it. It is not a DOI for the
+corpus, which has no public distribution yet (`/dataset` currently describes a release that is
+not downloadable). A dataset DOI is a separate, larger job.
 
 ## 5. Smoke test
 
