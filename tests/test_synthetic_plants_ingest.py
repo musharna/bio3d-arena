@@ -47,6 +47,11 @@ def test_synth_ingest_then_scoped_vote_ranks():
                 ext="glb",
                 title=f"zea_mays — {gen}",
                 meta={"synthetic": True},
+                # RECON_GENERATORS is defined as single-image->3D reconstructors, and these
+                # fal: entries carry that same identity. Without this the generators are
+                # created with a NULL paradigm, which is off config.ARENA_VOTE_PARADIGMS, so
+                # /api/next never returns a votable pair and `cast` below stays 0.
+                paradigm="image_recon",
             )
         db.commit()
         assert db.query(ModelOutput).filter(ModelOutput.task_id == task.id).count() == 2

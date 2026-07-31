@@ -160,6 +160,13 @@ def upsert_generator(
     paradigms (config.ARENA_VOTE_PARADIGMS) and a NULL paradigm is off-roster, so a generator
     created without one is ingested, displayed, and then never served for voting. That is a
     silent dead end, so it warns rather than passing quietly.
+
+    A pre-existing row with a blank paradigm is healed here, matching what
+    commission.get_or_create_generator and agentic already do. Without that, warning at
+    creation time is useless to every generator that predates its caller learning the
+    paradigm: the row is already there, so the warning never fires again and the row stays
+    off-roster forever. A row that already carries a deliberate, non-blank paradigm is left
+    alone.
     """
     gen = db.execute(select(Generator).where(Generator.slug == slug)).scalars().first()
     if gen is None:
@@ -181,8 +188,11 @@ def upsert_generator(
         )
         db.add(gen)
         db.flush()
-    elif name:
-        gen.name = name
+    else:
+        if name:
+            gen.name = name
+        if paradigm and not gen.paradigm:
+            gen.paradigm = paradigm
     return gen
 
 
@@ -207,16 +217,26 @@ def register_output(
     title: str = "",
     meta: dict | None = None,
     generator_name: str | None = None,
+    paradigm: str | None = None,
 ) -> tuple[ModelOutput, bool]:
     """Validate + store a generator's 3D asset for a task. Returns (output, created).
 
     Idempotent within a (task, generator): re-posting identical bytes returns the
     existing output instead of duplicating it.
+
+    `paradigm` names what KIND of entrant this is, and is forwarded to upsert_generator.
+    It matters because the arena vote pool is an allowlist over paradigms: until this
+    parameter existed, every generator whose first appearance was an ingest got a NULL
+    paradigm and could never be served for voting, and the warning upsert_generator raised
+    told callers to "pass paradigm=" through a signature that had no such parameter. There
+    is no default because this is the generic registration path — a recon bake-off, a
+    text-to-3D run and a procedural sweep all arrive here, and guessing one for all of them
+    is how the wrong roster gets populated silently. The creator states what it knows.
     """
     task = db.get(Task, task_id)
     if task is None:
         raise IngestError(f"Unknown task_id {task_id}.")
-    gen = upsert_generator(db, generator_slug, name=generator_name)
+    gen = upsert_generator(db, generator_slug, name=generator_name, paradigm=paradigm)
 
     stats = validate_3d_asset(data, ext)
     digest = sha256(data)
