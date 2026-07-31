@@ -279,11 +279,21 @@ def _stage(tmp_path, monkeypatch, *, compress, blobs, fake_result=None):
     return export_public._stage_assets(tmp_path, _FakeStorage(blobs), rows, compress=compress)
 
 
+def _real_glb(pad: int = 40000) -> bytes:
+    """A structurally valid GLB. The export parses containers now (texture downscaling), so a
+    `b"g" * 40000` stand-in no longer stands in for anything — it is exactly the corrupt-file
+    case, which the export is supposed to reject."""
+    return build_glb(_MINIMAL, b"\x00" * pad)
+
+
 def test_export_compresses_glbs_and_reports_the_ratio(tmp_path, monkeypatch):
-    blobs = {"uploads/a.glb": b"g" * 40000, "uploads/b.glb": b"g" * 40000}
+    blobs = {"uploads/a.glb": _real_glb(), "uploads/b.glb": _real_glb()}
     stats = _stage(tmp_path, monkeypatch, compress=True, blobs=blobs, fake_result=4000)
     assert stats["compressed"] == 2
-    assert stats["ratio"] == 10.0
+    # ~10x, not exactly: a real GLB carries a JSON chunk and 4-byte padding on top of the
+    # payload, so pinning an exact float would be pinning the fixture, not the behaviour.
+    assert 9.5 < stats["ratio"] < 10.5
+    assert stats["ratio"] == pytest.approx(stats["bytes_before"] / stats["bytes_after"], rel=1e-3)
     for rel in blobs:
         assert (tmp_path / "assets" / rel).stat().st_size == 4000, "bundle kept the original"
 
@@ -291,7 +301,7 @@ def test_export_compresses_glbs_and_reports_the_ratio(tmp_path, monkeypatch):
 def test_export_leaves_non_glb_assets_alone(tmp_path, monkeypatch):
     """A .ply point cloud or a reference JPEG must reach the bundle untouched — Draco would
     either fail or silently produce something the viewer for that format cannot read."""
-    blobs = {"uploads/cloud.ply": b"p" * 5000, "uploads/m.glb": b"g" * 40000}
+    blobs = {"uploads/cloud.ply": b"p" * 5000, "uploads/m.glb": _real_glb()}
     stats = _stage(tmp_path, monkeypatch, compress=True, blobs=blobs, fake_result=4000)
     assert stats["compressed"] == 1
     assert stats["skipped_not_glb"] == 1
@@ -308,12 +318,27 @@ def test_no_compress_ships_the_originals_and_needs_no_toolchain(tmp_path, monkey
         "require_node",
         lambda b: (_ for _ in ()).throw(AssertionError("toolchain consulted under --no-compress")),
     )
-    blobs = {"uploads/a.glb": b"g" * 40000}
+    blobs = {"uploads/a.glb": _real_glb()}
     rows = [{"asset_path": k} for k in blobs]
     stats = export_public._stage_assets(tmp_path, _FakeStorage(blobs), rows, compress=False)
     assert stats["enabled"] is False
     assert stats["compressed"] == 0
-    assert (tmp_path / "assets" / "uploads/a.glb").read_bytes() == b"g" * 40000
+    assert (tmp_path / "assets" / "uploads/a.glb").read_bytes() == blobs["uploads/a.glb"]
+
+
+def test_a_corrupt_glb_fails_the_export_and_names_the_asset(tmp_path, monkeypatch):
+    """A file carrying a .glb extension that is not a GLB is a corpus problem, not something to
+    route around — it would reach voters as a mesh that never loads. It must fail, and the error
+    must name the asset: an anonymous ValueError partway through a 939-file export tells the
+    operator nothing about which file to go and look at."""
+    from scripts import export_public
+
+    monkeypatch.setattr(export_public.mesh_compress, "require_node", lambda b: 20)
+    monkeypatch.setattr(export_public.mesh_compress, "cli_entry", lambda: __file__)
+    blobs = {"uploads/broken.glb": b"this is a JPEG that got the wrong extension"}
+    rows = [{"asset_path": k} for k in blobs]
+    with pytest.raises(ValueError, match="uploads/broken.glb"):
+        export_public._stage_assets(tmp_path, _FakeStorage(blobs), rows, compress=True)
 
 
 def test_only_glb_is_a_compression_candidate():
