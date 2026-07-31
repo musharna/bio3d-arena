@@ -1,16 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Arena · Bio 3D Arena{% endblock %}
 {# One line: a source line-wrap here put literal newlines inside `content="…"`. #}
-{% block description %}Compare two AI-generated 3D reconstructions of a real organism side by side and vote for the better one. Every vote feeds the Bradley–Terry leaderboards.{% endblock %}
+{% block description %}Compare AI-generated 3D reconstructions of a real organism and vote for the most faithful. Every vote feeds the Bradley–Terry leaderboards.{% endblock %}
 {% block content %}
 <section class="arena" data-can-flag="{{ 'true' if internal_pages() else 'false' }}">
   <div class="arena-hero">
     <h1 class="arena-hero-h1">Which model rebuilds life best?</h1>
+    {# Deliberately does NOT say "two": a ballot is four models where the task can fill a
+       quad and two where it cannot, so any fixed number is wrong half the time. #}
     <p class="arena-hero-lede">
-      Compare two AI-generated 3D reconstructions of a real organism, side by
-      side, and vote for the better one. Every vote feeds the
-      Bradley&ndash;Terry leaderboards &mdash; across Plants, Fungi, and
-      Animals.
+      Compare AI-generated 3D reconstructions of a real organism and vote for
+      the most faithful. Every vote feeds the Bradley&ndash;Terry leaderboards
+      &mdash; across Plants, Fungi, and Animals.
     </p>
     {# Design (02-arena.png): stats separated by plain spacing, not middot dividers. #}
     <div class="arena-hero-stats">
@@ -33,8 +34,8 @@
     <p class="onboard-eyebrow">First time here?</p>
     <h2 class="onboard-title">How it works</h2>
     <p class="onboard-lede">
-      You're comparing two AI-generated 3D reconstructions of a real organism.
-      Judge which one is more faithful — every vote sharpens the leaderboards.
+      You're comparing AI-generated 3D reconstructions of a real organism.
+      Judge which one is most faithful — every vote sharpens the leaderboards.
     </p>
     <ol class="onboard-steps">
       <li>
@@ -45,13 +46,18 @@
         <span class="onboard-step-n">2</span>
         <span><strong>Compare</strong> — check each against the reference photos above.</span>
       </li>
+      {# Step 3 and the key hints are the only genuinely shape-specific copy: a 4-up ballot
+         has no Tie / Both-bad and no A/B keys. arena.js rewrites both per rendered ballot
+         (see setBallotHelp); the markup below is the 2-up wording it falls back to. #}
       <li>
         <span class="onboard-step-n">3</span>
-        <span><strong>Vote</strong> — pick the better one, or Tie / Both bad.</span>
+        <span id="onboard-vote-step"
+          ><strong>Vote</strong> — pick the better one, or Tie / Both bad.</span
+        >
       </li>
     </ol>
     <div class="onboard-foot">
-      <span class="onboard-keys"
+      <span class="onboard-keys" id="onboard-keys"
         >Keys: <kbd>←</kbd> A · <kbd>→</kbd> B · <kbd>T</kbd> tie ·
         <kbd>X</kbd> both-bad</span
       >

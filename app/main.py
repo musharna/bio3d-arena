@@ -594,6 +594,9 @@ def _build_kwise_comparison(
                 "id": task.id,
                 "title": task.title,
                 "prompt": task.prompt,
+                # Feeds the same category chip the 2-up ballot fills. Without it the k-wise
+                # view had nothing to show there and displayed the literal word "K-wise".
+                "category": task.category.name if task.category else "",
                 # Same reference photos the 2-up ballot serves. Fidelity against a real organism
                 # is what this board measures, so the reference has to be on screen for EVERY
                 # ballot shape — omitting it here would have made the default ballot a beauty

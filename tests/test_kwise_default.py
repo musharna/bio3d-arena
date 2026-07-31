@@ -177,6 +177,9 @@ def test_kwise_ballot_carries_the_reference_photos(arena, monkeypatch):
     data = client.get(f"/api/next?criterion=overall&category={quad_slug}").json()
     assert data.get("kind") == "kwise", data
     assert data["task"]["references"] == refs
+    # The category chip is shared with the 2-up view; without this the k-wise ballot had
+    # nothing to put in it and showed the literal string "K-wise" to voters instead.
+    assert data["task"]["category"] == "KWDEF quad"
 
     # Positive control: the pairwise shape still carries them too, from the same source.
     pair = client.get(f"/api/next?criterion=overall&category={quad_slug}&set=pair").json()

@@ -203,6 +203,23 @@ function render(data) {
 // Shared by both ballot shapes deliberately. K-wise used to hard-hide this panel, because its
 // payload carried no references at all; when k-wise became the default ballot that would have
 // silently taken the reference photo away from every voter — more votes, worse votes.
+// The onboarding card's step 3 and key hints are the only copy that genuinely differs between
+// ballot shapes: a 4-up has no Tie / Both-bad and no A/B keyboard shortcuts. Everything else is
+// written shape-neutrally in the template. Called on every render so a voter who moves between
+// shapes mid-session is never reading instructions for the other one.
+function setBallotHelp(kind) {
+  const step = el("onboard-vote-step");
+  const keys = el("onboard-keys");
+  const kwise = kind === "kwise";
+  if (step) {
+    step.innerHTML = kwise
+      ? "<strong>Vote</strong> — pick the most faithful of the four."
+      : "<strong>Vote</strong> — pick the better one, or Tie / Both bad.";
+  }
+  // Hidden rather than rewritten: k-wise picks are buttons, with no shortcut to advertise.
+  if (keys) keys.hidden = kwise;
+}
+
 function renderReferences(references) {
   const refPanel = el("reference-panel");
   const refGallery = el("reference-gallery");
@@ -228,6 +245,7 @@ function renderPair(data) {
   setKwiseVisible(false);
   current = data;
   armVoteGate(); // re-lock: this pair's meshes have not arrived yet
+  setBallotHelp("pair");
   el("task-cat").textContent = data.task.category;
   el("task-title").textContent = data.task.title;
   el("task-prompt").textContent = data.task.prompt;
@@ -269,7 +287,11 @@ function renderKwise(data) {
   current = null; // pairwise vote()/keyboard shortcuts must no-op while a K-wise ballot is shown
   setKwiseVisible(true);
   renderReferences(data.task.references);
-  el("task-cat").textContent = "K-wise"; // kwise task payload has no `category` field
+  setBallotHelp("kwise");
+  // Show the CATEGORY, same as the 2-up. This chip read "K-wise" while the mode was an opt-in
+  // experiment; as the default that put internal jargon in front of every voter AND threw away
+  // the kingdom cue the chip exists to give. That there are four models is evident from the grid.
+  el("task-cat").textContent = data.task.category || "";
   el("task-title").textContent = data.task.title;
   el("task-prompt").textContent = data.task.prompt;
   el("criterion-name").textContent = data.criterion.name;
