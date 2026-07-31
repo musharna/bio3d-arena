@@ -134,6 +134,41 @@ def sync_id_sequences(conn) -> dict[str, int]:
     return fixed
 
 
+#: Cached leaderboards are DERIVED data identified by a NATURAL key (generator x scope x
+#: criterion x view), with a surrogate id that carries no meaning of its own. An internal refit
+#: reassigns those ids, so merging by primary key inserts a "new" row whose natural key the live
+#: database already holds — and the unique constraint rejects it:
+#:
+#:     UniqueViolation: duplicate key value violates unique constraint "uq_kingdom_judge_scope"
+#:
+#: That fires on EVERY import after the first; the initial release survived only because it went
+#: into an empty database. Nothing holds a foreign key to these tables, so replacing them
+#: wholesale is both correct and simpler than teaching merge() about per-table natural keys.
+BOARD_CACHE_TABLES = ("rating", "kingdom_rating", "judge_rating", "kingdom_judge_rating")
+
+
+def replace_board_caches(eng, tables: dict) -> dict:
+    """Clear and reload each cached board the bundle actually supplies. Returns {table: rows}.
+
+    Only tables PRESENT in the bundle are cleared. Blanket-clearing would blank a live
+    leaderboard whenever a bundle happened to carry no rows for it, turning a partial export into
+    a visibly empty board.
+    """
+    done = {}
+    with Session(eng) as s:
+        for name in BOARD_CACHE_TABLES:
+            model = _BY_TABLE.get(name)
+            if model is None or name not in tables:
+                continue
+            s.query(model).delete()
+            s.flush()
+            for d in tables[name]:
+                s.add(model(**_coerce_datetimes(model, d)))
+            done[name] = len(tables[name])
+        s.commit()
+    return done
+
+
 def import_bundle(
     bundle_dir, *, database_url: str, storage: StorageBackend, rows: bool = True
 ) -> dict:
@@ -151,10 +186,14 @@ def import_bundle(
         with Session(eng) as s:
             for model in EXPORT_MODELS:  # FK-safe order
                 name = model.__tablename__
+                if name in BOARD_CACHE_TABLES:
+                    continue  # handled below by replace_board_caches (natural-key tables)
                 for d in tables.get(name, []):
                     s.merge(model(**_coerce_datetimes(model, d)))  # merge = idempotent by PK
                 counts[name] = len(tables.get(name, []))
             s.commit()
+        # After the referenced rows (generator, criterion) exist, so the FKs resolve.
+        counts.update(replace_board_caches(eng, tables))
         # Must run AFTER the merges land: explicit-id inserts leave every sequence behind, and
         # the next organic insert would collide. Reported so an import that silently fixed a
         # lagging sequence is visible in the output rather than invisible.
