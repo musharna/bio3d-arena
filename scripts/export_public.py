@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.inspection import inspect as sqla_inspect  # noqa: E402
 
-from app import config, public_export  # noqa: E402
+from app import config, mesh_compress, public_export  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
 from app.storage import StorageBackend, get_storage  # noqa: E402
 from app.models import (  # noqa: E402
@@ -212,7 +212,17 @@ def export_bundle(
     out_dir,
     posture: str = "redistribute",
     dry_run: bool = False,
+    compress: bool = False,
 ) -> dict:
+    """`compress` defaults OFF here and ON at the command line (see main).
+
+    That asymmetry is deliberate. Compression needs a Node toolchain, and defaulting it on in the
+    library made every programmatic caller — the export tests among them — fail with
+    ToolchainUnavailable on a machine whose only Node was 18. A release goes out through
+    `python -m scripts.export_public`, which opts in and fails loudly if the toolchain is missing;
+    a caller that never asked to compress should not inherit a Node dependency. The manifest
+    records `compression.enabled`, so an uncompressed bundle is never silent.
+    """
     from app import admissibility
     from app.reference_provenance import (
         assert_recon_photos_cleared,
@@ -260,11 +270,8 @@ def export_bundle(
     (out / "rows.json").write_bytes(rows_bytes)
     manifest["sha256"] = hashlib.sha256(rows_bytes).hexdigest()
 
-    # Asset blobs for every included output.
-    for d in tables["model_output"]:
-        rel = d["asset_path"]
-        (out / "assets" / rel).parent.mkdir(parents=True, exist_ok=True)
-        (out / "assets" / rel).write_bytes(storage.read(rel))
+    # Asset blobs for every included output, Draco-compressed on the way into the bundle.
+    manifest["compression"] = _stage_assets(out, storage, tables["model_output"], compress=compress)
 
     manifest["reference_photos"] = copy_reference_gallery(out, posture)
 
@@ -282,6 +289,65 @@ def export_bundle(
     return manifest
 
 
+def _stage_assets(out: Path, storage: StorageBackend, rows: list[dict], *, compress: bool) -> dict:
+    """Write every output blob into the bundle, Draco-compressing GLBs as they land.
+
+    Compression belongs HERE rather than in the corpus or the web app:
+
+    * the internal corpus stays byte-identical, so reproducibility, any dataset release, and the
+      votes already cast against those exact meshes are untouched;
+    * `asset_path` is unchanged, so nothing downstream — import, the DB, `media_asset` — needs to
+      know this happened. The bundle simply carries a smaller file at the same key. That is the
+      same "promote, don't recompute" shape the scores and leaderboards already use;
+    * the public host never needs the Node toolchain, which matters because `requirements.txt` is
+      deliberately Python-only (PR #87: 173 MB runtime vs 5.6 GB with the research stack).
+
+    Measured motivation: 68% of the 5.35 GB votable roster is raw geometry, and a PAIRWISE ballot
+    already takes 83 s to become comparable on Fast 4G.
+    """
+    stats = {"compressed": 0, "skipped_not_glb": 0, "kept_original": 0, "enabled": compress}
+    node = cli = None
+    if compress:
+        node = mesh_compress.node_binary()
+        mesh_compress.require_node(node)  # fail loud and early, not per-file
+        cli = mesh_compress.cli_entry()
+        if not cli or not Path(cli).exists():
+            raise mesh_compress.ToolchainUnavailable(
+                "BIO3D_GLTF_TRANSFORM_CLI is unset or does not exist. Install "
+                "@gltf-transform/cli and point it there, or re-run with --no-compress to ship "
+                "uncompressed meshes (a pairwise ballot then costs ~83 s on 4G)."
+            )
+
+    before_total = after_total = 0
+    for d in rows:
+        rel = d["asset_path"]
+        dst = out / "assets" / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        raw = storage.read(rel)
+        dst.write_bytes(raw)
+        before_total += len(raw)
+        if not compress or not mesh_compress.is_candidate(rel):
+            stats["skipped_not_glb"] += (
+                0 if not compress else int(not mesh_compress.is_candidate(rel))
+            )
+            after_total += len(raw)
+            continue
+        tmp = dst.with_suffix(dst.suffix + ".draco")
+        res = mesh_compress.compress_glb(dst, tmp, node=node, cli_entry=cli)
+        if res.kept:
+            tmp.replace(dst)
+            stats["compressed"] += 1
+        else:
+            # Draco enlarged it; the original is already in place and is what we ship.
+            stats["kept_original"] += 1
+        after_total += dst.stat().st_size
+
+    stats["bytes_before"] = before_total
+    stats["bytes_after"] = after_total
+    stats["ratio"] = round(before_total / after_total, 3) if after_total else 0.0
+    return stats
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", required=True, help="comma-separated task titles")
@@ -289,6 +355,11 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--posture", default="redistribute", choices=["display", "redistribute"])
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--no-compress",
+        action="store_true",
+        help="ship meshes uncompressed (a pairwise ballot then costs ~83s on Fast 4G)",
+    )
     a = ap.parse_args()
     db = SessionLocal()
     try:
@@ -300,6 +371,7 @@ def main() -> int:
             out_dir=a.out,
             posture=a.posture,
             dry_run=a.dry_run,
+            compress=not a.no_compress,
         )
         # Advisory (non-blocking, NOT a gate): flag exported taxa whose recon completeness sits
         # far below text→3D — a suspect reference/capture the operator should inspect before
