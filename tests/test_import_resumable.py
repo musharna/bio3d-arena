@@ -42,6 +42,11 @@ class FakeStorage:
     def read(self, rel):
         return self.objects[rel]
 
+    def size(self, rel):
+        # The uploader skips on IDENTITY, not mere existence — a stored object whose bytes
+        # differ from the bundle's must still be replaced. See test_import_replaces_changed_blobs.
+        return len(self.objects[rel]) if rel in self.objects else None
+
     def url_for(self, rel):
         return f"/fake/{rel}"
 
@@ -66,11 +71,11 @@ def test_a_resumed_upload_skips_what_is_already_there(tmp_path):
     st = FakeStorage()
 
     first = import_public.import_bundle(b, database_url="sqlite://", storage=st, rows=False)
-    assert first == {"uploaded": 4, "already_present": 0}
+    assert first == {"uploaded": 4, "already_present": 0, "replaced": 0}
 
     st.put_calls.clear()
     second = import_public.import_bundle(b, database_url="sqlite://", storage=st, rows=False)
-    assert second == {"uploaded": 0, "already_present": 4}
+    assert second == {"uploaded": 0, "already_present": 4, "replaced": 0}
     assert st.put_calls == [], "a resumed run must not re-PUT objects that already landed"
 
 
@@ -81,7 +86,7 @@ def test_a_transient_failure_is_retried_not_fatal(tmp_path, monkeypatch):
 
     counts = import_public.import_bundle(b, database_url="sqlite://", storage=st, rows=False)
 
-    assert counts == {"uploaded": 4, "already_present": 0}
+    assert counts == {"uploaded": 4, "already_present": 0, "replaced": 0}
     assert st.put_calls.count("sub/o1.glb") == 3  # two failures then success
     assert st.objects["sub/o1.glb"] == b"glb1"
 

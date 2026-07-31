@@ -326,6 +326,30 @@ def test_no_compress_ships_the_originals_and_needs_no_toolchain(tmp_path, monkey
     assert (tmp_path / "assets" / "uploads/a.glb").read_bytes() == blobs["uploads/a.glb"]
 
 
+def test_the_draco_temp_file_keeps_a_glb_extension(tmp_path, monkeypatch):
+    """gltf-transform chooses its output container from the FILE EXTENSION. A temp target like
+    `foo.glb.draco` makes it emit JSON glTF, not binary — which shipped under a .glb name would
+    reach voters as a mesh that never loads. Caught in a real export run; pinned here because the
+    stubbed CLI in these tests cannot notice an extension."""
+    from scripts import export_public
+
+    seen = {}
+
+    def capture(src, dst, **kw):
+        seen["dst"] = pathlib.Path(dst)
+        pathlib.Path(dst).write_bytes(build_glb(_MINIMAL, b"\x00" * 256))
+        return mesh_compress.CompressionResult(src.stat().st_size, 256, kept=True)
+
+    monkeypatch.setattr(export_public.mesh_compress, "compress_glb", capture)
+    monkeypatch.setattr(export_public.mesh_compress, "require_node", lambda b: 20)
+    monkeypatch.setattr(export_public.mesh_compress, "cli_entry", lambda: __file__)
+    blobs = {"uploads/a.glb": _real_glb()}
+    export_public._stage_assets(
+        tmp_path, _FakeStorage(blobs), [{"asset_path": "uploads/a.glb"}], compress=True
+    )
+    assert seen["dst"].suffix == ".glb", f"draco target was {seen['dst'].name}"
+
+
 def test_a_corrupt_glb_fails_the_export_and_names_the_asset(tmp_path, monkeypatch):
     """A file carrying a .glb extension that is not a GLB is a corpus problem, not something to
     route around — it would reach voters as a mesh that never loads. It must fail, and the error
