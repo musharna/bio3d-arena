@@ -58,6 +58,17 @@ class StorageBackend(abc.ABC):
     @abc.abstractmethod
     def exists(self, rel_path: str) -> bool: ...
 
+    def size(self, rel_path: str) -> int | None:
+        """Byte size of a stored object, or None when it is absent.
+
+        Exists so callers can ask "is the stored copy the SAME as mine", not merely "is something
+        there". The bundle uploader needs that distinction: re-publishing a mesh at a key that
+        already holds an older version is the normal case for a release, and an exists()-only
+        check silently skips it — which would have shipped a 9.1x compression that never replaced
+        a single live file.
+        """
+        return len(self.read(rel_path)) if self.exists(rel_path) else None
+
 
 class LocalStorageBackend(StorageBackend):
     """Filesystem storage under ASSET_DIR, served at `url_prefix` by StaticFiles."""
@@ -81,6 +92,10 @@ class LocalStorageBackend(StorageBackend):
 
     def exists(self, rel_path: str) -> bool:
         return (self.root / rel_path).is_file()
+
+    def size(self, rel_path: str) -> int | None:
+        p = self.root / rel_path
+        return p.stat().st_size if p.is_file() else None
 
 
 class S3StorageBackend(StorageBackend):
@@ -144,6 +159,20 @@ class S3StorageBackend(StorageBackend):
             code = str(e.response.get("Error", {}).get("Code", ""))
             if code in ("404", "NoSuchKey", "NotFound"):
                 return False
+            raise
+
+    def size(self, rel_path: str) -> int | None:
+        """ContentLength from a HEAD — one cheap round trip, no body transfer."""
+        import botocore.exceptions
+
+        try:
+            return int(
+                self._s3.head_object(Bucket=self.bucket, Key=self._key(rel_path))["ContentLength"]
+            )
+        except botocore.exceptions.ClientError as e:
+            code = str(e.response.get("Error", {}).get("Code", ""))
+            if code in ("404", "NoSuchKey", "NotFound"):
+                return None
             raise
 
 

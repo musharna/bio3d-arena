@@ -354,7 +354,12 @@ def _stage_assets(out: Path, storage: StorageBackend, rows: list[dict], *, compr
             dst.write_bytes(shrunk)
             stats["textures_resized"] += tex_stats["resized"]
 
-        tmp = dst.with_suffix(dst.suffix + ".draco")
+        # The temp name MUST still end in .glb: gltf-transform picks its output container from
+        # the extension, so a `foo.glb.draco` target makes it write JSON glTF instead of binary.
+        # That produced a valid-but-wrong file the structural check then rejected — and had the
+        # check not existed, a JSON document would have shipped under a .glb name and reached
+        # voters as a mesh that never loads.
+        tmp = dst.with_name(dst.stem + ".tmpdraco.glb")
         res = mesh_compress.compress_glb(dst, tmp, node=node, cli_entry=cli)
         if res.kept:
             tmp.replace(dst)

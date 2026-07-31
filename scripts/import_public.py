@@ -66,11 +66,19 @@ def _upload_assets(b: Path, storage: StorageBackend, *, attempts: int = 4) -> di
     the retry loop keeps a transient network fault from ending the run at all. Together they
     make the upload converge on a bad link instead of merely being likely to survive one.
     """
-    sent = skipped = 0
+    sent = skipped = replaced = 0
     for rel, p in _bundle_assets(b):
-        if storage.exists(rel):
+        # "Already there AND identical", not merely "already there". Re-publishing a mesh at a
+        # key that already holds an older version is the NORMAL case for a release — an
+        # exists()-only check skips every one of them, reports success, and changes nothing.
+        # That would have silently discarded a 9.1x recompression of the whole corpus.
+        local_size = p.stat().st_size
+        remote_size = storage.size(rel)
+        if remote_size == local_size:
             skipped += 1
             continue
+        if remote_size is not None:
+            replaced += 1
         for attempt in range(1, attempts + 1):
             try:
                 storage.save(rel, p.read_bytes())
@@ -86,7 +94,7 @@ def _upload_assets(b: Path, storage: StorageBackend, *, attempts: int = 4) -> di
                     file=sys.stderr,
                 )
                 time.sleep(delay)
-    return {"uploaded": sent, "already_present": skipped}
+    return {"uploaded": sent, "already_present": skipped, "replaced": replaced}
 
 
 def sync_id_sequences(conn) -> dict[str, int]:
