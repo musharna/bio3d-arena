@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.inspection import inspect as sqla_inspect  # noqa: E402
 
-from app import config, mesh_compress, public_export  # noqa: E402
+from app import config, mesh_compress, public_export, texture_downscale  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
 from app.storage import StorageBackend, get_storage  # noqa: E402
 from app.models import (  # noqa: E402
@@ -305,7 +305,13 @@ def _stage_assets(out: Path, storage: StorageBackend, rows: list[dict], *, compr
     Measured motivation: 68% of the 5.35 GB votable roster is raw geometry, and a PAIRWISE ballot
     already takes 83 s to become comparable on Fast 4G.
     """
-    stats = {"compressed": 0, "skipped_not_glb": 0, "kept_original": 0, "enabled": compress}
+    stats = {
+        "compressed": 0,
+        "skipped_not_glb": 0,
+        "kept_original": 0,
+        "textures_resized": 0,
+        "enabled": compress,
+    }
     node = cli = None
     if compress:
         node = mesh_compress.node_binary()
@@ -332,6 +338,22 @@ def _stage_assets(out: Path, storage: StorageBackend, rows: list[dict], *, compr
             )
             after_total += len(raw)
             continue
+        # Stage 2 BEFORE stage 1: shrink textures while the container is still plain glTF.
+        # Draco rewrites the buffer wholesale, so running it first would mean decoding and
+        # re-encoding the geometry just to reach the images.
+        #
+        # A file that carries a .glb extension but is not a GLB is a corpus problem, not something
+        # to route around: it would reach voters as a mesh that never loads. Fail, but name the
+        # asset — an anonymous ValueError partway through a 939-file export tells the operator
+        # nothing about which file to go and look at.
+        try:
+            shrunk, tex_stats = texture_downscale.downscale_glb(dst.read_bytes())
+        except ValueError as e:
+            raise ValueError(f"{rel}: not a readable GLB ({e})") from e
+        if tex_stats["resized"]:
+            dst.write_bytes(shrunk)
+            stats["textures_resized"] += tex_stats["resized"]
+
         tmp = dst.with_suffix(dst.suffix + ".draco")
         res = mesh_compress.compress_glb(dst, tmp, node=node, cli_entry=cli)
         if res.kept:
