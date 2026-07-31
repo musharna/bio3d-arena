@@ -1,0 +1,107 @@
+name: tests
+
+# 1519 tests across 272 files that, until now, ran only when somebody happened to
+# run them. Measured on a clean origin/master checkout (2026-07-30): 1518 pass,
+# 14 skip, ~55s on 3.13 and ~60s on 3.12, plus a ~15-25s install. That is cheap
+# enough to run on every change.
+#
+# WHY THE DEPENDENCY SET IS DERIVED, NOT LISTED
+#
+# requirements-dev.txt -> requirements-research.txt -> open_clip_torch -> torch ->
+# the full NVIDIA CUDA stack, multiple GB, for a suite in which `open_clip` is
+# imported lazily inside app.species_id functions and nothing else. So CI cannot
+# install the declared dev set as-is.
+#
+# The tempting fix is to hand-list the packages CI needs. Do not: a hand-listed
+# set drifts silently from the declared one, and then CI is testing an
+# environment nobody deploys. Instead the step below FILTERS exactly one line out
+# of the declared files and installs the rest, so a dependency added to
+# requirements*.txt tomorrow is picked up here with no edit to this workflow.
+#
+# The filter is asserted in both directions -- it must remove exactly one line,
+# and torch must actually be absent afterwards. A filter that silently stopped
+# matching would quietly pull several GB per run and still go green.
+#
+# Triggers: push on master + pull_request, so a branch PR fires once rather than
+# billing two runs for one change (the fix applied in rnaseq-template 032b5e6).
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 is the floor pyproject declares, and the comment there is explicit
+        # that it is set by the pinned scipy/tifffile rather than being an
+        # aspiration -- so it is the version most likely to break first. 3.13 is
+        # the current release. Both verified locally before this workflow landed.
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Build the CI dependency set from the declared files
+        # The filtered copy MUST be written to the repo root: requirements-research.txt
+        # opens with `-r requirements.txt`, which pip resolves relative to the FILE
+        # it appears in, not the working directory. Writing it to /tmp makes pip
+        # look for /tmp/requirements.txt and fail.
+        run: |
+          set -euo pipefail
+          n=$(grep -c '^open_clip_torch' requirements-research.txt || true)
+          if [ "$n" -ne 1 ]; then
+            echo "::error::expected exactly 1 open_clip_torch line in requirements-research.txt, found $n -- the filter below is no longer doing what it claims"
+            exit 1
+          fi
+          grep -v '^open_clip_torch' requirements-research.txt > ci-research-noclip.txt
+          grep -v '^-r requirements-research.txt' requirements-dev.txt > ci-dev-rest.txt
+          python -m pip install --upgrade pip
+          pip install -r ci-research-noclip.txt -r ci-dev-rest.txt
+
+      - name: The CUDA stack stayed out
+        # The other half of the filter assertion, and the one that actually costs
+        # money if it regresses. `torch` absent is the property that keeps this
+        # workflow at ~90s instead of pulling cublas/cudnn/nccl on every run.
+        run: |
+          python - <<'PY'
+          import importlib.util as u, sys
+          heavy = [m for m in ("torch", "open_clip") if u.find_spec(m) is not None]
+          if heavy:
+              sys.exit(f"::error::{heavy} installed in CI -- the research/runtime dependency split has broken and every run now downloads the CUDA stack")
+          print("torch and open_clip absent, as intended")
+          PY
+
+      - name: Run the suite
+        # -rs lists every skip WITH ITS REASON. That is deliberate. This suite
+        # skips legitimately (assets that live outside the repo, an API key CI
+        # does not have), but an absorbed skip count is exactly how a real
+        # failure stays invisible: tests/test_synthetic_plants_ingest.py is
+        # skipped here for want of the AgriGen bake-off GLBs, and on a machine
+        # that HAS them it currently fails. A bare "14 skipped" hides that; a
+        # named list does not.
+        run: pytest -q -rs
+
+      - name: Record what did not run
+        if: always()
+        run: |
+          {
+            echo "### Skipped on Python ${{ matrix.python-version }}"
+            echo
+            echo "Skips are listed with reasons in the step above. They are not"
+            echo "failures, but they are also not coverage -- anything skipped here"
+            echo "is verified only on a workstation, if at all."
+          } >> "$GITHUB_STEP_SUMMARY"
