@@ -1160,8 +1160,27 @@ def api_flag(flag_in: FlagIn, request: Request, db: Session = Depends(get_db)):
     return {"status": "ok", "hidden": hidden, "flags": count}
 
 
+#: How long a voter's browser may reuse an arena mesh without asking again.
+#:
+#: These responses previously carried NO cache headers at all, so every ballot re-downloaded
+#: every mesh — including a model the voter had already seen in an earlier ballot. On Fast 4G a
+#: 4-up ballot is a measured 8.0 MB / 20.9 s (2026-07-31), so that is the dominant cost of
+#: voting on a phone.
+#:
+#: An hour rather than a year, and deliberately NOT `immutable`: these URLs are keyed by output
+#: id, not by content, and a release rewrites blobs IN PLACE — the 2026-07-31 recompression
+#: replaced 581 objects at their existing keys. `immutable` would pin voters to superseded
+#: geometry with no way to correct it. An hour covers a voting session; the ETag makes anything
+#: past it a 304 instead of another download.
+MEDIA_MAX_AGE = 3600
+
+
+def _media_headers(etag: str) -> dict[str, str]:
+    return {"Cache-Control": f"public, max-age={MEDIA_MAX_AGE}", "ETag": etag}
+
+
 @app.get("/media/o/{output_id}.{ext}")
-def media_asset(output_id: int, ext: str, db: Session = Depends(get_db)):
+def media_asset(output_id: int, ext: str, request: Request, db: Session = Depends(get_db)):
     """Resolve an opaque, output-scoped asset URL (emitted by _arena_asset_url) back to the real
     file, so the anonymized arena never exposes the descriptive asset_path. Serves by output id;
     `ext` is cosmetic (helps 3D viewers). Streams through the app on remote (S3) storage so the
@@ -1171,11 +1190,25 @@ def media_asset(output_id: int, ext: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "Unknown output")
     ctype = content_type_for(o.asset_path)
     if getattr(storage, "remote", False):
-        return Response(content=storage.read(o.asset_path), media_type=ctype)
+        body = storage.read(o.asset_path)
+        # Hash the bytes we already had to fetch. Deriving the validator from the output id
+        # instead would keep matching after a re-export replaced the blob, and voters would hold
+        # the superseded mesh until max-age expired.
+        etag = f'"{hashlib.sha256(body).hexdigest()[:32]}"'
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers=_media_headers(etag))
+        return Response(content=body, media_type=ctype, headers=_media_headers(etag))
     path = config.ASSET_DIR / o.asset_path
     if not path.is_file():
         raise HTTPException(404, "Asset missing")
-    return FileResponse(path, media_type=ctype)
+    # Local assets are the ORIGINAL uncompressed files (up to 59 MB before the release pipeline
+    # touches them), so they are stat-keyed rather than hashed — reading each one into memory per
+    # request to compute a digest would trade the bug for a worse one.
+    st = path.stat()
+    etag = f'"{st.st_size:x}-{st.st_mtime_ns:x}"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=_media_headers(etag))
+    return FileResponse(path, media_type=ctype, headers=_media_headers(etag))
 
 
 # ------------------------------------------------------------------ leaderboard
