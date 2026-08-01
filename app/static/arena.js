@@ -108,6 +108,44 @@ async function loadNext() {
   }
 }
 
+// The follow-up ballot is already in hand the moment a vote lands: /api/vote and /api/kvote both
+// return it, and it sits in `pendingNext` until "Next pair" is clicked. Until that click nothing
+// is downloading — then the voter pays the entire transfer at once. Measured 2026-07-31 on Fast
+// 4G: 20.9 s for a 4-up ballot (8.0 MB median), and that is AFTER a 9.1x corpus recompression.
+// Warming the meshes while the reveal is on screen spends that idle interval instead.
+//
+// Deliberately NOT a speculative /api/next call: that endpoint COMMITS a KBallot row every time
+// (see _build_kwise_comparison), so a lookahead fetch would invent ballots nobody voted on and
+// mark quads seen for a session that never saw them. The ballot warmed here already exists —
+// the server built it while recording the vote.
+const warmedUrls = new Set();
+
+function ballotUrls(data) {
+  if (!data) return [];
+  return (
+    data.outputs
+      ? data.outputs.map((o) => o && o.url)
+      : [data.a && data.a.url, data.b && data.b.url]
+  ).filter(Boolean);
+}
+
+function warmBallot(data) {
+  ballotUrls(data).forEach((url) => {
+    if (warmedUrls.has(url)) return; // the same model can recur across ballots
+    // Read the body to completion so the response actually lands in the HTTP cache — an
+    // unconsumed fetch can be dropped, which would cost the bytes and cache nothing. The viewer
+    // requests this identical URL on render and reuses it (see MEDIA_MAX_AGE in main.py; without
+    // those cache headers this prefetch would be a pure regression).
+    //
+    // Best-effort: a failure must never reject into the vote path, but it must not vanish
+    // silently either — a prefetch that never works would look exactly like one that does.
+    warmedUrls.add(url);
+    fetch(url, { credentials: "same-origin" })
+      .then((r) => r.arrayBuffer())
+      .catch((e) => console.warn("ballot prefetch failed:", url, e));
+  });
+}
+
 // True when the page is in a SCOPED session — a fixed, fully-enumerated list of pairs with its
 // own progress/done payload, which is why the post-vote path re-fetches instead of showing the
 // reveal. Calibration is the only such set. This deliberately checks the VALUE, not merely the
@@ -361,6 +399,7 @@ async function submitKvote(ballotId, bestOutputId) {
       // Hold the follow-up ballot/pair until "Next pair" is clicked — showKwiseReveal labels
       // each card in place with its real name and marks the pick, same grid stays on screen.
       pendingNext = data.next;
+      warmBallot(pendingNext); // download the next meshes while the reveal is read
       showKwiseReveal(data.reveal);
       flashVoted("Pick recorded");
     } else if (data.next) {
@@ -493,6 +532,7 @@ async function vote(winner) {
       // double-vote the pair that's still on screen during the reveal.
       current = null;
       pendingNext = data.next;
+      warmBallot(pendingNext); // download the next meshes while the reveal is read
       showReveal(data.reveal);
       flashVoted();
     } else if (data.next) {
@@ -736,6 +776,13 @@ document.addEventListener("DOMContentLoaded", () => {
     // Correctness lives in render() (see its clearReveal call) — this one is for TIMING:
     // when there is no stashed `next`, loadNext() awaits a fetch, and without clearing now
     // the reveal would sit on screen through "Loading next comparison…".
+    //
+    // Nothing here waits on warmBallot. It is tempting to think the viewer could race the
+    // in-flight prefetch for the same URL and download it twice; measured with
+    // PerformanceResourceTiming (transferSize 0 == served from cache), clicking "Next pair"
+    // 150 ms after the vote lands showed ZERO double-paid meshes over three runs, identically
+    // with and without a settle step. The browser coalesces it. Don't add one back without a
+    // measurement that shows a second transfer.
     clearReveal();
     const n = pendingNext;
     pendingNext = null;
