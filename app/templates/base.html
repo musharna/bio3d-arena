@@ -4,6 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}Bio 3D Arena{% endblock %}</title>
+    {# Search-engine ownership. Rendered ONLY when configured: a verification tag with an empty
+       content attribute is a malformed claim, and every dev and preview instance would ship one.
+       Tokens are issued against the operator's own Search Console / Webmaster account. #}
+    {% set gsv = google_site_verification() %}{% if gsv %}<meta name="google-site-verification" content="{{ gsv }}" />{% endif %}
+    {% set bsv = bing_site_verification() %}{% if bsv %}<meta name="msvalidate.01" content="{{ bsv }}" />{% endif %}
     {# Social / Open Graph share cards. Per-page overrides: block description / og_title / og_image. #}
     <meta
       name="description"
@@ -53,6 +58,9 @@
          the renderer off data-dense pages (leaderboard, models, methodology, …). -->
     {% block viewer_assets %}{% endblock %}
     <script defer src="{{ asset('shell.js') }}"></script>
+    {# Per-page <head> additions — currently structured data. Kept as an opt-in block so a page
+       contributes markup only when it has something true to declare about itself. #}
+    {% block head_extra %}{% endblock %}
   </head>
   <body>
     {% set path = request.url.path %} {% set kingdom = request.state.kingdom |
@@ -283,6 +291,10 @@
               ></span>
               <span class="b3d-nav-label">Dataset</span>
             </a>
+            {# Internal only: every spotlight subject is a plant, so under the Fungi or Animals
+            kingdom filter this page is empty — a nav item leading nowhere for two of the three
+            kingdoms. Hidden, not deleted; see tests/test_spotlight_is_internal.py. #}
+            {% if internal_pages() %}
             <a
               href="/spotlight"
               class="b3d-nav-link{{ ' is-active' if path == '/spotlight' else '' }}"
@@ -300,6 +312,7 @@
               ></span>
               <span class="b3d-nav-label">Spotlight</span>
             </a>
+            {% endif %}
           </div>
 
           <div class="b3d-navgroup">

@@ -61,9 +61,10 @@ const qs = () => {
   const p = new URLSearchParams();
   if (cat && cat !== "all") p.set("category", cat);
   if (crit) p.set("criterion", crit);
-  // Baseline arena is plain 1v1 pairwise (matches the design). K-wise 4-up is opt-in only:
-  // thread ?set=... from the page URL when present (e.g. ?set=kwise or ?set=calibration);
-  // with no ?set, /api/next serves a pairwise comparison.
+  // With no ?set, /api/next serves the largest ballot the task supports — a 4-up K-wise grid
+  // where one exists, a 1v1 pair where it doesn't. render() dispatches on payload.kind, so
+  // both shapes arrive through the same path. Thread ?set=... from the page URL when present
+  // (?set=pair forces 1v1, ?set=calibration runs a scoped set).
   const urlSet = new URLSearchParams(location.search).get("set");
   if (urlSet) p.set("set", urlSet);
   const s = p.toString();
@@ -107,8 +108,51 @@ async function loadNext() {
   }
 }
 
-// True when the page is in a scoped session mode (e.g. ?set=calibration).
-const inSessionMode = () => new URLSearchParams(location.search).has("set");
+// The follow-up ballot is already in hand the moment a vote lands: /api/vote and /api/kvote both
+// return it, and it sits in `pendingNext` until "Next pair" is clicked. Until that click nothing
+// is downloading — then the voter pays the entire transfer at once. Measured 2026-07-31 on Fast
+// 4G: 20.9 s for a 4-up ballot (8.0 MB median), and that is AFTER a 9.1x corpus recompression.
+// Warming the meshes while the reveal is on screen spends that idle interval instead.
+//
+// Deliberately NOT a speculative /api/next call: that endpoint COMMITS a KBallot row every time
+// (see _build_kwise_comparison), so a lookahead fetch would invent ballots nobody voted on and
+// mark quads seen for a session that never saw them. The ballot warmed here already exists —
+// the server built it while recording the vote.
+const warmedUrls = new Set();
+
+function ballotUrls(data) {
+  if (!data) return [];
+  return (
+    data.outputs
+      ? data.outputs.map((o) => o && o.url)
+      : [data.a && data.a.url, data.b && data.b.url]
+  ).filter(Boolean);
+}
+
+function warmBallot(data) {
+  ballotUrls(data).forEach((url) => {
+    if (warmedUrls.has(url)) return; // the same model can recur across ballots
+    // Read the body to completion so the response actually lands in the HTTP cache — an
+    // unconsumed fetch can be dropped, which would cost the bytes and cache nothing. The viewer
+    // requests this identical URL on render and reuses it (see MEDIA_MAX_AGE in main.py; without
+    // those cache headers this prefetch would be a pure regression).
+    //
+    // Best-effort: a failure must never reject into the vote path, but it must not vanish
+    // silently either — a prefetch that never works would look exactly like one that does.
+    warmedUrls.add(url);
+    fetch(url, { credentials: "same-origin" })
+      .then((r) => r.arrayBuffer())
+      .catch((e) => console.warn("ballot prefetch failed:", url, e));
+  });
+}
+
+// True when the page is in a SCOPED session — a fixed, fully-enumerated list of pairs with its
+// own progress/done payload, which is why the post-vote path re-fetches instead of showing the
+// reveal. Calibration is the only such set. This deliberately checks the VALUE, not merely the
+// presence of ?set: `pair` and `kwise` are ballot-shape hints for the ordinary open-ended arena,
+// and treating them as scoped sets would silently cost those voters the post-vote reveal.
+const inSessionMode = () =>
+  new URLSearchParams(location.search).get("set") === "calibration";
 
 // /api/next returned 404: the selected category+criterion has no available pairs.
 // Show an explicit in-stage empty state with a way back to "All" — never leave the
@@ -190,36 +234,61 @@ function render(data) {
   }
 }
 
+// Reference photos (what the organism actually looks like) — shown so voters judge FIDELITY
+// rather than aesthetics, which is the whole premise of the board. Hidden when a task has no
+// reference on record.
+//
+// Shared by both ballot shapes deliberately. K-wise used to hard-hide this panel, because its
+// payload carried no references at all; when k-wise became the default ballot that would have
+// silently taken the reference photo away from every voter — more votes, worse votes.
+// The onboarding card's step 3 and key hints are the only copy that genuinely differs between
+// ballot shapes: a 4-up has no Tie / Both-bad and no A/B keyboard shortcuts. Everything else is
+// written shape-neutrally in the template. Called on every render so a voter who moves between
+// shapes mid-session is never reading instructions for the other one.
+function setBallotHelp(kind) {
+  const step = el("onboard-vote-step");
+  const keys = el("onboard-keys");
+  const kwise = kind === "kwise";
+  if (step) {
+    step.innerHTML = kwise
+      ? "<strong>Vote</strong> — pick the most faithful of the four."
+      : "<strong>Vote</strong> — pick the better one, or Tie / Both bad.";
+  }
+  // Hidden rather than rewritten: k-wise picks are buttons, with no shortcut to advertise.
+  if (keys) keys.hidden = kwise;
+}
+
+function renderReferences(references) {
+  const refPanel = el("reference-panel");
+  const refGallery = el("reference-gallery");
+  if (!refPanel || !refGallery) return;
+  const refs = (references || []).filter((r) => r && r.url);
+  refGallery.textContent = "";
+  for (const r of refs) {
+    const img = document.createElement("img");
+    img.className = "reference-img";
+    img.src = r.url;
+    img.loading = "lazy";
+    img.alt = "Reference photo of this organism";
+    if (r.credit) img.title = r.credit; // CC attribution / "reconstruction input photo"
+    // Click to zoom: the thumbnail is cropped (object-fit:cover); the lightbox shows the
+    // full uncropped photo so a voter can actually inspect the organism.
+    img.addEventListener("click", () => openReferenceLightbox(r.url, r.credit));
+    refGallery.appendChild(img);
+  }
+  refPanel.hidden = refs.length === 0;
+}
+
 function renderPair(data) {
   setKwiseVisible(false);
   current = data;
+  armVoteGate(); // re-lock: this pair's meshes have not arrived yet
+  setBallotHelp("pair");
   el("task-cat").textContent = data.task.category;
   el("task-title").textContent = data.task.title;
   el("task-prompt").textContent = data.task.prompt;
   el("criterion-name").textContent = data.criterion.name;
-  // Reference photo (what the organism should look like) — shown so voters can judge fidelity,
-  // not just aesthetics. Hidden when a task has no reference on record.
-  const refPanel = el("reference-panel");
-  const refGallery = el("reference-gallery");
-  if (refPanel && refGallery) {
-    const refs = (data.task.references || []).filter((r) => r && r.url);
-    refGallery.textContent = "";
-    for (const r of refs) {
-      const img = document.createElement("img");
-      img.className = "reference-img";
-      img.src = r.url;
-      img.loading = "lazy";
-      img.alt = "Reference photo of this organism";
-      if (r.credit) img.title = r.credit; // CC attribution / "reconstruction input photo"
-      // Click to zoom: the thumbnail is cropped (object-fit:cover); the lightbox shows the
-      // full uncropped photo so a voter can actually inspect the organism.
-      img.addEventListener("click", () =>
-        openReferenceLightbox(r.url, r.credit),
-      );
-      refGallery.appendChild(img);
-    }
-    refPanel.hidden = refs.length === 0;
-  }
+  renderReferences(data.task.references);
   // Shared viewer registry (viewer.js) picks model-viewer vs 3Dmol by format. Flagging is a
   // curator-only tool: pass the ⚑ callback only on the internal instance (data-can-flag),
   // so the public deploy renders no flag button (viewer.js omits it when onFlag is falsy).
@@ -255,11 +324,12 @@ function setKwiseVisible(active) {
 function renderKwise(data) {
   current = null; // pairwise vote()/keyboard shortcuts must no-op while a K-wise ballot is shown
   setKwiseVisible(true);
-  // K-wise ballots carry no reference gallery — hide the strip thumbnail so it doesn't render as
-  // an empty circle (only 2-up pairs populate the subject thumbnail from data.task.references).
-  const kRefPanel = el("reference-panel");
-  if (kRefPanel) kRefPanel.hidden = true;
-  el("task-cat").textContent = "K-wise"; // kwise task payload has no `category` field
+  renderReferences(data.task.references);
+  setBallotHelp("kwise");
+  // Show the CATEGORY, same as the 2-up. This chip read "K-wise" while the mode was an opt-in
+  // experiment; as the default that put internal jargon in front of every voter AND threw away
+  // the kingdom cue the chip exists to give. That there are four models is evident from the grid.
+  el("task-cat").textContent = data.task.category || "";
   el("task-title").textContent = data.task.title;
   el("task-prompt").textContent = data.task.prompt;
   el("criterion-name").textContent = data.criterion.name;
@@ -329,6 +399,7 @@ async function submitKvote(ballotId, bestOutputId) {
       // Hold the follow-up ballot/pair until "Next pair" is clicked — showKwiseReveal labels
       // each card in place with its real name and marks the pick, same grid stays on screen.
       pendingNext = data.next;
+      warmBallot(pendingNext); // download the next meshes while the reveal is read
       showKwiseReveal(data.reveal);
       flashVoted("Pick recorded");
     } else if (data.next) {
@@ -353,13 +424,54 @@ async function submitKvote(ballotId, bestOutputId) {
 // The server verifies ONCE PER SESSION (integrity.captcha_ok_for_session), so this token is
 // needed for the first vote of a visit, not every vote — which is why a spent token is simply
 // cleared rather than re-requested after each vote.
+//
+// But a token is SINGLE-USE and expires in about five minutes, and the widget fires its
+// callback once. So if the server ever stops recognising the session, resending this same
+// stale token can only fail, and the voter is locked out with no way back. That is what
+// "the captcha occasionally loses authorization" looked like from the outside. The server
+// side now persists verification, and this side can ask the widget for a FRESH token and
+// retry, so the two failure modes no longer compound into a dead end.
 let captchaToken = "";
+let captchaWaiters = [];
 
 window.bio3dCaptchaDone = function (token) {
   captchaToken = token || "";
   const field = document.getElementById("captcha-token");
   if (field) field.value = captchaToken;
+  // Wake anyone waiting on a re-solve.
+  const waiters = captchaWaiters;
+  captchaWaiters = [];
+  waiters.forEach((resolve) => resolve(captchaToken));
 };
+
+// Ask the provider for a new token. Resolves with "" if no widget is present or it does not
+// answer in time, so a caller never hangs waiting on a challenge that will not arrive.
+function refreshCaptchaToken(timeoutMs = 8000) {
+  const slot = document.getElementById("captcha-slot");
+  const provider = slot && slot.getAttribute("data-captcha-provider");
+  const api = provider === "hcaptcha" ? window.hcaptcha : window.turnstile;
+  if (!slot || !api || typeof api.reset !== "function")
+    return Promise.resolve("");
+  captchaToken = "";
+  const field = document.getElementById("captcha-token");
+  if (field) field.value = "";
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => {
+      if (!done) {
+        done = true;
+        resolve(v);
+      }
+    };
+    captchaWaiters.push(finish);
+    setTimeout(() => finish(""), timeoutMs);
+    try {
+      api.reset();
+    } catch (_) {
+      finish("");
+    }
+  });
+}
 
 function captchaHeaders() {
   // Only attach the header when we actually hold a token — sending an empty or "undefined"
@@ -374,11 +486,22 @@ async function vote(winner) {
   busy = true;
   setStatus("Recording vote…");
   try {
-    const res = await fetch("/api/vote" + qs(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...captchaHeaders() },
-      body: JSON.stringify({ comparison_id: current.comparison_id, winner }),
-    });
+    const post = () =>
+      fetch("/api/vote" + qs(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...captchaHeaders() },
+        body: JSON.stringify({ comparison_id: current.comparison_id, winner }),
+      });
+    let res = await post();
+    if (res.status === 403) {
+      // Human verification lapsed (server restarted, or our token was spent/expired). The
+      // token we hold is single-use, so retrying with it can only fail again — ask the widget
+      // for a fresh one and retry ONCE. Without this the voter is stuck permanently, which is
+      // how a transient 403 turned into "the captcha stopped working".
+      setStatus("Re-checking human verification…");
+      const fresh = await refreshCaptchaToken();
+      if (fresh) res = await post();
+    }
     if (!res.ok) {
       // Failed vote (rate-limit 429, already-voted/dup 409, captcha 403, unknown 404):
       // surface the reason and do NOT claim success or advance.
@@ -387,6 +510,10 @@ async function vote(winner) {
         detail = (await res.json()).detail || detail;
       } catch (_) {
         /* non-JSON error body */
+      }
+      if (res.status === 403) {
+        detail +=
+          " — tick the verification box below the models, then vote again";
       }
       setStatus("Could not record vote: " + detail);
       return;
@@ -405,6 +532,7 @@ async function vote(winner) {
       // double-vote the pair that's still on screen during the reveal.
       current = null;
       pendingNext = data.next;
+      warmBallot(pendingNext); // download the next meshes while the reveal is read
       showReveal(data.reveal);
       flashVoted();
     } else if (data.next) {
@@ -648,6 +776,13 @@ document.addEventListener("DOMContentLoaded", () => {
     // Correctness lives in render() (see its clearReveal call) — this one is for TIMING:
     // when there is no stashed `next`, loadNext() awaits a fetch, and without clearing now
     // the reveal would sit on screen through "Loading next comparison…".
+    //
+    // Nothing here waits on warmBallot. It is tempting to think the viewer could race the
+    // in-flight prefetch for the same URL and download it twice; measured with
+    // PerformanceResourceTiming (transferSize 0 == served from cache), clicking "Next pair"
+    // 150 ms after the vote lands showed ZERO double-paid meshes over three runs, identically
+    // with and without a settle step. The browser coalesces it. Don't add one back without a
+    // measurement that shows a second transfer.
     clearReveal();
     const n = pendingNext;
     pendingNext = null;
@@ -716,6 +851,49 @@ document.querySelectorAll(".vote-bar .vote-btn").forEach((btn) => {
   btn.addEventListener("click", () => vote(btn.dataset.winner));
 });
 
+// --- "can't tell" ---------------------------------------------------------------------
+// Advances WITHOUT recording anything. Deliberately not a winner value: "tie" and "bad" are
+// real judgements the fit consumes, and routing an "I can't tell" into either would inject
+// noise into precisely the comparisons where the signal is weakest.
+async function skipPair() {
+  if (busy || !current) return;
+  setStatus("Skipped — no vote recorded.");
+  await loadNext();
+}
+
+const skipBtn = document.getElementById("skip-btn");
+if (skipBtn) skipBtn.addEventListener("click", skipPair);
+
+// --- vote gating ----------------------------------------------------------------------
+// Both models must have SETTLED (loaded, or visibly failed) before a vote can be cast. A
+// GLB streams in progressively, so a half-arrived mesh is a few loose triangles — the same
+// thing a genuinely degenerate output looks like. Voting on that records a judgement about
+// network timing rather than about the model.
+let settledCount = 0;
+
+function setVoteEnabled(on) {
+  document
+    .querySelectorAll(".vote-bar .vote-btn")
+    .forEach((b) => (b.disabled = !on));
+  const bar = document.querySelector(".vote-bar");
+  if (bar) bar.classList.toggle("is-waiting", !on);
+}
+
+function armVoteGate() {
+  settledCount = 0;
+  setVoteEnabled(false);
+}
+
+document.addEventListener("bio3d:viewer-settled", () => {
+  settledCount += 1;
+  if (settledCount >= 2) setVoteEnabled(true);
+});
+
+// Never let a stuck viewer strand a voter: settle the gate regardless after a grace period.
+setInterval(() => {
+  if (current && settledCount < 2) setVoteEnabled(true);
+}, 12000);
+
 // Re-fetch when the filters change.
 el("sel-category").addEventListener("change", loadNext);
 el("sel-criterion").addEventListener("change", loadNext);
@@ -727,6 +905,7 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "ArrowRight") vote("b");
   else if (e.key === "t") vote("tie");
   else if (e.key === "x") vote("bad");
+  else if (e.key === "s" || e.key === "S") skipPair();
 });
 
 // Preselect category/criterion from the URL (?category=plants&criterion=overall) so a

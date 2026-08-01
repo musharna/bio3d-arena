@@ -1,4 +1,7 @@
 # tests/test_reference_qa.py
+
+import pytest
+
 from app import reference_qa
 from app.organ_inventory import inventory_for
 
@@ -160,3 +163,190 @@ def test_photo_messages_declares_jpeg_for_jpeg_bytes():
     inv = inventory_for("Solanum lycopersicum")
     msgs = reference_qa._photo_messages(b"\xff\xd8\xff\xe0 jpeg-bytes", inv)
     assert msgs[0]["content"][0]["source"]["media_type"] == "image/jpeg"
+
+
+# --- subject check ---------------------------------------------------------------------
+#
+# The gap this closes (measured 2026-07-29 over all 130 gallery photos): sourcing selected on
+# TAXONOMIC CORRECTNESS and nothing ever checked VISUAL REPRESENTATIVENESS. iNaturalist
+# guarantees the first — a research-grade record is a true record of the taxon — and says
+# nothing about the second. A great blue heron with a goldfish crushed in its beak is a
+# flawless *Carassius auratus* record and a useless reference for judging a 3D goldfish;
+# a dingo is a legitimate *Canis familiaris* record and a misleading reference for the
+# domestic dogs the generators produce. `species_matches` cannot cover this: it routes
+# through BioCLIP, which needs open_clip/torch — deliberately absent from the runtime deps —
+# so on any machine without them the species half of gallery QA silently never ran.
+
+
+class _SubjectClient:
+    """Captures the outbound request so the prompt itself can be asserted on."""
+
+    def __init__(self, payload):
+        self.payload = payload
+        self.seen = None
+        self.messages = self
+
+    def create(self, **kw):
+        self.seen = kw
+
+        class _B:
+            type = "tool_use"
+            input = self.payload
+
+        class _R:
+            content = [_B()]
+
+        return _R()
+
+
+def test_subject_check_rejects_a_photo_whose_main_subject_is_another_organism():
+    """The heron case. The goldfish IS in frame and the record is valid, so any check that only
+    asks 'is the taxon present?' passes it. The question has to be about the SUBJECT."""
+    c = _SubjectClient(
+        {"subject": "Ardea herodias", "verdict": "different_organism", "note": "heron"}
+    )
+    r = reference_qa.assess_subject(
+        c, b"\xff\xd8\xff jpeg", taxon="Carassius auratus", common="goldfish"
+    )
+    assert r["ok"] is False
+    assert r["subject"] == "Ardea herodias"
+
+
+def test_subject_check_rejects_the_wrong_form_of_the_right_taxon():
+    """The dingo/wild-rose case, and the reason a bare taxonomic test cannot catch it: the
+    organism is genuinely the claimed taxon but not the morphotype the task asks for."""
+    c = _SubjectClient(
+        {"subject": "dingo", "verdict": "wrong_form", "note": "not a domestic breed"}
+    )
+    r = reference_qa.assess_subject(
+        c, b"\xff\xd8\xff jpeg", taxon="Canis familiaris", common="dog", morphotype="a domestic dog"
+    )
+    assert r["ok"] is False
+
+
+def test_subject_check_passes_a_good_reference():
+    c = _SubjectClient(
+        {"subject": "Boletus edulis", "verdict": "match", "note": "whole fruiting body"}
+    )
+    r = reference_qa.assess_subject(
+        c, b"\xff\xd8\xff jpeg", taxon="Boletus edulis", common="porcini"
+    )
+    assert r["ok"] is True
+
+
+def test_morphotype_reaches_the_model():
+    """Without this the rose gallery cannot be fixed: 'Rosa' alone matches a wild dog-rose just
+    as well as the garden roses the generators actually produce."""
+    c = _SubjectClient({"subject": "Rosa", "verdict": "match", "note": ""})
+    reference_qa.assess_subject(
+        c,
+        b"\xff\xd8\xff jpeg",
+        taxon="Rosa",
+        common="rose",
+        morphotype="a full-petalled garden rose",
+    )
+    sent = c.seen["messages"][0]["content"][1]["text"]
+    assert "full-petalled garden rose" in sent
+
+
+def test_subject_check_declares_the_real_media_type():
+    c = _SubjectClient({"subject": "x", "verdict": "match", "note": ""})
+    reference_qa.assess_subject(c, b"\x89PNG\r\n\x1a\n....", taxon="Rosa", common="rose")
+    assert c.seen["messages"][0]["content"][0]["source"]["media_type"] == "image/png"
+
+
+@pytest.mark.parametrize("verdict", ["different_organism", "wrong_form", "not_identifiable"])
+def test_every_failing_verdict_fails_the_combiner(verdict):
+    out = reference_qa.qa_reference_image(
+        subject={"ok": False, "subject": "other", "verdict": verdict, "note": ""}
+    )
+    assert out["passed"] is False
+    assert any("subject" in r for r in out["reasons"])
+
+
+def test_combiner_still_passes_when_the_subject_is_right():
+    out = reference_qa.qa_reference_image(
+        composition={"isolated": False},
+        subject={"ok": True, "subject": "Boletus edulis", "verdict": "match", "note": ""},
+    )
+    assert out["passed"] is True
+
+
+def test_combiner_is_unchanged_when_no_subject_signal_is_supplied():
+    """Back-compat: existing callers pass organ/composition/species only."""
+    assert reference_qa.qa_reference_image(composition={"isolated": False})["passed"] is True
+
+
+# --- composition is plant/fungus-framed and must not judge animals ------------------------
+#
+# `assess_composition`'s prompt asks whether the photo shows "a plant with stems/leaves/roots,
+# or a whole intact fungus on its substrate" versus "a single picked fruit/gourd sitting on a
+# table or a lone cut mushroom". It predates animals as a third kingdom, and on 2026-07-29 it
+# rejected 6 of 8 remaining dog photos as "isolated part" — including a clean head-and-shoulders
+# portrait of a poodle in a meadow, which is not a detached part of anything. The subject check
+# already covers whether an animal photo is usable (`not_identifiable`), so composition is
+# simply not applicable outside the body plans it was written for.
+
+
+# --- the morphotype must describe the TASK, not a stricter ideal ---------------------------
+#
+# Task 31 asks for "a whole goldfish (Carassius auratus)". The first morphotype demanded "a live
+# goldfish, whole and unobstructed, IN WATER", which is a photographic condition the task never
+# asks for; it rejected two specimens showing a complete lateral profile with every fin legible.
+# The subject check is only as good as the form it is told to look for, so an over-strict
+# morphotype throws away usable references just as surely as a missing one admits bad ones.
+
+
+def test_the_goldfish_morphotype_asks_for_what_the_task_asks_for():
+    m = reference_qa.morphotype_for("Carassius auratus")
+    assert "whole" in m.lower() and "fin" in m.lower()
+    assert "in water" not in m.lower(), "task 31 asks for a whole goldfish, not a photo in water"
+
+
+def test_the_monarch_morphotype_pins_the_adult_because_the_task_does():
+    """Task 30 asks for "a whole monarch butterfly". Relying on the bare common name left the
+    verdict to the model's own reading of whether a caterpillar counts as a butterfly."""
+    m = reference_qa.morphotype_for("Danaus plexippus")
+    assert "adult" in m.lower()
+    assert "caterpillar" in m.lower() or "larva" in m.lower()
+
+
+@pytest.mark.parametrize("taxon", ["Rosa", "Hericium erinaceus", "Trametes versicolor"])
+def test_morphotypes_that_were_already_right_are_left_alone(taxon):
+    """Positive control on the edits above: they must not have emptied the table."""
+    assert reference_qa.morphotype_for(taxon) != ""
+
+
+def test_every_morphotype_is_reachable_by_the_gate():
+    """A morphotype is looked up by ORGAN_INVENTORY key (that is what qa_reference_gallery resolves
+    a gallery slug to), so an entry keyed on any other spelling of the name is silently dead code.
+    The dog's was keyed 'Canis familiaris' — iNaturalist's name for the domestic dog — while the
+    gate passes the arena's 'Canis lupus familiaris', so the dingo exclusion the entry exists to
+    state never reached the model once. A stale entry for the de-corpused pumpkin sat beside it."""
+    from app.organ_inventory import ORGAN_INVENTORY
+
+    unreachable = set(reference_qa.MORPHOTYPE) - set(ORGAN_INVENTORY)
+    assert unreachable == set(), f"morphotypes no gallery can ever look up: {sorted(unreachable)}"
+
+
+def test_the_dog_morphotype_actually_reaches_the_gate():
+    """The specific regression: this is the lookup qa_reference_gallery performs."""
+    m = reference_qa.morphotype_for("Canis lupus familiaris")
+    assert "dingo" in m.lower()
+
+
+@pytest.mark.parametrize(
+    "taxon",
+    ["Canis lupus familiaris", "Anas platyrhynchos", "Danaus plexippus", "Carassius auratus"],
+)
+def test_composition_does_not_apply_to_animals(taxon):
+    """All four pinned explicitly: the animal test is indirect (a paired part), so every animal
+    taxon must be checked rather than assumed to follow from one."""
+    assert reference_qa.composition_applies(inventory_for(taxon)) is False
+
+
+def test_composition_still_applies_to_plants_and_fungi():
+    """Positive control — without this the test would pass if the function returned False for
+    everything, silently disabling the fruit-only gate that composition exists to provide."""
+    assert reference_qa.composition_applies(inventory_for("Solanum lycopersicum")) is True
+    assert reference_qa.composition_applies(inventory_for("Boletus edulis")) is True

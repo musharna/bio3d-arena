@@ -56,6 +56,26 @@ import pytest  # noqa: E402  (after the temp-dir/env bootstrap above, by design)
 
 
 @pytest.fixture(autouse=True)
+def _reset_asset_caches():
+    """Drop the process-wide storage singleton and gallery-manifest cache around every test.
+
+    Both are `lru_cache`s that are correct in production — config is fixed at boot and the
+    reference gallery only changes with a new bundle or image — and wrong across tests, which
+    routinely repoint `config.ASSET_DIR` at a tmp_path. Without this the storage backend keeps
+    the root it was built with on first use, so a later `monkeypatch.setattr(config,
+    "ASSET_DIR", ...)` silently has no effect and the test reads someone else's fixture.
+    """
+    from app import service
+    from app.storage import get_storage
+
+    get_storage.cache_clear()
+    service.reference_gallery_cache_clear()
+    yield
+    get_storage.cache_clear()
+    service.reference_gallery_cache_clear()
+
+
+@pytest.fixture(autouse=True)
 def _reset_commission_db(request):
     """Isolate commission tests by resetting the database before each test."""
     # Only reset for commission_ingest tests to ensure they have a clean database

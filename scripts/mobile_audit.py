@@ -139,7 +139,12 @@ def show(label, d):
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for name, w, h in VIEWPORTS:
-        for mode, url in [("pairwise", f"{BASE}/arena"), ("kwise", f"{BASE}/arena?set=kwise")]:
+        # Both shapes must be pinned explicitly: bare /arena serves whichever ballot the corpus
+        # can fill, so it would audit k-wise on most tasks and silently skip the pairwise layout.
+        for mode, url in [
+            ("pairwise", f"{BASE}/arena?set=pair"),
+            ("kwise", f"{BASE}/arena?set=kwise"),
+        ]:
             # Fresh context per page: no cookie/localStorage bleed between runs.
             ctx = browser.new_context(
                 viewport={"width": w, "height": h},

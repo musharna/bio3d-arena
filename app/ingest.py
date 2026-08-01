@@ -13,14 +13,18 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import logging
 import uuid
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import config, paradigms
 from .models import Category, Generator, ModelOutput, Task
 from .storage import get_storage
+
+logger = logging.getLogger(__name__)
 
 MESH_FORMATS = {"glb", "gltf"}  # rendered by <model-viewer>
 PDB_FORMATS = {"pdb", "cif", "mmcif", "ent"}  # rendered by 3Dmol.js (atomic coords)
@@ -143,17 +147,52 @@ def upsert_category(
 
 
 def upsert_generator(
-    db: Session, slug: str, name: str | None = None, kind: str = "model", description: str = ""
+    db: Session,
+    slug: str,
+    name: str | None = None,
+    kind: str = "model",
+    description: str = "",
+    paradigm: str | None = None,
 ) -> Generator:
+    """Fetch or create a generator.
+
+    `paradigm` is load-bearing, not decorative: the arena vote pool is an allowlist over
+    paradigms (config.ARENA_VOTE_PARADIGMS) and a NULL paradigm is off-roster, so a generator
+    created without one is ingested, displayed, and then never served for voting. That is a
+    silent dead end, so it warns rather than passing quietly.
+
+    A pre-existing row with a blank paradigm is healed here, matching what
+    commission.get_or_create_generator and agentic already do. Without that, warning at
+    creation time is useless to every generator that predates its caller learning the
+    paradigm: the row is already there, so the warning never fires again and the row stays
+    off-roster forever. A row that already carries a deliberate, non-blank paradigm is left
+    alone.
+    """
     gen = db.execute(select(Generator).where(Generator.slug == slug)).scalars().first()
     if gen is None:
+        if not paradigm and config.ARENA_VOTE_PARADIGMS:
+            logger.warning(
+                "generator %r created with no paradigm — it is OFF the arena vote roster "
+                "(config.ARENA_VOTE_PARADIGMS=%s) and will never be served for voting. "
+                "Pass paradigm= to make it votable.",
+                slug,
+                sorted(config.ARENA_VOTE_PARADIGMS),
+            )
         gen = Generator(
-            slug=slug, name=name or slug, kind=kind, description=description, is_anonymous=True
+            slug=slug,
+            name=name or slug,
+            kind=kind,
+            description=description,
+            is_anonymous=True,
+            paradigm=paradigm,
         )
         db.add(gen)
         db.flush()
-    elif name:
-        gen.name = name
+    else:
+        if name:
+            gen.name = name
+        if paradigm and not gen.paradigm:
+            gen.paradigm = paradigm
     return gen
 
 
@@ -178,16 +217,48 @@ def register_output(
     title: str = "",
     meta: dict | None = None,
     generator_name: str | None = None,
+    paradigm: str | None = None,
+    source: str | None = None,
 ) -> tuple[ModelOutput, bool]:
     """Validate + store a generator's 3D asset for a task. Returns (output, created).
 
     Idempotent within a (task, generator): re-posting identical bytes returns the
     existing output instead of duplicating it.
+
+    `source` is the provenance prefix this asset arrived by ("procedural:blender",
+    "api:text:meshy", "found:sketchfab", …). Pass it here rather than assigning
+    `out.source` after the call: paradigms.classify_paradigm keys off exactly these
+    prefixes, so setting it afterwards means the generator is created, classified as
+    nothing, and left off the arena vote roster until somebody remembers to run
+    backfill_paradigms.
+
+    `paradigm` is the override for when the caller knows better than the classifier —
+    a slug the rules cannot resolve, or a deliberate re-tag. Prefer `source`: the
+    classifier is the single place these rules live, and a paradigm hardcoded at each
+    call site is that table copied N times, drifting independently.
+
+    Neither is defaulted. This is the generic registration path — a recon bake-off, a
+    text-to-3D run and a procedural sweep all arrive here, and guessing one for all of
+    them is how the wrong board gets populated silently.
     """
     task = db.get(Task, task_id)
     if task is None:
         raise IngestError(f"Unknown task_id {task_id}.")
-    gen = upsert_generator(db, generator_slug, name=generator_name)
+    if paradigm is None:
+        # The canonical rules, not a local copy of them — and attempted for EVERY caller,
+        # not only those that pass a source. classify_paradigm resolves a good share of
+        # slugs on keyword rules alone ("lpy", "infinigen", "helios", "sketchfab",
+        # "trellis", "recon", "scan", …), so the ~19 existing call sites that state
+        # nothing get classified without being touched. A source, when given, is stronger:
+        # its prefix rules take priority and catch what the slug cannot.
+        #
+        # Returns None when nothing matches, which leaves the generator blank exactly as
+        # before. Unclassifiable is not the same as wrong: backfill_paradigms still covers
+        # those, and guessing here is how the wrong board gets populated silently.
+        paradigm = paradigms.classify_paradigm(
+            generator_slug, "model", {source} if source else set()
+        )
+    gen = upsert_generator(db, generator_slug, name=generator_name, paradigm=paradigm)
 
     stats = validate_3d_asset(data, ext)
     digest = sha256(data)
@@ -220,6 +291,9 @@ def register_output(
         asset_path=str(rel).replace("\\", "/"),
         asset_format=ext.lower(),
         meta_json=json.dumps(provenance),
+        # Omitted rather than passed as None so the column default ("bio3d-arena") still
+        # applies for callers that do not state a source.
+        **({"source": source} if source else {}),
     )
     db.add(output)
     db.flush()

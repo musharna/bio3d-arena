@@ -8,17 +8,20 @@ full decisive-vote record.
 from __future__ import annotations
 
 import datetime as dt
+import functools
+import json
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 
-from sqlalchemy import delete, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import delete, func, or_, select
+from sqlalchemy.orm import Session, aliased
 
 from . import config, kingdoms, matchmaking, paradigms, ranking
 from .calibration import cohens_kappa
 from .scope import is_assessable
 from .paradigms import same_paradigm
 from .sourcing import is_reference_scan, is_untextured_output
+from .storage import get_storage
 from .models import (
     Category,
     CommissionAttempt,
@@ -119,6 +122,46 @@ def resolve_kballot(
     return len(losers)
 
 
+def _comparison_output_ids(pairs) -> set[int]:  # noqa: ANN001
+    """Every output id referenced by a sequence of (vote, comparison) rows."""
+    ids: set[int] = set()
+    for _vote, comp in pairs:
+        ids.add(comp.output_a_id)
+        ids.add(comp.output_b_id)
+    return ids
+
+
+def _output_generator_ids(db: Session, pairs) -> dict[int, int]:  # noqa: ANN001
+    """{output_id: generator_id} for every output the given comparisons reference, in ONE query.
+
+    Replaces a `db.get(ModelOutput, ...)` per comparison side. That pattern was free on the
+    internal instance — SQLite, in-process, a primary-key lookup is microseconds — and became the
+    entire cost of the public leaderboard, where every lookup is a network round trip to managed
+    Postgres. Measured on the live deploy: 1103 statements per `/leaderboard`, 965 of them these
+    single-row selects, ~12s per render. Worse, it scaled with the vote count, which is the one
+    number this project is trying to grow.
+    """
+    ids = _comparison_output_ids(pairs)
+    if not ids:
+        return {}
+    rows = db.execute(
+        select(ModelOutput.id, ModelOutput.generator_id).where(ModelOutput.id.in_(ids))
+    ).all()
+    return {oid: gid for oid, gid in rows}
+
+
+def _output_asset_formats(db: Session, pairs) -> dict[int, str]:  # noqa: ANN001
+    """{output_id: asset_format} for every output the given comparisons reference, in ONE query.
+    Same N+1 removal as _output_generator_ids; see its docstring."""
+    ids = _comparison_output_ids(pairs)
+    if not ids:
+        return {}
+    rows = db.execute(
+        select(ModelOutput.id, ModelOutput.asset_format).where(ModelOutput.id.in_(ids))
+    ).all()
+    return {oid: fmt for oid, fmt in rows}
+
+
 def reference_scan_generator_ids(db: Session) -> set[int]:
     """Generator ids whose outputs are raw-scan/volumetric GT references.
 
@@ -176,6 +219,33 @@ def app_hidden_generator_ids(db: Session) -> set[int]:
             ).scalars()
         )
     return ids
+
+
+def vote_pool_excluded_generator_ids(db: Session) -> set[int]:
+    """Generators off the HUMAN vote roster (config.ARENA_VOTE_PARADIGMS).
+
+    Deliberately NOT part of app_hidden_generator_ids / mode_a_excluded_generator_ids: these
+    generators stay fully visible — model pages, leaderboard rows, and the VLM-judge boards
+    that rank them without spending human attention. The only thing they lose is a slot in the
+    arena, because human votes are the scarce input and spreading them over every paradigm
+    leaves every entrant provisional. See config.ARENA_VOTE_PARADIGMS for the measurement.
+
+    An empty allowlist means "no scoping" — every generator stays in the pool.
+    """
+    if not config.ARENA_VOTE_PARADIGMS:
+        return set()
+    # `paradigm` is nullable and SQL `NOT IN` never matches NULL, so a null-paradigm generator
+    # would slip INTO the pool without the explicit is_(None) arm.
+    return set(
+        db.execute(
+            select(Generator.id).where(
+                or_(
+                    Generator.paradigm.is_(None),
+                    Generator.paradigm.notin_(config.ARENA_VOTE_PARADIGMS),
+                )
+            )
+        ).scalars()
+    )
 
 
 def mode_a_excluded_generator_ids(db: Session) -> set[int]:
@@ -269,11 +339,80 @@ def _matches_for_scope(
     verified_only=True further restricts to votes from a session with a linked
     User (VoterSession.user_id set) — the "verified-only" leaderboard scope.
     """
+    rows = _scope_rows(
+        db,
+        criterion_id,
+        category_id,
+        verified_only=verified_only,
+        category_ids=category_ids,
+    )
+    matches: list[tuple[int, int]] = []
+    groups: list[int] = []
+    for gen_a, gen_b, winner, gkey in rows:
+        if winner == "a":
+            matches.append((gen_a, gen_b))
+            groups.append(gkey)
+        elif winner == "b":
+            matches.append((gen_b, gen_a))
+            groups.append(gkey)
+        elif winner == "tie" and include_ties:
+            matches.append((gen_a, gen_b))
+            groups.append(gkey)
+            matches.append((gen_b, gen_a))
+            groups.append(gkey)
+    return matches, groups
+
+
+def _scope_rows(
+    db: Session,
+    criterion_id: int,
+    category_id: int | None = None,
+    *,
+    verified_only: bool = False,
+    category_ids: set[int] | None = None,
+) -> list[tuple[int, int, str, int]]:
+    """(generator_a, generator_b, winner, bootstrap_group_key) for every ADMISSIBLE vote in a
+    scope — one row per comparison, before any tie is split.
+
+    This is the shared scan behind `_matches_for_scope` and `head_to_head_record`, and it is
+    ONE query. It used to be one query plus four per vote: the loop resolved each comparison's
+    two outputs and their two generators with `db.get`, which an in-process SQLite session
+    makes look free and Postgres charges a network round trip for. Measured on the public
+    instance, `/models/{slug}` spent 23 seconds here — 2079 statements for a page whose other
+    components cost 34 — because `head_to_head_record` ran the whole thing twice on top.
+
+    The outputs and generators are joined in rather than fetched per row, so the cost is flat
+    in the number of votes. Both output joins are OUTER: a comparison whose output was deleted
+    must be skipped, not raise, and real databases carry those (see the 2026-06-29 dangling
+    calibration_pair sweep).
+
+    One deliberate behaviour change, in the safe direction: an output whose GENERATOR row is
+    missing used to raise (the old code read `.paradigm` off a `db.get` that returned None) and
+    is now skipped like any other dangling row. FK enforcement (PRAGMA foreign_keys=ON, merged
+    2026-07-27) makes that state unreachable going forward; skipping is what the surrounding
+    code already does for every other broken reference. Output is otherwise identical — checked
+    row-for-row, order included, across all 112 (criterion x kingdom x ties x verified) scopes
+    of the real corpus.
+    """
+    out_a, out_b = aliased(ModelOutput), aliased(ModelOutput)
+    gen_a, gen_b = aliased(Generator), aliased(Generator)
     # Exclude gold attention-check comparisons, and (left outer join) any vote from
     # a session whose trust has fallen below TRUST_THRESHOLD — anti-abuse gating.
     stmt = (
-        select(Vote, Comparison)
+        select(
+            Vote.winner,
+            Comparison.id,
+            Comparison.ballot_id,
+            gen_a.id,
+            gen_a.paradigm,
+            gen_b.id,
+            gen_b.paradigm,
+        )
         .join(Comparison, Vote.comparison_id == Comparison.id)
+        .outerjoin(out_a, Comparison.output_a_id == out_a.id)
+        .outerjoin(out_b, Comparison.output_b_id == out_b.id)
+        .outerjoin(gen_a, out_a.generator_id == gen_a.id)
+        .outerjoin(gen_b, out_b.generator_id == gen_b.id)
         .outerjoin(VoterSession, VoterSession.session_id == Vote.session_id)
         .where(
             Comparison.criterion_id == criterion_id,
@@ -290,21 +429,22 @@ def _matches_for_scope(
     elif category_id is not None:
         stmt = stmt.join(Task, Comparison.task_id == Task.id).where(Task.category_id == category_id)
 
+    # Vote id order: the previous implementation had no ORDER BY and took whatever the driver
+    # returned, which was vote insertion order in practice. Pinned explicitly because the
+    # bootstrap resamples this list against a seeded RNG (app/ranking.py::_bootstrap_scores) —
+    # reordering it would silently move every published confidence interval.
+    stmt = stmt.order_by(Vote.id)
+
     ref_gens = mode_a_excluded_generator_ids(db)
-    matches: list[tuple[int, int]] = []
-    groups: list[int] = []
-    for vote, comparison in db.execute(stmt).all():
-        if vote.winner == "bad":
+    rows: list[tuple[int, int, str, int]] = []
+    for winner, comp_id, ballot_id, a_id, a_par, b_id, b_par in db.execute(stmt).all():
+        if winner == "bad":
             continue
-        out_a = db.get(ModelOutput, comparison.output_a_id)
-        out_b = db.get(ModelOutput, comparison.output_b_id)
-        if out_a is None or out_b is None:
+        if a_id is None or b_id is None:
             continue  # dangling vote (output deleted) — not a valid comparison
-        gen_a = out_a.generator_id
-        gen_b = out_b.generator_id
-        if gen_a in ref_gens or gen_b in ref_gens:
+        if a_id in ref_gens or b_id in ref_gens:
             continue  # GT/reference scans are not perceptual competitors (Mode-A exclusion)
-        if gen_a == gen_b:
+        if a_id == b_id:
             # Both outputs came from the SAME generator ("TRELLIS vs TRELLIS"). Matchmaking now
             # refuses to serve such a pair, but historic comparisons already carry real votes.
             # A (G, G) match is a model beating itself: meaningless as a preference signal and
@@ -312,24 +452,13 @@ def _matches_for_scope(
             # the DB (audit trail) — they are just inert here. The same_paradigm() guard below
             # can't catch this: same_paradigm(p, p) is trivially true.
             continue
-        if not same_paradigm(db.get(Generator, gen_a).paradigm, db.get(Generator, gen_b).paradigm):
+        if not same_paradigm(a_par, b_par):
             continue  # never rank across paradigms
         # Ballot-group key: comparisons derived from one K-wise ballot share ballot_id, so
         # their bootstrap resamples move together (not independently). Native pairwise votes
         # (ballot_id is None) each get a unique negative key — a singleton group.
-        gkey = comparison.ballot_id if comparison.ballot_id is not None else -comparison.id
-        if vote.winner == "a":
-            matches.append((gen_a, gen_b))
-            groups.append(gkey)
-        elif vote.winner == "b":
-            matches.append((gen_b, gen_a))
-            groups.append(gkey)
-        elif vote.winner == "tie" and include_ties:
-            matches.append((gen_a, gen_b))
-            groups.append(gkey)
-            matches.append((gen_b, gen_a))
-            groups.append(gkey)
-    return matches, groups
+        rows.append((a_id, b_id, winner, ballot_id if ballot_id is not None else -comp_id))
+    return rows
 
 
 def head_to_head_record(
@@ -359,8 +488,11 @@ def head_to_head_record(
     crit = db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
     if crit is None:
         return []
-    decisive, _ = _matches_for_scope(db, crit.id, category_ids=category_ids, include_ties=False)
-    with_ties, _ = _matches_for_scope(db, crit.id, category_ids=category_ids, include_ties=True)
+    # ONE scan. This used to call _matches_for_scope twice over the same scope — once
+    # decisive-only, once with ties — which doubled the cost of the most expensive query on
+    # the page for two views of identical rows. The split-tie form is derivable from the
+    # per-comparison rows, so it is derived here instead of re-read.
+    rows = _scope_rows(db, crit.id, category_ids=category_ids)
 
     def _tally(matches: list[tuple[int, int]]) -> dict[int, dict]:
         t: dict[int, dict] = {}
@@ -374,6 +506,19 @@ def head_to_head_record(
                 t.setdefault(winner, {"wins": 0, "losses": 0})
                 t[winner]["losses"] += 1
         return t
+
+    decisive: list[tuple[int, int]] = []
+    with_ties: list[tuple[int, int]] = []
+    for gen_a, gen_b, winner, _gkey in rows:
+        if winner == "a":
+            decisive.append((gen_a, gen_b))
+            with_ties.append((gen_a, gen_b))
+        elif winner == "b":
+            decisive.append((gen_b, gen_a))
+            with_ties.append((gen_b, gen_a))
+        elif winner == "tie":
+            with_ties.append((gen_a, gen_b))
+            with_ties.append((gen_b, gen_a))
 
     decisive_tally = _tally(decisive)
     all_tally = _tally(with_ties)
@@ -574,14 +719,15 @@ def generator_trend_series(
     ref_gens = mode_a_excluded_generator_ids(db)
     records: list[tuple[dt.datetime, int, int, str]] = []  # (created, gen_a, gen_b, winner)
     gen_paradigm: dict[int, str] = {}
-    for vote, comparison in db.execute(stmt).all():
+    pairs = db.execute(stmt).all()
+    out_gen = _output_generator_ids(db, pairs)
+    for vote, comparison in pairs:
         if vote.winner == "bad":
             continue
-        out_a = db.get(ModelOutput, comparison.output_a_id)
-        out_b = db.get(ModelOutput, comparison.output_b_id)
-        if out_a is None or out_b is None:
+        gen_a = out_gen.get(comparison.output_a_id)
+        gen_b = out_gen.get(comparison.output_b_id)
+        if gen_a is None or gen_b is None:
             continue  # dangling vote (output deleted)
-        gen_a, gen_b = out_a.generator_id, out_b.generator_id
         if gen_a in ref_gens or gen_b in ref_gens:
             continue
         if gen_a == gen_b:
@@ -1269,17 +1415,18 @@ def compute_bias(db: Session) -> dict:
     rows = db.execute(
         select(Vote, Comparison).join(Comparison, Vote.comparison_id == Comparison.id)
     ).all()
+    fmt_of = _output_asset_formats(db, rows)
     a = b = tie = bad = cross_format = n = 0
     fmt_wins: dict[str, int] = defaultdict(int)
     fmt_games: dict[str, int] = defaultdict(int)
     for vote, comp in rows:
-        out_a = db.get(ModelOutput, comp.output_a_id)
-        out_b = db.get(ModelOutput, comp.output_b_id)
-        if out_a is None or out_b is None:
+        fmt_a = fmt_of.get(comp.output_a_id)
+        fmt_b = fmt_of.get(comp.output_b_id)
+        if fmt_a is None or fmt_b is None:
             continue  # dangling vote (output deleted) — not a valid comparison, mirrors the
             # identical guard in _matches_for_scope
         n += 1
-        is_cross = out_a.asset_format != out_b.asset_format
+        is_cross = fmt_a != fmt_b
         if is_cross:
             cross_format += 1
         if vote.winner == "a":
@@ -1291,10 +1438,10 @@ def compute_bias(db: Session) -> dict:
         else:
             bad += 1
         if is_cross and vote.winner in ("a", "b"):
-            win_out, lose_out = (out_a, out_b) if vote.winner == "a" else (out_b, out_a)
-            fmt_wins[win_out.asset_format] += 1
-            fmt_games[win_out.asset_format] += 1
-            fmt_games[lose_out.asset_format] += 1
+            win_fmt, lose_fmt = (fmt_a, fmt_b) if vote.winner == "a" else (fmt_b, fmt_a)
+            fmt_wins[win_fmt] += 1
+            fmt_games[win_fmt] += 1
+            fmt_games[lose_fmt] += 1
     decisive = a + b
 
     # Gold attention-check + trust stats.
@@ -1432,9 +1579,18 @@ def coverage_summary(db: Session, category_ids: set[int] | None = None) -> dict:
     names = generator_display_names(db)
     excluded = mode_a_excluded_generator_ids(db)
 
+    # Bulk-load the non-gold outputs ONCE, grouped by generator and by task. `g.outputs` /
+    # `t.outputs` are lazy relationships: touching them per row cost one round trip each (57
+    # generators + 20 tasks on the live corpus) on top of the paradigm tally above.
+    _outs_by_gen: dict[int, list] = defaultdict(list)
+    _outs_by_task: dict[int, list] = defaultdict(list)
+    for o in db.execute(select(ModelOutput).where(ModelOutput.is_gold.is_(False))).scalars():
+        _outs_by_gen[o.generator_id].append(o)
+        _outs_by_task[o.task_id].append(o)
+
     gen_rows = []
     for g in db.execute(select(Generator)).scalars().all():
-        outs = [o for o in g.outputs if not o.is_gold]
+        outs = _outs_by_gen.get(g.id, [])
         if not outs:
             continue  # gold-only / empty generators don't appear on the public board
         votes = sum(o.n_comparisons for o in outs)
@@ -1455,48 +1611,66 @@ def coverage_summary(db: Session, category_ids: set[int] | None = None) -> dict:
     _tasks_stmt = select(Task).where(Task.active.is_(True))
     if category_ids is not None:
         _tasks_stmt = _tasks_stmt.where(Task.category_id.in_(category_ids))
-    for t in db.execute(_tasks_stmt).scalars().all():
-        outs = [o for o in t.outputs if not o.is_gold]
-        cat = db.get(Category, t.category_id)
-        diff = (
-            db.execute(select(TaskDifficulty).where(TaskDifficulty.task_id == t.id))
-            .scalars()
-            .first()
-        )
-        mode_a_votes = db.execute(
-            select(func.count(Vote.id))
+    _cats = {
+        c.id: c for c in db.execute(select(Category)).scalars()
+    }  # was db.get(Category, ...) per task
+    tasks = db.execute(_tasks_stmt).scalars().all()
+
+    # Everything the per-task loop used to fetch one task at a time, as six grouped queries.
+    # The loop cost 5-6 round trips PER TASK; on the live corpus that was ~100 statements for
+    # 20 tasks, and it grows with the corpus. These are the same aggregates, grouped.
+    _diff = {d.task_id: d for d in db.execute(select(TaskDifficulty)).scalars()}
+    _mode_a_votes = dict(
+        db.execute(
+            select(Comparison.task_id, func.count(Vote.id))
             .select_from(Vote)
             .join(Comparison, Vote.comparison_id == Comparison.id)
-            .where(Comparison.task_id == t.id, Comparison.is_gold.is_(False))
-        ).scalar_one()
-        judge_votes = db.execute(
-            select(func.count(JudgeVote.id)).where(JudgeVote.task_id == t.id)
-        ).scalar_one()
-        out_ids = [o.id for o in outs]
-        has_mode_b = bool(
-            out_ids
-            and db.execute(
-                select(func.count(Metric.id)).where(Metric.output_id.in_(out_ids))
-            ).scalar_one()
+            .where(Comparison.is_gold.is_(False))
+            .group_by(Comparison.task_id)
+        ).all()
+    )
+    _judge_votes = dict(
+        db.execute(
+            select(JudgeVote.task_id, func.count(JudgeVote.id)).group_by(JudgeVote.task_id)
+        ).all()
+    )
+    _rubric_tasks = {tid for (tid,) in db.execute(select(TraitRubric.task_id).distinct()).all()}
+    # Metric / TraitScore are keyed by OUTPUT, so group them by the output's task. The is_gold
+    # filter is load-bearing, not incidental: the per-task loop scoped both to the task's
+    # NON-GOLD outputs, so dropping it would light up has_mode_b — and pull gold rows into the
+    # accuracy mean — for a task whose only scored output is a gold reference.
+    _metric_tasks = {
+        tid
+        for (tid,) in db.execute(
+            select(ModelOutput.task_id)
+            .join(Metric, Metric.output_id == ModelOutput.id)
+            .where(ModelOutput.is_gold.is_(False))
+            .distinct()
+        ).all()
+    }
+    _acc: dict[int, list[float]] = defaultdict(list)
+    for tid, acc in db.execute(
+        select(ModelOutput.task_id, TraitScore.botanical_accuracy)
+        .join(TraitScore, TraitScore.output_id == ModelOutput.id)
+        .where(
+            ModelOutput.is_gold.is_(False),
+            TraitScore.botanical_accuracy.is_not(None),
         )
+    ).all():
+        _acc[tid].append(acc)
+
+    for t in tasks:
+        outs = _outs_by_task.get(t.id, [])
+        cat = _cats.get(t.category_id)
+        diff = _diff.get(t.id)
+        mode_a_votes = _mode_a_votes.get(t.id, 0)
+        judge_votes = _judge_votes.get(t.id, 0)
+        has_mode_b = t.id in _metric_tasks
         # Mode-C: this task has a literature-sourced trait rubric, and the mean
         # botanical-accuracy over its scored (calibrated-class) outputs.
-        has_rubric = bool(
-            db.execute(
-                select(func.count(TraitRubric.id)).where(TraitRubric.task_id == t.id)
-            ).scalar_one()
-        )
-        mode_c_accuracy = None
-        if out_ids:
-            accs = [
-                ts.botanical_accuracy
-                for ts in db.execute(
-                    select(TraitScore).where(TraitScore.output_id.in_(out_ids))
-                ).scalars()
-                if ts.botanical_accuracy is not None
-            ]
-            if accs:
-                mode_c_accuracy = round(sum(accs) / len(accs), 3)
+        has_rubric = t.id in _rubric_tasks
+        accs = _acc.get(t.id, [])
+        mode_c_accuracy = round(sum(accs) / len(accs), 3) if accs else None
         task_rows.append(
             {
                 "task": t.title,
@@ -1513,12 +1687,21 @@ def coverage_summary(db: Session, category_ids: set[int] | None = None) -> dict:
         )
     task_rows.sort(key=lambda r: (-r["outputs"], r["task"]))
 
-    # Count non-gold outputs by paradigm
-    by_paradigm: dict[str, int] = {}
-    for o in db.execute(select(ModelOutput).where(ModelOutput.is_gold.is_(False))).scalars():
-        g = db.get(Generator, o.generator_id)
-        key = g.paradigm if g else ""
-        by_paradigm[key] = by_paradigm.get(key, 0) + 1
+    # Count non-gold outputs by paradigm. This is a GROUP BY, and used to be written as a Python
+    # loop that hydrated every non-gold ModelOutput row and then re-fetched that row's Generator
+    # by primary key to read ONE column — 352 single-row generator SELECTs on the live instance,
+    # 17.9s of /models' 8s page (and /coverage's, which calls this too). Microseconds against
+    # in-process SQLite, a network round trip each against managed Postgres.
+    by_paradigm: dict[str, int] = {
+        (paradigm or ""): n
+        for paradigm, n in db.execute(
+            select(Generator.paradigm, func.count(ModelOutput.id))
+            .select_from(ModelOutput)
+            .join(Generator, Generator.id == ModelOutput.generator_id)
+            .where(ModelOutput.is_gold.is_(False))
+            .group_by(Generator.paradigm)
+        )
+    }
 
     return {"generators": gen_rows, "tasks": task_rows, "by_paradigm": by_paradigm}
 
@@ -1999,6 +2182,40 @@ def _gallery_slug(title: str) -> str:
     return title.split("—")[0].strip().lower().replace(" ", "_")
 
 
+@functools.lru_cache(maxsize=128)
+def _gallery_manifest(slug: str) -> tuple[dict, ...]:
+    """The reference gallery manifest for `slug`, read through the STORAGE BACKEND.
+
+    Reading it off the local filesystem is what made the galleries vanish in production: the
+    image excludes `data/`, so `config.ASSET_DIR` is empty on the public instance and every
+    `Path.exists()` was False while the photos sat in R2. The image URLs beside this always went
+    through `storage.url_for()`; only the manifest test did not, so the whole gallery silently
+    disappeared while working perfectly in dev.
+
+    Cached because it is static for the lifetime of a deploy (the gallery only changes via a new
+    bundle import or image), and this sits on the /api/next hot path where an S3 round trip per
+    request would be pure latency. Tests mutating the gallery must call
+    `reference_gallery_cache_clear()`.
+
+    A missing gallery is normal — not every taxon has one — so a miss returns () rather than
+    raising.
+    """
+    st = get_storage()
+    rel = f"reference/gallery/{slug}/manifest.json"
+    try:
+        if not st.exists(rel):
+            return ()
+        items = json.loads(st.read(rel))
+    except (ValueError, TypeError, OSError):
+        return ()
+    return tuple(i for i in items if isinstance(i, dict))
+
+
+def reference_gallery_cache_clear() -> None:
+    """Drop the cached gallery manifests (tests, and any in-process gallery swap)."""
+    _gallery_manifest.cache_clear()
+
+
 def reference_images_for_task(db: Session, task) -> list[dict]:
     """Ordered reference images for a task, each {url, credit}: an independent CC species gallery
     (data/assets/reference/gallery/<slug>/, sourced from iNaturalist) so voters judge fidelity
@@ -2008,12 +2225,8 @@ def reference_images_for_task(db: Session, task) -> list[dict]:
     config.INPUT_REFERENCE_EXEMPT_SLUGS (barley-MRI: a root stand-in with no whole-plant gallery).
     Only QA-passed gallery images are shown. Task-scoped; empty list if nothing is on record.
     cc-by gallery photos carry their required attribution in `credit`."""
-    import json
-
-    from . import config
     from .models import ModelOutput
     from .reference_provenance import _image_name, cleared_reference_images
-    from .storage import get_storage
 
     st = get_storage()
     out: list[dict] = []
@@ -2039,19 +2252,13 @@ def reference_images_for_task(db: Session, task) -> list[dict]:
                 seen.add(img)
                 out.append({"url": st.url_for(img), "credit": "reconstruction input photo"})
 
-    gdir = config.ASSET_DIR / "reference" / "gallery" / slug
-    manifest = gdir / "manifest.json"
-    if manifest.exists():
-        try:
-            for item in json.loads(manifest.read_text()):
-                # QA-failed reference images (fruit-only / isolated / species mismatch) are not
-                # shown. Default-true so un-scored legacy manifests are unaffected until scored.
-                if not item.get("passed_qa", True):
-                    continue
-                rel = f"reference/gallery/{slug}/{item['file']}"
-                out.append(
-                    {"url": st.url_for(rel), "credit": item.get("attribution", "iNaturalist")}
-                )
-        except (ValueError, KeyError, OSError):
-            pass
+    for item in _gallery_manifest(slug):
+        # QA-failed reference images (fruit-only / isolated / species mismatch) are not
+        # shown. Default-true so un-scored legacy manifests are unaffected until scored.
+        if not item.get("passed_qa", True):
+            continue
+        if "file" not in item:
+            continue
+        rel = f"reference/gallery/{slug}/{item['file']}"
+        out.append({"url": st.url_for(rel), "credit": item.get("attribution", "iNaturalist")})
     return out

@@ -407,13 +407,19 @@ CRITERIA = [
     ("scientific_usefulness", "Scientific usefulness", "Useful for downstream science"),
 ]
 
-# (slug, name, kind)
+# (slug, name, kind, paradigm)
+#
+# The demo generators carry a real paradigm rather than NULL. Two reasons: the matchmaker
+# groups by paradigm (a NULL key is one degenerate group, unlike any real corpus), and the
+# vote roster (config.ARENA_VOTE_PARADIGMS) is an allowlist in which NULL is off-roster — a
+# null-paradigm demo corpus produces no servable pair at all. They share ONE paradigm so the
+# demo task still has a pairable group of >=2 distinct generators.
 GENERATORS = [
-    ("gen-alpha", "Generator Alpha", "model"),
-    ("gen-beta", "Generator Beta", "model"),
-    ("gen-gamma", "Generator Gamma", "model"),
-    ("gen-delta", "Generator Delta", "model"),
-    ("baseline-blob", "Baseline (blob)", "baseline"),
+    ("gen-alpha", "Generator Alpha", "model", "image_recon"),
+    ("gen-beta", "Generator Beta", "model", "image_recon"),
+    ("gen-gamma", "Generator Gamma", "model", "image_recon"),
+    ("gen-delta", "Generator Delta", "model", "image_recon"),
+    ("baseline-blob", "Baseline (blob)", "baseline", "image_recon"),
 ]
 
 # (slug, category_slug, title, prompt, shape) — all demo tasks render to GLB meshes.
@@ -481,8 +487,8 @@ def seed_all(db: Session | None = None, force: bool = False) -> dict:
             crits[slug] = cr
 
         gens = {}
-        for slug, name, kind in GENERATORS:
-            g = Generator(slug=slug, name=name, kind=kind, is_anonymous=True)
+        for slug, name, kind, paradigm in GENERATORS:
+            g = Generator(slug=slug, name=name, kind=kind, is_anonymous=True, paradigm=paradigm)
             db.add(g)
             gens[slug] = g
         db.flush()  # assign ids
@@ -613,4 +619,21 @@ def _seed_gold(db: Session, task_by_slug: dict[str, tuple[Task, str]]) -> int:
 
 
 if __name__ == "__main__":
-    print(seed_all(force=True))
+    # force is OPT-IN. It used to be the default here, which made `python -m app.seed` a
+    # database-destroying command that looked like a setup step — and the production
+    # Dockerfile ran exactly that on every container boot. Containers restart for ordinary
+    # reasons (deploys, health checks, host migrations), so a public instance would have
+    # wiped every collected vote and reseeded demo data, repeatedly. Votes are the one
+    # irreplaceable thing this project holds.
+    #
+    # The safe default is the same one seed_all() already had; only this entry point
+    # disagreed with it. See tests/test_seed_entrypoint_is_not_destructive.py.
+    import argparse
+
+    ap = argparse.ArgumentParser(description="Seed demo data. Idempotent unless --force.")
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="WIPE every seeded table and rebuild. Destroys votes. Never use on a live instance.",
+    )
+    print(seed_all(force=ap.parse_args().force))

@@ -72,6 +72,23 @@ python -m scripts.import_public --bundle public_bundle/v1
 Import verifies bundle checksums and fails loud on mismatch — do not proceed on a
 partial or corrupted transfer.
 
+The import has two phases: rows into the database, then blobs into storage. The blob phase is
+**resumable** — it skips objects already present (a HEAD, not a PUT) and retries transient
+transport faults — so a broken transfer is re-run, never restarted. Re-run the blob phase alone
+with:
+
+```bash
+python -m scripts.import_public --bundle public_bundle/v1 --assets-only
+```
+
+This matters more than it sounds. A release bundle is multiple GB over whatever link the
+operator has, and on the first real deploy the upload died ~40 minutes in on a single corrupted
+TLS record (`SSLV3_ALERT_BAD_RECORD_MAC`). Nothing was wrong with the bundle or the credentials.
+
+`--assets-only` is also the right flag when only the blobs changed. Its opposite case — promoting
+recomputed leaderboards without moving 4 GB of unchanged meshes — is just a normal import: the
+row phase rewrites the boards and the blob phase skips every object it already finds.
+
 ## 4. Install dependencies and boot the app
 
 Install the **runtime** set only:
@@ -103,6 +120,46 @@ filled from the host's secret store (never commit real values):
 - `BIO3D_REQUIRE_CAPTCHA=true` + `BIO3D_CAPTCHA_PROVIDER=turnstile` +
   `BIO3D_CAPTCHA_SECRET` — bot protection on public vote/submit endpoints
 - `BIO3D_RECON_SCORER_URL=` — left empty; scoring stays off on the public instance
+- `BIO3D_GOOGLE_SITE_VERIFICATION` / `BIO3D_BING_SITE_VERIFICATION` — ownership tokens from
+  Search Console / Bing Webmaster Tools. Optional; unset renders no tag at all (an ownership
+  `<meta>` with `content=""` is a malformed claim, so there is no safe default)
+- `BIO3D_INDEXNOW_KEY` — 8–128 chars of `[a-zA-Z0-9-]`; generate with
+  `python -c "from app.indexnow import generate_key; print(generate_key())"`. Serves the key
+  file at `/indexnow-key.txt`, which is how IndexNow verifies domain ownership. Unset means the
+  key file 404s and `scripts/submit_indexnow.py` refuses to run — deliberately, because the
+  alternative is a 403 from the API several steps removed from the cause
+
+## 4b. Search-engine submission (optional, after the first deploy)
+
+`robots.txt` advertises the sitemap, so a crawler that already knows the site will find it.
+These steps tell the search engines the site exists and report back on whether it worked:
+
+1. **Search Console** — add the property at `search.google.com/search-console`, choose the
+   HTML-tag method, put the token in `BIO3D_GOOGLE_SITE_VERIFICATION`, redeploy, then verify
+   and submit `/sitemap.xml`.
+2. **Bing Webmaster Tools** — `bing.com/webmasters`; it can import the Search Console property
+   directly, or use `BIO3D_BING_SITE_VERIFICATION` the same way.
+3. **IndexNow** — set `BIO3D_INDEXNOW_KEY`, redeploy, then
+   `python scripts/submit_indexnow.py --base-url https://<domain>`. One POST reaches Bing,
+   Yandex, Seznam and Naver; no account needed. Re-run after a deploy that adds or changes
+   URLs. `--dry-run` prints the payload without sending it.
+
+## 4c. Citable DOI via Zenodo (optional)
+
+**Order matters and is not recoverable:** Zenodo only mints a DOI for releases created _after_
+the GitHub integration is switched on. Enabling it later does not pick up existing releases —
+those have to be uploaded manually, oldest first.
+
+1. Sign in at `zenodo.org` with GitHub and authorise it.
+2. Under _GitHub_, flip the switch for the repository. (It must be public.)
+3. **Then** cut the release: `git tag -a v0.1.0 -m "..." && git push origin v0.1.0`, and
+   publish it on GitHub.
+4. Zenodo mints the DOI within a few minutes. Add the badge to `README.md` and the DOI to
+   `CITATION.cff`.
+
+Note what this DOIs: the **repository** — code, and the docs in it. It is not a DOI for the
+corpus, which has no public distribution yet (`/dataset` currently describes a release that is
+not downloadable). A dataset DOI is a separate, larger job.
 
 ## 5. Smoke test
 
@@ -124,12 +181,35 @@ Then confirm the internal research pages are **404**, not 200 — with scoring o
 internal page and 404s under the public posture, so the smoke test failed against a correctly
 configured instance.)
 
+## Never recompute on the public instance
+
+Do not call `/admin/recompute` or `/admin/recompute_judge` against a public deploy. The
+Bradley-Terry fit runs a 200-sample bootstrap (`config.BT_BOOTSTRAP`) while holding the rating
+tables in memory; on a 1 GB web machine, inside an HTTP request, it OOM-killed the VM ("Virtual
+machine exited abruptly") after ~220 seconds.
+
+It also should never be necessary. Every board the public site renders — global, per-kingdom,
+and both AI-judge boards — is **promoted in the bundle**, fitted on the internal instance where
+the database is local. If a board looks stale, the fix is to re-run the recompute internally and
+export a new bundle, not to compute anything in production.
+
 ## Free-tier hosting targets
 
 - **App**: Fly.io or Render (either works; pick whichever the deployer already has
   an account on — nothing in the app is Fly- or Render-specific)
 - **Postgres**: Neon or Supabase
 - **Assets (S3-compatible)**: Cloudflare R2
+
+The live deployment uses Fly (`fly.toml`, committed) + Neon + R2. Two settings there are easy to
+get wrong and are worth repeating for any other host:
+
+- **Trust the proxy's forwarded-for header** (`BIO3D_TRUST_FORWARDED_FOR=true` on Fly). Any
+  platform that terminates TLS at an edge makes every request appear to come from the proxy.
+  Without this the per-IP vote limiter sees ONE client, so every visitor on earth shares a single
+  300-per-60s bucket — useless against a farmer, and actively harmful to real voters.
+- **Give the machine 1 GB, not 512 MB.** Assets stream _through_ the app on remote storage (so
+  the object key never leaks to the client — see `media_asset`), and the corpus contains meshes
+  up to ~124 MB.
 
 ## What the public instance deliberately does not have
 

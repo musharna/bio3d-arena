@@ -33,7 +33,14 @@ def engine_kwargs(url: str) -> dict:
     }
 
 
-engine = create_engine(config.DATABASE_URL, future=True, **engine_kwargs(config.DATABASE_URL))
+# Re-exported so existing callers keep working; the single implementation lives in config,
+# applied where the URL enters the process so EVERY engine inherits it — including the ones
+# scripts build for themselves. See config.normalize_database_url for why.
+normalize_database_url = config.normalize_database_url
+
+# config.DATABASE_URL is already normalised; this alias just keeps the name available here.
+DATABASE_URL = config.DATABASE_URL
+engine = create_engine(DATABASE_URL, future=True, **engine_kwargs(DATABASE_URL))
 
 if config.DATABASE_URL.startswith("sqlite"):
 
@@ -203,17 +210,30 @@ def _ensure_commission_attempt_identity(engine) -> None:  # noqa: ANN001
 
 
 def ensure_schema(target_engine=None) -> None:  # noqa: ANN001
-    """Bring a DB up to the current schema: create missing tables, ADD missing additive columns,
-    then rebuild any table whose CONSTRAINTS are stale. Idempotent.
+    """Bring a DB up to the current schema: create missing tables, and — on SQLite only — ADD
+    missing additive columns and rebuild any table whose CONSTRAINTS are stale. Idempotent.
 
     Takes an engine so a tool that writes a DB other than this process's own (scripts that promote
-    into the study DB) can heal its target instead of failing on a schema it never booted."""
+    into the study DB) can heal its target instead of failing on a schema it never booted.
+
+    The two repairs are gated on the dialect because they exist for a problem only a single-file
+    SQLite database has: it gets copied between checkouts, restored from snapshots, and handed
+    around, so it drifts behind the models, and the repairs read `sqlite_master` / `PRAGMA
+    table_info` to catch it up. Postgres has no `sqlite_master`, so running them there is not
+    merely pointless — it raises UndefinedTable on the boot path, which is exactly how the first
+    public deploy died in a restart loop (2026-07-28). Managed Postgres drifts through migrations,
+    not through file copies; `create_all` is the whole of what belongs here.
+
+    Gating inside ensure_schema rather than at the call site is deliberate: every entry point —
+    app boot, promotion scripts, tests — reaches the schema through this one function, so the fix
+    holds for all of them and a future caller cannot reintroduce the crash by forgetting."""
     from . import models  # noqa: F401  (import registers models on Base.metadata)
 
     eng = target_engine if target_engine is not None else engine
     Base.metadata.create_all(bind=eng)
-    _ensure_columns(eng)
-    _ensure_commission_attempt_identity(eng)
+    if eng.dialect.name == "sqlite":
+        _ensure_columns(eng)
+        _ensure_commission_attempt_identity(eng)
 
 
 def init_db() -> None:

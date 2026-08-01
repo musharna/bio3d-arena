@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.inspection import inspect as sqla_inspect  # noqa: E402
 
-from app import config, public_export  # noqa: E402
+from app import config, mesh_compress, public_export, texture_downscale  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
 from app.storage import StorageBackend, get_storage  # noqa: E402
 from app.models import (  # noqa: E402
@@ -29,6 +29,9 @@ from app.models import (  # noqa: E402
     Comparison,
     Vote,
     Rating,
+    KingdomRating,
+    JudgeRating,
+    KingdomJudgeRating,
     Metric,
     GoldPair,
     ReconTask,
@@ -45,6 +48,19 @@ EXPORT_MODELS = [
     Comparison,
     Vote,
     Rating,
+    # The other three cached boards. `Rating` alone used to ship, which quietly meant the public
+    # instance could show the global human board and nothing else: the kingdom boards had no cache
+    # to read, and the AI-judge board rendered its empty state ("No automated LLM-judge rankings
+    # for this selection yet") on a project that has judged four paradigms.
+    #
+    # The judge boards are the ones that MUST be promoted rather than recomputed. A cached rating
+    # is normally reproducible from the votes beside it, but `judge_vote` is not exported — a judge
+    # ballot references outputs the posture filter may drop, so shipping the ballots would dangle.
+    # Without the fitted ratings there is therefore no path to a populated judge board at all, and
+    # the page is blank forever. This is exactly the runbook's "promote, don't recompute".
+    KingdomRating,
+    JudgeRating,
+    KingdomJudgeRating,
     Metric,
     GoldPair,
     ReconTask,
@@ -100,7 +116,13 @@ def _filtered_rows(db, inc: public_export.IncludeSet) -> dict[str, list[dict]]:
                 continue
             if name == "metric" and getattr(r, "output_id", None) not in all_out:
                 continue
-            if name == "rating" and getattr(r, "generator_id", None) not in inc.generator_ids:
+            # Every cached board is keyed by generator, and a generator the posture dropped is not
+            # in the bundle — so its rating row would dangle on import and, worse, would rank an
+            # entrant the public site does not show.
+            if (
+                name in ("rating", "kingdom_rating", "judge_rating", "kingdom_judge_rating")
+                and getattr(r, "generator_id", None) not in inc.generator_ids
+            ):
                 continue
             if name == "gold_pair" and (
                 r.task_id not in inc.task_ids
@@ -116,6 +138,71 @@ def _filtered_rows(db, inc: public_export.IncludeSet) -> dict[str, list[dict]]:
     return tables
 
 
+class ReferenceLicenseError(RuntimeError):
+    """A gallery photo cannot be redistributed under its license."""
+
+
+def copy_reference_gallery(out: Path, posture: str) -> int:
+    """Ship the CC species galleries into the bundle. Returns the photo count.
+
+    They go under `assets/reference/gallery/<slug>/`, which is not decorative placement: the
+    uploader (`import_public._bundle_assets`) keys everything under `assets/` relative to it, so
+    a photo lands in storage at exactly `reference/gallery/<slug>/<file>` — the key
+    `service.reference_images_for_task` asks for. Any other layout uploads real files under a
+    path nothing reads, which looks like a successful publish and still shows no images.
+
+    Before this the galleries shipped nowhere at all: the export wrote only output blobs and
+    gt/, and the image excludes `data/`, so the public instance had no galleries in either place
+    and every task rendered `references: []`.
+
+    QA-failed photos are withheld AND pruned from the shipped manifest, so a manifest entry can
+    never point at a file that was not shipped (which would render a broken image).
+
+    Licensing follows the posture split already used for recon input photos: shipping the photo
+    FILES for redistribution requires a redistributable license, and that gate is fail-loud.
+    `display` does not redistribute — the photos are shown with their required attribution, the
+    same posture under which the meshes are displayed — so it does not gate.
+    """
+    from app.licensing import REDISTRIBUTABLE_LICENSES, normalize_license
+
+    src = config.ASSET_DIR / "reference" / "gallery"
+    if not src.is_dir():
+        return 0
+    n = 0
+    for manifest_path in sorted(src.glob("*/manifest.json")):
+        slug = manifest_path.parent.name
+        try:
+            items = json.loads(manifest_path.read_text())
+        except ValueError as e:
+            raise ReferenceLicenseError(f"unreadable gallery manifest for {slug}: {e}") from e
+        keep = [i for i in items if isinstance(i, dict) and i.get("passed_qa", True)]
+
+        if posture == "redistribute":
+            bad = [
+                (slug, i.get("file"), i.get("license"))
+                for i in keep
+                if normalize_license(i.get("license")) not in REDISTRIBUTABLE_LICENSES
+            ]
+            if bad:
+                raise ReferenceLicenseError(
+                    f"{len(bad)} reference photo(s) are not redistributable under their license "
+                    f"— refusing to ship them in a redistribute bundle: {bad[:5]}"
+                )
+
+        dst = out / "assets" / "reference" / "gallery" / slug
+        dst.mkdir(parents=True, exist_ok=True)
+        shipped = []
+        for i in keep:
+            f = manifest_path.parent / str(i.get("file", ""))
+            if not i.get("file") or not f.is_file():
+                continue
+            (dst / i["file"]).write_bytes(f.read_bytes())
+            shipped.append(i)
+            n += 1
+        (dst / "manifest.json").write_text(json.dumps(shipped, indent=1))
+    return n
+
+
 def export_bundle(
     db,
     storage: StorageBackend,
@@ -125,7 +212,17 @@ def export_bundle(
     out_dir,
     posture: str = "redistribute",
     dry_run: bool = False,
+    compress: bool = False,
 ) -> dict:
+    """`compress` defaults OFF here and ON at the command line (see main).
+
+    That asymmetry is deliberate. Compression needs a Node toolchain, and defaulting it on in the
+    library made every programmatic caller — the export tests among them — fail with
+    ToolchainUnavailable on a machine whose only Node was 18. A release goes out through
+    `python -m scripts.export_public`, which opts in and fails loudly if the toolchain is missing;
+    a caller that never asked to compress should not inherit a Node dependency. The manifest
+    records `compression.enabled`, so an uncompressed bundle is never silent.
+    """
     from app import admissibility
     from app.reference_provenance import (
         assert_recon_photos_cleared,
@@ -173,11 +270,10 @@ def export_bundle(
     (out / "rows.json").write_bytes(rows_bytes)
     manifest["sha256"] = hashlib.sha256(rows_bytes).hexdigest()
 
-    # Asset blobs for every included output.
-    for d in tables["model_output"]:
-        rel = d["asset_path"]
-        (out / "assets" / rel).parent.mkdir(parents=True, exist_ok=True)
-        (out / "assets" / rel).write_bytes(storage.read(rel))
+    # Asset blobs for every included output, Draco-compressed on the way into the bundle.
+    manifest["compression"] = _stage_assets(out, storage, tables["model_output"], compress=compress)
+
+    manifest["reference_photos"] = copy_reference_gallery(out, posture)
 
     # Baked GT reference GLBs only (never raw .npy). Copy whatever exists under gt/.
     # INVARIANT: gt/ reference GLBs are bio3d's own held-out meshes / CC-licensed scans -- not
@@ -193,6 +289,92 @@ def export_bundle(
     return manifest
 
 
+def _stage_assets(out: Path, storage: StorageBackend, rows: list[dict], *, compress: bool) -> dict:
+    """Write every output blob into the bundle, Draco-compressing GLBs as they land.
+
+    Compression belongs HERE rather than in the corpus or the web app:
+
+    * the internal corpus stays byte-identical, so reproducibility, any dataset release, and the
+      votes already cast against those exact meshes are untouched;
+    * `asset_path` is unchanged, so nothing downstream — import, the DB, `media_asset` — needs to
+      know this happened. The bundle simply carries a smaller file at the same key. That is the
+      same "promote, don't recompute" shape the scores and leaderboards already use;
+    * the public host never needs the Node toolchain, which matters because `requirements.txt` is
+      deliberately Python-only (PR #87: 173 MB runtime vs 5.6 GB with the research stack).
+
+    Measured motivation: 68% of the 5.35 GB votable roster is raw geometry, and a PAIRWISE ballot
+    already takes 83 s to become comparable on Fast 4G.
+    """
+    stats = {
+        "compressed": 0,
+        "skipped_not_glb": 0,
+        "kept_original": 0,
+        "textures_resized": 0,
+        "enabled": compress,
+    }
+    node = cli = None
+    if compress:
+        node = mesh_compress.node_binary()
+        mesh_compress.require_node(node)  # fail loud and early, not per-file
+        cli = mesh_compress.cli_entry()
+        if not cli or not Path(cli).exists():
+            raise mesh_compress.ToolchainUnavailable(
+                "BIO3D_GLTF_TRANSFORM_CLI is unset or does not exist. Install "
+                "@gltf-transform/cli and point it there, or re-run with --no-compress to ship "
+                "uncompressed meshes (a pairwise ballot then costs ~83 s on 4G)."
+            )
+
+    before_total = after_total = 0
+    for d in rows:
+        rel = d["asset_path"]
+        dst = out / "assets" / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        raw = storage.read(rel)
+        dst.write_bytes(raw)
+        before_total += len(raw)
+        if not compress or not mesh_compress.is_candidate(rel):
+            stats["skipped_not_glb"] += (
+                0 if not compress else int(not mesh_compress.is_candidate(rel))
+            )
+            after_total += len(raw)
+            continue
+        # Stage 2 BEFORE stage 1: shrink textures while the container is still plain glTF.
+        # Draco rewrites the buffer wholesale, so running it first would mean decoding and
+        # re-encoding the geometry just to reach the images.
+        #
+        # A file that carries a .glb extension but is not a GLB is a corpus problem, not something
+        # to route around: it would reach voters as a mesh that never loads. Fail, but name the
+        # asset — an anonymous ValueError partway through a 939-file export tells the operator
+        # nothing about which file to go and look at.
+        try:
+            shrunk, tex_stats = texture_downscale.downscale_glb(dst.read_bytes())
+        except ValueError as e:
+            raise ValueError(f"{rel}: not a readable GLB ({e})") from e
+        if tex_stats["resized"]:
+            dst.write_bytes(shrunk)
+            stats["textures_resized"] += tex_stats["resized"]
+
+        # The temp name MUST still end in .glb: gltf-transform picks its output container from
+        # the extension, so a `foo.glb.draco` target makes it write JSON glTF instead of binary.
+        # That produced a valid-but-wrong file the structural check then rejected — and had the
+        # check not existed, a JSON document would have shipped under a .glb name and reached
+        # voters as a mesh that never loads.
+        tmp = dst.with_name(dst.stem + ".tmpdraco.glb")
+        res = mesh_compress.compress_glb(dst, tmp, node=node, cli_entry=cli)
+        if res.kept:
+            tmp.replace(dst)
+            stats["compressed"] += 1
+        else:
+            # Draco enlarged it; the original is already in place and is what we ship.
+            stats["kept_original"] += 1
+        after_total += dst.stat().st_size
+
+    stats["bytes_before"] = before_total
+    stats["bytes_after"] = after_total
+    stats["ratio"] = round(before_total / after_total, 3) if after_total else 0.0
+    return stats
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", required=True, help="comma-separated task titles")
@@ -200,6 +382,11 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--posture", default="redistribute", choices=["display", "redistribute"])
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--no-compress",
+        action="store_true",
+        help="ship meshes uncompressed (a pairwise ballot then costs ~83s on Fast 4G)",
+    )
     a = ap.parse_args()
     db = SessionLocal()
     try:
@@ -211,6 +398,7 @@ def main() -> int:
             out_dir=a.out,
             posture=a.posture,
             dry_run=a.dry_run,
+            compress=not a.no_compress,
         )
         # Advisory (non-blocking, NOT a gate): flag exported taxa whose recon completeness sits
         # far below text→3D — a suspect reference/capture the operator should inspect before

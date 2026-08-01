@@ -31,7 +31,7 @@ def test_significance_matrix_recovers_order_and_probabilities():
 
 def _cast_biased_votes(n: int = 40):
     for i in range(n):
-        nxt = client.get("/api/next").json()
+        nxt = client.get("/api/next?set=pair").json()
         # A session can vote each pairing at most once (the /api/vote 409 guard); once its
         # fresh pairs are exhausted /api/next returns 404, so stop rather than KeyError.
         if "comparison_id" not in nxt:

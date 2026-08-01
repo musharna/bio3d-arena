@@ -255,6 +255,11 @@ class VoterSession(Base):
     gold_seen: Mapped[int] = mapped_column(Integer, default=0)
     gold_passed: Mapped[int] = mapped_column(Integer, default=0)
     n_votes: Mapped[int] = mapped_column(Integer, default=0)
+    # Human verification, held HERE rather than in process memory: a restart, a deploy or an
+    # auto-suspend used to forget every verified voter, and the browser cannot re-solve (its
+    # Turnstile token is single-use and the widget has already fired), so the voter was locked
+    # out mid-session. This makes it as durable as the rest of their state.
+    captcha_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
     updated: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
     # Verified-login link: NULL = anonymous, set = signed in with Hugging Face (SP2).

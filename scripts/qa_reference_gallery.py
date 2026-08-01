@@ -23,6 +23,9 @@ from app.judge import JUDGE_MODEL  # noqa: E402
 from app.organ_inventory import ORGAN_INVENTORY, inventory_for  # noqa: E402
 from app.reference_qa import (  # noqa: E402
     assess_composition,
+    assess_subject,
+    composition_applies,
+    morphotype_for,
     qa_reference_image,
     species_matches,
 )
@@ -68,9 +71,24 @@ def qa_gallery(slug: str, *, client, bundle) -> dict:
         # Calibrated reference QA (2026-07-06): the VLM composition question is the fruit-only /
         # isolation signal for ALL taxa — organ-coverage's 'isolated-organ' over-fires on good
         # single-organ views (e.g. an Arabidopsis rosette). Species check via multi-class BioCLIP.
-        composition = assess_composition(client, png, taxon=taxon, common=_common(taxon))
+        # Plant/fungus-framed; misfires on animals (see reference_qa.composition_applies).
+        composition = (
+            assess_composition(client, png, taxon=taxon, common=_common(taxon))
+            if composition_applies(inv)
+            else None
+        )
         species = species_matches(bundle, png, claimed_taxon=taxon, panel=panel) if bundle else None
-        verdict = qa_reference_image(composition=composition, species=species)
+        # The subject check (2026-07-29) is what makes this gate meaningful without BioCLIP, and
+        # asks something BioCLIP cannot: is the claimed organism the photo's MAIN SUBJECT, in the
+        # form the task wants? Sourcing only ever guaranteed the identification was correct.
+        subject = assess_subject(
+            client,
+            png,
+            taxon=taxon,
+            common=_common(taxon),
+            morphotype=morphotype_for(taxon),
+        )
+        verdict = qa_reference_image(composition=composition, species=species, subject=subject)
         item["passed_qa"] = verdict["passed"]
         item["qa_reasons"] = verdict["reasons"]
         passed += verdict["passed"]
@@ -91,7 +109,10 @@ def main() -> int:
     client = _build_client()
     bundle = species_id.load_model("bioclip") if species_id.available() else None
     if bundle is None:
-        print(f"NOTE: open_clip unavailable — species check skipped (VLM {JUDGE_MODEL} only)")
+        print(
+            f"NOTE: open_clip unavailable — BioCLIP species check skipped; the VLM subject "
+            f"check ({JUDGE_MODEL}) still runs and is the load-bearing species/form gate."
+        )
 
     for slug in slugs:
         r = qa_gallery(slug, client=client, bundle=bundle)

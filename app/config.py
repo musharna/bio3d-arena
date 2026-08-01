@@ -20,7 +20,32 @@ DATA_DIR = Path(os.environ.get("BIO3D_DATA_DIR", ROOT / "data"))
 ASSET_DIR = DATA_DIR / "assets"
 DB_PATH = Path(os.environ.get("BIO3D_DB_PATH", DATA_DIR / "arena.db"))
 
-DATABASE_URL = os.environ.get("BIO3D_DATABASE_URL", f"sqlite:///{DB_PATH}")
+
+def normalize_database_url(url: str) -> str:
+    """Point a bare Postgres URL at the driver that is actually installed.
+
+    Every managed provider — Neon, Supabase, RDS — hands out a URL beginning `postgresql://`
+    (some still emit `postgres://`). SQLAlchemy maps that bare scheme to **psycopg2**, while
+    the pinned driver is **psycopg v3**, whose dialect is `postgresql+psycopg://`. An operator
+    pasting exactly the string their provider gave them gets an ImportError naming a driver
+    nobody told them to install.
+
+    Applied HERE, at the single point the URL enters the process, rather than at each engine.
+    It first lived beside the app's own engine, which left `scripts/import_public.py` — the
+    step that loads the release bundle into the public database — building its engine from the
+    raw URL and failing exactly the same way. One consumer fixed, the mechanism untouched.
+    Normalising at the source means every present and future engine inherits it.
+
+    An explicit `+driver` is respected, so a deliberate psycopg2 still works, and non-Postgres
+    URLs (sqlite: local dev and the whole test suite) are returned unchanged.
+    """
+    for prefix in ("postgresql://", "postgres://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix) :]
+    return url
+
+
+DATABASE_URL = normalize_database_url(os.environ.get("BIO3D_DATABASE_URL", f"sqlite:///{DB_PATH}"))
 
 # Mode-B recon-accuracy scorer (AgriGen's /score microservice). Read HERE rather than beside
 # its siblings below because the deploy-safety guards under it need the public/internal signal.
@@ -171,6 +196,20 @@ SITE_TAGLINE = (
     "reconstruction best matches the real thing."
 )
 OG_IMAGE_PATH = os.environ.get("BIO3D_OG_IMAGE", "/static/og-default.png")
+
+# --- search-engine submission -------------------------------------------------------------
+# All three are empty by default and every consumer treats empty as "not configured" rather
+# than emitting a blank value: an ownership <meta> with content="" is a malformed claim, and an
+# empty IndexNow key file verifies nothing (the API answers 403). Dev and preview instances
+# therefore ship none of this, which is what you want — a preview instance verifying the
+# production domain, or pinging IndexNow for URLs it does not serve, is worse than silence.
+#
+# The two verification tokens are issued against the operator's own Search Console / Webmaster
+# account, so they can only ever be configuration. IndexNow needs no account at all, which is
+# why it is the half that lives in the repo (see app/indexnow.py).
+GOOGLE_SITE_VERIFICATION = os.environ.get("BIO3D_GOOGLE_SITE_VERIFICATION", "").strip()
+BING_SITE_VERIFICATION = os.environ.get("BIO3D_BING_SITE_VERIFICATION", "").strip()
+INDEXNOW_KEY = os.environ.get("BIO3D_INDEXNOW_KEY", "").strip()
 # Set the Secure flag on session cookies.
 #
 # This used to be DERIVED from PUBLIC_BASE_URL.startswith("https://") alone, which made cookie
@@ -266,6 +305,28 @@ APP_HIDDEN_SOURCES = frozenset({"found:xfrog", "frontier:partcrafter"})
 #   capture_scan — photogrammetry / real-world capture; a data-capture reference, thin, kept for
 #     internal analysis.
 APP_HIDDEN_PARADIGMS = frozenset({"retrieval", "procedural_expert", "capture_scan"})
+
+# Paradigms eligible for the HUMAN vote pool — an ALLOWLIST, and a different axis from
+# APP_HIDDEN_PARADIGMS above. Off-roster paradigms keep everything except a slot in the arena:
+# their outputs, their model pages, their leaderboard rows, and above all their VLM-judge
+# boards, which rank them without spending any human attention.
+#
+# Why scope it at all: human votes are the scarce input, and a pairwise vote credits n_games to
+# BOTH entrants, so V votes buy 2V games. Measured on the live instance 2026-07-28 at the scope
+# the launch board uses (criterion 'overall', category_id IS NULL):
+#     everything          53 entrants  1110 games  555 votes to firm   (0/53 firm)
+#     commercial models   19 entrants   334 games  167 votes to firm
+# 555 votes is not reachable at launch traffic, and a board whose every row reads "provisional"
+# ranks nothing. 19 models WITH confidence intervals beats 53 without.
+#
+# Why this cut: the game-count distribution runs 20 down to 0 with no natural cliff, so "keep
+# the top N by games" would be selecting on the dependent variable — picking winners by how
+# often the matchmaker happened to serve them. Paradigm is independent of vote counts, and it
+# matches the existing per-modality boards, which already state that BT scores from different
+# paradigms come from disconnected match pools and are not comparable.
+#
+# Empty frozenset = unscoped (every paradigm votable). Widen this as vote volume grows.
+ARENA_VOTE_PARADIGMS = frozenset({"image_recon", "text_native"})
 
 
 def is_safe_test_db_target(value: str | None) -> bool:

@@ -134,31 +134,58 @@ def reset_captcha_sessions() -> None:
     _CAPTCHA_VERIFIED.clear()
 
 
-def captcha_ok_for_session(session_id: str, token: str | None, *, _post=_post_form) -> bool:
+def captcha_ok_for_session(
+    db: Session, session_id: str, token: str | None, *, _post=_post_form
+) -> bool:
     """Verify a voter ONCE per session rather than once per vote.
 
     Turnstile/hCaptcha tokens are single-use and short-lived, so checking one on every vote
-    means a challenge round-trip per vote. This arena's binding constraint is vote VOLUME —
-    as of the 2026-07-26 measurement it needs roughly 1000 more vote-units before most
-    entrants are rankable at all — so per-vote friction would cost more than the automation
-    it deters. One challenge per session, then the session carries it.
+    means a challenge round-trip per vote. This arena's binding constraint is vote VOLUME, so
+    per-vote friction would cost more than the automation it deters. One challenge per session,
+    then the session carries it.
+
+    The verification is PERSISTED on the voter's session row, not held in process memory. It
+    used to live in a module-level dict, which meant a restart, a deploy, or an auto-suspend
+    forgot every verified voter — and the browser cannot recover from that, because its token
+    is single-use and the widget has already fired its callback. The voter was simply locked
+    out mid-session, reported from the live instance as the captcha "having occasional issues
+    staying authorized". Session state belongs with the session.
+
+    The in-memory map is kept purely as a read-through cache to save a query per vote; it is
+    never the source of truth, so losing it costs one SELECT rather than one voter.
 
     Fails closed in both directions: an unverified session with no token is refused, and a
-    REJECTED token leaves the session unverified, so the next vote is challenged again
-    instead of being waved through.
+    REJECTED token leaves the session unverified, so the next vote is challenged again instead
+    of being waved through.
     """
     if not config.REQUIRE_CAPTCHA:
         return True
     if _CAPTCHA_VERIFIED.get(session_id):
         _CAPTCHA_VERIFIED.move_to_end(session_id)
         return True
+
+    row = db.get(VoterSession, session_id)
+    if row is not None and row.captcha_verified:
+        _remember(session_id)
+        return True
+
     if not verify_captcha(token, _post=_post):
         return False
+
+    if row is None:
+        row = get_or_create_session(db, session_id)
+    row.captcha_verified = True
+    db.flush()
+    _remember(session_id)
+    return True
+
+
+def _remember(session_id: str) -> None:
+    """Cache a known-verified session, bounded so one-shot sessions can't grow it forever."""
     _CAPTCHA_VERIFIED[session_id] = True
     _CAPTCHA_VERIFIED.move_to_end(session_id)
     while len(_CAPTCHA_VERIFIED) > _CAPTCHA_VERIFIED_MAX:
         _CAPTCHA_VERIFIED.popitem(last=False)  # evict least-recently-verified
-    return True
 
 
 def get_or_create_session(db: Session, session_id: str) -> VoterSession:

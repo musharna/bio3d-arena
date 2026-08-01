@@ -10,6 +10,7 @@ import re
 import uuid
 from pathlib import Path
 from urllib.parse import quote
+from xml.sax.saxutils import escape as xml_escape
 
 from fastapi import (
     Depends,
@@ -33,7 +34,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from . import (
     config,
@@ -43,8 +44,10 @@ from . import (
     ingest,
     integrity,
     kingdoms,
+    indexnow,
     matchmaking,
     og,
+    organisms,
     paradigms,
     ranking,
     service,
@@ -113,6 +116,10 @@ templates.env.globals["og_image_path"] = config.OG_IMAGE_PATH
 # Read live (not the value at import) so tests/deploys can toggle config.INTERNAL_PAGES_ENABLED
 # and both the route guard and the nav conditionals see the same current value.
 templates.env.globals["internal_pages"] = lambda: config.INTERNAL_PAGES_ENABLED
+# Same live-read reason: the verification tokens are set per deploy, and an instance that has
+# not been given one must render no tag at all rather than an empty ownership claim.
+templates.env.globals["google_site_verification"] = lambda: config.GOOGLE_SITE_VERIFICATION
+templates.env.globals["bing_site_verification"] = lambda: config.BING_SITE_VERIFICATION
 # Same live-read reason as above. Returns a dict rather than two globals so a template can
 # never render the widget while missing the key it needs — the two travel together.
 templates.env.globals["captcha"] = lambda: {
@@ -401,6 +408,57 @@ def _serialize_output(o: ModelOutput) -> dict:
     }
 
 
+def _vote_pool_predicate(db: Session):
+    """The ONE definition of "not servable to a human voter", shared by the pairwise and k-wise
+    builders and by pick_task/pick_pair within each.
+
+    Both builders previously carried their own copy of this closure. That duplication is the
+    exact shape of a bug already fixed once here: pick_task and pick_pair disagreeing about
+    what was excluded made pick_task offer a task pick_pair then rejected, which surfaced as
+    intermittent /api/next 404s. One definition, four call sites.
+
+    Excluded:
+      * raw reference scans — render as ugly point clouds and confound metric<->vote agreement
+      * untextured (geometry-only) outputs — flat grey blobs lose votes for lack of texture,
+        not shape. Both of the above stay on the Mode-B board.
+      * outputs auto-hidden by the flag threshold, or gated by the admissibility rubric
+        (structural u completeness u semantic-when-gating)
+      * app-hidden generators — AgriGen internal testers, never in the pool anywhere
+      * generators off the vote roster (config.ARENA_VOTE_PARADIGMS) — these are NOT hidden;
+        they keep their pages and boards, they just don't spend scarce human votes
+    """
+    from . import admissibility
+    from .sourcing import is_reference_scan, is_untextured_output
+
+    # Precomputed ONCE per request so the per-output predicate stays O(1).
+    gated = admissibility.non_admitted_output_ids(db)
+    app_hidden_gids = service.app_hidden_generator_ids(db)
+    off_roster_gids = service.vote_pool_excluded_generator_ids(db)
+
+    def excluded(o) -> bool:
+        return (
+            is_reference_scan(o.source)
+            or is_untextured_output(o)
+            or o.hidden_at is not None
+            or o.id in gated
+            or o.generator_id in app_hidden_gids
+            or o.generator_id in off_roster_gids
+        )
+
+    return excluded
+
+
+def _criterion_or_default(db: Session, criterion_slug: str | None) -> Criterion:
+    """Resolve a criterion slug, falling back to the default when absent or unknown."""
+    if criterion_slug:
+        crit = (
+            db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
+        )
+        if crit is not None:
+            return crit
+    return _default_criterion(db)
+
+
 def _build_gold_comparison(db: Session, session_id: str, crit: Criterion) -> dict | None:
     """Build a gold attention-check comparison (good vs decoy) with a known answer."""
     gp = matchmaking.pick_gold_pair(db)
@@ -443,48 +501,18 @@ def _build_comparison(
     category_slug: str | None = None,
     kingdom: str = "all",
 ) -> dict | None:
-    """Pick a task + pair (or inject a gold check), persist it, return anon payload."""
-    crit = None
-    if criterion_slug:
-        crit = (
-            db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
-        )
-    if crit is None:
-        crit = _default_criterion(db)
+    """Pick a task + pair, persist it, return anon payload.
 
-    # Occasionally serve a gold attention check instead of a real comparison.
-    if random.random() < config.GOLD_RATE:
-        gold = _build_gold_comparison(db, session_id, crit)
-        if gold is not None:
-            return gold
-
-    from .sourcing import is_reference_scan, is_untextured_output
-    from . import admissibility
+    Gold attention checks are NOT injected here — see `_build_ballot`, which owns that decision
+    for every ballot shape.
+    """
+    crit = _criterion_or_default(db, criterion_slug)
 
     category_id = _resolve_category_id(db, category_slug)
 
-    # Precompute the gated output ids ONCE (per-output exclude_fn stays O(1)): the
-    # admissibility composer unions structural ∪ completeness (∪ semantic when
-    # SEMANTIC_ADMISSIBILITY_MODE=gate) behind one call.
-    _gated = admissibility.non_admitted_output_ids(db)  # structural ∪ completeness ∪ semantic(gate)
-
-    # Exclude from the perceptual vote pool: raw-scan reference outputs (render as ugly
-    # point clouds, confound metric↔vote agreement) AND geometry-only outputs (flat grey
-    # blobs that lose votes for lack of texture, not shape). Both stay in the Mode-B board.
-    # Also exclude outputs auto-hidden (flag threshold) or D-Complete classified into a bad
-    # completeness category (config.POOL_EXCLUDED_COMPLETENESS_CATEGORIES).
-    # Same predicate for task AND pair selection so pick_task never returns a task whose
-    # only outputs pick_pair then excludes (which caused intermittent /api/next 404s).
-    _app_hidden_gids = service.app_hidden_generator_ids(db)
-
-    def _vote_excluded(o):
-        return (
-            is_reference_scan(o.source)
-            or is_untextured_output(o)
-            or o.hidden_at is not None
-            or o.id in _gated
-            or o.generator_id in _app_hidden_gids  # AgriGen internal testers: never in the pool
-        )
+    # Same predicate for task AND pair selection so pick_task never returns a task whose only
+    # outputs pick_pair then excludes (which caused intermittent /api/next 404s).
+    _vote_excluded = _vote_pool_predicate(db)
 
     # Pairings this session already voted on: the /api/vote guard 409s a re-vote of any of
     # them, so exclude them from BOTH task and pair selection (same set for both, mirroring
@@ -533,29 +561,10 @@ def _build_kwise_comparison(
     import json as _json
     import random as _random
 
-    from .sourcing import is_reference_scan, is_untextured_output
-    from . import admissibility
-
-    crit = None
-    if criterion_slug:
-        crit = (
-            db.execute(select(Criterion).where(Criterion.slug == criterion_slug)).scalars().first()
-        )
-    if crit is None:
-        crit = _default_criterion(db)
+    crit = _criterion_or_default(db, criterion_slug)
 
     category_id = _resolve_category_id(db, category_slug)
-    _gated = admissibility.non_admitted_output_ids(db)
-    _app_hidden_gids = service.app_hidden_generator_ids(db)
-
-    def _vote_excluded(o):
-        return (
-            is_reference_scan(o.source)
-            or is_untextured_output(o)
-            or o.hidden_at is not None
-            or o.id in _gated
-            or o.generator_id in _app_hidden_gids  # AgriGen internal testers: never in the pool
-        )
+    _vote_excluded = _vote_pool_predicate(db)
 
     seen = integrity.seen_quads_for(db, session_id, crit.id)
     stmt = select(Task).where(Task.active.is_(True))
@@ -581,7 +590,19 @@ def _build_kwise_comparison(
         return {
             "kind": "kwise",
             "ballot_id": ballot.id,
-            "task": {"id": task.id, "title": task.title, "prompt": task.prompt},
+            "task": {
+                "id": task.id,
+                "title": task.title,
+                "prompt": task.prompt,
+                # Feeds the same category chip the 2-up ballot fills. Without it the k-wise
+                # view had nothing to show there and displayed the literal word "K-wise".
+                "category": task.category.name if task.category else "",
+                # Same reference photos the 2-up ballot serves. Fidelity against a real organism
+                # is what this board measures, so the reference has to be on screen for EVERY
+                # ballot shape — omitting it here would have made the default ballot a beauty
+                # contest the moment k-wise stopped being opt-in.
+                "references": service.reference_images_for_task(db, task),
+            },
             "criterion": {"slug": crit.slug, "name": crit.name},
             "outputs": [_serialize_output(o) for o in quad],
         }
@@ -638,6 +659,61 @@ def _build_calibration_comparison(db: Session, session_id: str) -> dict | None:
     payload["set"] = "calibration"
     payload["progress"] = progress
     return payload
+
+
+#: `?set=` values that route to a builder other than the default. Anything else — including a
+#: typo — falls through to the default, which always serves *something* rather than 404ing on a
+#: malformed URL.
+BALLOT_MODE_PAIR = "pair"
+BALLOT_MODE_KWISE = "kwise"
+BALLOT_MODE_CALIBRATION = "calibration"
+
+
+def _build_ballot(
+    db: Session,
+    session_id: str,
+    criterion_slug: str | None = None,
+    category_slug: str | None = None,
+    *,
+    kingdom: str = "all",
+    mode: str | None = None,
+) -> dict | None:
+    """The ONE definition of "what ballot comes next", shared by /api/next and the follow-up
+    `next` embedded in the /api/vote and /api/kvote responses.
+
+    The default is K-WISE, which is not a preference for 4-up so much as a preference for the
+    largest ballot the task can support: `_build_kwise_comparison` degrades to a pairwise
+    comparison whenever no task has four admitted same-paradigm outputs from four distinct
+    generators. A pair yields one Bradley-Terry relation; a quad yields three. Human votes are
+    the scarce input on every board, so serving a pair where a quad exists discards two thirds
+    of what the voter just told us.
+
+    `?set=pair` is the explicit opt-out, and the reason this routing is centralized: /api/vote
+    used to build its follow-up with the pairwise builder unconditionally. With a k-wise default
+    that hardcoding becomes a trap — one pairwise ballot (the degrade, or an explicit opt-out)
+    would pin the voter to pairs for the rest of the session, because every follow-up came from
+    the pairwise builder regardless of what was available. The same divergence between two
+    copies of one decision already caused a live bug here once (see `_vote_pool_predicate`).
+    """
+    if mode == BALLOT_MODE_CALIBRATION:
+        # A calibration set is a fixed, fully-enumerated list of pairs; a gold check inserted
+        # into it would not belong to the set and would break its progress count.
+        return _build_calibration_comparison(db, session_id)
+
+    # Gold attention checks are a property of serving a ballot to a human, NOT of the pairwise
+    # builder that used to host them. While pairwise was the default entry point those two were
+    # indistinguishable; the moment the default changed, gold would have gone dark — the k-wise
+    # builder reaches `_build_comparison` only as a fallback, and most tasks can fill a quad, so
+    # the fallback (and with it every attention check) would almost never fire. Hoisting the
+    # injection to the routing point makes the check independent of which ballot shape follows.
+    if random.random() < config.GOLD_RATE:
+        gold = _build_gold_comparison(db, session_id, _criterion_or_default(db, criterion_slug))
+        if gold is not None:
+            return gold
+
+    if mode == BALLOT_MODE_PAIR:
+        return _build_comparison(db, session_id, criterion_slug, category_slug, kingdom=kingdom)
+    return _build_kwise_comparison(db, session_id, criterion_slug, category_slug, kingdom=kingdom)
 
 
 def _require_admin(token: str | None) -> None:
@@ -755,10 +831,12 @@ _SITEMAP_PATHS = (
     "/leaderboard",
     "/models",
     "/dataset",
-    "/spotlight",
+    # No /spotlight: it is an internal page (see spotlight_index) and 404s on the public
+    # instance, so advertising it here would hand crawlers a dead URL.
     "/methodology",
     "/coverage",
     "/tasks",
+    "/organisms",
     "/submit",
     "/terms",
     "/privacy",
@@ -787,9 +865,114 @@ def robots_txt():
     return "\n".join(lines)
 
 
+@app.get(indexnow.KEY_PATH, response_class=PlainTextResponse)
+def indexnow_key_file():
+    """Proof of domain ownership for IndexNow — the file's whole content is the key.
+
+    404s when unconfigured rather than serving an empty file: an empty key file verifies
+    nothing and the API answers 403 for it, which is a confusing way to learn the key was
+    never set. See app/indexnow.py for why this is a fixed path rather than `/{key}.txt`.
+    """
+    if not config.INDEXNOW_KEY:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return config.INDEXNOW_KEY
+
+
+@app.get("/llms.txt", response_class=PlainTextResponse)
+def llms_txt():
+    """A short factual map of the site for a model reading it directly.
+
+    Increasingly people arrive by asking a model rather than a search engine, and a model
+    answering "is there a benchmark for AI-generated 3D models of organisms" is reading text,
+    not rendering a page. This is that text: what the site is, what it covers, and what the
+    numbers currently do and do not support.
+
+    It states the unranked position on purpose. That is the single fact most likely to be
+    stated wrongly by something summarising this site — an arena with a leaderboard reads as
+    an arena with results — and it is the one this project has been most careful about
+    everywhere else.
+
+    Same rule as the sitemap: internal research surfaces 404 publicly and are not named here.
+    """
+    base = config.PUBLIC_BASE_URL
+    return "\n".join(
+        [
+            "# Bio 3D Arena",
+            "",
+            "> A blind comparison benchmark for generative 3D models of real organisms.",
+            "> Two anonymised 3D outputs of the same species are shown side by side against",
+            "> CC-licensed reference photographs, so the judgement is biological fidelity",
+            "> rather than visual appeal.",
+            "",
+            "Rankings use Bradley-Terry with bootstrap confidence intervals, computed within a",
+            "single generation method: scores from different methods come from disconnected",
+            "match pools and are not comparable. A generator without enough comparisons is",
+            "reported as unranked rather than given a point estimate, and at present most",
+            "entrants are unranked for want of votes.",
+            "",
+            "## Pages",
+            "",
+            f"- [Arena]({base}/arena): vote on a pair of anonymised outputs.",
+            f"- [Leaderboard]({base}/leaderboard): per-method Bradley-Terry standings.",
+            f"- [Models]({base}/models): every generator, its coverage and its record.",
+            f"- [Organisms]({base}/organisms): the corpus by species, with reference photos.",
+            f"- [Task catalog]({base}/tasks): every benchmarked task and its difficulty tier.",
+            f"- [Methodology]({base}/methodology): how ranking, matchmaking and gating work.",
+            f"- [Dataset]({base}/dataset): the citable, licensed benchmark release.",
+            f"- [Coverage]({base}/coverage): what the corpus covers and what it does not.",
+            f"- [Licenses]({base}/licenses): attribution for everything redistributed.",
+            "",
+            "## Scope",
+            "",
+            "Three kingdoms (plants, fungi, animals) across four generation methods:",
+            "single-image reconstruction, text-to-3D, LLM-authored procedural geometry, and",
+            "agentic render-critique-revise pipelines.",
+            "",
+            "Source code: https://github.com/musharna/bio3d-arena (MIT).",
+            "",
+        ]
+    )
+
+
+def _sitemap_content_paths(db: Session) -> list[str]:
+    """The per-model, per-modality and per-organism pages, derived rather than hand-listed.
+
+    The static allowlist above is the right shape for the top-level product surface, where a new
+    page should be absent until someone says otherwise. It is the wrong shape for content that
+    arrives with the data: 37 model detail pages were serving 200 with unique titles and real
+    per-task tables while the sitemap named none of them, because nobody edits a tuple when a
+    generator is added.
+
+    Both visibility rules are read from the single source the ROUTES use, never restated:
+
+      * `_model_cards(db, None)` already drops app-hidden testers and generators with no
+        coverage row — exactly the set `/models` links to and `/models/{slug}` serves.
+      * A modality board is listed only if some visible generator carries that paradigm. That
+        covers the app-hidden paradigms for free (no visible generator has one) and, separately,
+        keeps the reserved-but-unused names — video, texturing, sketch — out: their boards
+        render empty, and advertising empty pages is thin content, not coverage.
+
+    Global scope (`k_ids=None`) on purpose: a sitemap is not viewed through a kingdom filter.
+    This costs one `_model_cards` pass, the same work `/models` does; the sitemap is fetched
+    rarely enough that sharing the route's own query beats a faster copy that can drift.
+    """
+    cards = _model_cards(db, None)
+    paths = [f"/models/{c['slug']}" for c in cards if c["slug"]]
+    populated = {c["paradigm"] for c in cards if c["paradigm"]}
+    paths += [f"/leaderboard/{p}" for p in paradigms.PARADIGMS if p in populated]
+    # Organism pages come from the same index the /organisms hub renders, so a page that exists
+    # is declared and one that does not cannot be.
+    paths += [f"/organisms/{o['slug']}" for o in organisms.organism_index(db)]
+    return paths
+
+
 @app.get("/sitemap.xml")
-def sitemap_xml():
-    urls = "".join(f"<url><loc>{config.PUBLIC_BASE_URL}{p}</loc></url>" for p in _SITEMAP_PATHS)
+def sitemap_xml(db: Session = Depends(get_db)):
+    # Escaped because the dynamic half interpolates generator slugs, and nothing in the schema
+    # keeps a slug free of `&` or `<`. An unescaped one does not cost you its own entry — it
+    # makes the whole document unparseable, so every URL in it goes unread.
+    paths = list(_SITEMAP_PATHS) + _sitemap_content_paths(db)
+    urls = "".join(f"<url><loc>{xml_escape(config.PUBLIC_BASE_URL + p)}</loc></url>" for p in paths)
     body = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
@@ -832,16 +1015,14 @@ def api_next(
     category: str | None = None,
     mode: str | None = Query(default=None, alias="set"),
 ):
-    if mode == "calibration":
-        payload = _build_calibration_comparison(db, request.state.session_id)
-    elif mode == "kwise":
-        payload = _build_kwise_comparison(
-            db, request.state.session_id, criterion, category, kingdom=request.state.kingdom
-        )
-    else:
-        payload = _build_comparison(
-            db, request.state.session_id, criterion, category, kingdom=request.state.kingdom
-        )
+    payload = _build_ballot(
+        db,
+        request.state.session_id,
+        criterion,
+        category,
+        kingdom=request.state.kingdom,
+        mode=mode,
+    )
     if payload is None:
         return JSONResponse({"error": "no-comparisons-available"}, status_code=404)
     return payload
@@ -854,12 +1035,13 @@ def api_vote(
     db: Session = Depends(get_db),
     criterion: str | None = None,
     category: str | None = None,
+    mode: str | None = Query(default=None, alias="set"),
     x_captcha_token: str | None = Header(default=None),
 ):
     sid = request.state.session_id
 
     # 1. Human verification (no-op unless REQUIRE_CAPTCHA is enabled).
-    if not integrity.captcha_ok_for_session(sid, x_captcha_token):
+    if not integrity.captcha_ok_for_session(db, sid, x_captcha_token):
         raise HTTPException(403, "Captcha verification required/failed")
     # 2. Rate limiting — per session AND per IP (the IP layer caps cookie-reset farming).
     if not integrity.check_rate_limit(sid):
@@ -890,8 +1072,10 @@ def api_vote(
     else:
         service.apply_vote(db, vote)
     db.commit()
-    # Keep the same criterion/category filter (+ active kingdom) for the follow-up comparison.
-    nxt = _build_comparison(db, sid, criterion, category, kingdom=request.state.kingdom)
+    # Keep the same criterion/category filter (+ active kingdom, + ballot mode) for the follow-up.
+    # Routed through _build_ballot so the follow-up is whatever /api/next would serve for these
+    # same params — a pairwise vote can hand back a k-wise ballot, which is the point.
+    nxt = _build_ballot(db, sid, criterion, category, kingdom=request.state.kingdom, mode=mode)
 
     # Post-vote reveal (Feature C): real generator names for the just-voted pair, ONLY for
     # non-gold comparisons — gold is an attention-check decoy, so revealing it would leak the
@@ -918,12 +1102,13 @@ def api_kvote(
     db: Session = Depends(get_db),
     criterion: str | None = None,
     category: str | None = None,
+    mode: str | None = Query(default=None, alias="set"),
     x_captcha_token: str | None = Header(default=None),
 ):
     import json as _json
 
     sid = request.state.session_id
-    if not integrity.captcha_ok_for_session(sid, x_captcha_token):
+    if not integrity.captcha_ok_for_session(db, sid, x_captcha_token):
         raise HTTPException(403, "Captcha verification required/failed")
     if not integrity.check_rate_limit(sid):
         raise HTTPException(429, "Rate limit exceeded — slow down")
@@ -940,7 +1125,7 @@ def api_kvote(
     service.resolve_kballot(db, ballot, kvote_in.best_output_id, sid)
     integrity.note_vote(db, sid)  # ONE rate-accounting per ballot, not per derived vote
     db.commit()
-    nxt = _build_kwise_comparison(db, sid, criterion, category, kingdom=request.state.kingdom)
+    nxt = _build_ballot(db, sid, criterion, category, kingdom=request.state.kingdom, mode=mode)
 
     # Post-vote reveal (Feature C): real generator names for every output shown in the ballot +
     # which one was picked, so the grid can label each card. K-wise never serves gold (see
@@ -975,8 +1160,27 @@ def api_flag(flag_in: FlagIn, request: Request, db: Session = Depends(get_db)):
     return {"status": "ok", "hidden": hidden, "flags": count}
 
 
+#: How long a voter's browser may reuse an arena mesh without asking again.
+#:
+#: These responses previously carried NO cache headers at all, so every ballot re-downloaded
+#: every mesh — including a model the voter had already seen in an earlier ballot. On Fast 4G a
+#: 4-up ballot is a measured 8.0 MB / 20.9 s (2026-07-31), so that is the dominant cost of
+#: voting on a phone.
+#:
+#: An hour rather than a year, and deliberately NOT `immutable`: these URLs are keyed by output
+#: id, not by content, and a release rewrites blobs IN PLACE — the 2026-07-31 recompression
+#: replaced 581 objects at their existing keys. `immutable` would pin voters to superseded
+#: geometry with no way to correct it. An hour covers a voting session; the ETag makes anything
+#: past it a 304 instead of another download.
+MEDIA_MAX_AGE = 3600
+
+
+def _media_headers(etag: str) -> dict[str, str]:
+    return {"Cache-Control": f"public, max-age={MEDIA_MAX_AGE}", "ETag": etag}
+
+
 @app.get("/media/o/{output_id}.{ext}")
-def media_asset(output_id: int, ext: str, db: Session = Depends(get_db)):
+def media_asset(output_id: int, ext: str, request: Request, db: Session = Depends(get_db)):
     """Resolve an opaque, output-scoped asset URL (emitted by _arena_asset_url) back to the real
     file, so the anonymized arena never exposes the descriptive asset_path. Serves by output id;
     `ext` is cosmetic (helps 3D viewers). Streams through the app on remote (S3) storage so the
@@ -986,11 +1190,25 @@ def media_asset(output_id: int, ext: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "Unknown output")
     ctype = content_type_for(o.asset_path)
     if getattr(storage, "remote", False):
-        return Response(content=storage.read(o.asset_path), media_type=ctype)
+        body = storage.read(o.asset_path)
+        # Hash the bytes we already had to fetch. Deriving the validator from the output id
+        # instead would keep matching after a re-export replaced the blob, and voters would hold
+        # the superseded mesh until max-age expired.
+        etag = f'"{hashlib.sha256(body).hexdigest()[:32]}"'
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers=_media_headers(etag))
+        return Response(content=body, media_type=ctype, headers=_media_headers(etag))
     path = config.ASSET_DIR / o.asset_path
     if not path.is_file():
         raise HTTPException(404, "Asset missing")
-    return FileResponse(path, media_type=ctype)
+    # Local assets are the ORIGINAL uncompressed files (up to 59 MB before the release pipeline
+    # touches them), so they are stat-keyed rather than hashed — reading each one into memory per
+    # request to compute a digest would trade the bug for a worse one.
+    st = path.stat()
+    etag = f'"{st.st_size:x}-{st.st_mtime_ns:x}"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=_media_headers(etag))
+    return FileResponse(path, media_type=ctype, headers=_media_headers(etag))
 
 
 # ------------------------------------------------------------------ leaderboard
@@ -1157,11 +1375,19 @@ def _leaderboard_rows(
         ratings = (
             db.execute(select(Rating).where(Rating.criterion_id == crit.id, scope)).scalars().all()
         )
+        # One bulk load instead of a db.get() per rating row — 54 single-row generator SELECTs
+        # on the live corpus, each a network round trip against managed Postgres.
+        _gens = {
+            g.id: g
+            for g in db.execute(
+                select(Generator).where(Generator.id.in_({r.generator_id for r in ratings}))
+            ).scalars()
+        }
         rows = []
         for r in ratings:
             if r.generator_id in ref_gens:
                 continue  # GT/reference scans don't compete in the Mode-A perceptual board
-            gen = db.get(Generator, r.generator_id)
+            gen = _gens.get(r.generator_id)
             if gen is None:
                 continue  # stale rating row (generator deleted); skip rather than crash
             if paradigm and gen.paradigm != paradigm:
@@ -1461,6 +1687,12 @@ def leaderboard(
             # Plain-language "what this measures" line for THIS modality (never hard-coded copy —
             # paradigms.WHAT_THIS_MEASURES is the one source, shared with the hub cards).
             "board_what": paradigms.WHAT_THIS_MEASURES.get(paradigm, ""),
+            # True when this modality is outside the current human vote roster
+            # (config.ARENA_VOTE_PARADIGMS). Its rows keep the votes already cast but accrue no
+            # new ones, so the board must say that rather than let permanently-"provisional"
+            # rows read as an un-voted backlog. Keyed off live config, not a hard-coded list.
+            "off_roster": bool(config.ARENA_VOTE_PARADIGMS)
+            and paradigm not in config.ARENA_VOTE_PARADIGMS,
             "sel_paradigm": paradigm,
             "total_votes": total,
             "lb_share": lb_share,
@@ -2065,6 +2297,55 @@ def model_detail(slug: str, request: Request, db: Session = Depends(get_db)):
     )
 
 
+@app.get("/organisms", response_class=HTMLResponse)
+def organisms_index(request: Request, db: Session = Depends(get_db)):
+    """The corpus indexed by subject. Also the crawl hub for the detail pages: a crawler that
+    never fetches the sitemap still reaches every organism by following links from here."""
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
+    rows = organisms.organism_index(db)
+    grouped = []
+    for kingdom in ("plants", "fungi", "animals", "all"):
+        group = [r for r in rows if r["kingdom"] == kingdom]
+        if group:
+            grouped.append(
+                (
+                    {
+                        "label": kingdoms.KINGDOM_LABEL.get(kingdom, kingdom),
+                        "emoji": kingdoms.KINGDOM_EMOJI.get(kingdom, kingdoms.KINGDOM_EMOJI["all"]),
+                    },
+                    group,
+                )
+            )
+    return templates.TemplateResponse(request, "organisms_index.html", {"grouped": grouped})
+
+
+@app.get("/organisms/{slug}", response_class=HTMLResponse)
+def organism_page(slug: str, request: Request, db: Session = Depends(get_db)):
+    """One organism, every task set on it and every model that attempted it.
+
+    NOT kingdom-scoped: an organism page is about that organism, and rendering it differently
+    according to whichever kingdom filter the visitor happens to be carrying would give one URL
+    two bodies — which is the shape a crawler reads as unstable content.
+    """
+    roadmap = _roadmap_or_none(request, db)
+    if roadmap is not None:
+        return roadmap
+    org = organisms.build_organism(db, slug)
+    if org is None:
+        raise HTTPException(404, "Unknown organism")
+    return templates.TemplateResponse(
+        request,
+        "organism.html",
+        {
+            "org": org,
+            "description": organisms.meta_description(org),
+            "breadcrumbs": organisms.breadcrumbs(org, config.PUBLIC_BASE_URL),
+        },
+    )
+
+
 @app.get("/dataset", response_class=HTMLResponse)
 def dataset_page(request: Request, db: Session = Depends(get_db)):
     roadmap = _roadmap_or_none(request, db)
@@ -2080,8 +2361,62 @@ def dataset_page(request: Request, db: Session = Depends(get_db)):
     k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
     composition = dataset.dataset_composition(db, k_ids)
     return templates.TemplateResponse(
-        request, "dataset.html", {"releases": releases, "composition": composition}
+        request,
+        "dataset.html",
+        {
+            "releases": releases,
+            "composition": composition,
+            "dataset_ld": _dataset_jsonld(releases),
+        },
     )
+
+
+def _dataset_jsonld(releases: list[dict]) -> dict:
+    """schema.org/Dataset for the release page — the only markup Google Dataset Search reads.
+
+    `license` is the licences PAGE, not an SPDX identifier, and that is deliberate: a release's
+    LICENSE file is a ROLLUP of per-item terms (`dataset.license_rollup`), because the corpus
+    mixes CC0, several CC-BY variants and outputs whose model terms permit display but not
+    redistribution. There is no single identifier that is true of the whole thing, and naming
+    one would be a licence claim this project cannot support.
+
+    `distribution` is emitted only for releases that exist. The key asserts a retrievable file,
+    so on an instance with no release cut it is absent rather than pointing at a 404 — markup
+    promising a download that isn't there is worse than no markup.
+    """
+    ld: dict = {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "name": "Bio 3D Arena benchmark",
+        "description": (
+            "A blind comparison benchmark for generative 3D models of real organisms. Contains "
+            "benchmark tasks across plants, fungi and animals, generated 3D outputs from "
+            "multiple generation methods, baked ground-truth reference renders, CC-licensed "
+            "reference photographs, and objective completeness and fidelity metrics."
+        ),
+        "url": f"{config.PUBLIC_BASE_URL}/dataset",
+        "license": f"{config.PUBLIC_BASE_URL}/licenses",
+        "isAccessibleForFree": True,
+        "creator": {"@type": "Person", "name": "Jaret Arnold"},
+        "keywords": [
+            "3D generation",
+            "benchmark",
+            "plant phenotyping",
+            "computer vision",
+            "Bradley-Terry",
+        ],
+    }
+    if releases:
+        ld["version"] = releases[0]["version"]
+        ld["distribution"] = [
+            {
+                "@type": "DataDownload",
+                "name": r["version"],
+                "contentUrl": f"{config.PUBLIC_BASE_URL}/dataset",
+            }
+            for r in releases
+        ]
+    return ld
 
 
 @app.get("/methodology", response_class=HTMLResponse)
@@ -2298,10 +2633,21 @@ def tasks_page(request: Request, db: Session = Depends(get_db)):
     if roadmap is not None:
         return roadmap
     k_ids = kingdoms.category_ids_for_kingdom(db, request.state.kingdom)
-    stmt = select(Task).order_by(Task.id)
+    # Eager-loaded because every row below walks `t.outputs` (twice: the count and
+    # `_paradigm_label`) and `t.category`, and each output's `.generator`. Left lazy that is a
+    # round trip per task and per output — this page measured 137 statements on the real
+    # corpus, the same defect as service._scope_rows one layer up.
+    stmt = (
+        select(Task)
+        .order_by(Task.id)
+        .options(
+            joinedload(Task.category),
+            selectinload(Task.outputs).joinedload(ModelOutput.generator),
+        )
+    )
     if k_ids is not None:
         stmt = stmt.where(Task.category_id.in_(k_ids))
-    tasks = db.execute(stmt).scalars().all()
+    tasks = db.execute(stmt).unique().scalars().all()
     task_ids = [t.id for t in tasks]
 
     # Real vote totals per task (non-gold decisive votes) — reused for both the per-row
@@ -2375,11 +2721,19 @@ def tasks_page(request: Request, db: Session = Depends(get_db)):
             return "Multiple"
         return "—"
 
+    # Organisms that actually HAVE a page. This catalog lists retired tasks alongside live ones
+    # (see the `active` field below) but an organism page is built from the LIVE corpus only, so
+    # linking every row's subject unconditionally invents links to pages that do not exist —
+    # `cucurbita-pepo` (the de-corpused pumpkin) and `hordeum-vulgare` on the real corpus.
+    # Reading the set the /organisms hub renders means the link exists iff its target does.
+    linkable_organisms = {o["slug"] for o in organisms.organism_index(db)}
+
     rows = []
     for t in tasks:
         cat = t.category
         kingdom = kingdoms.KINGDOM_OF.get(cat.slug, "all")
         species_name = species_by_task.get(t.id) or ""
+        organism_slug = organisms.url_slug(organisms.binomial_of_title(t.title))
         rows.append(
             {
                 "id": t.id,
@@ -2390,6 +2744,10 @@ def tasks_page(request: Request, db: Session = Depends(get_db)):
                 "active": t.active,
                 "kingdom_emoji": kingdoms.KINGDOM_EMOJI.get(kingdom, kingdoms.KINGDOM_EMOJI["all"]),
                 "species_name": species_name,
+                # Derived from the title, not from `species_by_task`: only 5 of the 20 active
+                # tasks carry a ReconTask row, so keying the link off that would leave three
+                # quarters of the catalog unlinked. None when the organism has no live page.
+                "organism_slug": organism_slug if organism_slug in linkable_organisms else None,
                 "paradigm": _paradigm_label(t),
                 "tier": tier_by_task.get(t.id),
                 "votes": vote_counts.get(t.id, 0),
@@ -2403,7 +2761,11 @@ def tasks_page(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(request, "tasks.html", {"tasks": rows, "stats": stats})
 
 
-@app.get("/spotlight", response_class=HTMLResponse)
+@app.get(
+    "/spotlight",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def spotlight_index(request: Request, db: Session = Depends(get_db)):
     from . import spotlight
 
@@ -2416,7 +2778,11 @@ def spotlight_index(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(request, "spotlight_index.html", {"subjects": subjects})
 
 
-@app.get("/spotlight/{slug}", response_class=HTMLResponse)
+@app.get(
+    "/spotlight/{slug}",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_internal_pages)],
+)
 def spotlight_page(slug: str, request: Request, db: Session = Depends(get_db)):
     from . import spotlight
 
@@ -2964,7 +3330,7 @@ async def api_submit(
 ):
     """Public: queue a community 3D output for moderation (rate-limited, validated)."""
     sid = request.state.session_id
-    if not integrity.captcha_ok_for_session(sid, x_captcha_token):
+    if not integrity.captcha_ok_for_session(db, sid, x_captcha_token):
         raise HTTPException(403, "Captcha verification required/failed")
     if not integrity.check_rate_limit(sid):
         raise HTTPException(429, "Rate limit exceeded — slow down")

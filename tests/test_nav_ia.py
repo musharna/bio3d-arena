@@ -30,7 +30,6 @@ PUBLIC_SIDEBAR = [
     "/leaderboard",
     "/models",
     "/dataset",
-    "/spotlight",
     "/methodology",
 ]
 
@@ -39,6 +38,14 @@ DEMOTED = ["/coverage", "/tasks", "/submit"]
 
 # Research instruments, now reachable only through the /research hub.
 RESEARCH_BOARDS = ["/benchmark", "/significance", "/difficulty", "/fidelity", "/procedural"]
+
+# Internal-only pages that keep their own sidebar slot when INTERNAL_PAGES_ENABLED (i.e. they
+# are hidden from the public sidebar rather than folded into the /research hub).
+#
+# /spotlight joined this list on 2026-07-28: every spotlight subject is a plant, so under the
+# Fungi or Animals kingdom filter the page renders empty — a public nav slot leading nowhere for
+# two of the three kingdoms. See tests/test_spotlight_is_internal.py.
+INTERNAL_SIDEBAR = ["/research", "/spotlight"]
 
 
 @pytest.fixture
@@ -65,11 +72,19 @@ def test_public_sidebar_carries_exactly_the_product_loop(client, monkeypatch):
         assert f'href="{href}"' in nav, f"public sidebar must keep {href}"
 
 
-def test_internal_sidebar_adds_only_the_research_hub(client, monkeypatch):
+def test_internal_sidebar_adds_only_the_internal_pages(client, monkeypatch):
     monkeypatch.setattr(config, "INTERNAL_PAGES_ENABLED", True, raising=False)
     nav = sidebar(client.get("/").text)
-    assert nav.count(SIDEBAR_LINK_CLASS) == len(PUBLIC_SIDEBAR) + 1
-    assert 'href="/research"' in nav
+    assert nav.count(SIDEBAR_LINK_CLASS) == len(PUBLIC_SIDEBAR) + len(INTERNAL_SIDEBAR)
+    for href in INTERNAL_SIDEBAR:
+        assert f'href="{href}"' in nav, f"internal sidebar must keep {href}"
+
+
+def test_internal_only_pages_are_absent_from_the_public_sidebar(client, monkeypatch):
+    monkeypatch.setattr(config, "INTERNAL_PAGES_ENABLED", False, raising=False)
+    nav = sidebar(client.get("/").text)
+    for href in INTERNAL_SIDEBAR:
+        assert f'href="{href}"' not in nav, f"{href} must not hold a public sidebar slot"
 
 
 def test_research_hub_absent_from_public_sidebar(client, monkeypatch):

@@ -121,7 +121,7 @@ def test_arena_js_only_attaches_the_header_when_a_token_exists():
 # --- session-scoped verification ---------------------------------------------------
 
 
-def test_verification_is_remembered_for_the_session(monkeypatch):
+def test_verification_is_remembered_for_the_session(monkeypatch, db_session):
     """The design decision. Turnstile tokens are single-use and short-lived, so checking one
     per vote means a challenge round-trip per vote. This arena's binding constraint is vote
     VOLUME, so a voter is verified ONCE and the session carries it afterwards.
@@ -134,38 +134,42 @@ def test_verification_is_remembered_for_the_session(monkeypatch):
         return {"success": True}
 
     monkeypatch.setattr(integrity, "_post_form", fake_post)
-    assert integrity.captcha_ok_for_session("sess-a", "tok-1", _post=fake_post) is True
+    assert integrity.captcha_ok_for_session(db_session, "sess-a", "tok-1", _post=fake_post) is True
     # Second and third votes in the same session must not re-challenge.
-    assert integrity.captcha_ok_for_session("sess-a", None, _post=fake_post) is True
-    assert integrity.captcha_ok_for_session("sess-a", None, _post=fake_post) is True
+    assert integrity.captcha_ok_for_session(db_session, "sess-a", None, _post=fake_post) is True
+    assert integrity.captcha_ok_for_session(db_session, "sess-a", None, _post=fake_post) is True
     assert seen == ["tok-1"], "the provider must be called once per session, not once per vote"
 
     # A different session is NOT covered by the first one's verification.
-    assert integrity.captcha_ok_for_session("sess-b", None, _post=fake_post) is False
+    assert integrity.captcha_ok_for_session(db_session, "sess-b", None, _post=fake_post) is False
 
 
-def test_a_failed_challenge_does_not_mark_the_session_verified(monkeypatch):
+def test_a_failed_challenge_does_not_mark_the_session_verified(monkeypatch, db_session):
     """Fail-closed must not be self-healing: a rejected token leaves the session unverified,
     so the next vote is challenged again rather than waved through."""
     _enable(monkeypatch)
     assert (
-        integrity.captcha_ok_for_session("sess-c", "bad", _post=lambda u, d: {"success": False})
+        integrity.captcha_ok_for_session(
+            db_session, "sess-c", "bad", _post=lambda u, d: {"success": False}
+        )
         is False
     )
     assert (
-        integrity.captcha_ok_for_session("sess-c", None, _post=lambda u, d: {"success": True})
+        integrity.captcha_ok_for_session(
+            db_session, "sess-c", None, _post=lambda u, d: {"success": True}
+        )
         is False
     )
 
 
-def test_captcha_disabled_never_calls_the_provider(monkeypatch):
+def test_captcha_disabled_never_calls_the_provider(monkeypatch, db_session):
     """Positive control: with the switch off, voting must not require or consult anything."""
     monkeypatch.setattr(config, "REQUIRE_CAPTCHA", False)
 
     def explode(url, data):  # pragma: no cover - must never run
         raise AssertionError("provider must not be called when captcha is disabled")
 
-    assert integrity.captcha_ok_for_session("sess-d", None, _post=explode) is True
+    assert integrity.captcha_ok_for_session(db_session, "sess-d", None, _post=explode) is True
 
 
 def test_a_verified_voter_keeps_voting_without_re_challenging(client, monkeypatch):
