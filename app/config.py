@@ -108,6 +108,25 @@ TRUST_FORWARDED_FOR = os.environ.get("BIO3D_TRUST_FORWARDED_FOR", "false").lower
     "true",
     "yes",
 )
+# X-Forwarded-For is not sufficient on its own. Cloudflare's documentation states it "will append
+# the IP address of the HTTP proxy connecting to Cloudflare to the header" — an existing
+# client-supplied value is PRESERVED, so the first element is whatever the caller typed. Behind
+# Cloudflare that makes per-IP vote limiting bypassable by sending a header.
+#
+# These two name headers the edge sets itself and overwrites every request. Each is trusted ONLY
+# when we have declared we sit behind that edge: with no Cloudflare in front, nothing strips
+# CF-Connecting-IP, so trusting it unconditionally would be worse than the bug it fixes.
+BEHIND_CLOUDFLARE = os.environ.get("BIO3D_BEHIND_CLOUDFLARE", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+# Fly documents Fly-Client-IP as "always set by the Fly Proxy".
+TRUST_FLY_CLIENT_IP = os.environ.get("BIO3D_TRUST_FLY_CLIENT_IP", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 # Probability of serving a gold-standard attention-check pair instead of a real one.
 GOLD_RATE = float(os.environ.get("BIO3D_GOLD_RATE", "0.1"))
 # Sessions below this trust score are excluded from the authoritative BT leaderboard.
@@ -210,6 +229,14 @@ OG_IMAGE_PATH = os.environ.get("BIO3D_OG_IMAGE", "/static/og-default.png")
 GOOGLE_SITE_VERIFICATION = os.environ.get("BIO3D_GOOGLE_SITE_VERIFICATION", "").strip()
 BING_SITE_VERIFICATION = os.environ.get("BIO3D_BING_SITE_VERIFICATION", "").strip()
 INDEXNOW_KEY = os.environ.get("BIO3D_INDEXNOW_KEY", "").strip()
+# Cloudflare Web Analytics beacon token, issued against the operator's own Cloudflare account —
+# configuration for the same reason the verification tokens above are.
+#
+# The site shipped with NO analytics of any kind. Measured 2026-08-01: the only evidence of a
+# visitor was a `comparison` row, which crawlers create too (the arena auto-loads a ballot), so
+# "are we accruing views" was literally unanswerable. Cookieless and personal-data-free, so it
+# does not change the consent posture described on /privacy.
+CF_ANALYTICS_TOKEN = os.environ.get("BIO3D_CF_ANALYTICS_TOKEN", "").strip()
 # Set the Secure flag on session cookies.
 #
 # This used to be DERIVED from PUBLIC_BASE_URL.startswith("https://") alone, which made cookie

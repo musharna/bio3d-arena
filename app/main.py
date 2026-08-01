@@ -120,6 +120,9 @@ templates.env.globals["internal_pages"] = lambda: config.INTERNAL_PAGES_ENABLED
 # not been given one must render no tag at all rather than an empty ownership claim.
 templates.env.globals["google_site_verification"] = lambda: config.GOOGLE_SITE_VERIFICATION
 templates.env.globals["bing_site_verification"] = lambda: config.BING_SITE_VERIFICATION
+# Same live-read reason again. Unset on any instance not behind Cloudflare, which must render no
+# beacon at all rather than a request to an analytics property that does not exist.
+templates.env.globals["cf_analytics_token"] = lambda: config.CF_ANALYTICS_TOKEN
 # Same live-read reason as above. Returns a dict rather than two globals so a template can
 # never render the widget while missing the key it needs — the two travel together.
 templates.env.globals["captcha"] = lambda: {
@@ -139,9 +142,26 @@ SESSION_COOKIE = "bio3d_session"
 
 
 def _client_ip(request: Request) -> str:
-    """Resolve the client IP for per-IP rate limiting. X-Forwarded-For is trusted ONLY behind a
-    known proxy (config.TRUST_FORWARDED_FOR) — an untrusted client can spoof the header to dodge
-    the limit; otherwise the socket peer address is authoritative."""
+    """Resolve the client IP for per-IP rate limiting, preferring headers a client cannot forge.
+
+    X-Forwarded-For alone is not safe. Cloudflare "will append the IP address of the HTTP proxy
+    connecting to Cloudflare to the header", so a request carrying `X-Forwarded-For: 1.2.3.4`
+    reaches the origin as `1.2.3.4, <real client>` — element [0] is the caller's choice, and a
+    vote farmer who rotates it never meets the per-IP cap.
+
+    So prefer the headers the edge sets and overwrites itself, each trusted only when we have
+    declared we sit behind that edge. Cloudflare outranks Fly because when both are in the chain
+    Fly-Client-IP is Cloudflare's EDGE address — identical for every visitor, which would put the
+    whole world in one rate-limit bucket.
+    """
+    if config.BEHIND_CLOUDFLARE:
+        cf = request.headers.get("cf-connecting-ip", "")
+        if cf.strip():
+            return cf.strip()
+    if config.TRUST_FLY_CLIENT_IP:
+        fly = request.headers.get("fly-client-ip", "")
+        if fly.strip():
+            return fly.strip()
     if config.TRUST_FORWARDED_FOR:
         xff = request.headers.get("x-forwarded-for", "")
         if xff.strip():
