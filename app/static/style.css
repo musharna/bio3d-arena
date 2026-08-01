@@ -4013,6 +4013,23 @@ details.group[open] > summary.group-title::before {
   color: var(--accent);
   font-weight: 600;
 }
+/* "N more votes firms the next model here" — the actionable counterpart to .lb-hub-pop, which
+   only states the board's current standing. Sits one step up in emphasis from --faint so it
+   reads as an invitation, but stays below the card's own CTA so it never competes with it. */
+.lb-hub-goal {
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.lb-hub-goal a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.lb-hub-goal a:hover,
+.lb-hub-goal a:focus-visible {
+  text-decoration: underline;
+}
 .lb-hub-cta {
   margin-top: auto;
   padding-top: 0.5rem;

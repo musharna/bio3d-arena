@@ -157,6 +157,9 @@ def test_modality_hub_card_keys_and_values():
         "rated_count",
         "firm_count",
         "firm",
+        # Votes to firm the nearest not-yet-firm entrant — the card's call to action.
+        # See service.next_firm_gap and tests/test_next_firm_gap.py.
+        "next_firm_gap",
     }
     assert card["display"] == paradigms.DISPLAY_NAMES["image_recon"]
     assert card["what"] == paradigms.WHAT_THIS_MEASURES["image_recon"]
