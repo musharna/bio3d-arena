@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.inspection import inspect as sqla_inspect  # noqa: E402
 
-from app import config, mesh_compress, public_export, texture_downscale  # noqa: E402
+from app import config, mesh_compress, mesh_lod, public_export, texture_downscale  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
 from app.storage import StorageBackend, get_storage  # noqa: E402
 from app.models import (  # noqa: E402
@@ -213,6 +213,7 @@ def export_bundle(
     posture: str = "redistribute",
     dry_run: bool = False,
     compress: bool = False,
+    lod: bool = False,
 ) -> dict:
     """`compress` defaults OFF here and ON at the command line (see main).
 
@@ -266,12 +267,20 @@ def export_bundle(
     out = Path(out_dir)
     (out / "assets").mkdir(parents=True, exist_ok=True)
     (out / "gt").mkdir(parents=True, exist_ok=True)
+    # Asset blobs for every included output, Draco-compressed on the way into the bundle.
+    #
+    # This runs BEFORE rows.json is written, and the order is load-bearing: staging stamps
+    # `meta_json.lod` on the rows it generated an LOD for, and that flag is how the running app
+    # knows a low-detail variant exists without probing storage on every request. Writing rows
+    # first (as this did until the LOD pass existed) would serialise the rows unstamped and the
+    # flag would silently never reach the bundle.
+    manifest["compression"] = _stage_assets(
+        out, storage, tables["model_output"], compress=compress, lod=lod
+    )
+
     rows_bytes = json.dumps(tables, indent=0, sort_keys=True).encode()
     (out / "rows.json").write_bytes(rows_bytes)
     manifest["sha256"] = hashlib.sha256(rows_bytes).hexdigest()
-
-    # Asset blobs for every included output, Draco-compressed on the way into the bundle.
-    manifest["compression"] = _stage_assets(out, storage, tables["model_output"], compress=compress)
 
     manifest["reference_photos"] = copy_reference_gallery(out, posture)
 
@@ -289,7 +298,25 @@ def export_bundle(
     return manifest
 
 
-def _stage_assets(out: Path, storage: StorageBackend, rows: list[dict], *, compress: bool) -> dict:
+def _stamp_lod(row: dict) -> None:
+    """Record on the row itself that a low-detail companion shipped for it.
+
+    `meta_json` rather than a new column: the flag has to survive export -> bundle -> import into
+    a Postgres instance that is migrated by nothing but this pipeline, and `meta_json` already
+    makes that trip. A column would need a migration on an instance whose schema is only ever
+    created fresh, which is how the id-sequence desync (PR #107) got in.
+    """
+    try:
+        meta = json.loads(row.get("meta_json") or "{}") or {}
+    except (ValueError, TypeError):
+        meta = {}
+    meta["lod"] = True
+    row["meta_json"] = json.dumps(meta)
+
+
+def _stage_assets(
+    out: Path, storage: StorageBackend, rows: list[dict], *, compress: bool, lod: bool = False
+) -> dict:
     """Write every output blob into the bundle, Draco-compressing GLBs as they land.
 
     Compression belongs HERE rather than in the corpus or the web app:
@@ -311,8 +338,16 @@ def _stage_assets(out: Path, storage: StorageBackend, rows: list[dict], *, compr
         "kept_original": 0,
         "textures_resized": 0,
         "enabled": compress,
+        # LOD is a SECOND artifact per mesh, not a replacement — the full mesh always ships.
+        "lod_enabled": lod,
+        "lod_generated": 0,
+        "lod_not_worth_it": 0,
+        "lod_refused": 0,
+        "lod_bytes": 0,
     }
-    node = cli = None
+    # Empty rather than None: every use is guarded by `compress`, but typing them as `str | None`
+    # makes every call site look nullable to a reader who has not traced the guard.
+    node = cli = ""
     if compress:
         node = mesh_compress.node_binary()
         mesh_compress.require_node(node)  # fail loud and early, not per-file
@@ -369,6 +404,28 @@ def _stage_assets(out: Path, storage: StorageBackend, rows: list[dict], *, compr
             stats["kept_original"] += 1
         after_total += dst.stat().st_size
 
+        # Low-detail companion, generated from the FINAL served mesh (post-texture-shrink,
+        # post-Draco) so its size ratio is measured against what a voter would otherwise fetch.
+        # Candidacy is judged on that final size too — a mesh Draco already took under the floor
+        # does not need a second file.
+        if lod and mesh_lod.is_lod_candidate(rel, dst.stat().st_size):
+            lod_dst = dst.with_name(Path(mesh_lod.lod_path(dst.name)).name)
+            try:
+                lod_res = mesh_lod.generate_lod(dst, lod_dst, node=node, cli_entry=cli)
+            except (mesh_lod.LodCollapsed, mesh_lod.LodChangedTheModel) as e:
+                # The gate refusing is the system working, and the full mesh still ships — so this
+                # is not fatal. It is still counted and named: a refusal RATE climbing across a
+                # release is how a toolchain regression would announce itself.
+                stats["lod_refused"] += 1
+                print(f"  LOD refused for {rel}: {e}", file=sys.stderr)
+            else:
+                if lod_res.kept:
+                    stats["lod_generated"] += 1
+                    stats["lod_bytes"] += lod_res.lod_bytes
+                    _stamp_lod(d)
+                else:
+                    stats["lod_not_worth_it"] += 1
+
     stats["bytes_before"] = before_total
     stats["bytes_after"] = after_total
     stats["ratio"] = round(before_total / after_total, 3) if after_total else 0.0
@@ -387,6 +444,14 @@ def main() -> int:
         action="store_true",
         help="ship meshes uncompressed (a pairwise ballot then costs ~83s on Fast 4G)",
     )
+    ap.add_argument(
+        "--no-lod",
+        action="store_true",
+        help=(
+            "skip the low-detail companion meshes. LODs roughly halve the bytes a ballot must "
+            "fetch before it is comparable; without them every voter waits for the full mesh."
+        ),
+    )
     a = ap.parse_args()
     db = SessionLocal()
     try:
@@ -399,6 +464,10 @@ def main() -> int:
             posture=a.posture,
             dry_run=a.dry_run,
             compress=not a.no_compress,
+            # LOD generation runs the same Node toolchain as compression, so asking for LODs
+            # without compression cannot work — and would fail deep inside the asset loop rather
+            # than here, after the export had already done most of its work.
+            lod=not a.no_lod and not a.no_compress,
         )
         # Advisory (non-blocking, NOT a gate): flag exported taxa whose recon completeness sits
         # far below text→3D — a suspect reference/capture the operator should inspect before
