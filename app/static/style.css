@@ -2142,11 +2142,18 @@ details.group[open] > summary.group-title::before {
    On a full window the cap fills the content column (.b3d-main is max-width 1180px − 2×30px
    padding ≈ 1120px inner), so ~7 thumbnails show at once; min(100%, …) still shrinks it on
    narrow windows without introducing a wrap. */
+/* `safe center` — NOT plain `center`. Centring a flex row that overflows pushes the leading
+   items past the scroll origin, where nothing can reach them: measured 2026-08-02 on the live
+   arena with 8 references, scrollWidth 1188 vs clientWidth 1120, and at scrollLeft 0 (already
+   the minimum) the first thumbnail's left edge sat at -68px — permanently half-hidden, on the
+   page whose own instruction is "check each against the reference photos above". `safe` falls
+   back to flex-start exactly when overflow would occur, so the centring below the cap is
+   unchanged and only the overflow case differs. */
 .reference-gallery {
   display: flex;
   flex-wrap: nowrap;
   gap: 0.5rem;
-  justify-content: center;
+  justify-content: safe center;
   align-items: center;
   width: min(100%, 1120px);
   margin: 0 auto;

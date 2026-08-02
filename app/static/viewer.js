@@ -133,7 +133,7 @@
     mv.setAttribute("reveal", "manual");
     mv.setAttribute(
       "aria-label",
-      "Interactive 3D model — drag to rotate, scroll to zoom",
+      "Interactive 3D model — drag to rotate, scroll or pinch to zoom",
     );
     // Open on the low-detail mesh when the release produced one: it is a fraction of the bytes,
     // and the ballot cannot be judged at all until every slot has arrived. `armDetailUpgrade`
@@ -152,7 +152,7 @@
         /* older model-viewer without manual reveal — it was already visible */
       }
       loading.remove();
-      hint(slot, "drag to rotate · scroll to zoom");
+      hint(slot, "drag to rotate · scroll or pinch to zoom");
       slot.dispatchEvent(
         new CustomEvent("bio3d:viewer-settled", {
           bubbles: true,
@@ -363,7 +363,7 @@
       viewer.zoomTo();
       viewer.render();
       loading.remove();
-      hint(slot, "drag to rotate · scroll to zoom");
+      hint(slot, "drag to rotate · scroll or pinch to zoom");
       slot._molViewer = viewer;
       slot._resetView = () => {
         viewer.zoomTo();
