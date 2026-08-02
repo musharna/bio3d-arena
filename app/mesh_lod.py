@@ -19,6 +19,12 @@ faceting to the generator. So the LOD is only ever the *opening* frame: the view
 full mesh the moment anyone zooms or goes fullscreen. Nothing here is allowed to assume the
 difference is imperceptible, because it is not.
 
+**Import-safe for the public web app**, unlike the toolchain it drives. `app.main` imports this
+module to name and serve the LOD (`lod_path`), and that costs nothing: the transitive imports are
+stdlib only (`json/os/re/struct/subprocess/dataclasses/pathlib`), so the Python-only runtime that
+PR #87 cut to 173 MB is unaffected. Only `generate_lod` shells out to Node, and only the export
+calls it — the public host still never needs the toolchain, exactly as `mesh_compress` requires.
+
 **Why this needs its own gate.** `mesh_compress.structural_signature` is sufficient for Draco,
 which quantizes positions and keeps every triangle. Decimation deletes triangles, and the
 signature cannot see that: a pass that dropped 99% of the geometry has the same mesh, material,

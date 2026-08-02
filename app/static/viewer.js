@@ -135,7 +135,13 @@
       "aria-label",
       "Interactive 3D model — drag to rotate, scroll to zoom",
     );
-    mv.setAttribute("src", asset.url);
+    // Open on the low-detail mesh when the release produced one: it is a fraction of the bytes,
+    // and the ballot cannot be judged at all until every slot has arrived. `armDetailUpgrade`
+    // below swaps in `asset.url` the moment anyone looks closely. Absent lod_url — an older
+    // bundle, a mesh too small to be worth a second file, or one the LOD gate refused — this is
+    // exactly the behaviour it has always had.
+    const lodUrl = asset.lod_url || null;
+    mv.setAttribute("src", lodUrl || asset.url);
     mv.style.width = "100%";
     mv.style.height = "100%";
     mv.addEventListener("load", () => {
@@ -167,14 +173,116 @@
       );
     });
     slot.appendChild(mv);
+    bindResetView(slot, mv);
+    slot._onResize = null; // model-viewer auto-resizes; clear any stale molecular closure
+    addControls(slot, onFlag);
+    // Served the low-detail mesh? Then the full one has to be one interaction away.
+    if (lodUrl) armDetailUpgrade(slot, mv, asset.url, stale);
+  }
+
+  function bindResetView(slot, mv) {
     slot._resetView = () => {
       mv.cameraOrbit = "0deg 75deg auto";
       mv.fieldOfView = "auto";
       mv.cameraTarget = "auto auto auto";
       mv.jumpCameraToGoal();
     };
-    slot._onResize = null; // model-viewer auto-resizes; clear any stale molecular closure
-    addControls(slot, onFlag);
+  }
+
+  // Attributes that decide how a mesh is LIT and FRAMED. The upgraded viewer must carry every
+  // one of them or the full mesh would render differently from the LOD it replaces — and on a
+  // fidelity benchmark a lighting change mid-inspection reads as a property of the model.
+  const MESH_VIEW_ATTRS = [
+    "camera-controls",
+    "touch-action",
+    "shadow-intensity",
+    "exposure",
+    "loading",
+    "reveal",
+    "aria-label",
+  ];
+
+  /**
+   * Swap the low-detail mesh for the real one the moment a voter looks closely.
+   *
+   * The LOD exists only to make the ballot's FIRST frame arrive sooner. It is a decimated mesh:
+   * at a 158x168 grid cell it is indistinguishable, but zoomed in it is not, and a voter who
+   * sees our faceting attributes it to the generator. So the full mesh must arrive before any
+   * close inspection can happen, and this is what guarantees it.
+   *
+   * The upgrade loads into a SECOND, hidden model-viewer and only removes the LOD once the
+   * replacement has actually rendered. Reassigning `src` in place would have been far less code,
+   * but `reveal="manual"` holds the frame blank until the new mesh decodes — so the model would
+   * visibly VANISH for a second or two at the exact moment the voter leaned in. Camera state is
+   * copied across first, so the swap lands on the view they had already framed.
+   */
+  function armDetailUpgrade(slot, lodViewer, fullUrl, stale) {
+    let started = false;
+    const start = () => {
+      if (started || stale()) return;
+      started = true;
+      const full = document.createElement("model-viewer");
+      for (const a of MESH_VIEW_ATTRS) {
+        const v = lodViewer.getAttribute(a);
+        if (v !== null) full.setAttribute(a, v);
+      }
+      full.setAttribute("src", fullUrl);
+      // Stacked exactly over the LOD, invisible until it has something to show. The slot is the
+      // positioning context; it may be `static` in the grid layout, which would anchor the
+      // overlay to the page instead of the cell.
+      if (getComputedStyle(slot).position === "static")
+        slot.style.position = "relative";
+      full.style.cssText =
+        "position:absolute;inset:0;width:100%;height:100%;opacity:0";
+      full.addEventListener("load", () => {
+        // Ballot moved on while the full mesh was in flight — drop it, do not touch the slot.
+        if (stale()) {
+          full.remove();
+          return;
+        }
+        try {
+          full.cameraOrbit = lodViewer.cameraOrbit;
+          full.fieldOfView = lodViewer.fieldOfView;
+          full.cameraTarget = lodViewer.cameraTarget;
+          full.jumpCameraToGoal();
+        } catch (_) {
+          /* camera not readable yet — the default framing is still correct */
+        }
+        try {
+          full.dismissPoster();
+        } catch (_) {
+          /* older model-viewer without manual reveal */
+        }
+        full.style.opacity = "1";
+        lodViewer.remove();
+        // Reset-view and fullscreen resize must now drive the viewer that is actually on screen.
+        bindResetView(slot, full);
+      });
+      // If the full mesh fails, the LOD stays exactly where it is. A voter keeps a working
+      // ballot; deliberately NOT emitting viewer-settled here, because the slot already settled
+      // on the LOD and re-emitting would double-count against the vote gate.
+      full.addEventListener("error", () => full.remove());
+      slot.appendChild(full);
+    };
+
+    // Zoom is the interaction that makes decimation visible: wheel on desktop, pinch on touch.
+    lodViewer.addEventListener("wheel", start, { passive: true, once: true });
+    lodViewer.addEventListener(
+      "touchstart",
+      (e) => {
+        if (e.touches && e.touches.length > 1) start(); // two fingers == pinch-zoom
+      },
+      { passive: true },
+    );
+    // Fullscreen is an explicit request for a closer look, whatever the input device.
+    document.addEventListener("fullscreenchange", () => {
+      if (
+        document.fullscreenElement &&
+        slot.contains(document.fullscreenElement)
+      )
+        start();
+      else if (document.fullscreenElement === slot) start();
+    });
   }
 
   async function mountMolecular(slot, asset, fmt, onFlag) {

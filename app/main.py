@@ -46,6 +46,7 @@ from . import (
     kingdoms,
     indexnow,
     matchmaking,
+    mesh_lod,
     og,
     organisms,
     paradigms,
@@ -371,6 +372,28 @@ def _arena_asset_url(o: ModelOutput) -> str:
     return f"/media/o/{o.id}.{o.asset_format}"
 
 
+def _arena_lod_url(o: ModelOutput) -> str | None:
+    """URL of the low-detail companion, or None when this output has none.
+
+    Read from `meta_json.lod`, which the export stamps on rows it actually generated an LOD for.
+    The alternative — probing storage per output — would cost an S3 round trip per mesh on every
+    single ballot, on the exact request path this feature exists to make faster.
+
+    A missing or unparseable flag yields None, so the ballot silently keeps today's behaviour of
+    fetching the full mesh. That is the correct failure direction: the full mesh is always right,
+    while a wrongly advertised LOD is a 404 in front of a voter.
+    """
+    if o.asset_format != "glb":
+        return None
+    try:
+        meta = json.loads(o.meta_json or "{}") or {}
+    except (ValueError, TypeError):
+        return None
+    if not meta.get("lod"):
+        return None
+    return f"/media/o/{o.id}.lod.glb"
+
+
 def _serialize(
     comparison: Comparison,
     task: Task,
@@ -396,6 +419,7 @@ def _serialize(
         "criterion": {"slug": crit.slug, "name": crit.name},
         "a": {
             "url": _arena_asset_url(out_a),
+            "lod_url": _arena_lod_url(out_a),
             "format": out_a.asset_format,
             "output_id": out_a.id,
             "machine_generated": is_commercial_model(out_a.source),
@@ -403,6 +427,7 @@ def _serialize(
         },
         "b": {
             "url": _arena_asset_url(out_b),
+            "lod_url": _arena_lod_url(out_b),
             "format": out_b.asset_format,
             "output_id": out_b.id,
             "machine_generated": is_commercial_model(out_b.source),
@@ -422,6 +447,7 @@ def _serialize_output(o: ModelOutput) -> dict:
     return {
         "output_id": o.id,
         "url": _arena_asset_url(o),
+        "lod_url": _arena_lod_url(o),
         "format": o.asset_format,
         "machine_generated": is_commercial_model(o.source),
         "attribution": o.attribution or None,
@@ -1197,6 +1223,43 @@ MEDIA_MAX_AGE = 3600
 
 def _media_headers(etag: str) -> dict[str, str]:
     return {"Cache-Control": f"public, max-age={MEDIA_MAX_AGE}", "ETag": etag}
+
+
+@app.get("/media/o/{output_id}.lod.{ext}")
+def media_asset_lod(output_id: int, ext: str, request: Request, db: Session = Depends(get_db)):
+    """The low-detail companion mesh, when the release pipeline produced one.
+
+    DECLARED BEFORE `media_asset`: Starlette matches routes in registration order and `{ext}` is
+    happy to swallow `lod.glb`, so registering the generic route first would send every LOD
+    request to the full mesh — a silent no-op that looks exactly like a working feature while
+    every voter still downloads the thing the LOD exists to avoid.
+
+    404 rather than falling back to the full mesh. A fallback would make a missing LOD invisible:
+    the ballot would still work, nobody would be faster, and no signal would say so. The client
+    only ever asks after `lod_url` appeared in its payload, so a 404 here means the bundle and the
+    database disagree — which is worth surfacing, not smoothing over.
+    """
+    o = db.get(ModelOutput, output_id)
+    if o is None:
+        raise HTTPException(404, "Unknown output")
+    rel = mesh_lod.lod_path(o.asset_path)
+    if not storage.exists(rel):
+        raise HTTPException(404, "No LOD for this output")
+    ctype = content_type_for(rel)
+    if getattr(storage, "remote", False):
+        body = storage.read(rel)
+        etag = f'"{hashlib.sha256(body).hexdigest()[:32]}"'
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers=_media_headers(etag))
+        return Response(content=body, media_type=ctype, headers=_media_headers(etag))
+    path = config.ASSET_DIR / rel
+    if not path.is_file():
+        raise HTTPException(404, "No LOD for this output")
+    st = path.stat()
+    etag = f'"{st.st_size:x}-{st.st_mtime_ns:x}"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=_media_headers(etag))
+    return FileResponse(path, media_type=ctype, headers=_media_headers(etag))
 
 
 @app.get("/media/o/{output_id}.{ext}")
