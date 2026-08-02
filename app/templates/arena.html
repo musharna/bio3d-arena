@@ -40,7 +40,9 @@
     <ol class="onboard-steps">
       <li>
         <span class="onboard-step-n">1</span>
-        <span><strong>Inspect</strong> — drag to rotate, scroll to zoom each model.</span>
+        {# "scroll or pinch": this is the instruction for the primary interaction, and most
+           voters are on a phone, where there is no scroll-to-zoom. #}
+        <span><strong>Inspect</strong> — drag to rotate, scroll or pinch to zoom each model.</span>
       </li>
       <li>
         <span class="onboard-step-n">2</span>
@@ -168,13 +170,16 @@
      is the absence of a judgement, and folding it into Tie would inject noise into exactly the
      pairs where the signal is weakest. So this records nothing and just advances. #}
   <div class="skip-bar">
+    {# "comparison", not "pair": same rule as the hero above — a ballot is four models or two,
+       so a count here is wrong half the time. Said "this pair" while four models were on
+       screen. #}
     <button type="button" id="skip-btn" class="skip-btn">
-      Can’t tell — skip this pair <kbd>S</kbd>
+      Can’t tell — skip this comparison <kbd>S</kbd>
     </button>
   </div>
   <!-- Post-vote reveal (Feature C): shown by arena.js after a vote commits, in place of the
        vote bar. Hidden by default; never present before a vote. -->
-  <button type="button" id="next-pair-btn" hidden>Next pair →</button>
+  <button type="button" id="next-pair-btn" hidden>Next comparison →</button>
   <p id="status-line" class="status-line"></p>
 </section>
 <div id="confetti-layer" aria-hidden="true"></div>

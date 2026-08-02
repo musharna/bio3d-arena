@@ -824,7 +824,11 @@ def home(request: Request, db: Session = Depends(get_db)):
     kingdom_blurbs = {
         "plants": "Flowers, crops, and foliage — the founding kingdom of the benchmark.",
         "fungi": "Mushrooms and fruiting bodies — complement-aware completeness beyond plants.",
-        "animals": "Vertebrates and invertebrates — arriving as tasks are seeded.",
+        # Written while animals were still being seeded; they shipped, so the card was
+        # rendering "arriving as tasks are seeded" directly beside its own LIVE badge and a
+        # real task count. The blurb is static text next to live per-kingdom queries — it
+        # cannot go stale silently again if it stops making a claim about readiness.
+        "animals": "Vertebrates and invertebrates — bilateral body plans, a third kingdom.",
     }
     kingdom_cards = []
     for k in kingdoms.KINGDOMS:
