@@ -192,6 +192,11 @@
   // Attributes that decide how a mesh is LIT and FRAMED. The upgraded viewer must carry every
   // one of them or the full mesh would render differently from the LOD it replaces — and on a
   // fidelity benchmark a lighting change mid-inspection reads as a property of the model.
+  // How far a voter must dolly IN before the full mesh is fetched. 0.9 is deliberately close to
+  // 1: the cost of upgrading early is bytes, the cost of upgrading late is a voter scoring our
+  // decimation as the generator's geometry — and only one of those corrupts the benchmark.
+  const ZOOM_IN_FRACTION = 0.9;
+
   const MESH_VIEW_ATTRS = [
     "camera-controls",
     "touch-action",
@@ -265,16 +270,59 @@
       slot.appendChild(full);
     };
 
-    // Zoom is the interaction that makes decimation visible: wheel on desktop, pinch on touch.
-    lodViewer.addEventListener("wheel", start, { passive: true, once: true });
-    lodViewer.addEventListener(
-      "touchstart",
-      (e) => {
-        if (e.touches && e.touches.length > 1) start(); // two fingers == pinch-zoom
-      },
-      { passive: true },
-    );
-    // Fullscreen is an explicit request for a closer look, whatever the input device.
+    // Watch the CAMERA, not the input device.
+    //
+    // This listened for `wheel` and `touchstart` on the host element until 2026-08-02, and it
+    // fired for about 1 voter in 10 in production. Measured, not guessed: a real wheel demonstrably
+    // reached the element (it zoomed the camera and fired both capture- and bubble-phase probes),
+    // so delivery was never the problem. The trigger was.
+    //
+    // Two mechanisms, and the fix removes both rather than patching either:
+    //
+    //   * `{once: true}` removes a listener the first time it FIRES, but `start()` returns early
+    //     without setting `started` when the slot is stale. Any wheel arriving during a remount
+    //     therefore consumed the one and only listener and disabled the upgrade permanently, with
+    //     nothing logged and no way to notice.
+    //   * more fundamentally, raw input events couple this safeguard to how a third-party web
+    //     component handles its own gestures. model-viewer owns zoom; we were guessing at the
+    //     input that produces it, so pinch, keyboard zoom and programmatic framing never
+    //     triggered an upgrade at all — even on the runs where the wheel path did work.
+    //
+    // `camera-change` is the signal that actually means "someone is looking closer", and
+    // model-viewer emits it however the zoom was produced. Watching state instead of input also
+    // makes the failure visible: if the event stopped firing the upgrade would stop entirely,
+    // rather than degrading to one voter in ten.
+    let baseRadius = null;
+    const readRadius = () => {
+      try {
+        const o = lodViewer.getCameraOrbit && lodViewer.getCameraOrbit();
+        return o && typeof o.radius === "number" ? o.radius : null;
+      } catch (_) {
+        return null;
+      }
+    };
+    // The framing model-viewer settles on after `load` is the baseline; anything read before that
+    // is the pre-framing default and would make the first real frame look like a zoom.
+    lodViewer.addEventListener("load", () => {
+      baseRadius = readRadius();
+    });
+
+    const onCamera = (e) => {
+      // 'none' is our own jumpCameraToGoal and the initial framing; only a person counts.
+      if (!e || !e.detail || e.detail.source !== "user-interaction") return;
+      const r = readRadius();
+      if (baseRadius === null || r === null) return;
+      // Dollying IN is what reveals faceting. Rotating at a 158x168 grid cell does not, and
+      // upgrading on rotation would spend the full mesh's bytes on most ballots and give back
+      // the saving the LOD exists for.
+      if (r <= baseRadius * ZOOM_IN_FRACTION) {
+        lodViewer.removeEventListener("camera-change", onCamera);
+        start();
+      }
+    };
+    lodViewer.addEventListener("camera-change", onCamera);
+
+    // Fullscreen is an explicit request for a closer look before the camera has moved at all.
     document.addEventListener("fullscreenchange", () => {
       if (
         document.fullscreenElement &&
