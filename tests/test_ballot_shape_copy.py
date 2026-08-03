@@ -62,6 +62,56 @@ def test_no_hardcoded_ballot_size_in_visitor_copy(name):
         )
 
 
+#: Repo-level documents that describe the product to someone who has not used it.
+#: These were NOT covered when this guard was written for the templates, and a day
+#: later the same stale claim was still sitting in both: the README opened with
+#: "blind pairwise comparison ... two anonymised 3D outputs ... pick the better
+#: one", and CITATION.cff — which feeds a permanent Zenodo record — said "Voters
+#: compare two anonymised 3D outputs". Guarding the templates alone guarded the
+#: tripwire, not the mechanism.
+DESCRIBES_THE_PRODUCT = ["README.md", "CITATION.cff"]
+
+#: Deliberately NARROWER than BANNED above. These files legitimately discuss
+#: pairwise STATISTICS ("pairwise significance", "three pairwise comparisons"), so
+#: a bare /pairwise/ ban would be wrong here. Each pattern asserts a ballot SIZE.
+BANNED_IN_DOCS = [
+    (r"\btwo anonymi[sz]ed\b", 'drop the count: "anonymised 3D outputs"'),
+    (r"\bblind pairwise\b", 'describing the interaction: say "blind comparison"'),
+    (r"\bpick the better one\b", 'implies exactly two: say "pick the best"'),
+]
+
+
+@pytest.mark.parametrize("name", DESCRIBES_THE_PRODUCT)
+def test_no_hardcoded_ballot_size_in_repo_docs(name):
+    body = (Path(__file__).resolve().parent.parent / name).read_text()
+    for pattern, remedy in BANNED_IN_DOCS:
+        found = re.search(pattern, body, flags=re.IGNORECASE)
+        assert not found, (
+            f"{name} contains {found.group(0)!r}, which asserts a ballot size. "
+            f"A ballot is four models or two depending on whether the task fills a "
+            f"quad. Instead: {remedy}."
+        )
+
+
+def test_repo_docs_keep_their_pairwise_statistics_language():
+    """Positive control for the docs guard, mirroring the methodology one below.
+
+    The patterns above are narrow precisely so "pairwise" survives where it is
+    CORRECT. If someone widens them into a blanket ban, the paired bootstrap and
+    the k-wise-to-pairwise decomposition both get described wrongly — and a wrong
+    statistical claim in CITATION.cff would be minted into a DOI.
+    """
+    root = Path(__file__).resolve().parent.parent
+    assert "pairwise significance" in (root / "README.md").read_text().lower(), (
+        "README lost its pairwise-significance language. The paired bootstrap "
+        "genuinely is pairwise — a statistical claim, not a ballot-size one."
+    )
+    assert "pairwise" in (root / "CITATION.cff").read_text().lower(), (
+        "CITATION.cff lost its pairwise language. A pick-best-of-four is recorded "
+        "as three pairwise comparisons; the statistics are pairwise either way."
+    )
+
+
 def test_methodology_keeps_its_pairwise_language():
     """The positive control: this guard must not be 'fixed' by purging the word everywhere.
 

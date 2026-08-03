@@ -9,13 +9,15 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/arena-dark.png">
-  <img alt="The arena: a goldfish reconstruction task, reference photographs of the real organism, and two anonymised 3D models side by side" src="docs/images/arena-light.png">
+  <img alt="The arena: a single-image 3D reconstruction task, reference photographs of the real organism, and anonymised 3D models shown side by side for comparison" src="docs/images/arena-light.png">
 </picture>
 
-A [Chatbot-Arena](https://lmarena.ai/)-style platform for **blind pairwise
-comparison of generative 3D models — of living organisms**. You get a biological
-task and two anonymised 3D outputs, rotate and zoom both, and pick the better one.
-Votes feed Bradley–Terry rankings with bootstrap confidence intervals.
+A [Chatbot-Arena](https://lmarena.ai/)-style platform for **blind comparison of
+generative 3D models — of living organisms**. You get a biological task and a set
+of anonymised 3D outputs — four where the task can fill a quad, two otherwise —
+rotate and zoom each, and pick the best. A pick-best-of-four is recorded as three
+pairwise comparisons, so votes feed Bradley–Terry rankings with bootstrap
+confidence intervals either way.
 
 **Why organisms.** Most 3D-generation evaluation runs on furniture and game props,
 where "looks plausible" is close enough. A maize plant, a lion's mane mushroom and
