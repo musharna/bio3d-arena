@@ -9,9 +9,12 @@ repository-code: "https://github.com/musharna/bio3d-arena"
 url: "https://bio3d-arena.fly.dev"
 abstract: >-
   Bio 3D Arena evaluates generative 3D models on biological subjects rather than
-  generic objects. Voters compare two anonymised 3D outputs of the same organism
-  side by side, against CC-licensed reference photographs of the real organism, so
-  the judgement is biological fidelity rather than visual appeal. Rankings use
+  generic objects. Voters compare anonymised 3D outputs of the same organism side
+  by side — four where the task can fill a quad, two otherwise — against
+  CC-licensed reference photographs of the real organism, so the judgement is
+  biological fidelity rather than visual appeal. A pick-best-of-four is recorded
+  as three pairwise comparisons, so the statistics are pairwise either way.
+  Rankings use
   Bradley-Terry with bootstrap confidence intervals, and a generator without
   enough comparisons is reported as unranked rather than given a point estimate.
   The corpus spans plants, fungi and animals across four generation paradigms:
