@@ -62,6 +62,37 @@ checksums. It does not reference any internal filesystem path (no Agrigen path, 
 
 ## 3. Import (run on the public instance)
 
+### The operator env is NOT the app env — R2 names have to be mapped
+
+The secret file an operator holds (`~/.bio3d-deploy.env` on the release machine) stores the object
+storage credentials under **Cloudflare's own names**, while the app and boto3 read the
+**AWS/BIO3D** names. Nothing translates between them, so sourcing the secret file and running the
+import straight away leaves `BIO3D_STORAGE_BACKEND` unset — and the import then writes the blobs
+to **local disk**, reporting complete success while uploading nothing:
+
+```bash
+set -a; . ~/.bio3d-deploy.env; set +a
+export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+export AWS_ENDPOINT_URL="$R2_ACCOUNT_ENDPOINT"   # needs botocore >= 1.34
+export AWS_DEFAULT_REGION=auto                   # R2 ignores the value but boto3 demands one
+export BIO3D_STORAGE_BACKEND=s3
+export BIO3D_S3_BUCKET="$R2_BUCKET"
+```
+
+Verify the mapping **before** an upload, with a read: a HEAD against a key you know exists proves
+credentials, endpoint and bucket in one call, and cannot write anything.
+
+```bash
+python -c "import boto3,os; print(boto3.client('s3').head_object(
+  Bucket=os.environ['BIO3D_S3_BUCKET'], Key='reference/gallery/zea_mays/1.jpg')['ContentLength'])"
+```
+
+Neither `boto3` nor `psycopg` is in `requirements.txt` — that set is deliberately what _serving_
+needs. Both are pinned in `requirements-scale.txt`; install from there on the release machine.
+
+### Then import
+
 Load the public env (see `deploy/.env.public.example`) and import:
 
 ```bash
