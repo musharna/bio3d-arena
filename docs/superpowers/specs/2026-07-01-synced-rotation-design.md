@@ -58,12 +58,12 @@ other. This makes side-by-side (and mobile A/B-toggle) comparison meaningful.
     if (e.detail.source === "user-interaction") copyCam(b, a);
   });
   ```
-- Expose on `window.Bio3DViewer.syncPair`. (`mount()` is unchanged.)
+- Expose on `window.Taxon3DViewer.syncPair`. (`mount()` is unchanged.)
 
 ### 2. `arena.js` — call it after mounting a pair
 
-- In `render(data)`, after the two `Bio3DViewer.mount(...)` calls, add
-  `window.Bio3DViewer.syncPair(el("slot-a"), el("slot-b"));`.
+- In `render(data)`, after the two `Taxon3DViewer.mount(...)` calls, add
+  `window.Taxon3DViewer.syncPair(el("slot-a"), el("slot-b"));`.
 
 ## Data flow
 

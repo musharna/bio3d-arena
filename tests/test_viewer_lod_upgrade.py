@@ -44,7 +44,7 @@ PAGE = """<!doctype html><html><head><meta charset="utf-8">
 <script>
   window.__mounted = false;
   window.addEventListener('load', () => {
-    window.Bio3DViewer.mount(document.getElementById('slot'),
+    window.Taxon3DViewer.mount(document.getElementById('slot'),
       {url: 'full.glb', lod_url: 'lod.glb', format: 'glb', output_id: 1}, null);
     window.__mounted = true;
   });

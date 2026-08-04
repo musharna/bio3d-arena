@@ -1,10 +1,10 @@
-# Bio 3D Arena — Field-Audit Plan of Attack
+# Taxon3D — Field-Audit Plan of Attack
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Execute the 2026-06-20 field audit (`docs/audits/2026-06-20-field-audit.md`) as a sequence of independently-shippable increments. This document is the **roadmap for all 7 increments** plus the **full executable plan for Increment 1** (real benchmark content + SDF support). Increments 2–7 are sequenced here with deliverables/dependencies; each gets its own detailed plan when we reach it (writing them all now would go stale).
 
-**Architecture:** Keep the established pattern — server-rendered FastAPI + Jinja2 + vanilla JS, SQLAlchemy 2.0 over SQLite (Postgres via `DATABASE_URL`), format-keyed client-side viewer registry (`window.Bio3DViewer`). Each increment is TDD'd, live-verified under uvicorn, committed, and fast-forward-merged to `master`.
+**Architecture:** Keep the established pattern — server-rendered FastAPI + Jinja2 + vanilla JS, SQLAlchemy 2.0 over SQLite (Postgres via `DATABASE_URL`), format-keyed client-side viewer registry (`window.Taxon3DViewer`). Each increment is TDD'd, live-verified under uvicorn, committed, and fast-forward-merged to `master`.
 
 **Tech Stack:** Python 3.13, FastAPI, SQLAlchemy 2.0, trimesh, numpy, 3Dmol.js, Google `<model-viewer>`, pytest.
 
@@ -35,7 +35,7 @@ Ordered by leverage-per-effort (audit §E). Each row is one shippable increment 
 | 3     | Viewer affordances + a11y pass                          | D1, D2, D4                                       | drag hint, loading spinner, asset-failure fallback, reset/fullscreen; focus styles, AA contrast, favicon, drop "MVP", admin out of public nav, colorblind-safe matrix + legend | needs headless browser to screenshot-verify | M (1 day)          |
 | 4     | Structure-validation track (the moat)                   | B3                                               | per-output validity badges (TM-score / MolProbity-style clashscore / Ramachandran) + a "is it physically valid?" view distinct from the aesthetic vote                         | 1 (real PDB content to validate against)    | M–L                |
 | 5     | Transparency: vote-data export + read API + model cards | B4, B5                                           | anonymized vote dump (CSV/Parquet) + recompute notebook; JSON leaderboard API; per-model metadata cards (license/format/provider)                                              | 1 (meta fields)                             | S–M                |
-| 6     | Engagement: embeddable rank badge                       | B6                                               | dynamic SVG/PNG "#N on Bio 3D Arena" badge endpoint + iframe mini-leaderboard + OG cards                                                                                       | 2 (rank numbers)                            | S                  |
+| 6     | Engagement: embeddable rank badge                       | B6                                               | dynamic SVG/PNG "#N on Taxon3D" badge endpoint + iframe mini-leaderboard + OG cards                                                                                       | 2 (rank numbers)                            | S                  |
 | 7     | Voxel→GLB ingest pipeline                               | C3-voxel                                         | offline `niftiitomesh`/marching-cubes converter → register CellMap/TotalSegmentator/MSD organ meshes                                                                           | 1 (loader)                                  | L                  |
 
 **Cross-cutting prerequisite (do before Increment 3):** install a headless browser so the visual fixes are screenshot-verified, not reasoned-about — `pip install playwright && playwright install chromium`. Until then, Increment 3's "done" is gated on real screenshots.
@@ -96,7 +96,7 @@ import pytest
 from app import ingest
 
 VALID_SDF = """arena-test
-  Bio3DArena
+  Taxon3D
 
   3  2  0  0  0  0  0  0  0  0999 V2000
     0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
@@ -350,7 +350,7 @@ def build_molecule_sdf(seed: int, out_path: Path) -> dict:
     elements = [_ELEMENTS[int(rng.integers(0, len(_ELEMENTS)))] for _ in range(n)]
     bonds = [(i, i + 1) for i in range(1, n)]  # 1-indexed chain
 
-    header = ["arena-demo", "  Bio3DArena", ""]
+    header = ["arena-demo", "  Taxon3D", ""]
     counts = f"{n:>3}{len(bonds):>3}  0  0  0  0  0  0  0  0999 V2000"
     atom_lines = [
         f"{c[0]:>10.4f}{c[1]:>10.4f}{c[2]:>10.4f} {el:<3} 0  0  0  0  0  0  0  0  0  0  0  0"

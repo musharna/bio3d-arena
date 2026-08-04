@@ -1,6 +1,6 @@
 # Structure Validation Track — Design Spec (Increment 4)
 
-> Bio 3D Arena · 2026-06-20 · audit item **B3** ("CASP-style structure-validation track,
+> Taxon3D · 2026-06-20 · audit item **B3** ("CASP-style structure-validation track,
 > distinct from the aesthetic vote — our strongest differentiator").
 
 ## Goal

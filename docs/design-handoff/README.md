@@ -1,7 +1,7 @@
-# Handoff: Bio 3D Arena
+# Handoff: Taxon3D
 
 ## Overview
-**Bio 3D Arena** is a web application for benchmarking AI 3D-generation models on *biological* subjects (plants, fungi, and — on the roadmap — animals). Its core loop is a blind **pairwise arena**: two anonymous model reconstructions of the same real organism are shown side by side, the user votes for the better one, and votes feed a **Bradley–Terry** ranking. Around that loop sits a full analytics suite — leaderboard, per-model pages, difficulty analysis, statistical significance, dataset/task catalogs, coverage, spotlight, and methodology.
+**Taxon3D** is a web application for benchmarking AI 3D-generation models on *biological* subjects (plants, fungi, and — on the roadmap — animals). Its core loop is a blind **pairwise arena**: two anonymous model reconstructions of the same real organism are shown side by side, the user votes for the better one, and votes feed a **Bradley–Terry** ranking. Around that loop sits a full analytics suite — leaderboard, per-model pages, difficulty analysis, statistical significance, dataset/task catalogs, coverage, spotlight, and methodology.
 
 The design is a **single-page app** with a persistent left sidebar, a sticky "kingdom scope" bar, and ~13 routable screens. It supports **light and dark themes** and a **tweakable accent color**, all driven by CSS custom properties.
 
@@ -15,7 +15,7 @@ The prototype is built as a "Design Component" (`.dc.html`) that runs on a small
 The one file worth reusing directly is **`viewer.js`** — see the "3D Viewer" section; it is framework-agnostic and wraps `<model-viewer>` / 3Dmol.js.
 
 ### How to open the prototype
-Open `Bio 3D Arena v2.dc.html` in a browser (it loads `support.js` and `viewer.js` from the same folder, plus `<model-viewer>`, fonts, and 3Dmol.js from CDNs). Navigate via the sidebar; toggle theme via the button at the sidebar bottom.
+Open `Taxon3D v2.dc.html` in a browser (it loads `support.js` and `viewer.js` from the same folder, plus `<model-viewer>`, fonts, and 3Dmol.js from CDNs). Navigate via the sidebar; toggle theme via the button at the sidebar bottom.
 
 ---
 
@@ -151,7 +151,7 @@ All screens are kingdom-scoped (data refilters when the kingdom changes) and the
 - **Task strip** (`.b3d-strip`): the subject prompt + category/criterion selects.
 - **Pair** (`.b3d-pair`): two viewer **stages** side by side (`1fr 1fr`, collapses to one column ≤760px). Each stage: real 3D viewer (GLB via `<model-viewer>`, or molecular via 3Dmol) with reset + fullscreen controls (top-right, appear on hover), a hover hint, loading spinner, and — **after voting** — a reveal pill top-left showing the real model name (e.g. "TRELLIS", "Hunyuan3D v2") and a small "**• 1st / • 2nd**" rank chip top-right. The winning stage gets a soft gold top-border.
 - **Vote bar** (`.b3d-votebar`, becomes sticky-bottom on mobile): "A is better" / "Tie" / "B is better" style actions. Voting is disabled once a vote is cast for the pair.
-- **Reveal / fanfare** (deliberately subtle): on first vote only, a light confetti burst; otherwise just the name pills, rank chips, and a single centered "**Next pair →**" button that advances to a fresh pair (remounts both viewers). The two viewers' cameras are **synced** (`Bio3DViewer.syncPair`) so rotating one rotates both.
+- **Reveal / fanfare** (deliberately subtle): on first vote only, a light confetti burst; otherwise just the name pills, rank chips, and a single centered "**Next pair →**" button that advances to a fresh pair (remounts both viewers). The two viewers' cameras are **synced** (`Taxon3DViewer.syncPair`) so rotating one rotates both.
 - **State**: `voted` (null | 'A' | 'B' | 'tie'), `sessionVotes` counter, a pair sequence key that increments on Next.
 
 ### 3. Leaderboard
@@ -196,12 +196,12 @@ All screens are kingdom-scoped (data refilters when the kingdom changes) and the
 
 ## 3D Viewer (`viewer.js` — reusable)
 
-`viewer.js` registers a framework-agnostic `window.Bio3DViewer` used for every real 3D surface (hero specimen + both arena stages). **This file can be reused nearly as-is**; it has no framework dependency.
+`viewer.js` registers a framework-agnostic `window.Taxon3DViewer` used for every real 3D surface (hero specimen + both arena stages). **This file can be reused nearly as-is**; it has no framework dependency.
 
-- **`Bio3DViewer.mount(slotEl, asset, opts)`** — mounts a renderer into a slot element, dispatching on `asset.format`:
+- **`Taxon3DViewer.mount(slotEl, asset, opts)`** — mounts a renderer into a slot element, dispatching on `asset.format`:
   - **GLB/GLTF** → a `<model-viewer>` element (Google's web component, loaded from CDN `model-viewer@3.5.0`). Configured with `camera-controls`, transparent poster/background, and **eager loading** (`loading="eager"` / reveal on load — the default lazy IntersectionObserver does **not** fire reliably when embedded, so eager mount is required).
   - **Molecular** (PDB/mmCIF etc.) → a **3Dmol.js** viewer.
-- **`Bio3DViewer.syncPair(slotA, slotB)`** — locks the two arena cameras together so orbiting one orbits both.
+- **`Taxon3DViewer.syncPair(slotA, slotB)`** — locks the two arena cameras together so orbiting one orbits both.
 - Chrome rendered around each viewer: reset + fullscreen control buttons (`.viewer-ctl`, 31×31, appear on hover / always visible on touch), a hover hint (`.viewer-hint`), a loading spinner (`.viewer-spinner`, 0.8s spin), and an error state (`.viewer-error`, amber). These use the stage/viewer CSS tokens above.
 
 **In production**: if using React, wrap `<model-viewer>` in a component (register the custom element once), or use `@google/model-viewer` + a 3Dmol React wrapper. Preserve: eager loading, camera-sync across the pair, transparent background, and the hover-reveal controls.
@@ -276,8 +276,8 @@ Reference captures of each screen live in `screenshots/` (dark theme). They show
 *(The arena's live 3D viewer stages sit below the fold and load real GLB assets; the capture shows the top of the screen. See the app for the full stages.)*
 
 ## Files
-- **`Bio 3D Arena v2.dc.html`** — the complete prototype (all screens, shell, logic). This is the source of truth for layout, copy, and behavior. The template markup is between `<x-dc>…</x-dc>`; the logic is the `class Component extends DCLogic { … }` block near the bottom (~line 960+). Theme tokens live in the `themeVars`/`vars` getter (~line 1495). Nav structure is in the sidebar-groups builder (~line 1008).
-- **`viewer.js`** — the reusable 3D viewer registry (`window.Bio3DViewer`). Reuse in production.
+- **`Taxon3D v2.dc.html`** — the complete prototype (all screens, shell, logic). This is the source of truth for layout, copy, and behavior. The template markup is between `<x-dc>…</x-dc>`; the logic is the `class Component extends DCLogic { … }` block near the bottom (~line 960+). Theme tokens live in the `themeVars`/`vars` getter (~line 1495). Nav structure is in the sidebar-groups builder (~line 1008).
+- **`viewer.js`** — the reusable 3D viewer registry (`window.Taxon3DViewer`). Reuse in production.
 - **`support.js`** — the prototype runtime only. **Do not ship.** Included so the HTML opens standalone.
 - **`DESIGN_SYSTEM.md`** — supplementary notes on the visual system (if present).
 

@@ -1,7 +1,7 @@
 // Mount a preview viewer for each pending submission + mirror the admin token
 // into every approve/reject form (entered once at the top of the page).
 document.querySelectorAll(".mod-viewer").forEach((slot) => {
-  window.Bio3DViewer.mount(slot, {
+  window.Taxon3DViewer.mount(slot, {
     url: slot.dataset.url,
     format: slot.dataset.format,
   });

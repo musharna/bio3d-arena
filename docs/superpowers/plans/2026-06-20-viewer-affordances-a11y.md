@@ -380,7 +380,7 @@ git commit -m "feat(a11y): colorblind-safe blue/orange significance matrix + gly
 
 **Interfaces:**
 
-- Consumes: `window.Bio3DViewer.mount(slot, asset)` (existing).
+- Consumes: `window.Taxon3DViewer.mount(slot, asset)` (existing).
 - Produces: same `mount` signature, now returning the format string AND rendering loading/hint/error overlays inside the slot.
 
 - [ ] **Step 1: Add CSS affordance styles**
@@ -534,13 +534,13 @@ Full new `app/static/viewer.js`:
     return fmt;
   }
 
-  window.Bio3DViewer = { mount, MESH_FORMATS: MESH, MOLECULAR_FORMATS: MOL };
+  window.Taxon3DViewer = { mount, MESH_FORMATS: MESH, MOLECULAR_FORMATS: MOL };
 })();
 ```
 
 - [ ] **Step 3: Screenshot-verify loaded state + hint + fallback**
 
-Write `/home/mjarnold/.claude/jobs/3400ad8a/tmp/viewer_check.py` that boots the app, opens `/`, waits for `model-viewer` load, asserts `.viewer-hint` exists and `.viewer-loading` is gone, screenshots; then injects a broken asset URL via `Bio3DViewer.mount(slot,{format:'glb',url:'/static/does-not-exist.glb'})` and asserts `.viewer-error` appears.
+Write `/home/mjarnold/.claude/jobs/3400ad8a/tmp/viewer_check.py` that boots the app, opens `/`, waits for `model-viewer` load, asserts `.viewer-hint` exists and `.viewer-loading` is gone, screenshots; then injects a broken asset URL via `Taxon3DViewer.mount(slot,{format:'glb',url:'/static/does-not-exist.glb'})` and asserts `.viewer-error` appears.
 
 Run: `PYTHONPATH=$(pwd) .venv/bin/python /home/mjarnold/.claude/jobs/3400ad8a/tmp/viewer_check.py`
 Expected: prints `HINT_OK True`, `ERROR_FALLBACK_OK True`.

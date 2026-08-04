@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Produce a self-contained, publishable Bio 3D Arena instance by adding a curated export/import promotion pipeline plus a scoring-disabled runtime mode — so the public deploy needs no Agrigen filesystem, no live scorer, and cannot leak unpublished work or the held-out test set.
+**Goal:** Produce a self-contained, publishable Taxon3D instance by adding a curated export/import promotion pipeline plus a scoring-disabled runtime mode — so the public deploy needs no Agrigen filesystem, no live scorer, and cannot leak unpublished work or the held-out test set.
 
 **Architecture:** "Promote, don't recompute." An `export_public.py` script on the internal instance resolves a curated include-set (explicit task/generator allowlist × `active` × license allowlist × non-leaking gold), serializes those rows to JSON, copies their asset blobs + the already-baked GT reference GLBs, and writes a checksummed bundle. `import_public.py` loads a bundle into a fresh public DB + storage. The running server never scores (guarded by `SCORING_ENABLED`) and never reads `GT_BUNDLE_DIR` (already build-time-only).
 
@@ -785,7 +785,7 @@ Minimal templates (match the existing Jinja base — check `app/templates/` for 
 {% extends "base.html" %} {% block content %}
 <h1>Terms of Use</h1>
 <p>
-  Bio 3D Arena is a research platform for comparing biological 3D generations.
+  Taxon3D is a research platform for comparing biological 3D generations.
   Votes are anonymous and used for aggregate rankings and research. Do not
   submit content you do not have the right to share. Provided "as is", without
   warranty.
@@ -888,7 +888,7 @@ Expected: FAIL — file missing.
 - [ ] **Step 3: Create `deploy/.env.public.example`**
 
 ```bash
-# Public Bio 3D Arena — env (fill secrets from the host's secret store; never commit real values)
+# Public Taxon3D — env (fill secrets from the host's secret store; never commit real values)
 BIO3D_DATABASE_URL=postgresql+psycopg://USER:PASS@HOST/DBNAME
 BIO3D_STORAGE_BACKEND=s3
 BIO3D_S3_BUCKET=bio3d-public

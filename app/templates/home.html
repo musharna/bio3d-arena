@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {# title and description are kept on ONE line each: both render into an HTML attribute, and a
    source line-wrap put literal newlines inside `content="…"`. #}
-{% block title %}Bio 3D Arena — Biological 3D reconstruction benchmark{% endblock %}
+{% block title %}Taxon3D — Biological 3D reconstruction benchmark{% endblock %}
 {% block description %}Which AI model best rebuilds life in 3D? Vote in a blind arena comparing generative reconstructions of real plants, fungi, and animals against reference photos.{% endblock %}
 {% block content %}
 <section class="b3d-hero">
@@ -41,7 +41,7 @@
     </div>
 
     <!-- Hero viz: a live rotating specimen when a featured GLB is available
-         (mounted below via the shared window.Bio3DViewer.mount); otherwise the
+         (mounted below via the shared window.Taxon3DViewer.mount); otherwise the
          static concentric-ring motif placeholder. The rings/gizmo/pills/caption
          below are chrome around the viewer slot -- they don't touch #hero-slot. -->
     <div class="b3d-hero-viz">

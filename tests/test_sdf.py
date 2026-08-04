@@ -7,7 +7,7 @@ import pytest
 from app import ingest
 
 VALID_SDF = """arena-test
-  Bio3DArena
+  Taxon3D
 
   3  2  0  0  0  0  0  0  0  0999 V2000
     0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0

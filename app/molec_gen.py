@@ -30,7 +30,7 @@ def build_molecule_pdb(seed: int, out_path: Path) -> dict:
     rng = np.random.default_rng(seed)
     n_atoms = int(rng.integers(6, 14))
     pos = np.zeros(3)
-    lines = ["REMARK  Bio 3D Arena procedural demo molecule", "COMPND    LIGAND"]
+    lines = ["REMARK  Taxon3D procedural demo molecule", "COMPND    LIGAND"]
     coords = []
     for i in range(n_atoms):
         element = _ELEMENTS[int(rng.integers(0, len(_ELEMENTS)))]
@@ -62,7 +62,7 @@ def build_molecule_sdf(seed: int, out_path: Path) -> dict:
     elements = [_ELEMENTS[int(rng.integers(0, len(_ELEMENTS)))] for _ in range(n)]
     bonds = [(i, i + 1) for i in range(1, n)]  # 1-indexed chain
 
-    header = ["arena-demo", "  Bio3DArena", ""]
+    header = ["arena-demo", "  Taxon3D", ""]
     counts = f"{n:>3}{len(bonds):>3}  0  0  0  0  0  0  0  0999 V2000"
     atom_lines = [
         f"{c[0]:>10.4f}{c[1]:>10.4f}{c[2]:>10.4f} {el:<3} 0  0  0  0  0  0  0  0  0  0  0  0"

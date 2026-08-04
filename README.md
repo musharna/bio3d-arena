@@ -1,4 +1,4 @@
-# 🧬 Bio 3D Arena
+# 🧬 Taxon3D
 
 **Which AI model actually rebuilds a living thing in 3D?**
 
@@ -6,6 +6,12 @@
 [![CI](https://github.com/musharna/bio3d-arena/actions/workflows/ci.yml/badge.svg)](https://github.com/musharna/bio3d-arena/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Cite](https://img.shields.io/badge/cite-CITATION.cff-8957e5)](CITATION.cff)
+
+> **Note** — this project was called _Bio 3D Arena_ until August 2026. The name collided with the
+> [Bio3D R package](https://cran.r-project.org/package=bio3d) for protein structure analysis and
+> with [Arena3D](https://arena3d.org/), so searching the name found neither of us. The hosting URL
+> and repository path still carry the old name and are unchanged — those move separately, and
+> every link above is live.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/arena-dark.png">
@@ -301,8 +307,8 @@ JSON/upload endpoints:
 Python client (`app/client.py`) + runnable example (`scripts/ingest_example.py`):
 
 ```python
-from app.client import Bio3DArenaClient
-c = Bio3DArenaClient("http://localhost:8000", admin_token="...")
+from app.client import Taxon3DClient
+c = Taxon3DClient("http://localhost:8000", admin_token="...")
 c.upsert_category("flowers", "Flowers")
 task = c.create_task("flowers", "Rose bloom", "Generate an open rose.")
 c.upsert_generator("my-rose-gen", "My Rose Generator")

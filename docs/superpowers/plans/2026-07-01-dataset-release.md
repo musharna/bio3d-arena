@@ -147,10 +147,10 @@ def license_rollup(output_rows: list[dict]) -> list[dict]:
 
 def render_license(rollup: list[dict]) -> str:
     lines = [
-        "Bio 3D Arena — Benchmark Dataset License",
+        "Taxon3D — Benchmark Dataset License",
         "",
         "Each 3D asset retains its original license and attribution, listed below. Assets",
-        "authored by Bio 3D Arena (source=bio3d-arena) are released CC-BY-4.0. Redistribution",
+        "authored by Taxon3D (source=bio3d-arena) are released CC-BY-4.0. Redistribution",
         "of any asset is bound by its stated license.",
         "",
         "Per-asset provenance (license | attribution | source):",
@@ -164,7 +164,7 @@ def render_datasheet(version: str, manifest: dict, rollup: list[dict]) -> str:
     counts = manifest.get("counts", {})
     return "\n".join(
         [
-            f"# Bio 3D Arena Benchmark — Datasheet ({version})",
+            f"# Taxon3D Benchmark — Datasheet ({version})",
             "",
             f"Content hash (bundle rows.json sha256): `{manifest.get('sha256', '')}`",
             "",
@@ -434,7 +434,7 @@ def dataset_page(request: Request):
 `app/templates/dataset.html`:
 
 ```html
-{% extends "base.html" %} {% block title %}Dataset · Bio 3D Arena{% endblock %}
+{% extends "base.html" %} {% block title %}Dataset · Taxon3D{% endblock %}
 {% block content %}
 <h1>Benchmark Dataset</h1>
 <p>

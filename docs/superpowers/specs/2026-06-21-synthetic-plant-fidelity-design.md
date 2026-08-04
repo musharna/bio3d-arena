@@ -1,6 +1,6 @@
 # Synthetic-Plant Botanical Fidelity — Design Spec
 
-> Bio 3D Arena · 2026-06-21 · the fast-follow vertical from the benchmark-landscape triage
+> Taxon3D · 2026-06-21 · the fast-follow vertical from the benchmark-landscape triage
 > (`~/.claude/projects/-home-mjarnold-agrigen/memory/bio_benchmark_vertical_landscape_2026-06-20.md`).
 > Pure greenfield: nobody scores "is this _generated_ plant botanically plausible?".
 

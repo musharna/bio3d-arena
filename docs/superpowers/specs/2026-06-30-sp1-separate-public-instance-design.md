@@ -1,7 +1,7 @@
 # SP1 — Separate Public Instance (design)
 
 > 2026-06-30. First product move in the [Go-Public Roadmap](2026-06-30-bio3d-arena-go-public-roadmap.md).
-> Goal: stand up a public Bio 3D Arena that is **self-contained** (no Agrigen dependency),
+> Goal: stand up a public Taxon3D that is **self-contained** (no Agrigen dependency),
 > **cheap to run**, and **cannot leak** unpublished Agrigen work or the held-out test set.
 
 ## Problem

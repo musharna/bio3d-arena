@@ -1,6 +1,6 @@
-# Bio 3D Arena — Refreshed Design System (handoff)
+# Taxon3D — Refreshed Design System (handoff)
 
-Direction chosen: **Focus** (viewer-first). Prototype lives in `Bio 3D Arena.dc.html`
+Direction chosen: **Focus** (viewer-first). Prototype lives in `Taxon3D.dc.html`
 (nav switches screens; theme toggle top-right; accent is tweakable). This doc maps the
 system back onto `app/templates/*.html` + `app/static/style.css`. Everything below is
 theme-aware via CSS custom properties — keep the existing `--*` variable approach, just

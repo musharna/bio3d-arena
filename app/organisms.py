@@ -252,6 +252,6 @@ def meta_description(org: dict) -> str:
     if methods:
         clauses.append(f"across {plural(methods, 'generation method')}")
     clauses.append(
-        "compared blind against reference photographs of the real organism on Bio 3D Arena"
+        "compared blind against reference photographs of the real organism on Taxon3D"
     )
     return ", ".join(clauses) + "."

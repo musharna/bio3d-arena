@@ -293,7 +293,7 @@
       </div>
     </div>
 
-    <!-- model pair · real Bio3DViewer (viewer.js → model-viewer / 3Dmol) -->
+    <!-- model pair · real Taxon3DViewer (viewer.js → model-viewer / 3Dmol) -->
     <div class="b3d-pair" style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:18px;">
       <div style="{{ stageAFrame }}">
         <div class="b3d-stage" style="position:relative; height:430px; overflow:hidden;">
@@ -930,7 +930,7 @@
   <main style="max-width:720px; margin:0 auto; padding:64px 30px 90px; text-align:center;">
     <div style="display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:10.5px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--amber); background:color-mix(in oklch, var(--amber) 15%, transparent); border:1px solid color-mix(in oklch, var(--amber) 38%, transparent); border-radius:999px; padding:4px 12px;">In progress</div>
     <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:30px; letter-spacing:-0.02em; margin:18px 0 0; color:var(--text);">{{ stubTitle }}</h1>
-    <p style="color:var(--muted); font-size:15px; line-height:1.6; max-width:560px; margin:14px auto 0;">This section is on the Bio 3D Arena roadmap. The design system, tokens, and table/card patterns from the live pages carry straight into it — it's a content build, not a new design.</p>
+    <p style="color:var(--muted); font-size:15px; line-height:1.6; max-width:560px; margin:14px auto 0;">This section is on the Taxon3D roadmap. The design system, tokens, and table/card patterns from the live pages carry straight into it — it's a content build, not a new design.</p>
     <button onClick="{{ goArena }}" style="margin-top:28px; display:inline-flex; align-items:center; gap:8px; background:var(--accent); border:none; border-radius:11px; color:oklch(0.98 0.01 258); font-family:'IBM Plex Sans',sans-serif; font-size:14px; font-weight:600; padding:11px 20px; cursor:pointer;" style-hover="filter:brightness(1.08)">← Back to the arena</button>
   </main>
   </sc-if>
@@ -1271,7 +1271,7 @@ class Component extends DCLogic {
     return { url: 'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Assets@main/Models/Avocado/glTF-Binary/Avocado.glb', format: 'glb' };
   }
 
-  // Mount the shared Bio3DViewer registry (viewer.js) into both A/B slots and lock
+  // Mount the shared Taxon3DViewer registry (viewer.js) into both A/B slots and lock
   // their cameras. Guarded so ordinary re-renders (voting, menus) don't remount and
   // reset the camera — only a new pair / kingdom / (re)entering the arena remounts.
   mountViewers() {
@@ -1279,10 +1279,10 @@ class Component extends DCLogic {
     const a = document.getElementById('b3d-slot-a');
     const b = document.getElementById('b3d-slot-b');
     if (!a || !b) return;
-    const V = window.Bio3DViewer;
+    const V = window.Taxon3DViewer;
     if (!V) {
       if (!this._vRetry) this._vRetry = setInterval(() => {
-        if (window.Bio3DViewer) { clearInterval(this._vRetry); this._vRetry = null; this.mountViewers(); }
+        if (window.Taxon3DViewer) { clearInterval(this._vRetry); this._vRetry = null; this.mountViewers(); }
       }, 150);
       return;
     }

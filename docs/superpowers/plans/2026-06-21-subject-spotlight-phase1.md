@@ -497,7 +497,7 @@ def spotlight_page(slug: str, request: Request, db: Session = Depends(get_db)):
 - [ ] **Step 5: Create `app/templates/spotlight_index.html`**
 
 ```html
-{% extends "base.html" %} {% block title %}Spotlight · Bio 3D Arena{% endblock
+{% extends "base.html" %} {% block title %}Spotlight · Taxon3D{% endblock
 %} {% block content %}
 <section class="board">
   <h2>Subject Spotlight <span class="subtle">(internal)</span></h2>
