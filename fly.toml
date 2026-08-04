@@ -23,7 +23,7 @@ primary_region = "ord"          # Chicago: the Neon database is in aws us-east-2
 
   # Absolute URLs in share cards, OG tags and canonical links. Left unset, the app would
   # advertise itself as localhost to every crawler and every shared link.
-  BIO3D_PUBLIC_BASE_URL = "https://bio3d-arena.fly.dev"
+  BIO3D_PUBLIC_BASE_URL = "https://taxon3d.org"
 
   BIO3D_REQUIRE_CAPTCHA = "true"
   BIO3D_CAPTCHA_PROVIDER = "turnstile"

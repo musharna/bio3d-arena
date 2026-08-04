@@ -3,7 +3,7 @@
 
 Why this has to exist as a standing step, not a one-off rescue:
 
-Every vote a real visitor casts on bio3d-arena.fly.dev lands in the public Postgres and nowhere
+Every vote a real visitor casts on taxon3d.org lands in the public Postgres and nowhere
 else. The internal study DB is the source of truth the leaderboards are FITTED on, and the export
 promotes those fitted boards outward. So the moment the public site takes a vote, the two
 databases diverge, and every subsequent release publishes rankings computed without the newest

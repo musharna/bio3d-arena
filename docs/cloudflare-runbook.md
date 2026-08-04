@@ -46,30 +46,30 @@ Covered by `tests/test_client_ip_trust.py`.
 
 **Analytics does NOT require DNS.** Cloudflare Web Analytics is "privacy-first analytics for your
 website without changing DNS or using Cloudflare proxy" — a beacon snippet is enough. So "are we
-getting visitors" can be answered today, on `bio3d-arena.fly.dev`, with nothing but a token.
+getting visitors" can be answered today, on `taxon3d.org`, with nothing but a token.
 
 **The CDN half DOES require a domain you own.** Putting a site behind Cloudflare's proxy means
 adding it as a zone and pointing a registrar's nameservers at Cloudflare — impossible for a
 `*.fly.dev` hostname, which belongs to Fly. Edge caching therefore waits on acquiring a domain,
 and moving the public hostname carries an SEO cost: the sitemap, canonical links and OG tags all
-currently advertise `bio3d-arena.fly.dev`, so the indexed URLs would need redirects and
+currently advertise `taxon3d.org`, so the indexed URLs would need redirects and
 re-verification.
 
 ## Steps A — analytics only (no domain, ~5 minutes)
 
-1. Cloudflare dashboard → **Web Analytics** → _Add a site_ → hostname `bio3d-arena.fly.dev`.
+1. Cloudflare dashboard → **Web Analytics** → _Add a site_ → hostname `taxon3d.org`.
 2. Copy the beacon **token**.
 3. `fly secrets set --app bio3d-arena BIO3D_CF_ANALYTICS_TOKEN=<token>`, then redeploy.
 4. Do **NOT** set `BIO3D_BEHIND_CLOUDFLARE`. Traffic is not flowing through Cloudflare, so
    nothing is stripping `CF-Connecting-IP` and it must stay untrusted.
 
-Verify: `curl -s https://bio3d-arena.fly.dev/ | grep -c cloudflareinsights` → `1`.
+Verify: `curl -s https://taxon3d.org/ | grep -c cloudflareinsights` → `1`.
 
 ## Steps B — full proxy for edge caching (needs a domain you own)
 
 1.  **Add the site** in Cloudflare and let it scan DNS.
 2.  **Point the record at Fly.** For an apex/subdomain served by Fly, a proxied (orange-cloud)
-    `CNAME` to `bio3d-arena.fly.dev`. The orange cloud is the part that matters — grey-cloud is
+    `CNAME` to `taxon3d.org`. The orange cloud is the part that matters — grey-cloud is
     DNS-only and gives neither caching nor analytics.
 3.  **Update the nameservers** at the registrar to the pair Cloudflare shows. Propagation is
     usually minutes.
