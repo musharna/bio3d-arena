@@ -251,7 +251,5 @@ def meta_description(org: dict) -> str:
     methods = len({m["paradigm"] for m in org["models"] if m["paradigm"]})
     if methods:
         clauses.append(f"across {plural(methods, 'generation method')}")
-    clauses.append(
-        "compared blind against reference photographs of the real organism on Taxon3D"
-    )
+    clauses.append("compared blind against reference photographs of the real organism on Taxon3D")
     return ", ".join(clauses) + "."
