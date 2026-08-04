@@ -55,7 +55,10 @@ def _seed_pair(asset_a: str, asset_b: str):
         db.add(comp)
         db.flush()
         payload = main._serialize(comp, task, crit, oa, ob)
-        out_payload = main._serialize_output(oa)
+        # The LOD url is resolved across the whole ballot, never per output — see
+        # `_uniform_lod_urls`. Routed through the real helper rather than passing None, so this
+        # fixture keeps exercising the call shape the k-wise builder actually uses.
+        out_payload = main._serialize_output(oa, main._uniform_lod_urls([oa])[0])
         return payload, out_payload, oa.id, ob.id
 
 
