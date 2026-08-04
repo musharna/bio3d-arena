@@ -67,8 +67,10 @@ checksums. It does not reference any internal filesystem path (no Agrigen path, 
 The secret file an operator holds (`~/.bio3d-deploy.env` on the release machine) stores the object
 storage credentials under **Cloudflare's own names**, while the app and boto3 read the
 **AWS/BIO3D** names. Nothing translates between them, so sourcing the secret file and running the
-import straight away leaves `BIO3D_STORAGE_BACKEND` unset — and the import then writes the blobs
-to **local disk**, reporting complete success while uploading nothing:
+import straight away leaves `BIO3D_STORAGE_BACKEND` unset, which resolves to local storage. The
+import now **refuses** in that state rather than writing the blobs to local disk and reporting
+complete success while uploading nothing — but the refusal only tells you the mapping is missing.
+This is the mapping:
 
 ```bash
 set -a; . ~/.bio3d-deploy.env; set +a
@@ -101,7 +103,8 @@ python -m scripts.import_public --bundle public_bundle/v1
 ```
 
 Import verifies bundle checksums and fails loud on mismatch — do not proceed on a
-partial or corrupted transfer.
+partial or corrupted transfer. It also refuses to run against local storage unless you pass
+`--local-assets`, which is how you rebuild a local preview from a bundle on purpose.
 
 The import has two phases: rows into the database, then blobs into storage. The blob phase is
 **resumable** — it skips objects already present (a HEAD, not a PUT) and retries transient
