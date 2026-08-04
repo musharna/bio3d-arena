@@ -7,6 +7,8 @@ authors:
     given-names: Jaret
 repository-code: "https://github.com/musharna/taxon3d"
 url: "https://taxon3d.org"
+version: 0.1.0
+date-released: "2026-08-04"
 abstract: >-
   Taxon3D evaluates generative 3D models on biological subjects rather than
   generic objects. Voters compare anonymised 3D outputs of the same organism side

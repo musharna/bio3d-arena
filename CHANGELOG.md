@@ -2,14 +2,18 @@
 
 Notable changes to Taxon3D, a multi-paradigm benchmark arena for biological 3D generation.
 
-Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This project has
-**not been released** — `version` in `pyproject.toml` is still `0.1.0` and no tag exists. Everything
-below therefore sits under Unreleased, with the history before this file grouped by milestone.
-
-Entries are milestone-level, not commit-level. For commit detail, see `git log`; most milestones
-also carry a design spec under `docs/superpowers/specs/`.
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Entries are
+milestone-level, not commit-level. For commit detail, see `git log`; most milestones also carry a
+design spec under `docs/superpowers/specs/`.
 
 ## [Unreleased]
+
+## [0.1.0] - 2026-08-04
+
+First tagged release, and the first archived on Zenodo. It is cut here because the project's
+name is now settled — a DOI freezes the name into the citation record, so the rename had to land
+first. The benchmark itself is early: the leaderboard deliberately ranks nobody, because no
+generator yet has enough comparisons to rank honestly.
 
 ### Changed
 
