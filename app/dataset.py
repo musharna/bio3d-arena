@@ -97,10 +97,10 @@ def render_license(rollup: list[dict]) -> str:
     from .public_export import is_own_output
 
     lines = [
-        "Bio 3D Arena — Benchmark Dataset License",
+        "Taxon3D — Benchmark Dataset License",
         "",
         "Each 3D asset retains its original license and attribution, listed below. Assets",
-        "authored by Bio 3D Arena's own generation pipeline (source=bio3d-arena, commissioned,",
+        "authored by Taxon3D's own generation pipeline (source=bio3d-arena, commissioned,",
         "agentic:<model>, procedural:<generator>) are released CC-BY-4.0. Redistribution",
         "of any asset is bound by its stated license.",
         "",
@@ -123,7 +123,7 @@ def render_datasheet(version: str, manifest: dict, rollup: list[dict]) -> str:
     counts = manifest.get("counts", {})
     return "\n".join(
         [
-            f"# Bio 3D Arena Benchmark — Datasheet ({version})",
+            f"# Taxon3D Benchmark — Datasheet ({version})",
             "",
             f"Content hash (bundle rows.json sha256): `{manifest.get('sha256', '')}`",
             "",

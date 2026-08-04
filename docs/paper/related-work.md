@@ -1,10 +1,10 @@
 # Related Work (SP4 paper — draft)
 
-> Draft related-work / positioning section for the Bio 3D Arena paper (P-A). Citations are
+> Draft related-work / positioning section for the Taxon3D paper (P-A). Citations are
 > anchor-verified (abstracts read; arXiv/DOI checked) but NOT yet ghostcite-gated — run a full
 > citation audit (byline + retraction) before submission. First-author surnames verified.
 
-Bio 3D Arena sits at the intersection of four lines of work: arena-style human evaluation of
+Taxon3D sits at the intersection of four lines of work: arena-style human evaluation of
 generative models, VLM-as-judge evaluation for 3D, objective and perceptual evaluation of
 generated _plant_ geometry, and the emerging critique of leaderboard governance. No prior system
 spans them; we position against each in turn.
@@ -58,7 +58,7 @@ feasible and valuable — but they are _static, single-species, offline_ studies
 preference signal, no live or continuously-updated leaderboard, no calibrated judge, and no bias
 auditing, and they rank methods by geometric distance to a single reference (implicitly treating
 geometry as quality). Adjacent plant-3D datasets (ROSE-X, Pheno4D, Crops3D) target phenotyping and
-segmentation rather than generation. Bio 3D Arena adds the live human + calibrated-VLM preference
+segmentation rather than generation. Taxon3D adds the live human + calibrated-VLM preference
 layer, statistical ranking with uncertainty, bias correction, difficulty stratification, and a
 trait-grounded morphological axis _on top of_ held-out-scan objective metrics — and spans whole-
 plant, procedural, reconstruction, and molecular modalities in one platform. A recurring, honest
@@ -78,7 +78,7 @@ arena publishes a comparable governance surface.
 
 ## Positioning
 
-| Capability                                                | **Bio 3D Arena** | 3D Arena | 3DGen-Bench | GenAI-Arena | Plant Methods |
+| Capability                                                | **Taxon3D** | 3D Arena | 3DGen-Bench | GenAI-Arena | Plant Methods |
 | --------------------------------------------------------- | ---------------- | -------- | ----------- | ----------- | ------------- |
 | Biological/plant domain                                   | ✓                | ✗        | ✗           | ✗           | ✓             |
 | Live human voting + leaderboard                           | ✓                | ✓        | ✓           | ✓           | ✗             |
@@ -90,7 +90,7 @@ arena publishes a comparable governance surface.
 | Published governance / submission policy                  | ✓                | ✗        | ✗           | ✗           | ✗             |
 | Multi-modal span (plant + procedural + recon + molecular) | ✓                | ✗        | ✗           | ✗           | ✗             |
 
-The gap Bio 3D Arena does not yet close is _scale_: with vote volume far below 3D Arena's, our
+The gap Taxon3D does not yet close is _scale_: with vote volume far below 3D Arena's, our
 Bradley–Terry intervals remain wide and many ranks are provisional. This is a matter of
 participation over time rather than of method, and we report it transparently on the coverage page.
 

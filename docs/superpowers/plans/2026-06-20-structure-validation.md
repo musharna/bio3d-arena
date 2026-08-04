@@ -56,7 +56,7 @@ PDB_3 = (
     "ATOM      3  C   THR A   1      15.685  12.755   5.133  1.00  9.19           C  \n"
 )
 SDF_3 = (
-    "demo\n  Bio3DArena\n\n"
+    "demo\n  Taxon3D\n\n"
     "  3  2  0  0  0  0  0  0  0  0999 V2000\n"
     "    0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n"
     "    1.5400    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n"
@@ -105,7 +105,7 @@ def test_clean_chain_has_no_clashes():
 
 def test_bond_outlier_flags_stretched_bond():
     bad = (
-        "demo\n  Bio3DArena\n\n"
+        "demo\n  Taxon3D\n\n"
         "  2  1  0  0  0  0  0  0  0  0999 V2000\n"
         "    0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n"
         "    3.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n"
@@ -972,7 +972,7 @@ def api_validation(db: Session = Depends(get_db)):
 - [ ] **Step 5: Create `app/templates/validation.html`**
 
 ```html
-{% extends "base.html" %} {% block title %}Validation · Bio 3D Arena{% endblock
+{% extends "base.html" %} {% block title %}Validation · Taxon3D{% endblock
 %} {% block content %}
 <section class="board">
   <h2>

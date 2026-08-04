@@ -1,9 +1,9 @@
-"""Python client for the Bio 3D Arena ingestion API.
+"""Python client for the Taxon3D ingestion API.
 
 Lets a generator pipeline register its baked 3D outputs without touching the DB:
 
-    from app.client import Bio3DArenaClient
-    c = Bio3DArenaClient("http://localhost:8000", admin_token="...")
+    from app.client import Taxon3DClient
+    c = Taxon3DClient("http://localhost:8000", admin_token="...")
     c.upsert_category("flowers", "Flowers")
     task = c.create_task("flowers", "Rose bloom", "Generate an open rose.")
     c.upsert_generator("my-rose-gen", "My Rose Generator")
@@ -21,7 +21,7 @@ from pathlib import Path
 import httpx
 
 
-class Bio3DArenaClient:
+class Taxon3DClient:
     def __init__(self, base_url: str, admin_token: str | None = None, timeout: float = 30.0):
         self.base_url = base_url.rstrip("/")
         self._admin = {"X-Admin-Token": admin_token} if admin_token else {}

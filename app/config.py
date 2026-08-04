@@ -209,7 +209,7 @@ if IS_PUBLIC_DEPLOY and PUBLIC_BASE_URL == _DEV_BASE_URL:
     )
 
 # Social / Open Graph share cards — a pasted link previews with a title, description and image.
-SITE_NAME = "Bio 3D Arena"
+SITE_NAME = "Taxon3D"
 SITE_TAGLINE = (
     "A blind benchmark arena for 3D generative models of real organisms — vote on which "
     "reconstruction best matches the real thing."

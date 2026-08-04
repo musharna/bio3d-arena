@@ -30,7 +30,7 @@
 **Interfaces:**
 
 - Produces (internal to the IIFE, not exported): `addControls(slot)` appends `<div class="viewer-controls">` with two `<button class="viewer-ctl">`; `toggleFullscreen(slot)` enters/exits fullscreen on `slot`; each mount sets `slot._resetView` (reset closure) and `slot._onResize` (molecular resize closure or `null`); molecular also sets `slot._molViewer`.
-- `window.Bio3DViewer` export is unchanged (`mount`, `syncPair`, `MESH_FORMATS`, `MOLECULAR_FORMATS`).
+- `window.Taxon3DViewer` export is unchanged (`mount`, `syncPair`, `MESH_FORMATS`, `MOLECULAR_FORMATS`).
 
 - [ ] **Step 1: Write the failing test**
 

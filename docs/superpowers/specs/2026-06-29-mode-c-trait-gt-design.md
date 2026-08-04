@@ -2,7 +2,7 @@
 
 > **Date:** 2026-06-29
 > **Status:** Approved design (pre-plan). Next step: `writing-plans` → implementation plan.
-> **Author:** Bio 3D Arena
+> **Author:** Taxon3D
 > **Context:** First sub-project of the "scale program" (competitive audit #4). The other
 > sub-projects — A: phylogenetic coverage/difficulty framework, C: LLM-as-generator modality,
 > D: long-tail acquisition + photo galleries — get their own specs. See
@@ -230,7 +230,7 @@ existing VLM judge defensible (see the eval-loop calibration study).
 
 ## AgriGen integration
 
-Loose coupling only. Bio 3D Arena owns the trait tables and exposes `/api/traits.json` +
+Loose coupling only. Taxon3D owns the trait tables and exposes `/api/traits.json` +
 `/api/trait_scores.json`. AgriGen consumes the export; there is **no shared database** and no
 cross-project import dependency. (A tighter integration can be a later, separate decision.)
 

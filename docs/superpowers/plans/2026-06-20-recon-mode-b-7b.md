@@ -623,7 +623,7 @@ def api_benchmark(db: Session = Depends(get_db), task_id: int | None = None):
 - [ ] **Step 5: Create `app/templates/benchmark.html`**
 
 ```html
-{% extends "base.html" %} {% block title %}Benchmark · Bio 3D Arena{% endblock
+{% extends "base.html" %} {% block title %}Benchmark · Taxon3D{% endblock
 %} {% block content %}
 <section class="board">
   <h2>

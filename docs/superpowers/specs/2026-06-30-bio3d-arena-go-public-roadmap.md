@@ -1,4 +1,4 @@
-# Bio 3D Arena — Go-Public Roadmap (scoping)
+# Taxon3D — Go-Public Roadmap (scoping)
 
 > 2026-06-30. Decomposition of "make this tool public / competitive / useful / novel."
 > Companion deep-dive: [SP1 — Separate Public Instance](2026-06-30-sp1-separate-public-instance-design.md).

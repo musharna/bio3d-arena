@@ -8,7 +8,7 @@ client = TestClient(app)
 def test_syncpair_defined_and_wired():
     vjs = client.get("/static/viewer.js").text
     assert "function syncPair" in vjs
-    assert "syncPair" in vjs and "Bio3DViewer" in vjs  # exported
+    assert "syncPair" in vjs and "Taxon3DViewer" in vjs  # exported
     # gated on user-interaction (feedback-safe)
     assert "user-interaction" in vjs
     ajs = client.get("/static/arena.js").text

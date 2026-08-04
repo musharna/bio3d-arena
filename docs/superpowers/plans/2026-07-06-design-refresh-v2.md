@@ -1,8 +1,8 @@
-# Bio 3D Arena v2 Design Refresh — Implementation Plan
+# Taxon3D v2 Design Refresh — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Port the Claude "Bio 3D Arena v2" design handoff (left-sidebar shell, OKLCH green token system, sticky kingdom scope bar, light/dark theming, ~13 hi-fi screens) onto the existing server-rendered FastAPI + Jinja2 app, and wire kingdom (Plants/Fungi/Animals) as a global data filter across every page.
+**Goal:** Port the Claude "Taxon3D v2" design handoff (left-sidebar shell, OKLCH green token system, sticky kingdom scope bar, light/dark theming, ~13 hi-fi screens) onto the existing server-rendered FastAPI + Jinja2 app, and wire kingdom (Plants/Fungi/Animals) as a global data filter across every page.
 
 **Architecture:** Keep the app **server-rendered Jinja2** (NOT an SPA — the handoff prototype is an SPA reference only; the README says "recreate in the codebase's own patterns"). Every template continues to `{% extends "base.html" %}`. The re-skin is: (1) a rewritten `style.css` token system + component styles, (2) a new sidebar `base.html` shell + `shell.js`, (3) a static kingdom↔category map + request-scoped `kingdom` filter threaded into existing data builders, (4) per-page template restyles that preserve every JS DOM contract.
 
@@ -11,7 +11,7 @@
 **Design source of truth (the pixel/copy reference for every task):**
 
 - Screenshots: `<HANDOFF>/screenshots/01..13-*.png` (dark theme, intended layout/hierarchy).
-- Prototype markup + exact copy + SVGs: `<HANDOFF>/Bio 3D Arena v2.dc.html` (2365 lines). Landmarks: brand mark SVG `:90`; nav-icon `icon(name)` helper `:966`; accent/theme props `:960`; live-pulse dot `:207`; `syncPair` `:1296`.
+- Prototype markup + exact copy + SVGs: `<HANDOFF>/Taxon3D v2.dc.html` (2365 lines). Landmarks: brand mark SVG `:90`; nav-icon `icon(name)` helper `:966`; accent/theme props `:960`; live-pulse dot `:207`; `syncPair` `:1296`.
 - Token tables + screen specs: `<HANDOFF>/README.md` and `<HANDOFF>/DESIGN_SYSTEM.md`.
 - `<HANDOFF>` = `/home/mjarnold/.claude/jobs/c4d42ae1/tmp/design/design_handoff_bio3d_arena` (also mirrored — copy the folder into `docs/design-handoff/` in Task 0 so it is repo-local for implementers).
 
@@ -29,7 +29,7 @@ Every task's requirements implicitly include this section.
 - **Kingdom scope:** value ∈ `{all, plants, fungi, animals}` (microbes stays out of the switcher — no live data). Read from `?kingdom=` query param, persisted in a cookie; exposed as `request.state.kingdom`; `all` == no filter. Buckets: **plants = {`plants`, `synthetic-plants`}**, fungi = {`fungi`}, animals = {`animals`}. Selecting **Animals** (a coming-soon kingdom with no live tasks) routes to the roadmap screen instead of the normal page.
 - **PRESERVE ALL JS DOM CONTRACTS — renaming any of these breaks the app:**
   - Arena (`arena.js`): ids `#sel-category`, `#sel-criterion`, `#task-cat`, `#task-title`, `#task-prompt`, `#criterion-name`, `#task-card`, `#reference-panel`, `#reference-gallery`, `#fmt-a`, `#fmt-b`, `#slot-a`, `#slot-b`, `#ai-badge-a`, `#ai-badge-b`, `#kwise-grid`, `#kwise-allbad`, `#status-line`, `#onboard-banner`, `#onboard-dismiss`, `#reference-lightbox`, `#reference-lightbox-img`, `#reference-lightbox-credit`; classes `.ab-btn`, `.pair .model-col`, `.vote-bar .vote-btn` (this scoped selector must stay — `arena.js:413` deliberately excludes `.kwise-pick-btn`); data-attrs `data-winner`, `data-ab`. `arena.js:192-243` builds K-wise cards as `div.model-col.kwise-cell > (div.model-label + span.fmt-chip [+ span.ai-badge]) + div.viewer-slot + button.vote-btn.win.kwise-pick-btn` — style via these classes, do NOT change the shape.
-  - Viewer (`viewer.js`): container class `.viewer-slot`; `window.Bio3DViewer.mount(slot, asset, onFlag)` / `.syncPair(a,b)`; generated classes `.viewer-loading`, `.viewer-spinner`, `.viewer-hint`, `.viewer-error`, `.viewer-controls`, `.viewer-ctl` (restyle freely, don't rename).
+  - Viewer (`viewer.js`): container class `.viewer-slot`; `window.Taxon3DViewer.mount(slot, asset, onFlag)` / `.syncPair(a,b)`; generated classes `.viewer-loading`, `.viewer-spinner`, `.viewer-hint`, `.viewer-error`, `.viewer-controls`, `.viewer-ctl` (restyle freely, don't rename).
   - Spotlight (`spotlight.js`): `#live-viewer-slot`, `.spotlight-card`(`.active`/`.hidden`), `.thumb`(`data-asset`), `#spotlight-toolbar`(`data-cap`), `.chip`(`data-filter-cls`), `#scored-only`, `#spotlight-search`, `#result-count`, `.group`, `.show-all-btn`, card data-attrs `data-cls`/`data-scored`/`data-label`/`data-chamfer`.
   - Moderation/admin (`moderation.js`, inline `admin.html`): `.mod-viewer`(`data-url`/`data-format`), `#admin-token`, `.token-mirror`.
   - Benchmark inline script (`benchmark.html:66-92`) and submit inline script (`submit.html:29-48`) — preserve their element ids.
@@ -138,7 +138,7 @@ git commit -m "chore(design): repo-local handoff bundle + page smoke-test baseli
 - [ ] **Step 1: Add the token blocks at the very top of `style.css`** (above the existing "appended at top" block so vars resolve for everything). Use the exact OKLCH values from `<HANDOFF>/README.md` "Design Tokens". Structure:
 
 ```css
-/* === Bio 3D Arena v2 design tokens (OKLCH). Dark = default. === */
+/* === Taxon3D v2 design tokens (OKLCH). Dark = default. === */
 :root {
   /* dark palette — values verbatim from README "Dark palette (default)" */
   --bg: oklch(0.165 0.018 258);
@@ -279,7 +279,7 @@ Expected: `ok <bytes>` and grep ≥1.
   - Add Google Fonts: `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">`.
   - Keep the 3 existing CDN/script tags (`model-viewer`, `3Dmol`, `/static/viewer.js`) and add `<script defer src="/static/shell.js"></script>`.
   - Body layout: `.b3d-app` (flex) → `.b3d-sidebar` + `.b3d-content`.
-  - **Sidebar** (`aria` labelled): logo tile with the tree-in-hexagon SVG (copy verbatim from `<HANDOFF>/Bio 3D Arena v2.dc.html:90`) + wordmark "Bio 3D" (Space Grotesk, "3D" in `--accent`) + collapse toggle button (`#b3d-collapse`, `aria-label="Collapse sidebar"`). Grouped nav with mono uppercase headings — extract the group/label/icon set from the prototype `icon(name)` helper `:966` and the sidebar-groups builder `:1008`:
+  - **Sidebar** (`aria` labelled): logo tile with the tree-in-hexagon SVG (copy verbatim from `<HANDOFF>/Taxon3D v2.dc.html:90`) + wordmark "Bio 3D" (Space Grotesk, "3D" in `--accent`) + collapse toggle button (`#b3d-collapse`, `aria-label="Collapse sidebar"`). Grouped nav with mono uppercase headings — extract the group/label/icon set from the prototype `icon(name)` helper `:966` and the sidebar-groups builder `:1008`:
     - Overview: Home (`/`), Arena (`/arena`)
     - Rankings: Leaderboard (`/leaderboard`), Models (`/models`), Difficulty (`/difficulty`)
     - Analysis: Benchmark (`/benchmark`), Coverage (`/coverage`), Significance (`/significance`)
@@ -690,7 +690,7 @@ def test_pick_task_respects_category_id_set(db_session):
 
 - [ ] **Step 2: Run, verify fail** (arena markup currently at `/`, not `/arena`).
 
-- [ ] **Step 3: Build `home.html`** to match `<HANDOFF>/screenshots/01-home.png` + README §1: hero (mono eyebrow "BIOLOGICAL 3D RECONSTRUCTION · BENCHMARK" in `--accent2`; H1 52px "The _life-sciences_ arena for **3D** generation" — "3D" with the stacked accent `text-shadow`, "life-sciences" in `--accent2`; muted lede; primary CTA → `/arena`, secondary → `/methodology`; stats strip with the breathing live-pulse dot (copy the `b3d-breathe` keyframe + dot markup from prototype `:207`, and the keyframe from `:28`) showing real counts; "Generators from" org row). Right column `.b3d-hero-viz`: reuse `window.Bio3DViewer.mount` with a sample GLB (or a static concentric-ring motif if no asset is wired — the ring motif is acceptable for v1; note it). Below hero: kingdom/feature cards. Wire the route in `main.py`.
+- [ ] **Step 3: Build `home.html`** to match `<HANDOFF>/screenshots/01-home.png` + README §1: hero (mono eyebrow "BIOLOGICAL 3D RECONSTRUCTION · BENCHMARK" in `--accent2`; H1 52px "The _life-sciences_ arena for **3D** generation" — "3D" with the stacked accent `text-shadow`, "life-sciences" in `--accent2`; muted lede; primary CTA → `/arena`, secondary → `/methodology`; stats strip with the breathing live-pulse dot (copy the `b3d-breathe` keyframe + dot markup from prototype `:207`, and the keyframe from `:28`) showing real counts; "Generators from" org row). Right column `.b3d-hero-viz`: reuse `window.Taxon3DViewer.mount` with a sample GLB (or a static concentric-ring motif if no asset is wired — the ring motif is acceptable for v1; note it). Below hero: kingdom/feature cards. Wire the route in `main.py`.
 
 - [ ] **Step 4: Run tests** — `pytest -q tests/test_home_route.py tests/test_smoke_pages.py` — Expected: PASS.
 
@@ -710,7 +710,7 @@ Each task: restyle the named template to its screenshot + README/DESIGN_SYSTEM s
 
 - [ ] **Task 13 — Difficulty** (`difficulty.html`, screenshot 05). "Win-rate degradation" line chart (inline SVG, one line per method Easy→Moderate→Hard, top-3 labelled with a de-overlap nudge) built from the existing `gradient`/`scorecard` data; heatmap tier grid (`color-mix(win|amber|bad …)` cells) for the paradigm×tier tables; per-tier top-3 cards. All server-rendered SVG/markup. Commit.
 
-- [ ] **Task 14 — Benchmark** (`benchmark.html`, screenshot 06). Cross-species agreement table (Spearman ± colored win/bad, mono), dual inspect viewer (recon vs GT, GT pane `--win` top-border) — **preserve the inline mount script `benchmark.html:66-92` element ids** and `window.Bio3DViewer.mount`. Metric grid (mono chamfer, PASS/FAIL pills). Commit.
+- [ ] **Task 14 — Benchmark** (`benchmark.html`, screenshot 06). Cross-species agreement table (Spearman ± colored win/bad, mono), dual inspect viewer (recon vs GT, GT pane `--win` top-border) — **preserve the inline mount script `benchmark.html:66-92` element ids** and `window.Taxon3DViewer.mount`. Metric grid (mono chamfer, PASS/FAIL pills). Commit.
 
 - [ ] **Task 15 — Coverage** (`coverage.html`, screenshot 07). Paradigm stat-card grid (mono accent numerals from `by_paradigm`), generator-coverage table with firm/provisional confidence pills (`.cov-*` exist — restyle) + in-arena ✓ / `excluded`. Keep governance prose. Commit.
 
@@ -724,7 +724,7 @@ Each task: restyle the named template to its screenshot + README/DESIGN_SYSTEM s
 
 - [ ] **Task 20 — Submit** (`submit.html`, screenshot 12). Numbered step cards (01 Submit · 02 Calibrate · 03 Compete) + styled form (model name, organization, paradigm select, **kingdom select** (from `kingdoms.KINGDOMS`), output format select, file input). **Preserve the inline submit script `submit.html:29-48` element ids + `/api/submit` POST**. Commit.
 
-- [ ] **Task 21 — Spotlight index + detail** (`spotlight_index.html`, `spotlight.html`, screenshot 13). Index: featured taxon cards with stage-gradient header + `featured` badge, taxonomy breadcrumb (`Kingdom › Order › Family › Genus`, mono faint), common name (`--accent2`) + _italic latin_ + description. Detail: restyle the existing `.spotlight-*` layout to tokens — **preserve every spotlight.js hook** (Global Constraints). Consider routing `spotlight.js`'s inline `<model-viewer>` through `window.Bio3DViewer.mount` for consistency (optional; if changed, verify the sticky `#live-viewer-slot` still loads). Commit.
+- [ ] **Task 21 — Spotlight index + detail** (`spotlight_index.html`, `spotlight.html`, screenshot 13). Index: featured taxon cards with stage-gradient header + `featured` badge, taxonomy breadcrumb (`Kingdom › Order › Family › Genus`, mono faint), common name (`--accent2`) + _italic latin_ + description. Detail: restyle the existing `.spotlight-*` layout to tokens — **preserve every spotlight.js hook** (Global Constraints). Consider routing `spotlight.js`'s inline `<model-viewer>` through `window.Taxon3DViewer.mount` for consistency (optional; if changed, verify the sticky `#live-viewer-slot` still loads). Commit.
 
 ---
 

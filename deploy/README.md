@@ -1,4 +1,4 @@
-# Bio 3D Arena — public-instance deploy runbook
+# Taxon3D — public-instance deploy runbook
 
 The public instance is a **separate, self-contained deployment**. It never talks to
 the internal (Agrigen-coupled) instance at runtime: no live scoring, no shared GT

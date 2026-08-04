@@ -28,7 +28,7 @@
 
 **Interfaces:**
 
-- Produces: `window.Bio3DViewer.syncPair(slotA, slotB)` — wires bidirectional user-driven camera sync between the `<model-viewer>` in each slot (no-op if either is absent).
+- Produces: `window.Taxon3DViewer.syncPair(slotA, slotB)` — wires bidirectional user-driven camera sync between the `<model-viewer>` in each slot (no-op if either is absent).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -43,7 +43,7 @@ client = TestClient(app)
 def test_syncpair_defined_and_wired():
     vjs = client.get("/static/viewer.js").text
     assert "function syncPair" in vjs
-    assert "syncPair" in vjs and "Bio3DViewer" in vjs  # exported
+    assert "syncPair" in vjs and "Taxon3DViewer" in vjs  # exported
     # gated on user-interaction (feedback-safe)
     assert "user-interaction" in vjs
     ajs = client.get("/static/arena.js").text
@@ -57,7 +57,7 @@ Expected: FAIL — `assert "function syncPair" in vjs`.
 
 - [ ] **Step 3: Add `syncPair` to `viewer.js`**
 
-In `app/static/viewer.js`, immediately BEFORE the `window.Bio3DViewer = { … }` line (currently line ~108), add:
+In `app/static/viewer.js`, immediately BEFORE the `window.Taxon3DViewer = { … }` line (currently line ~108), add:
 
 ```js
 // Lock two mesh viewers' cameras together (side-by-side comparison at the same angle).
@@ -83,10 +83,10 @@ function syncPair(slotA, slotB) {
 }
 ```
 
-Then change the export line from `window.Bio3DViewer = { mount, MESH_FORMATS: MESH, MOLECULAR_FORMATS: MOL };` to:
+Then change the export line from `window.Taxon3DViewer = { mount, MESH_FORMATS: MESH, MOLECULAR_FORMATS: MOL };` to:
 
 ```js
-window.Bio3DViewer = {
+window.Taxon3DViewer = {
   mount,
   syncPair,
   MESH_FORMATS: MESH,
@@ -96,13 +96,13 @@ window.Bio3DViewer = {
 
 - [ ] **Step 4: Call it in `arena.js`**
 
-In `app/static/arena.js`, in `render(data)`, AFTER the two `Bio3DViewer.mount(...)` calls that set `el("fmt-a")` / `el("fmt-b")` (the two viewers are mounted there), add — before the existing `setAB("a")` / `setStatus("")` lines:
+In `app/static/arena.js`, in `render(data)`, AFTER the two `Taxon3DViewer.mount(...)` calls that set `el("fmt-a")` / `el("fmt-b")` (the two viewers are mounted there), add — before the existing `setAB("a")` / `setStatus("")` lines:
 
 ```js
-window.Bio3DViewer.syncPair(el("slot-a"), el("slot-b"));
+window.Taxon3DViewer.syncPair(el("slot-a"), el("slot-b"));
 ```
 
-(Confirm the exact spot: it must run after BOTH `mount` calls so both `<model-viewer>`s exist. The anchor is the `el("fmt-b") = window.Bio3DViewer.mount(...)` line; insert right after it.)
+(Confirm the exact spot: it must run after BOTH `mount` calls so both `<model-viewer>`s exist. The anchor is the `el("fmt-b") = window.Taxon3DViewer.mount(...)` line; insert right after it.)
 
 - [ ] **Step 5: Run tests + full suite**
 
@@ -228,6 +228,6 @@ git commit -m "test(viewer): Playwright verify for synced A/B camera + feedback 
 
 **Placeholder scan:** no TBD/TODO; complete code in every step. Task 2 `<playwright-python>` = the playwright-enabled interpreter used for prior verifications; not a logic placeholder.
 
-**Type/name consistency:** `syncPair(slotA, slotB)` signature identical in viewer.js (Task 1 def + export), arena.js call, the pytest smoke, and the Playwright script; `copyCam(src, dst)` internal; `#slot-a`/`#slot-b` selectors match `arena.html`'s `id="slot-a"`/`id="slot-b"`; `window.Bio3DViewer.syncPair` matches the export.
+**Type/name consistency:** `syncPair(slotA, slotB)` signature identical in viewer.js (Task 1 def + export), arena.js call, the pytest smoke, and the Playwright script; `copyCam(src, dst)` internal; `#slot-a`/`#slot-b` selectors match `arena.html`'s `id="slot-a"`/`id="slot-b"`; `window.Taxon3DViewer.syncPair` matches the export.
 
 **Adjust-on-contact:** confirm the `render()` insertion point (right after the second `mount(...)` that sets `el("fmt-b")`, before `setAB("a")`) against live `arena.js` — line numbers shifted with the onboarding/mobile changes; the anchor (the `fmt-b` mount + the `setAB("a")` call) is stable.

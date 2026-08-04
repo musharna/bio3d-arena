@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest a recon bake-off (TRELLIS/Hunyuan3D × species GLBs) into Bio 3D Arena and
+"""Ingest a recon bake-off (TRELLIS/Hunyuan3D × species GLBs) into Taxon3D and
 score it against the live recon service — the B5 launch step for the Mode-B benchmark.
 
 The bake-off dir holds `<species_slug>__<method>.glb` files (e.g.

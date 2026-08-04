@@ -210,7 +210,7 @@ function render(data) {
   // bar still collapsed. See tests/test_reveal_state_bleed.py.
   clearReveal();
   // Leaving the no-comparisons empty state: restore the category chip the empty
-  // state hid (the viewer slots are cleared by Bio3DViewer.mount / renderKwise).
+  // state hid (the viewer slots are cleared by Taxon3DViewer.mount / renderKwise).
   const catChip = el("task-cat");
   if (catChip) catChip.hidden = false;
   // Terminal payload from a scoped mode (e.g. calibration): no card to render.
@@ -292,17 +292,17 @@ function renderPair(data) {
   // Shared viewer registry (viewer.js) picks model-viewer vs 3Dmol by format. Flagging is a
   // curator-only tool: pass the ⚑ callback only on the internal instance (data-can-flag),
   // so the public deploy renders no flag button (viewer.js omits it when onFlag is falsy).
-  window.Bio3DViewer.mount(
+  window.Taxon3DViewer.mount(
     el("slot-a"),
     data.a,
     canFlag() ? (btn) => flagOutput(data.a.output_id, btn) : null,
   );
-  window.Bio3DViewer.mount(
+  window.Taxon3DViewer.mount(
     el("slot-b"),
     data.b,
     canFlag() ? (btn) => flagOutput(data.b.output_id, btn) : null,
   );
-  window.Bio3DViewer.syncPair(el("slot-a"), el("slot-b"));
+  window.Taxon3DViewer.syncPair(el("slot-a"), el("slot-b"));
   setAB("a"); // each new pair starts on Model A
   setStatus("");
 }
@@ -358,7 +358,7 @@ function renderKwise(data) {
     // Shared viewer registry (viewer.js) picks model-viewer vs 3Dmol by format — same
     // {url, format, output_id} shape _serialize uses for a/b, so the flag callback reuses
     // flagOutput unchanged.
-    window.Bio3DViewer.mount(
+    window.Taxon3DViewer.mount(
       slot,
       o,
       canFlag() ? (btn) => flagOutput(o.output_id, btn) : null,

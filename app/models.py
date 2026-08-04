@@ -1,4 +1,4 @@
-"""ORM models — the extensible data model for Bio 3D Arena.
+"""ORM models — the extensible data model for Taxon3D.
 
 Taxonomy (Category) and evaluation axes (Criterion) are first-class tables so new
 biological categories and scoring criteria are added by inserting rows, not by

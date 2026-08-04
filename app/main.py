@@ -132,7 +132,7 @@ templates.env.globals["captcha"] = lambda: {
     "site_key": config.CAPTCHA_SITE_KEY,
 }
 
-app = FastAPI(title="Bio 3D Arena", version="0.1.0")
+app = FastAPI(title="Taxon3D", version="0.1.0")
 app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
 # Local backend serves assets from disk; the S3 backend serves them from the bucket/CDN.
 storage = get_storage()
@@ -947,7 +947,7 @@ def llms_txt():
     base = config.PUBLIC_BASE_URL
     return "\n".join(
         [
-            "# Bio 3D Arena",
+            "# Taxon3D",
             "",
             "> A blind comparison benchmark for generative 3D models of real organisms.",
             "> Two anonymised 3D outputs of the same species are shown side by side against",
@@ -978,7 +978,7 @@ def llms_txt():
             "single-image reconstruction, text-to-3D, LLM-authored procedural geometry, and",
             "agentic render-critique-revise pipelines.",
             "",
-            "Source code: https://github.com/musharna/bio3d-arena (MIT).",
+            "Source code: https://github.com/musharna/taxon3d (MIT).",
             "",
         ]
     )
@@ -2256,7 +2256,7 @@ def model_og_card(slug: str, db: Session = Depends(get_db)):
 def _leaderboard_card_facts(db: Session, kingdom: str) -> tuple[str, int, int, int]:
     """(scope_label, n_models, n_methods, votes) for a kingdom's board card. Scope label is the
     site name for the all-kingdoms view (a card headline of "All kingdoms leaderboard" reads worse
-    than "Bio 3D Arena leaderboard"); a specific kingdom keeps its own label. Vote count is the
+    than "Taxon3D leaderboard"); a specific kingdom keeps its own label. Vote count is the
     site-wide total, matching the leaderboard page header's own framing."""
     rows = _leaderboard_rows(db, "overall", "all", None, kingdom)
     n_methods = len({r.get("paradigm") for r in rows if r.get("paradigm")})
@@ -2474,7 +2474,7 @@ def _dataset_jsonld(releases: list[dict]) -> dict:
     ld: dict = {
         "@context": "https://schema.org",
         "@type": "Dataset",
-        "name": "Bio 3D Arena benchmark",
+        "name": "Taxon3D benchmark",
         "description": (
             "A blind comparison benchmark for generative 3D models of real organisms. Contains "
             "benchmark tasks across plants, fungi and animals, generated 3D outputs from "

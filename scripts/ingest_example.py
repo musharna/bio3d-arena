@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Example: register real generator outputs into a running Bio 3D Arena.
+"""Example: register real generator outputs into a running Taxon3D.
 
 This stands in for a real generator pipeline (flower-sim, Blender/GeoNodes rose,
 plant world model, …). The "bake" step here uses the procedural asset generator;
@@ -24,7 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.assets_gen import build_asset  # noqa: E402  stand-in for a real generator
-from app.client import Bio3DArenaClient  # noqa: E402
+from app.client import Taxon3DClient  # noqa: E402
 
 
 def bake_glb(shape: str, seed: int, out_dir: Path) -> Path:
@@ -40,7 +40,7 @@ def main() -> None:
     ap.add_argument("--token", default=os.environ.get("BIO3D_ADMIN_TOKEN", "changeme-admin-token"))
     args = ap.parse_args()
 
-    c = Bio3DArenaClient(args.base_url, admin_token=args.token)
+    c = Taxon3DClient(args.base_url, admin_token=args.token)
     print("health:", c.health())
 
     # 1) Ensure the taxonomy + task exist.

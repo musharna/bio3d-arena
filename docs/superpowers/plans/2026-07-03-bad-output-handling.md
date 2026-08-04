@@ -720,17 +720,17 @@ In `app/static/arena.js`, replace the `render` viewer-mount block (lines 119-128
 
 ```javascript
 // Shared viewer registry (viewer.js) picks model-viewer vs 3Dmol by format.
-el("fmt-a").textContent = window.Bio3DViewer.mount(
+el("fmt-a").textContent = window.Taxon3DViewer.mount(
   el("slot-a"),
   data.a,
   (btn) => flagOutput(data.a.output_id, btn),
 ).toUpperCase();
-el("fmt-b").textContent = window.Bio3DViewer.mount(
+el("fmt-b").textContent = window.Taxon3DViewer.mount(
   el("slot-b"),
   data.b,
   (btn) => flagOutput(data.b.output_id, btn),
 ).toUpperCase();
-window.Bio3DViewer.syncPair(el("slot-a"), el("slot-b"));
+window.Taxon3DViewer.syncPair(el("slot-a"), el("slot-b"));
 ```
 
 Add the `flagOutput` function (near `vote`, after line 174):

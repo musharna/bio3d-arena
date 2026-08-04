@@ -428,7 +428,7 @@
     });
   }
 
-  window.Bio3DViewer = {
+  window.Taxon3DViewer = {
     mount,
     syncPair,
     MESH_FORMATS: MESH,

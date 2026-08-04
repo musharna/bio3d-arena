@@ -1,4 +1,4 @@
-# Bio 3D Arena — Field Audit (2026-06-20)
+# Taxon3D — Field Audit (2026-06-20)
 
 **Trigger:** User asked, after the submission/moderation queue shipped — "audit the field: what do
 similar websites have that we lack? what improvements are we missing? how does our stuff look
@@ -107,7 +107,7 @@ screenshots + verify 3D viewer runtime before the visual fixes are called done.
 
 ### B6. Engagement (industry-wide white space)
 
-- [ ] **[HIGH] Embeddable "#N on Bio 3D Arena" badge + iframe rank widget** — absent on EVERY
+- [ ] **[HIGH] Embeddable "#N on Taxon3D" badge + iframe rank widget** — absent on EVERY
       platform surveyed. Wide-open differentiation + viral distribution lever. _Low — dynamic SVG/PNG
       badge endpoint + iframe-able mini-leaderboard._
 - [ ] **[MED] OpenGraph / social cards** for leaderboard + per-model pages. _Low._

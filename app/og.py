@@ -12,7 +12,7 @@ pure function and the single place the product's honesty invariants are enforced
   * a rank is ALWAYS scoped to the model's own method. Every board on this site ranks exactly ONE
     paradigm (paradigms are disconnected match pools — see ``paradigms.same_paradigm`` and
     ``service._matches_for_scope``), so "#2 of 16 in Image→3D reconstruction" is a claim the
-    ranking math backs and a bare "#2 in Bio 3D Arena" is not;
+    ranking math backs and a bare "#2 in Taxon3D" is not;
   * under ``service.FIRM_VOTE_THRESHOLD`` votes a model reads as evaluation-in-progress
     (provisional + the vote count), never as a settled rank;
   * with no votes there is no rank to state, so none is drawn.
@@ -158,7 +158,7 @@ def share_description(
     standing: dict,
     bt_score: float | None,
     votes: int,
-    site_name: str = "Bio 3D Arena",
+    site_name: str = "Taxon3D",
 ) -> str:
     """The one-line og:description for a model page. Mirrors the card exactly (same `standing`)."""
     if not standing["rated"]:

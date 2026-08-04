@@ -1,4 +1,4 @@
-# Bio 3D Arena — Design Doc
+# Taxon3D — Design Doc
 
 > Date: 2026-06-20
 > Status: MVP design, approved-by-default (background build; user can redirect)

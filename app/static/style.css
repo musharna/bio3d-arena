@@ -1,4 +1,4 @@
-/* === Bio 3D Arena v2 design tokens (OKLCH). Dark = default. === */
+/* === Taxon3D v2 design tokens (OKLCH). Dark = default. === */
 :root {
   /* dark palette — values verbatim from README "Dark palette (default)" */
   --bg: oklch(0.165 0.018 258);
@@ -2313,13 +2313,16 @@ details.group[open] > summary.group-title::before {
   align-items: center;
   justify-content: center;
 }
-/* Prototype (source of truth): wordmark is INLINE "Bio 3D" at all widths — Bio in text
+/* Prototype (source of truth): wordmark is INLINE "Taxon3D" at all widths — Taxon in text
    color, 3D in accent. (The 924px PNG showed it stacked, but the interactive prototype
-   renders it inline; the PNG and the prototype disagree, and the prototype governs.) */
+   renders it inline; the PNG and the prototype disagree, and the prototype governs.)
+   No gap: the old name rendered as two words ("Bio 3D"), but Taxon3D is one word, so a
+   gap here would render a name nobody types. The two spans remain because the accent on
+   "3D" is the wordmark, not a word break. */
 .b3d-wordmark {
   display: inline-flex;
   align-items: baseline;
-  gap: 0.3em;
+  gap: 0;
   font-family: "Space Grotesk", sans-serif;
   font-weight: 700;
   font-size: 16px;

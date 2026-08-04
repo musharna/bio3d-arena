@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app import indexnow  # noqa: E402
 
 TIMEOUT = 30
-UA = "bio3d-arena/0.1 (+https://github.com/musharna/bio3d-arena; indexnow submitter)"
+UA = "bio3d-arena/0.1 (+https://github.com/musharna/taxon3d; indexnow submitter)"
 
 
 def _get(url: str) -> str:

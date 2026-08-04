@@ -1,4 +1,4 @@
-# Bio 3D Arena — Plant Single-Image→3D Reconstruction Benchmark (v1 pilot results)
+# Taxon3D — Plant Single-Image→3D Reconstruction Benchmark (v1 pilot results)
 
 > **Status:** internal results report, 2026-06-21. Pilot (3 baselines), run on a local dev
 > instance. The pre-registered methodology lives in the AgriGen tree
@@ -11,7 +11,7 @@
 The first **living** leaderboard for **image→3D plant reconstruction accuracy vs ground truth**.
 Per the benchmark-landscape analysis, this intersection — {3D-bio-recon × accuracy-vs-GT ×
 living arena} — had no incumbent: the two live 3D arenas score _aesthetics_ only, and prior
-plant-recon evaluations are static, single-paper tables. Bio 3D Arena runs it as a **dual-mode**
+plant-recon evaluations are static, single-paper tables. Taxon3D runs it as a **dual-mode**
 benchmark:
 
 - **Mode B (objective, this report):** each reconstruction scored against a **held-out, private**

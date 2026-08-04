@@ -1,6 +1,6 @@
 # Changelog
 
-Notable changes to Bio 3D Arena, a multi-paradigm benchmark arena for biological 3D generation.
+Notable changes to Taxon3D, a multi-paradigm benchmark arena for biological 3D generation.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This project has
 **not been released** — `version` in `pyproject.toml` is still `0.1.0` and no tag exists. Everything
@@ -12,6 +12,22 @@ also carry a design spec under `docs/superpowers/specs/`.
 ## [Unreleased]
 
 ### Changed
+
+- **Renamed the project from "Bio 3D Arena" to "Taxon3D".** The old name collided twice and
+  neither collision was survivable: `bio3d` resolves to the Bio3D R package for protein structure
+  analysis (a 2006 _Bioinformatics_ paper with ~20 years of citations, in the same broad field),
+  and "bio3d arena" resolves to Arena3D, a different bioinformatics visualisation tool. Searching
+  the exact product name returned neither this project nor anything close to it, so word of mouth
+  failed as well as search. Renamed now because the cost only rises: no DOI has been issued yet,
+  and a DOI freezes the name into the citation record permanently.
+
+  Deliberately **not** renamed: the `BIO3D_*` environment variables, the `bio3d_*` cookie and
+  localStorage keys, the `b3d-` CSS prefix, and the `bio3d-arena` value stored in
+  `model_output.source`. The last one is load-bearing data — `sourcing.py`, `spotlight.py`,
+  `public_export.py` and `reference_provenance.py` all compare against it to decide whether an
+  output is our own generation, so renaming it would silently mis-classify every existing row.
+  The others are invisible to visitors and renaming them would either require an atomic secret
+  migration or log every voter out, in both cases for no discovery benefit.
 
 - Pinned the seven previously-unpinned dependencies (`pillow`, `scikit-image`, `scipy`, `nibabel`,
   `tifffile`, `anthropic`, `open_clip_torch`) to the versions the app is actually built and tested

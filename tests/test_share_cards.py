@@ -3,7 +3,7 @@
 A shared model link must unfurl into a branded card that states the model's standing HONESTLY:
 
   * the rank is WITHIN ITS OWN METHOD (paradigms are disconnected match pools — a bare
-    "#2 in Bio 3D Arena" would be a cross-paradigm claim the ranking math does not back);
+    "#2 in Taxon3D" would be a cross-paradigm claim the ranking math does not back);
   * a model under `service.FIRM_VOTE_THRESHOLD` votes reads as evaluation-in-progress
     (provisional), never as a settled rank;
   * an unrated model gets no rank at all;

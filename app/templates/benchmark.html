@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Benchmark · Bio 3D Arena{% endblock %}
+{% block title %}Benchmark · Taxon3D{% endblock %}
 {% block content %}
 <section class="board bm">
   <header class="b3d-page-head">
@@ -88,13 +88,13 @@
         function mountPick() {
           const o = outs[pick.value | 0];
           document.getElementById("recon-name").textContent = o.generator;
-          window.Bio3DViewer.mount(document.getElementById("recon-slot"), { url: o.url, format: o.format });
+          window.Taxon3DViewer.mount(document.getElementById("recon-slot"), { url: o.url, format: o.format });
         }
         pick.addEventListener("change", mountPick);
         if (outs.length) mountPick();
         const refSlot = document.getElementById("ref-slot");
         if (ref) {
-          window.Bio3DViewer.mount(refSlot, { url: ref.url, format: ref.format });
+          window.Taxon3DViewer.mount(refSlot, { url: ref.url, format: ref.format });
         } else {
           refSlot.innerHTML =
             '<div class="viewer-error" style="color:var(--muted)">ⓘ <span>No reference exemplar set for this task. GT scans live in the scorer bundle (point clouds), used for objective scoring.</span></div>';
