@@ -119,8 +119,12 @@
 
 <div class="b3d-section-head">
   <h2>How voting works</h2>
+  {# "blind", not "pairwise" — same rule as the footer tagline in base.html: this note
+     describes the INTERACTION, and the interaction is a four-model ballot as often as a
+     two-model one. methodology.html keeps its pairwise language, which is about the
+     statistics and is correct. #}
   <span class="b3d-section-head-note"
-    >anonymous &middot; pairwise &middot; Bradley&ndash;Terry</span
+    >anonymous &middot; blind &middot; Bradley&ndash;Terry</span
   >
 </div>
 <div class="b3d-steps-grid">
@@ -132,20 +136,28 @@
       ground-truth biology.
     </p>
   </div>
+  {# Cards 2 and 3 said "Two … / Vote for A, B, a tie, or both-bad" until 2026-08-04. That
+     was the pairwise ballot, and the hero three sections up was corrected for k-wise
+     (PR #121, PR #138) while these were missed — the fix was scoped to the fold. Keep
+     these shape-agnostic for the reason arena.html states: a ballot is four models where
+     the task can fill a quad and two where it cannot, so any fixed count is wrong half
+     the time. Tie and both-bad exist only on the two-model shape. #}
   <div class="b3d-step-card">
     <div class="b3d-step-num">2</div>
-    <h3>Two 3D reconstructions</h3>
+    <h3>The candidate reconstructions</h3>
     <p>
-      Two models generate 3D from that input. You inspect both in an
-      interactive viewer — orbit, zoom, pan.
+      Several models build 3D from that same input — four where the organism can
+      fill a quad, two where it cannot. You inspect each in an interactive viewer:
+      orbit, zoom, pan.
     </p>
   </div>
   <div class="b3d-step-card">
     <div class="b3d-step-num">3</div>
-    <h3>You pick the better one</h3>
+    <h3>You pick the closest to life</h3>
     <p>
-      Vote for A, B, a tie, or both-bad. Names stay hidden until you choose —
-      no brand bias.
+      One click on the best reconstruction. Where a ballot holds only a pair, tie
+      and both-bad are offered as well. Names stay hidden until you choose — no
+      brand bias.
     </p>
   </div>
 </div>

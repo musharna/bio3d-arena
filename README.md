@@ -43,10 +43,11 @@ fidelity, not taste.
 | **Ranking**   | Bradley–Terry (MM) with bootstrap 95% CIs, CI-grouped ranks                                               |
 
 > [!NOTE]
-> **Live, and deliberately unranked.** The leaderboard refuses to rank a generator
-> that lacks enough comparisons, rather than printing a confident number built on a
-> handful of votes — so it currently ranks nobody. Votes are the only thing that
-> changes that, which is the honest reason to **[try it](https://taxon3d.org/arena)**.
+> **Live, and honest about what it cannot yet separate.** Ranks are grouped by
+> confidence interval, so generators the votes cannot tell apart share a rank rather
+> than being ordered by noise. Each board states on its face how many further votes
+> would firm its next model — at the time of writing, under twenty per board. That
+> number is the honest reason to **[try it](https://taxon3d.org/arena)**.
 
 ## How it works
 

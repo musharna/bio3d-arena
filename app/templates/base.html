@@ -463,11 +463,12 @@
             >
             <div class="b3d-footer-links">
               <a class="b3d-footer-chip" href="/methodology">Methodology</a>
-              {# GitHub chip intentionally omitted: the repo (musharna/taxon3d)
-                 is private, so a public visitor would hit a 404. Re-add when the
-                 repo goes public:
-                 <a class="b3d-footer-chip" href="https://github.com/musharna/taxon3d"
-                    target="_blank" rel="noopener">GitHub &#8599;</a> #}
+              {# Restored 2026-08-04: this chip was suppressed while musharna/taxon3d was a
+                 private repo (a visitor would have hit a 404). The repo went public with
+                 PR #114 and the chip was never re-added, so for five days the one piece of
+                 evidence that the benchmark is auditable was missing from every page. #}
+              <a class="b3d-footer-chip" href="https://github.com/musharna/taxon3d"
+                 target="_blank" rel="noopener">GitHub &#8599;</a>
               <a class="b3d-footer-chip" href="/dataset">Dataset</a>
               <a class="b3d-footer-chip" href="/submit">Submit a model</a>
               <a class="b3d-footer-muted" href="/terms">Terms</a>
