@@ -34,7 +34,7 @@ from app.licensing import REDISTRIBUTABLE_LICENSES, normalize_license  # noqa: E
 
 GALLERY_ROOT = REPO / "data" / "assets" / "reference" / "gallery"
 # Wikimedia asks for a descriptive UA naming the project and its purpose, and refuses generic ones.
-UA = "bio3d-arena/0.1 (+https://github.com/musharna/bio3d-arena; reference gallery sourcing)"
+UA = "bio3d-arena/0.1 (+https://github.com/musharna/taxon3d; reference gallery sourcing)"
 
 # iNaturalist states a licence as a short code carrying no version; its CC licences are 4.0.
 # Mapping them to SPDX ids means the ONE allowlist in app.licensing decides admission here too.

@@ -3,15 +3,15 @@
 **Which AI model actually rebuilds a living thing in 3D?**
 
 [![Live](https://img.shields.io/badge/live-bio3d--arena.fly.dev-2ea043)](https://bio3d-arena.fly.dev)
-[![CI](https://github.com/musharna/bio3d-arena/actions/workflows/ci.yml/badge.svg)](https://github.com/musharna/bio3d-arena/actions/workflows/ci.yml)
+[![CI](https://github.com/musharna/taxon3d/actions/workflows/ci.yml/badge.svg)](https://github.com/musharna/taxon3d/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Cite](https://img.shields.io/badge/cite-CITATION.cff-8957e5)](CITATION.cff)
 
 > **Note** — this project was called _Bio 3D Arena_ until August 2026. The name collided with the
 > [Bio3D R package](https://cran.r-project.org/package=bio3d) for protein structure analysis and
-> with [Arena3D](https://arena3d.org/), so searching the name found neither of us. The hosting URL
-> and repository path still carry the old name and are unchanged — those move separately, and
-> every link above is live.
+> with [Arena3D](https://arena3d.org/), so searching the name found neither of us. The repository
+> has moved to `musharna/taxon3d`; the hosting URL still carries the old name until the domain
+> cuts over. Every link above is live.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/arena-dark.png">

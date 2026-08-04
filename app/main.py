@@ -978,7 +978,7 @@ def llms_txt():
             "single-image reconstruction, text-to-3D, LLM-authored procedural geometry, and",
             "agentic render-critique-revise pipelines.",
             "",
-            "Source code: https://github.com/musharna/bio3d-arena (MIT).",
+            "Source code: https://github.com/musharna/taxon3d (MIT).",
             "",
         ]
     )
