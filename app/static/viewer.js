@@ -211,9 +211,20 @@
    * Swap the low-detail mesh for the real one the moment a voter looks closely.
    *
    * The LOD exists only to make the ballot's FIRST frame arrive sooner. It is a decimated mesh:
-   * at a 158x168 grid cell it is indistinguishable, but zoomed in it is not, and a voter who
-   * sees our faceting attributes it to the generator. So the full mesh must arrive before any
-   * close inspection can happen, and this is what guarantees it.
+   * at card size it is indistinguishable, but zoomed in it is not, and a voter who sees our
+   * faceting attributes it to the generator. So the full mesh must arrive before any close
+   * inspection can happen, and this is what guarantees it.
+   *
+   * "At card size" was measured 2026-08-03, because the number this comment used to quote
+   * (158x168) was the phone's CSS cell — and geometry resolves at CANVAS pixels, which are
+   * devicePixelRatio-scaled. The real rasters are 476x430 (desktop 1280 @1x), 1099x860
+   * (desktop 1440 @2x) and 475x504 (phone 390 @3x), so the old premise understated the worst
+   * case by ~2.6x. Re-measured against it anyway: 92 LOD/full pairs across 16 taxa, 3 azimuths,
+   * both desktop rasters, rendered in one page with the camera derived from the FULL mesh and
+   * forced onto both. Silhouette IoU averaged 0.9985 and never fell below 0.988; the residual
+   * is high-frequency shading along edges, not lost structure — Hericium's spines stay
+   * individually countable and Danaus's wing pattern survives at its worst angle. So the
+   * conclusion held even though the number behind it did not.
    *
    * The upgrade loads into a SECOND, hidden model-viewer and only removes the LOD once the
    * replacement has actually rendered. Reassigning `src` in place would have been far less code,
