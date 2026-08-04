@@ -11,7 +11,7 @@ Usage:
     python scripts/submit_indexnow.py --dry-run
 
     # for real, against the live site
-    python scripts/submit_indexnow.py --base-url https://bio3d-arena.fly.dev
+    python scripts/submit_indexnow.py --base-url https://taxon3d.org
 
 The key must already be served at `<base-url>/indexnow-key.txt` — that is the app reading
 BIO3D_INDEXNOW_KEY (see app/indexnow.py), so a deploy without the env var set will be refused
@@ -97,7 +97,7 @@ _MEANING = {
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--base-url", default="https://bio3d-arena.fly.dev")
+    ap.add_argument("--base-url", default="https://taxon3d.org")
     ap.add_argument("--dry-run", action="store_true", help="print the payload, send nothing")
     args = ap.parse_args()
 

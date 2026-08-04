@@ -2,16 +2,17 @@
 
 **Which AI model actually rebuilds a living thing in 3D?**
 
-[![Live](https://img.shields.io/badge/live-bio3d--arena.fly.dev-2ea043)](https://bio3d-arena.fly.dev)
+[![Live](https://img.shields.io/badge/live-taxon3d.org-2ea043)](https://taxon3d.org)
 [![CI](https://github.com/musharna/taxon3d/actions/workflows/ci.yml/badge.svg)](https://github.com/musharna/taxon3d/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Cite](https://img.shields.io/badge/cite-CITATION.cff-8957e5)](CITATION.cff)
 
 > **Note** — this project was called _Bio 3D Arena_ until August 2026. The name collided with the
 > [Bio3D R package](https://cran.r-project.org/package=bio3d) for protein structure analysis and
-> with [Arena3D](https://arena3d.org/), so searching the name found neither of us. The repository
-> has moved to `musharna/taxon3d`; the hosting URL still carries the old name until the domain
-> cuts over. Every link above is live.
+> with [Arena3D](https://arena3d.org/), so searching the name found neither of us. The site now
+> lives at [taxon3d.org](https://taxon3d.org) and the repository at `musharna/taxon3d`; the old
+> `bio3d-arena.fly.dev` host and repository path both still resolve, so nothing that linked to us
+> has broken.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/arena-dark.png">
@@ -44,7 +45,7 @@ fidelity, not taste.
 > **Live, and deliberately unranked.** The leaderboard refuses to rank a generator
 > that lacks enough comparisons, rather than printing a confident number built on a
 > handful of votes — so it currently ranks nobody. Votes are the only thing that
-> changes that, which is the honest reason to **[try it](https://bio3d-arena.fly.dev/arena)**.
+> changes that, which is the honest reason to **[try it](https://taxon3d.org/arena)**.
 
 ## How it works
 
@@ -87,7 +88,7 @@ fidelity, not taste.
   _Carassius auratus_ record and a useless reference — and dingoes standing in for
   domestic dogs. A VLM subject check now asks what the photo's _main subject_ is
   and whether it is in the form the task asks for.
-- **A public [methodology page](https://bio3d-arena.fly.dev/methodology)**, and an
+- **A public [methodology page](https://taxon3d.org/methodology)**, and an
   admin surface for adding categories, criteria, tasks and generators.
 
 ## Architecture
