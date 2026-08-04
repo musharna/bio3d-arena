@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy import create_engine, inspect as sqla_inspect, text  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
+from app import config  # noqa: E402
 from app.database import Base, engine_kwargs  # noqa: E402
 from app.storage import StorageBackend, get_storage  # noqa: E402
 from scripts.export_public import EXPORT_MODELS  # noqa: E402
@@ -206,6 +207,22 @@ def import_bundle(
     return counts
 
 
+_LOCAL_STORAGE_REFUSAL = """\
+refusing to publish a bundle into LOCAL storage.
+
+BIO3D_STORAGE_BACKEND resolved to {backend!r}, so every blob would be written to the local
+asset directory and NOTHING would reach the object store. The counts below would still print
+green and the public site would keep serving whatever is already in the bucket, so the release
+would look like it worked. That is why this refuses instead of warning.
+
+If the release secrets use the R2 names (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY /
+R2_ACCOUNT_ENDPOINT / R2_BUCKET), nothing translates them into the BIO3D_/AWS_ names this code
+reads — see deploy/README.md for the exact mapping and the read-only HEAD pre-flight.
+
+If you genuinely mean a local import (rebuilding a local preview from a bundle), say so with
+--local-assets."""
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bundle", required=True)
@@ -215,11 +232,26 @@ def main() -> int:
         help="skip the row import and only sync blobs — for resuming an interrupted upload "
         "without replaying every row against a remote database again",
     )
+    ap.add_argument(
+        "--local-assets",
+        action="store_true",
+        help="allow importing into local storage — for rebuilding a local preview from a "
+        "bundle. Without it a local backend is refused, because on the release path it is "
+        "silently a no-op rather than an error",
+    )
     a = ap.parse_args()
+    # Ask the backend what it IS, rather than re-deriving it from config: `remote` is the same
+    # flag app/main.py and app/seed.py branch on. The check lives here at the CLI boundary and
+    # not in import_bundle(), because import_bundle legitimately accepts any storage it is
+    # handed (the round-trip tests inject local temp backends) — it is only at the point where
+    # the environment silently chose for us that "local" is indistinguishable from a mistake.
+    storage = get_storage()
+    if not storage.remote and not a.local_assets:
+        raise SystemExit(_LOCAL_STORAGE_REFUSAL.format(backend=config.STORAGE_BACKEND))
     counts = import_bundle(
         a.bundle,
-        database_url=__import__("app.config", fromlist=["DATABASE_URL"]).DATABASE_URL,
-        storage=get_storage(),
+        database_url=config.DATABASE_URL,
+        storage=storage,
         rows=not a.assets_only,
     )
     print(json.dumps(counts, indent=2))
