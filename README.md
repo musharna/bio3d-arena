@@ -6,6 +6,7 @@
 [![CI](https://github.com/musharna/taxon3d/actions/workflows/ci.yml/badge.svg)](https://github.com/musharna/taxon3d/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Cite](https://img.shields.io/badge/cite-CITATION.cff-8957e5)](CITATION.cff)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21789280.svg)](https://doi.org/10.5281/zenodo.21789280)
 
 > **Note** — this project was called _Bio 3D Arena_ until August 2026. The name collided with the
 > [Bio3D R package](https://cran.r-project.org/package=bio3d) for protein structure analysis and
