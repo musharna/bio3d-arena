@@ -208,6 +208,23 @@ MORPHOTYPE = {
     # on the model's own reading of whether a caterpillar counts as a butterfly; iNaturalist's pool
     # holds 9,259 CC research-grade larval records, so that reading is load-bearing.
     "Danaus plexippus": "an adult monarch butterfly with its wings — NOT the striped caterpillar (larva) or the green chrysalis (pupa)",
+    # Added 2026-08-04 after a by-eye sweep of all 16 galleries. The entries above already named,
+    # correctly, most of what that sweep found — the bramble, the dingo, the fish in a beak, the
+    # larva and pupa — but the scorer had never been run, so none of it was ever applied. These
+    # five cover the failures no entry could have caught because none existed.
+    #
+    # They are deliberately about SUBJECT LEGIBILITY rather than taxonomy: every photo below is
+    # the right species. What made them useless as a reference is that the organism is incidental
+    # to the frame, or is not the growth stage the task names. Per the note above, each states
+    # only what its task asks for — an unusual habitat or a wild-growing specimen is legitimate
+    # variation and must keep passing.
+    "Solanum lycopersicum": "a tomato plant legible as the subject of the frame, with its foliage — NOT a distant view in which the plant is incidental to a wall, drain or waterway",
+    "Pinus sylvestris": "a Scots pine legible as a whole tree — NOT a bark or trunk detail alone, and NOT a distant landscape in which the tree is a few pixels",
+    "Boletus edulis": "one or a few porcini legible as individual fruiting bodies — NOT a long row of harvested specimens laid out for a haul photograph",
+    "Glycine max": "a soybean plant, or its pods or flowers in close-up — NOT a whole-field view in which no individual plant is legible",
+    # Task 10 asks specifically for the "whole-plant rosette", so a bolted plant photographed for
+    # its flowering stem is the wrong stage even though it is the right species.
+    "Arabidopsis thaliana": "a thale cress with its basal leaf rosette legible — a flowering stem may be present, but NOT a photograph of the inflorescence alone",
 }
 
 

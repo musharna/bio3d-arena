@@ -62,8 +62,22 @@ def gallery_in_storage(tmp_path, monkeypatch):
         store_root,
         "glycine_max",
         [
-            {"file": "1.jpg", "license": "cc0", "attribution": "no rights reserved"},
-            {"file": "2.jpg", "license": "cc-by", "attribution": "(c) Someone, CC BY"},
+            # `passed_qa: True` is required as of 2026-08-04 — a photo with no QA verdict is no
+            # longer shown to a voter (see test_reference_gallery_qa_gate). These entries are
+            # standing in for a HEALTHY shipped gallery, so they carry the verdict a healthy one
+            # has; the fail-closed behaviour itself is exercised in that file, not here.
+            {
+                "file": "1.jpg",
+                "license": "cc0",
+                "attribution": "no rights reserved",
+                "passed_qa": True,
+            },
+            {
+                "file": "2.jpg",
+                "license": "cc-by",
+                "attribution": "(c) Someone, CC BY",
+                "passed_qa": True,
+            },
         ],
     )
     monkeypatch.setattr(config, "ASSET_DIR", empty_local)
@@ -102,7 +116,10 @@ def test_qa_failed_images_are_not_shown(tmp_path, monkeypatch):
         store,
         "rosa",
         [
-            {"file": "1.jpg", "attribution": "a"},
+            # Explicitly passed. This entry carried NO verdict until 2026-08-04, back when a
+            # missing `passed_qa` defaulted to shown — so this test's own control was an
+            # instance of the defect it now guards against. See test_reference_gallery_qa_gate.
+            {"file": "1.jpg", "attribution": "a", "passed_qa": True},
             {"file": "2.jpg", "attribution": "b", "passed_qa": False},
         ],
     )

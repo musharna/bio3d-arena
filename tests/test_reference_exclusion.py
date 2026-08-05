@@ -77,7 +77,7 @@ def test_qa_failed_gallery_item_not_shown(monkeypatch, tmp_path):
                     "passed_qa": False,
                     "qa_reasons": ["fruit-only"],
                 },
-                {"file": "3.jpg", "attribution": "legacy"},  # no passed_qa -> default-shown
+                {"file": "3.jpg", "attribution": "legacy"},  # no passed_qa -> NOT shown
             ]
         )
     )
@@ -88,5 +88,8 @@ def test_qa_failed_gallery_item_not_shown(monkeypatch, tmp_path):
         urls = [r["url"] for r in service.reference_images_for_task(db, t)]
         assert any("1.jpg" in u for u in urls)  # passed_qa True -> shown
         assert not any("2.jpg" in u for u in urls)  # passed_qa False -> hidden
-        assert any("3.jpg" in u for u in urls)  # legacy (unscored) -> default shown
+        # Unscored was shown until 2026-08-04, when a sweep found that NO shipped gallery entry
+        # had ever been scored (0 of 122) and 9 of 16 galleries did not depict their task's
+        # subject. "Nobody judged this" is not a pass. See test_reference_gallery_qa_gate.
+        assert not any("3.jpg" in u for u in urls)  # unscored -> hidden
         db.rollback()

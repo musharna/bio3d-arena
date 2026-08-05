@@ -2253,9 +2253,22 @@ def reference_images_for_task(db: Session, task) -> list[dict]:
                 out.append({"url": st.url_for(img), "credit": "reconstruction input photo"})
 
     for item in _gallery_manifest(slug):
-        # QA-failed reference images (fruit-only / isolated / species mismatch) are not
-        # shown. Default-true so un-scored legacy manifests are unaffected until scored.
-        if not item.get("passed_qa", True):
+        # An UNJUDGED reference photo is not shown. This used to read
+        # `item.get("passed_qa", True)` — default-true, so "nobody has scored this" and "scored
+        # and passed" were indistinguishable.
+        #
+        # Requires the literal True, not truthiness: a half-written or hand-edited manifest
+        # carrying `"pending"` must not read as approval.
+        #
+        # Measured 2026-08-04 across the shipped corpus: 129 of 172 entries pass, 35 are explicit
+        # rejects, and 8 carry no verdict — all 8 in `cucurbita_pepo`, retired on 2026-07-25 and
+        # skipped by the scorer because its slug maps to no `ORGAN_INVENTORY` taxon. So this line
+        # does not darken the arena; it hides one dead task. The reason it still matters is that a
+        # future gallery added without a scoring run would otherwise reach voters unjudged, which
+        # is exactly how 9 of 16 galleries came to show the wrong subject — a bramble ID series
+        # for a garden rose, dead fish for a live goldfish, a caterpillar and a chrysalis for an
+        # adult monarch. `reference_qa.MORPHOTYPE` names every one of those in writing.
+        if item.get("passed_qa") is not True:
             continue
         if "file" not in item:
             continue
