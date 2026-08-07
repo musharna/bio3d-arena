@@ -175,7 +175,17 @@ def copy_reference_gallery(out: Path, posture: str) -> int:
             items = json.loads(manifest_path.read_text())
         except ValueError as e:
             raise ReferenceLicenseError(f"unreadable gallery manifest for {slug}: {e}") from e
-        keep = [i for i in items if isinstance(i, dict) and i.get("passed_qa", True)]
+        # Judged-and-passed, matching `service.reference_images_for_task` exactly. This used to
+        # read `i.get("passed_qa", True)` — default-true, so an unjudged photo shipped as though
+        # it had been approved.
+        #
+        # Fixing only the serving gate would have left the mechanism in place here, which is the
+        # half that matters more: serving decides what a voter sees from what is already in R2,
+        # but THIS decides what gets into R2 at all. The two must agree, or the export uploads
+        # photos the app will then refuse to show — bytes paid for and never rendered.
+        #
+        # `is True`, not truthiness: a hand-edited manifest carrying `"pending"` is not approval.
+        keep = [i for i in items if isinstance(i, dict) and i.get("passed_qa") is True]
 
         if posture == "redistribute":
             bad = [
