@@ -56,6 +56,17 @@ LOD_TARGET_ERROR = 0.001
 #: trade than serving one.
 LOD_MIN_USEFUL_RATIO = 1.5
 
+#: Long-edge cap for the TEXTURE tier (see `texture_lod`). Measured on live R2 2026-08-07: the
+#: meshes that never got an LOD are not geometry-heavy but texture-heavy — median 31,250 triangles
+#: at a 90.8% texture share, against 500,000 triangles at 25% for the meshes that did. Decimation
+#: has nothing to remove there, so the only reducible dimension is the image.
+#:
+#: 768 halves the stage-2 serving cap of 1536 (`texture_downscale.DEFAULT_MAX_DIM`), a ~4x cut in
+#: the bytes that dominate those files. It is deliberately NOT the 512 that would save more:
+#: this is a fidelity benchmark, colour and pattern carry much of what a voter judges, and the
+#: opening frame should not be the thing that decides a comparison.
+LOD_TEXTURE_MAX_DIM = 768
+
 #: A decimation may not leave fewer than this fraction of the original triangles. Catches a
 #: simplify pass that collapsed the model into a blob — which `structural_signature` cannot see.
 LOD_MIN_TRIANGLE_FRACTION = 0.02
@@ -295,8 +306,82 @@ def generate_lod(
     return result
 
 
+def texture_lod(glb: bytes, *, max_dim: int = LOD_TEXTURE_MAX_DIM) -> bytes | None:
+    """A reduced opening frame for a mesh whose bytes are TEXTURE rather than geometry.
+
+    Returns the reduced GLB, or None when there is nothing worth shipping — either no image
+    exceeded `max_dim`, or the result failed to earn its place under `worth_keeping`.
+
+    **Why this exists.** `generate_lod` decimates geometry, which is the right lever for the
+    500k-triangle meshes it was built on and useless for the ones it silently refused. Measured
+    on live R2 2026-08-07, the sources over 1 MB *without* an LOD had a median 31,250 triangles
+    and a 90.8% texture share: there was no geometry to remove, so the pass could never reach
+    `LOD_MIN_USEFUL_RATIO` and every one was dropped. Coverage sat at 17.3% for a structural
+    reason, not a tunable one — raising `LOD_MIN_SOURCE_BYTES` would not have produced a single
+    extra file.
+
+    **Why it is safe to serve.** It signs the same contract as the geometry tier: this is the
+    OPENING frame, and `viewer.js` swaps in the full mesh as soon as anyone zooms or goes
+    fullscreen. It is held to the same two gates as well — `check_lod` for model integrity (a
+    dropped texture would otherwise register as an enormous saving) and `worth_keeping` for
+    value. Pure Python via Pillow, so unlike `generate_lod` it needs no Node toolchain.
+
+    Textures already at or below the cap are left byte-identical by `target_size`, so a mesh
+    that mixes one large image with several small ones only pays for the large one.
+    """
+    from app import texture_downscale
+
+    reduced, _stats = texture_downscale.downscale_glb(
+        glb, max_dim=max_dim, quality=texture_downscale.DEFAULT_QUALITY
+    )
+    if reduced is glb or len(reduced) >= len(glb):
+        # Nothing exceeded the cap (or the re-encode grew the file). Either way there is no
+        # artifact worth a second key in the bucket, an import row and a cache entry.
+        return None
+    check_lod(glb, reduced)
+    return reduced if worth_keeping(len(glb), len(reduced)) else None
+
+
+def write_best_lod(src: Path, dst: Path, *, node: str, cli_entry: str) -> str | None:
+    """Write the best available reduction of `src` to `dst`. Returns which tier produced it —
+    `"geometry"`, `"texture"`, or None when neither earned its place (and `dst` is removed).
+
+    Geometry is tried first and kept when it works: it removes triangles the voter would
+    otherwise download while leaving texture resolution — the dimension that carries colour and
+    pattern — untouched. The texture tier exists for the meshes decimation provably cannot help.
+
+    Both of `generate_lod`'s refusals fall through, and they are not the same shape: a result
+    with `kept=False`, and a raised `LodCollapsed` / `LodChangedTheModel`. Wiring the fallback
+    into only the returned one would skip every mesh whose simplify pass collapsed, which is the
+    population most in need of the other tier.
+    """
+    geometry_error: Exception | None = None
+    try:
+        result = generate_lod(src, dst, node=node, cli_entry=cli_entry)
+    except (LodCollapsed, LodChangedTheModel) as e:
+        geometry_error = e
+    else:
+        if result.kept:
+            return "geometry"
+
+    reduced = texture_lod(src.read_bytes())
+    if reduced is not None:
+        dst.write_bytes(reduced)
+        return "texture"
+
+    # Neither tier. Remove any stale companion so the export cannot ship a "low-detail" file
+    # that is not actually smaller than the mesh beside it.
+    dst.unlink(missing_ok=True)
+    if geometry_error is not None:
+        raise geometry_error
+    return None
+
+
 __all__ = [
     "LOD_SUFFIX",
+    "LOD_TEXTURE_MAX_DIM",
+    "texture_lod",
+    "write_best_lod",
     "LodChangedTheModel",
     "LodCollapsed",
     "LodResult",
