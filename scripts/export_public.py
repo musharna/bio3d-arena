@@ -351,6 +351,12 @@ def _stage_assets(
         # LOD is a SECOND artifact per mesh, not a replacement — the full mesh always ships.
         "lod_enabled": lod,
         "lod_generated": 0,
+        # Split by tier, because the two answer different questions. `lod_geometry` falling is a
+        # toolchain regression; `lod_texture` rising just means the corpus gained texture-heavy
+        # models. Before the texture tier existed the second group produced no LOD at all, which
+        # is what held coverage at 17.3%.
+        "lod_geometry": 0,
+        "lod_texture": 0,
         "lod_not_worth_it": 0,
         "lod_refused": 0,
         "lod_bytes": 0,
@@ -421,20 +427,26 @@ def _stage_assets(
         if lod and mesh_lod.is_lod_candidate(rel, dst.stat().st_size):
             lod_dst = dst.with_name(Path(mesh_lod.lod_path(dst.name)).name)
             try:
-                lod_res = mesh_lod.generate_lod(dst, lod_dst, node=node, cli_entry=cli)
+                # Geometry first, texture as the fallback. Decimation is useless on the
+                # texture-dominated meshes — measured 2026-08-07, they held a median 31,250
+                # triangles at a 90.8% texture share — and refusing them was why coverage sat
+                # at 17.3%.
+                tier = mesh_lod.write_best_lod(dst, lod_dst, node=node, cli_entry=cli)
             except (mesh_lod.LodCollapsed, mesh_lod.LodChangedTheModel) as e:
-                # The gate refusing is the system working, and the full mesh still ships — so this
-                # is not fatal. It is still counted and named: a refusal RATE climbing across a
-                # release is how a toolchain regression would announce itself.
+                # Reached only when the texture tier ALSO had nothing to give. The gate refusing
+                # is the system working and the full mesh still ships, so this is not fatal. It
+                # is still counted and named: a refusal RATE climbing across a release is how a
+                # toolchain regression would announce itself.
                 stats["lod_refused"] += 1
                 print(f"  LOD refused for {rel}: {e}", file=sys.stderr)
             else:
-                if lod_res.kept:
-                    stats["lod_generated"] += 1
-                    stats["lod_bytes"] += lod_res.lod_bytes
-                    _stamp_lod(d)
-                else:
+                if tier is None:
                     stats["lod_not_worth_it"] += 1
+                else:
+                    stats[f"lod_{tier}"] += 1
+                    stats["lod_generated"] += 1
+                    stats["lod_bytes"] += lod_dst.stat().st_size
+                    _stamp_lod(d)
 
     stats["bytes_before"] = before_total
     stats["bytes_after"] = after_total
