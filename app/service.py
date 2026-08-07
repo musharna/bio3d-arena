@@ -2260,14 +2260,21 @@ def reference_images_for_task(db: Session, task) -> list[dict]:
         # Requires the literal True, not truthiness: a half-written or hand-edited manifest
         # carrying `"pending"` must not read as approval.
         #
-        # Measured 2026-08-04 across the shipped corpus: 129 of 172 entries pass, 35 are explicit
-        # rejects, and 8 carry no verdict — all 8 in `cucurbita_pepo`, retired on 2026-07-25 and
-        # skipped by the scorer because its slug maps to no `ORGAN_INVENTORY` taxon. So this line
-        # does not darken the arena; it hides one dead task. The reason it still matters is that a
-        # future gallery added without a scoring run would otherwise reach voters unjudged, which
-        # is exactly how 9 of 16 galleries came to show the wrong subject — a bramble ID series
-        # for a garden rose, dead fish for a live goldfish, a caterpillar and a chrysalis for an
-        # adult monarch. `reference_qa.MORPHOTYPE` names every one of those in writing.
+        # THIS LINE IS ONLY SAFE ALONGSIDE A SCORED CORPUS. Measured against live R2 on
+        # 2026-08-05: all 130 shipped entries carried NO verdict, so deploying this gate by
+        # itself would have hidden every reference photo on the site. `data/` is gitignored, so
+        # gallery manifests ride in no commit and no CI run — the code half of a gallery change
+        # can merge while the data half never leaves someone's disk, which is exactly what
+        # happened to the 2026-07-29 regather.
+        #
+        # The corpus this ships with: 172 entries, 112 pass, 52 explicit rejects, 8 with no
+        # verdict — all 8 in `cucurbita_pepo`, retired 2026-07-25, skipped by the scorer because
+        # its slug maps to no `ORGAN_INVENTORY` taxon.
+        #
+        # What it buys: a gallery added without a scoring run cannot reach voters unjudged, which
+        # is how 9 of 16 galleries came to show the wrong subject — a bramble ID series for a
+        # garden rose, dead fish for a live goldfish, a caterpillar and a chrysalis for an adult
+        # monarch. `reference_qa.MORPHOTYPE` names every one of those in writing.
         if item.get("passed_qa") is not True:
             continue
         if "file" not in item:

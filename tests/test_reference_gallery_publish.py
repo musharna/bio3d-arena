@@ -142,7 +142,7 @@ def test_export_writes_the_gallery_where_the_uploader_will_find_it(tmp_path, mon
     from scripts.import_public import _bundle_assets
 
     src = tmp_path / "assets"
-    _write_gallery(src, "zea_mays", [{"file": "1.jpg", "attribution": "a"}])
+    _write_gallery(src, "zea_mays", [{"file": "1.jpg", "attribution": "a", "passed_qa": True}])
     monkeypatch.setattr(config, "ASSET_DIR", src)
 
     bundle = tmp_path / "bundle"
@@ -165,7 +165,7 @@ def test_export_prunes_qa_failed_entries_from_the_shipped_manifest(tmp_path, mon
         src,
         "rosa",
         [
-            {"file": "1.jpg", "attribution": "a"},
+            {"file": "1.jpg", "attribution": "a", "passed_qa": True},
             {"file": "2.jpg", "attribution": "b", "passed_qa": False},
         ],
     )
@@ -186,7 +186,14 @@ def test_redistribute_posture_refuses_an_unredistributable_photo(tmp_path, monke
     from scripts.export_public import copy_reference_gallery
 
     src = tmp_path / "assets"
-    _write_gallery(src, "rosa", [{"file": "1.jpg", "license": "cc-by-nc", "attribution": "a"}])
+    # `passed_qa: True` is load-bearing here, not decoration. The QA gate runs BEFORE the licence
+    # gate, so an unjudged entry empties `keep` and the licence check finds nothing to refuse —
+    # the test would pass by vacuum. See test_an_unjudged_photo_cannot_smuggle_past_the_licence_gate.
+    _write_gallery(
+        src,
+        "rosa",
+        [{"file": "1.jpg", "license": "cc-by-nc", "attribution": "a", "passed_qa": True}],
+    )
     monkeypatch.setattr(config, "ASSET_DIR", src)
     bundle = tmp_path / "b"
     (bundle / "assets").mkdir(parents=True)
@@ -201,11 +208,69 @@ def test_display_posture_ships_the_same_photo(tmp_path, monkeypatch):
     from scripts.export_public import copy_reference_gallery
 
     src = tmp_path / "assets"
-    _write_gallery(src, "rosa", [{"file": "1.jpg", "license": "cc-by-nc", "attribution": "a"}])
+    # `passed_qa: True` is load-bearing here, not decoration. The QA gate runs BEFORE the licence
+    # gate, so an unjudged entry empties `keep` and the licence check finds nothing to refuse —
+    # the test would pass by vacuum. See test_an_unjudged_photo_cannot_smuggle_past_the_licence_gate.
+    _write_gallery(
+        src,
+        "rosa",
+        [{"file": "1.jpg", "license": "cc-by-nc", "attribution": "a", "passed_qa": True}],
+    )
     monkeypatch.setattr(config, "ASSET_DIR", src)
     bundle = tmp_path / "b"
     (bundle / "assets").mkdir(parents=True)
     assert copy_reference_gallery(bundle, "display") == 1
+
+
+def test_an_unjudged_photo_is_never_exported(tmp_path, monkeypatch):
+    """The export gate must agree with the serving gate, or we pay to upload bytes the app
+    then refuses to render.
+
+    Live R2 on 2026-08-05 held 130 gallery entries and ZERO verdicts, all of them shipped by
+    the default-true predicate this replaces. `data/` is gitignored, so no CI run ever saw
+    that corpus — this test is the only thing standing between an unscored gallery and R2.
+    """
+    from scripts.export_public import copy_reference_gallery
+
+    src = tmp_path / "assets"
+    _write_gallery(
+        src,
+        "rosa",
+        [
+            {"file": "1.jpg", "attribution": "a", "passed_qa": True},
+            {"file": "2.jpg", "attribution": "b"},  # never scored
+            {"file": "3.jpg", "attribution": "c", "passed_qa": "pending"},  # not a verdict
+        ],
+    )
+    monkeypatch.setattr(config, "ASSET_DIR", src)
+    bundle = tmp_path / "b"
+    (bundle / "assets").mkdir(parents=True)
+
+    # Positive control rides INSIDE the same assertion: if the gate were simply broken shut,
+    # `1.jpg` would be missing too and the count would be 0, not 1.
+    assert copy_reference_gallery(bundle, "display") == 1
+    shipped = json.loads((bundle / "assets/reference/gallery/rosa/manifest.json").read_text())
+    assert [i["file"] for i in shipped] == ["1.jpg"]
+    assert not (bundle / "assets/reference/gallery/rosa/2.jpg").exists()
+    assert not (bundle / "assets/reference/gallery/rosa/3.jpg").exists()
+
+
+def test_an_unjudged_photo_cannot_smuggle_past_the_licence_gate(tmp_path, monkeypatch):
+    """Ordering check. The QA filter builds `keep`, and the licence gate only inspects `keep`,
+    so an unjudged non-redistributable photo must be dropped by QA rather than sailing through
+    a licence check that never sees it. Asserts the drop, not merely the absence of a raise —
+    "no exception" is exactly what the vacuum failure looks like.
+    """
+    from scripts.export_public import copy_reference_gallery
+
+    src = tmp_path / "assets"
+    _write_gallery(src, "rosa", [{"file": "1.jpg", "license": "cc-by-nc", "attribution": "a"}])
+    monkeypatch.setattr(config, "ASSET_DIR", src)
+    bundle = tmp_path / "b"
+    (bundle / "assets").mkdir(parents=True)
+
+    assert copy_reference_gallery(bundle, "redistribute") == 0
+    assert not (bundle / "assets/reference/gallery/rosa/1.jpg").exists()
 
 
 def test_absent_gallery_tree_is_not_an_export_failure(tmp_path, monkeypatch):
