@@ -8,6 +8,7 @@ import logging
 import random
 import re
 import uuid
+from collections.abc import Sequence
 from pathlib import Path
 from urllib.parse import quote
 from xml.sax.saxutils import escape as xml_escape
@@ -394,6 +395,37 @@ def _arena_lod_url(o: ModelOutput) -> str | None:
     return f"/media/o/{o.id}.lod.glb"
 
 
+def _uniform_lod_urls(outputs: Sequence[ModelOutput]) -> list[str | None]:
+    """LOD urls for a whole ballot — all of them, or none of them.
+
+    Whether an output HAS a decimated companion is decided per mesh by a byte-size threshold
+    (`is_lod_candidate`, 1 MB). Mesh size is a property of the GENERATOR: dense neural meshes
+    clear it, LLM-authored procedural ones do not. So the threshold hands out decimated meshes
+    along generator lines. Measured on production 2026-08-04: 6 generators always had one, 43
+    never did, and **113 of 120 served k-ballots (94.2%) put a decimated mesh beside a
+    full-resolution one**.
+
+    On a fidelity benchmark that is a confound rather than a preference — the voter compares our
+    decimation of one model against another model's real geometry, and because the threshold
+    selects the heaviest meshes, the models most likely to carry fine structure are exactly the
+    ones degraded at first paint. The card-size delta is small (silhouette IoU 0.9985) and the
+    swap-on-zoom fires, so this bites voters who judge without zooming; small is not zero, and it
+    is not random with respect to model identity.
+
+    Raising or lowering the threshold does not fix it — ANY threshold on a generator-correlated
+    quantity reproduces it. The fidelity tier has to be a property of the ballot, which is what
+    this enforces: if one slot cannot be served decimated, none are.
+
+    Cost is real and accepted: on a mixed ballot every slot falls back to the full mesh, which is
+    the payload this feature exists to avoid. Closing that gap means raising LOD coverage toward
+    100%, not relaxing the invariant.
+    """
+    urls = [_arena_lod_url(o) for o in outputs]
+    if any(u is None for u in urls):
+        return [None] * len(urls)
+    return urls
+
+
 def _serialize(
     comparison: Comparison,
     task: Task,
@@ -408,6 +440,10 @@ def _serialize(
     candidates)."""
     from .public_export import is_commercial_model
 
+    # Both slots or neither — see _uniform_lod_urls. A pair is not exempt from the rule: it is
+    # still two models judged side by side, and `?set=pair` remains reachable.
+    lod_a, lod_b = _uniform_lod_urls([out_a, out_b])
+
     return {
         "comparison_id": comparison.id,
         "task": {
@@ -419,7 +455,7 @@ def _serialize(
         "criterion": {"slug": crit.slug, "name": crit.name},
         "a": {
             "url": _arena_asset_url(out_a),
-            "lod_url": _arena_lod_url(out_a),
+            "lod_url": lod_a,
             "format": out_a.asset_format,
             "output_id": out_a.id,
             "machine_generated": is_commercial_model(out_a.source),
@@ -427,7 +463,7 @@ def _serialize(
         },
         "b": {
             "url": _arena_asset_url(out_b),
-            "lod_url": _arena_lod_url(out_b),
+            "lod_url": lod_b,
             "format": out_b.asset_format,
             "output_id": out_b.id,
             "machine_generated": is_commercial_model(out_b.source),
@@ -436,18 +472,25 @@ def _serialize(
     }
 
 
-def _serialize_output(o: ModelOutput) -> dict:
+def _serialize_output(o: ModelOutput, lod_url: str | None) -> dict:
     """Anonymized per-output payload for the 4-up K-wise ballot — the SAME fields `_serialize`
     exposes for a single output (url/format/output_id + the AUP machine-generated label). Never
     leaks generator identity. machine_generated/attribution carry the mandatory AI-provenance
     label so a commercial-model output shows the same badge in the K-wise grid as in the pair
-    view — the labeling requirement is display-posture-wide, not pair-only."""
+    view — the labeling requirement is display-posture-wide, not pair-only.
+
+    `lod_url` is passed in rather than derived from `o`, and is deliberately REQUIRED. Deriving it
+    here is what made the level of detail a property of the mesh — and therefore of the generator
+    — instead of the ballot; see `_uniform_lod_urls`. Requiring the caller to resolve it across
+    the whole ballot means a future ballot builder cannot silently reintroduce that confound: it
+    gets a TypeError instead of a biased ballot.
+    """
     from .public_export import is_commercial_model
 
     return {
         "output_id": o.id,
         "url": _arena_asset_url(o),
-        "lod_url": _arena_lod_url(o),
+        "lod_url": lod_url,
         "format": o.asset_format,
         "machine_generated": is_commercial_model(o.source),
         "attribution": o.attribution or None,
@@ -650,7 +693,12 @@ def _build_kwise_comparison(
                 "references": service.reference_images_for_task(db, task),
             },
             "criterion": {"slug": crit.slug, "name": crit.name},
-            "outputs": [_serialize_output(o) for o in quad],
+            # Resolved across the WHOLE quad, not per output: if any of the four cannot be
+            # served decimated, none of them are. See _uniform_lod_urls.
+            "outputs": [
+                _serialize_output(o, lod)
+                for o, lod in zip(quad, _uniform_lod_urls(quad), strict=True)
+            ],
         }
     # No quad anywhere → transparent pairwise fallback.
     return _build_comparison(db, session_id, criterion_slug, category_slug, kingdom=kingdom)
