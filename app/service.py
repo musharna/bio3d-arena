@@ -2253,9 +2253,29 @@ def reference_images_for_task(db: Session, task) -> list[dict]:
                 out.append({"url": st.url_for(img), "credit": "reconstruction input photo"})
 
     for item in _gallery_manifest(slug):
-        # QA-failed reference images (fruit-only / isolated / species mismatch) are not
-        # shown. Default-true so un-scored legacy manifests are unaffected until scored.
-        if not item.get("passed_qa", True):
+        # An UNJUDGED reference photo is not shown. This used to read
+        # `item.get("passed_qa", True)` — default-true, so "nobody has scored this" and "scored
+        # and passed" were indistinguishable.
+        #
+        # Requires the literal True, not truthiness: a half-written or hand-edited manifest
+        # carrying `"pending"` must not read as approval.
+        #
+        # THIS LINE IS ONLY SAFE ALONGSIDE A SCORED CORPUS. Measured against live R2 on
+        # 2026-08-05: all 130 shipped entries carried NO verdict, so deploying this gate by
+        # itself would have hidden every reference photo on the site. `data/` is gitignored, so
+        # gallery manifests ride in no commit and no CI run — the code half of a gallery change
+        # can merge while the data half never leaves someone's disk, which is exactly what
+        # happened to the 2026-07-29 regather.
+        #
+        # The corpus this ships with: 172 entries, 112 pass, 52 explicit rejects, 8 with no
+        # verdict — all 8 in `cucurbita_pepo`, retired 2026-07-25, skipped by the scorer because
+        # its slug maps to no `ORGAN_INVENTORY` taxon.
+        #
+        # What it buys: a gallery added without a scoring run cannot reach voters unjudged, which
+        # is how 9 of 16 galleries came to show the wrong subject — a bramble ID series for a
+        # garden rose, dead fish for a live goldfish, a caterpillar and a chrysalis for an adult
+        # monarch. `reference_qa.MORPHOTYPE` names every one of those in writing.
+        if item.get("passed_qa") is not True:
             continue
         if "file" not in item:
             continue
