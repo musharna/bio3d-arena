@@ -866,6 +866,14 @@ def _hero_stats(db: Session) -> dict:
 
     return {
         "total_votes": matchmaking.total_votes(db),
+        # The homepage strip leads with THIS, not total_votes: the corpus is what verifiably
+        # exists, whereas the vote total invites a reading about community participation that the
+        # session distribution does not support (2026-08-08: 340 votes, 18 sessions ever, 93.8%
+        # from two internal ones). Counts visible outputs only — hidden ones are not on display,
+        # so claiming them would be the same overstatement in a different place.
+        "outputs_count": db.execute(
+            select(func.count(ModelOutput.id)).where(ModelOutput.hidden_at.is_(None))
+        ).scalar_one(),
         "models_count": db.execute(
             select(func.count(func.distinct(Generator.id))).where(Generator.kind == "model")
         ).scalar_one(),
@@ -927,6 +935,7 @@ def home(request: Request, db: Session = Depends(get_db)):
         "home.html",
         {
             "total_votes": total_votes,
+            "outputs_count": stats["outputs_count"],
             "models_count": models_count,
             "tasks_count": tasks_count,
             "kingdoms_live": kingdoms_live,
