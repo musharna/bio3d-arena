@@ -29,12 +29,21 @@
         <a href="/arena" class="b3d-btn-primary">Enter the arena &rarr;</a>
         <a href="/methodology" class="b3d-btn-secondary">View methodology</a>
       </div>
+      {# Leads with the CORPUS, not the vote count. "N votes cast" used to head this strip and it
+         was the most challengeable claim on the site: measured 2026-08-08, the 340 votes came from
+         18 sessions ever, with 93.8% of them from two internal ones. Arithmetically true, and a
+         visitor reads it as community participation — the exact thing a sharp reader checks first,
+         and the worst possible thing to be caught overstating on a benchmark that sells its
+         rigour. The corpus numbers below need no such defence: they are what actually exists.
+         Vote totals still appear where they carry their own context — per board, beside the
+         "N of M firm" badges that say how much weight to put on them. #}
       <div class="b3d-hero-stats">
         <span
           ><span class="b3d-live-dot" aria-hidden="true"></span>
-          <strong>{{ "{:,}".format(total_votes) }}</strong> votes cast</span
+          <strong>{{ "{:,}".format(outputs_count) }}</strong>
+          3D models generated</span
         >
-        <span><strong>{{ models_count }}</strong> models</span>
+        <span><strong>{{ models_count }}</strong> generators</span>
         <span><strong>{{ tasks_count }}</strong> tasks</span>
         <span><strong>{{ kingdoms_live }}</strong> kingdoms live</span>
       </div>

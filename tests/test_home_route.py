@@ -18,7 +18,12 @@ def test_home_page_200_and_hero_copy():
     assert resp.status_code == 200
     html = resp.text
     assert "arena for" in html  # hero H1: "The life-sciences arena for 3D generation"
-    assert "votes" in html  # stats strip: "<N> votes cast"
+    # The strip led with "<N> votes cast" until 2026-08-08. That number was true and misleading:
+    # 340 votes from 18 sessions EVER, 93.8% of them two internal ones, read by a visitor as
+    # community participation. The hero now leads with the corpus, which is simply what exists.
+    # Asserting the NEW copy rather than merely deleting the old assertion.
+    assert "3D models generated" in html  # stats strip: "<N> 3D models generated"
+    assert "votes cast" not in html  # the overstated headline claim must not creep back
 
 
 def test_arena_page_200_and_vote_loop_markup():

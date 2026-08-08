@@ -1,8 +1,13 @@
 {# The 3D viewer libraries. Included via {% block viewer_assets %} only by pages that
    actually mount a viewer (arena, home hero, spotlight, model detail, benchmark, moderation).
    viewer.js exposes window.Taxon3DViewer and lazy-loads 3Dmol on the first molecular mount. #}
-<script
-  type="module"
-  src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"
-></script>
+{# SELF-HOSTED, deliberately. This used to load model-viewer from ajax.googleapis.com, which made
+   Google a single point of failure for the ONLY thing this site does. Measured 2026-08-08 with that
+   host blocked: 6/6 <model-viewer> elements upgraded and drew a canvas normally, 0/6 when blocked —
+   the elements stayed in the DOM as inert boxes and NOTHING said why. Anyone on a network that
+   blocks Google (China entirely; some corporate and university networks) got a 3D benchmark with no
+   3D. Same bytes, served from our own origin, so visitor payload is unchanged and no visitor IP is
+   handed to a third party to render a model. Pin the version in the FILENAME so an upgrade is a
+   visible, reviewable file swap rather than a silent CDN drift. #}
+<script type="module" src="{{ asset('vendor/model-viewer-3.5.0.min.js') }}"></script>
 <script src="{{ asset('viewer.js') }}"></script>
