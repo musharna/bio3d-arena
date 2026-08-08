@@ -4,24 +4,15 @@
 {% block description %}Compare AI-generated 3D reconstructions of a real organism and vote for the most faithful. Every vote feeds the Bradley–Terry leaderboards.{% endblock %}
 {% block content %}
 <section class="arena" data-can-flag="{{ 'true' if internal_pages() else 'false' }}">
-  <div class="arena-hero">
-    <h1 class="arena-hero-h1">Which model rebuilds life best?</h1>
-    {# Deliberately does NOT say "two": a ballot is four models where the task can fill a
-       quad and two where it cannot, so any fixed number is wrong half the time. #}
-    <p class="arena-hero-lede">
-      Compare AI-generated 3D reconstructions of a real organism and vote for
-      the most faithful. Every vote feeds the Bradley&ndash;Terry leaderboards
-      &mdash; across Plants, Fungi, and Animals.
-    </p>
-    {# Design (02-arena.png): stats separated by plain spacing, not middot dividers. #}
-    <div class="arena-hero-stats">
-      <span><strong>{{ "{:,}".format(total_votes) }}</strong> votes cast</span>
-      <span><strong>{{ models_count }}</strong> models</span>
-      <span><strong>{{ tasks_count }}</strong> tasks</span>
-      <span><strong>{{ kingdoms_live }}</strong> kingdoms live</span>
-    </div>
-  </div>
+  {# The hero that used to sit here was DELETED 2026-08-08. It restated the homepage's pitch on a
+     page you can only reach by clicking "Enter the arena" from that homepage, and it cost 162px of
+     the first viewport. Measured before removal: at 1280x720 and 1280x900 a first-time visitor saw
+     0% of the first model — the thing they are here to judge. See .arena-brief below for the
+     invariant that keeps it that way. #}
 
+  {# Overlay, NOT a flow block: shown once by arena.js initOnboarding(). It used to be an inline
+     card costing 276px, so the help text explaining "drag to rotate" pushed the rotatable thing
+     off-screen. Same id/hidden contract as before — only its positioning changed. #}
   <div class="onboard-card" id="onboard-banner" hidden>
     <button
       type="button"
@@ -69,6 +60,14 @@
     </div>
   </div>
 
+  {# ARENA BRIEF — everything a voter needs BEFORE the models, under one height budget.
+     This wrapper is the invariant, not decoration. The fold bug this fixes was not caused by any
+     single block: the hero (162px), onboarding (276px), task strip (115px) and reference panel
+     (185px) were each individually reasonable and SUMMED to 901px, so the ballot — the last block
+     in a stacked document — began below the fold. Deleting the biggest one still left ~625px.
+     Capping the whole region means a block added here later eats the budget instead of pushing the
+     models off-screen; see --arena-brief-max in style.css. #}
+  <div class="arena-brief">
   <div id="task-card" class="task-strip">
     <div class="task-strip-main">
       <div class="task-card-heading">
@@ -103,6 +102,7 @@
     <figcaption class="reference-cap">Reference — what the real organism looks like</figcaption>
     <div id="reference-gallery" class="reference-gallery"></div>
   </figure>
+  </div>
 
   <div class="ab-toggle" role="tablist" aria-label="Which model to view">
     <button
