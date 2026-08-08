@@ -21,8 +21,21 @@
   {% if cards %}
   <div class="lb-hub-grid">
     {% for c in cards %}
-    <a class="lb-hub-card" href="/leaderboard/{{ c.paradigm }}?criterion={{ sel_criterion }}&category={{ sel_category }}">
-      <h3 class="lb-hub-title">{{ c.display }}</h3>
+    {# A DIV, not an <a>. It used to be an anchor wrapping the whole card, but .lb-hub-goal below
+       contains its own link ("N more votes"), and nested <a> is invalid HTML: the parser closes the
+       outer anchor at the inner one. Everything after it then became a SIBLING of the card, so the
+       grid gave each piece its own cell — measured on production 2026-08-08, .lb-hub-grid's children
+       were A.lb-hub-card, P.lb-hub-goal, SPAN.lb-hub-cta repeating, which is why every card rendered
+       beside a tall empty box. Whole-card clicking is preserved by stretching the title link over
+       the card (see .lb-hub-link::after); inner links sit above it on z-index. #}
+    <div class="lb-hub-card">
+      <h3 class="lb-hub-title">
+        <a
+          class="lb-hub-link"
+          href="/leaderboard/{{ c.paradigm }}?criterion={{ sel_criterion }}&category={{ sel_category }}"
+          >{{ c.display }}</a
+        >
+      </h3>
       <p class="lb-hub-what subtle">{{ c.what }}</p>
       {% if c.rated_count %}
       <ol class="lb-hub-top">
@@ -67,7 +80,7 @@
       </p>
       {% endif %}
       <span class="lb-hub-cta">View board →</span>
-    </a>
+    </div>
     {% endfor %}
   </div>
   {% else %}
