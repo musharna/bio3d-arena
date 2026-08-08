@@ -7,9 +7,101 @@ PHOTO-framed prompt, not the 3D-render-sheet framing."""
 
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
+from urllib.parse import unquote
+
 from .completeness import COMPLETENESS_TOOL, _parse, derive
 from .judge import JUDGE_MODEL
 from .organ_inventory import TaxonInventory
+
+# --- reference independence -------------------------------------------------------------
+# A reference photo must not be the photo a reconstruction was generated FROM: a recon that
+# reproduces its own input reads as faithful even when it is biologically wrong.
+#
+# `service.reference_images_for_task` already refuses to show a task's `meta_json.input_image`.
+# That guard suppresses one ASSET PATH, and the gallery is sourced independently from
+# iNaturalist — so the same underlying photo can arrive as a different file, at a different
+# rendition, and be shown anyway. Measured 2026-08-08: `zea_mays/4.jpg`,
+# `morchella_esculenta/2.jpg` and `trametes_versicolor/1.jpg` were each the recon input for
+# 10-11 outputs (tasks 12/26/27) and all three were passing QA and being served.
+#
+# Comparing bytes does NOT catch it — the input is `/photos/<id>/original.jpg` while the gallery
+# holds `/photos/<id>/medium.jpg`. Identity has to be the SOURCE PHOTO, not the file.
+
+_INAT_PHOTO = re.compile(r"/photos/(\d+)")
+# Commons serves both `/commons/a/ab/File.jpg` and `/commons/thumb/a/ab/File.jpg/800px-File.jpg`;
+# the segment after the two hash dirs is the canonical file name in both.
+_WIKIMEDIA_FILE = re.compile(r"/commons/(?:thumb/)?[0-9a-f]/[0-9a-f]{2}/([^/]+)")
+
+
+def photo_identity(url: str | None) -> str | None:
+    """Identity of the SOURCE photo behind `url`, stable across renditions and thumbnail sizes.
+
+    Namespaced by host so a numeric iNaturalist id can never collide with a Commons file name.
+    Returns None for anything unrecognised — callers must treat that as "no opinion", never as
+    a match, or an unparsed URL would silently reject a legitimate reference.
+    """
+    if not url:
+        return None
+    m = _INAT_PHOTO.search(url)
+    if m:
+        return f"inat:{m.group(1)}"
+    m = _WIKIMEDIA_FILE.search(url)
+    if m:
+        return f"wikimedia:{unquote(m.group(1))}"
+    return None
+
+
+def recon_input_photo_ids(reference_dir: Path) -> set[str]:
+    """Source-photo identities of every recon INPUT image, read from the `*_ref*.json` sidecars.
+
+    Deliberately reads the sidecars on disk rather than the DB: this runs inside gallery QA,
+    which is read-only w.r.t. the database, and every `input_image` recorded on a model output
+    is a `reference/<file>` that has one of these sidecars. Superseded inputs (`*_old.json`)
+    are included on purpose — excluding a photo that ONCE fed a generator costs one reference
+    image; including it risks a circular one.
+    """
+    ids: set[str] = set()
+    for sidecar in sorted(Path(reference_dir).glob("*_ref*.json")):
+        try:
+            meta = json.loads(sidecar.read_text())
+        except (ValueError, OSError):
+            continue
+        if not isinstance(meta, dict):
+            continue
+        for key in ("download_url", "source_url", "url"):
+            ident = photo_identity(meta.get(key))
+            if ident:
+                ids.add(ident)
+                break
+    return ids
+
+
+def assess_independence(
+    *,
+    photo_id: int | str | None = None,
+    url: str | None = None,
+    input_photo_ids: set[str] | None = None,
+) -> dict:
+    """Is this gallery photo independent of the recon inputs? `ok=False` means it IS an input.
+
+    Checks the manifest's `photo_id` as well as the URL: manifests carry the id directly, and an
+    entry whose url is missing or in an unrecognised form must not slip through unchecked.
+    With an empty input set the predicate ABSTAINS (`ok=True`) rather than failing closed — a
+    caller that could not load the inputs would otherwise reject every reference image, which is
+    the failure mode that hid the whole gallery in 2026-08-05.
+    """
+    known = input_photo_ids or set()
+    if not known:
+        return {"ok": True, "identity": None, "abstained": True}
+
+    candidates = {photo_identity(url)}
+    if photo_id is not None and str(photo_id).strip():
+        candidates.add(f"inat:{photo_id}")
+    hit = next((c for c in candidates if c and c in known), None)
+    return {"ok": hit is None, "identity": hit, "abstained": False}
 
 
 def _sniff_media_type(data: bytes) -> str:
@@ -335,6 +427,7 @@ def qa_reference_image(
     composition: dict | None = None,
     species: dict | None = None,
     subject: dict | None = None,
+    independence: dict | None = None,
 ) -> dict:
     """Combine QA signals into a pass/fail verdict. `composition` = assess_composition output
     (isolated=True → a detached/harvested part, not the whole organism) is the calibrated
@@ -357,5 +450,10 @@ def qa_reference_image(
         reasons.append(
             f"subject is {subject.get('subject')!r} ({subject.get('verdict')}), "
             "not the claimed organism in the expected form"
+        )
+    if independence is not None and not independence.get("ok", True):
+        reasons.append(
+            f"this photo IS a reconstruction input ({independence.get('identity')}) — "
+            "showing it as the reference is circular"
         )
     return {"passed": not reasons, "reasons": reasons}
