@@ -417,8 +417,28 @@ def _uniform_lod_urls(outputs: Sequence[ModelOutput]) -> list[str | None]:
     this enforces: if one slot cannot be served decimated, none are.
 
     Cost is real and accepted: on a mixed ballot every slot falls back to the full mesh, which is
-    the payload this feature exists to avoid. Closing that gap means raising LOD coverage toward
-    100%, not relaxing the invariant.
+    the payload this feature exists to avoid.
+
+    DO NOT try to close that gap by raising coverage — measured 2026-08-07, it cannot be closed.
+    An earlier version of this docstring said "closing that gap means raising LOD coverage toward
+    100%". That is FALSE, and the arithmetic is why: this rule makes coverage a PRODUCT, since a
+    ballot is uniform only if every one of its k slots has a companion.
+
+        per-output coverage 17.5% (before the texture tier) -> ~0% of k=4 ballots
+        per-output coverage 33.4% (after  the texture tier) -> 1.4% of k=4 ballots  (0.334^4)
+
+    Doubling coverage bought 1.4%. Going further is not available: 335 of 527 outputs sit BELOW
+    `mesh_lod.LOD_MIN_SOURCE_BYTES` and were never candidates, and running the real reducer over
+    20 of them with only that threshold bypassed kept just 5 — the rest are 1-80 KB meshes with
+    nothing to remove. Extrapolated, every lever together reaches ~50% coverage, i.e. ~6% of
+    ballots. LOD is structurally OFF for k-wise ballots on this corpus.
+
+    The reason is not tunable: bias-free means degrading EVERY slot or NONE, and "every" is
+    physically impossible when some meshes are already minimal. So the honest state is that this
+    invariant and the LOD payload win are incompatible here, and the invariant wins — the LODs
+    still serve the k=2 path and cost nothing to keep. If someone later decides the payload
+    matters more, that is a deliberate trade against a measured card-size delta of silhouette
+    IoU 0.9985, not a coverage bug to fix.
     """
     urls = [_arena_lod_url(o) for o in outputs]
     if any(u is None for u in urls):
