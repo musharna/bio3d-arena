@@ -27,11 +27,11 @@
        grid gave each piece its own cell — measured on production 2026-08-08, .lb-hub-grid's children
        were A.lb-hub-card, P.lb-hub-goal, SPAN.lb-hub-cta repeating, which is why every card rendered
        beside a tall empty box. Whole-card clicking is preserved by stretching the title link over
-       the card (see .lb-hub-cardlink::after); inner links sit above it on z-index. #}
+       the card (see .lb-hub-link::after); inner links sit above it on z-index. #}
     <div class="lb-hub-card">
       <h3 class="lb-hub-title">
         <a
-          class="lb-hub-cardlink"
+          class="lb-hub-link"
           href="/leaderboard/{{ c.paradigm }}?criterion={{ sel_criterion }}&category={{ sel_category }}"
           >{{ c.display }}</a
         >

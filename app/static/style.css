@@ -3990,7 +3990,7 @@ details.group[open] > summary.group-title::before {
 }
 .lb-hub-card {
   /* `position: relative` is load-bearing, not cosmetic: it is the containing block for
-     .lb-hub-cardlink::after, which is what keeps the WHOLE card clickable now that the card is a
+     .lb-hub-link::after, which is what keeps the WHOLE card clickable now that the card is a
      <div> rather than an <a>. It had to stop being an anchor because it contains another link
      ("N more votes"), and nested <a> is invalid HTML — the parser closed the outer one early and
      the grid then rendered each card as three separate cells. See leaderboard_hub.html. */
@@ -4011,17 +4011,17 @@ details.group[open] > summary.group-title::before {
 }
 /* The card's real link. Its ::after stretches over the entire card so clicking anywhere still
    opens the board — the behaviour the wrapping <a> used to provide. */
-.lb-hub-cardlink {
+.lb-hub-link {
   text-decoration: none;
   color: inherit;
 }
-.lb-hub-cardlink::after {
+.lb-hub-link::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
 }
-.lb-hub-cardlink:focus-visible {
+.lb-hub-link:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -4100,7 +4100,7 @@ details.group[open] > summary.group-title::before {
   font-size: 0.78rem;
 }
 .lb-hub-goal a {
-  /* Must sit ABOVE .lb-hub-cardlink::after, or the stretched card link would swallow this one and
+  /* Must sit ABOVE .lb-hub-link::after, or the stretched card link would swallow this one and
      "N more votes" would silently open the board instead of the arena. This is the whole reason
      the pattern is safe: the card is clickable everywhere EXCEPT where a real link is. */
   position: relative;
